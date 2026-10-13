@@ -1,0 +1,462 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 1070" width="1700" height="1070" font-family="Pretendard, 'Malgun Gothic', sans-serif">
+<style>text{font-family:Pretendard, 'Malgun Gothic', sans-serif;}</style>
+<defs>
+<marker id="ar-dark" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#37474f"/></marker>
+<marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e88e5"/></marker>
+<marker id="ar-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ef6c00"/></marker>
+<marker id="ar-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8d8d8d"/></marker>
+</defs>
+<rect x="0" y="0" width="1700" height="1070" fill="#ffffff"/>
+<g class="frame">
+<rect x="310" y="40" width="1375" height="938" rx="6" fill="none" stroke="#ef6c00" stroke-width="1.5"/>
+<rect x="313" y="46" width="75.52000000000001" height="17" rx="3" fill="#fff" stroke="#ef6c00" stroke-width="1"/>
+<text x="318" y="58" font-size="13" font-weight="bold" fill="#ef6c00" text-anchor="start">AWS Cloud</text>
+</g>
+<g class="frame">
+<rect x="325" y="68" width="1345" height="894" rx="6" fill="none" stroke="#1976d2" stroke-width="1.5" stroke-dasharray="8 4"/>
+<rect x="328" y="69" width="139.35999999999996" height="17" rx="3" fill="#fff" stroke="#1976d2" stroke-width="1"/>
+<text x="333" y="81" font-size="11" font-weight="bold" fill="#1976d2" text-anchor="start">Region ap-northeast-2</text>
+</g>
+<g class="frame">
+<rect x="340" y="100" width="835" height="840" rx="6" fill="none" stroke="#8c4fff" stroke-width="1.5"/>
+<rect x="343" y="104" width="102.39999999999998" height="17" rx="3" fill="#fff" stroke="#8c4fff" stroke-width="1"/>
+<text x="348" y="116" font-size="11" font-weight="bold" fill="#8c4fff" text-anchor="start">VPC 10.0.0.0/16</text>
+</g>
+<g class="frame">
+<rect x="1198" y="100" width="460" height="840" rx="6" fill="none" stroke="#1976d2" stroke-width="1.5"/>
+<rect x="1533.02" y="104" width="121.97999999999998" height="17" rx="3" fill="#fff" stroke="#1976d2" stroke-width="1"/>
+<text x="1650" y="116" font-size="11" font-weight="bold" fill="#1976d2" text-anchor="end">리전 서비스 (VPC 밖)</text>
+</g>
+<g class="frame">
+<rect x="352" y="208" width="396" height="720" rx="6" fill="none" stroke="#90a4ae" stroke-width="1.5" stroke-dasharray="4 3"/>
+<rect x="457" y="212" width="120.87999999999997" height="17" rx="3" fill="#fff" stroke="#90a4ae" stroke-width="1"/>
+<text x="462" y="224" font-size="11" font-weight="bold" fill="#90a4ae" text-anchor="start">AZ ap-northeast-2a</text>
+</g>
+<g class="frame">
+<rect x="774" y="208" width="392" height="720" rx="6" fill="none" stroke="#90a4ae" stroke-width="1.5" stroke-dasharray="4 3"/>
+<rect x="1042.1200000000001" y="212" width="120.87999999999997" height="17" rx="3" fill="#fff" stroke="#90a4ae" stroke-width="1"/>
+<text x="1158" y="224" font-size="11" font-weight="bold" fill="#90a4ae" text-anchor="end">AZ ap-northeast-2c</text>
+</g>
+<g class="frame">
+<rect x="362" y="232" width="378" height="98" rx="6" fill="#f1f8e9" stroke="#2e7d32" stroke-width="1.5"/>
+<rect x="557" y="236" width="83.91999999999999" height="17" rx="3" fill="#fff" stroke="#2e7d32" stroke-width="1"/>
+<text x="562" y="248" font-size="11" font-weight="bold" fill="#2e7d32" text-anchor="start">public-a /24</text>
+</g>
+<g class="frame">
+<rect x="782" y="232" width="376" height="98" rx="6" fill="#f1f8e9" stroke="#2e7d32" stroke-width="1.5"/>
+<rect x="1071.08" y="236" width="83.91999999999999" height="17" rx="3" fill="#fff" stroke="#2e7d32" stroke-width="1"/>
+<text x="1150" y="248" font-size="11" font-weight="bold" fill="#2e7d32" text-anchor="end">public-c /24</text>
+</g>
+<g class="frame">
+<rect x="347" y="348" width="825" height="567" rx="6" fill="none" stroke="#ef6c00" stroke-width="1.5" stroke-dasharray="7 4"/>
+<rect x="455" y="352" width="358.6999999999999" height="32" rx="3" fill="#fff" stroke="#ef6c00" stroke-width="1"/>
+<text x="460" y="364" font-size="11" font-weight="bold" fill="#ef6c00" text-anchor="start">EKS Cluster sesac-gojigi-eks-cluster · 관리형 컨트롤 플레인</text>
+<text x="460" y="379" font-size="11" font-weight="bold" fill="#ef6c00" text-anchor="start">Managed Node Group t3.large ×2 (min 0 · max 3)</text>
+</g>
+<text x="1164" y="364" font-size="11" font-weight="bold" fill="#ef6c00" text-anchor="end">매일 08:00 생성 · 22:00 삭제 (클러스터 · 노드 · 파드 · EBS)</text>
+<g class="frame">
+<rect x="362" y="388" width="378" height="517" rx="6" fill="#eef4fb" stroke="#1976d2" stroke-width="1.5"/>
+<rect x="566.07" y="390" width="170.92999999999995" height="17" rx="3" fill="#fff" stroke="#1976d2" stroke-width="1"/>
+<text x="732" y="402" font-size="11" font-weight="bold" fill="#1976d2" text-anchor="end">private-a /24 · 워커 노드 1</text>
+</g>
+<g class="frame">
+<rect x="782" y="388" width="376" height="517" rx="6" fill="#eef4fb" stroke="#1976d2" stroke-width="1.5"/>
+<rect x="984.07" y="390" width="170.92999999999995" height="17" rx="3" fill="#fff" stroke="#1976d2" stroke-width="1"/>
+<text x="1150" y="402" font-size="11" font-weight="bold" fill="#1976d2" text-anchor="end">private-c /24 · 워커 노드 2</text>
+</g>
+<g class="frame">
+<rect x="35" y="560" width="255" height="340" rx="6" fill="none" stroke="#24292e" stroke-width="1.5"/>
+<rect x="38" y="564" width="46.96" height="17" rx="3" fill="#fff" stroke="#24292e" stroke-width="1"/>
+<text x="43" y="576" font-size="11" font-weight="bold" fill="#24292e" text-anchor="start">GitHub</text>
+</g>
+<g class="obox">
+<rect x="40" y="60" width="230" height="60" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="50" y="70" width="40" height="40" rx="6" fill="#1e88e5"/>
+<text x="70" y="95" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">PO</text>
+<text x="100" y="87" font-size="12" font-weight="bold" fill="#222" text-anchor="start">포트원(PortOne) V2</text>
+<text x="100" y="101" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">테스트 채널 · 외부 결제</text>
+</g>
+<g class="obox">
+<rect x="40" y="145" width="230" height="60" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="50" y="155" width="40" height="40" rx="6" fill="#546e7a"/>
+<text x="70" y="180" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">USR</text>
+<text x="100" y="172" font-size="12" font-weight="bold" fill="#222" text-anchor="start">사용자 (브라우저)</text>
+<text x="100" y="186" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">구매자 · 판매자 · 관리자</text>
+</g>
+<g class="obox">
+<rect x="40" y="235" width="230" height="70" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="50" y="250" width="40" height="40" rx="6" fill="#111111"/>
+<text x="70" y="275" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">VCL</text>
+<text x="100" y="260" font-size="12" font-weight="bold" fill="#222" text-anchor="start">Vercel</text>
+<text x="100" y="274" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">React 정적 사이트 gotgan-frontend</text>
+<text x="100" y="288" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">/api/* rewrite</text>
+</g>
+<g class="obox">
+<rect x="40" y="335" width="230" height="60" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="50" y="345" width="40" height="40" rx="6" fill="#f9a825"/>
+<text x="70" y="370" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">DNS</text>
+<text x="100" y="362" font-size="12" font-weight="bold" fill="#222" text-anchor="start">DuckDNS</text>
+<text x="100" y="376" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">gotgan-api.duckdns.org → EIP</text>
+</g>
+<g class="obox">
+<rect x="50" y="596" width="225" height="40" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="60" y="596" width="40" height="40" rx="6" fill="#24292e"/>
+<text x="80" y="621" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">GH</text>
+<text x="110" y="613" font-size="12" font-weight="bold" fill="#222" text-anchor="start">gotgan-config</text>
+<text x="110" y="627" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">Terraform · Helm values</text>
+</g>
+<g class="obox">
+<rect x="50" y="646" width="225" height="40" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="60" y="646" width="40" height="40" rx="6" fill="#24292e"/>
+<text x="80" y="671" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">GH</text>
+<text x="110" y="663" font-size="12" font-weight="bold" fill="#222" text-anchor="start">gotgan-frontend</text>
+<text x="110" y="677" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">React</text>
+</g>
+<g class="obox">
+<rect x="50" y="696" width="225" height="40" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="60" y="696" width="40" height="40" rx="6" fill="#24292e"/>
+<text x="80" y="721" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">GH</text>
+<text x="110" y="713" font-size="12" font-weight="bold" fill="#222" text-anchor="start">gotgan-backend</text>
+<text x="110" y="727" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">Spring Boot 서비스 9개</text>
+</g>
+<g class="obox">
+<rect x="50" y="762" width="225" height="55" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="60" y="769.5" width="40" height="40" rx="6" fill="#2088ff"/>
+<text x="80" y="794.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">GHA</text>
+<text x="110" y="786.5" font-size="12" font-weight="bold" fill="#222" text-anchor="start">GitHub Actions (OIDC)</text>
+<text x="110" y="800.5" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">CI · infra-schedule · bootstrap</text>
+</g>
+<g class="obox">
+<rect x="50" y="835" width="225" height="40" rx="6" fill="#fff" stroke="#9e9e9e" stroke-width="1.2"/>
+<rect x="60" y="835" width="40" height="40" rx="6" fill="#6e5494"/>
+<text x="80" y="860" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">SEC</text>
+<text x="110" y="852" font-size="12" font-weight="bold" fill="#222" text-anchor="start">GitHub Secrets</text>
+<text x="110" y="866" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">secrets-sync → K8s Secret</text>
+</g>
+<g class="icon">
+<rect x="355" y="124" width="40" height="40" rx="6" fill="#8c4fff"/>
+<text x="375" y="149" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">EIP</text>
+<text x="375" y="178" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">EIP ×2</text>
+<text x="375" y="191" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">NLB 고정 IP</text>
+</g>
+<g class="icon">
+<rect x="740" y="124" width="40" height="40" rx="6" fill="#8c4fff"/>
+<text x="760" y="149" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">IGW</text>
+<text x="790" y="140" font-size="12" font-weight="bold" fill="#222" text-anchor="start">IGW</text>
+</g>
+<g class="icon">
+<rect x="529" y="252" width="40" height="40" rx="6" fill="#ed7100"/>
+<text x="549" y="277" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">EC2</text>
+<text x="549" y="306" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">작업용 EC2 (선택)</text>
+<text x="549" y="319" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">t3.small · SSM</text>
+</g>
+<g class="icon">
+<rect x="405" y="252" width="40" height="40" rx="6" fill="#8c4fff"/>
+<text x="425" y="277" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">NLB</text>
+<text x="425" y="306" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">NLB 노드 a</text>
+<text x="425" y="319" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">ip 타깃</text>
+</g>
+<g class="icon">
+<rect x="670" y="252" width="40" height="40" rx="6" fill="#8c4fff"/>
+<text x="690" y="277" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">NAT</text>
+<text x="690" y="306" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">NAT GW</text>
+<text x="690" y="319" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">NAT Gateway</text>
+</g>
+<g class="icon">
+<rect x="825" y="252" width="40" height="40" rx="6" fill="#8c4fff"/>
+<text x="845" y="277" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">NLB</text>
+<text x="845" y="306" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">NLB 노드 c</text>
+<text x="845" y="319" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">internet-facing</text>
+</g>
+<g class="icon">
+<rect x="405" y="420" width="40" height="40" rx="6" fill="#8c4fff"/>
+<text x="425" y="445" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">GW</text>
+<text x="425" y="474" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">gateway #1</text>
+<text x="425" y="487" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">Spring Cloud Gateway</text>
+</g>
+<g class="icon">
+<rect x="529" y="420" width="40" height="40" rx="6" fill="#4d4d4d"/>
+<text x="549" y="445" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">KC</text>
+<text x="549" y="474" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">Keycloak</text>
+<text x="549" y="487" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">JWKS · OIDC</text>
+</g>
+<g class="icon">
+<rect x="653" y="420" width="40" height="40" rx="6" fill="#00758f"/>
+<text x="673" y="445" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">SQL</text>
+<text x="673" y="474" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">MySQL</text>
+<text x="673" y="487" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">EBS gp3 · 스키마 8</text>
+</g>
+<g class="icon">
+<rect x="405" y="528" width="40" height="40" rx="6" fill="#0f9d8a"/>
+<text x="425" y="553" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">USR</text>
+<text x="425" y="582" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">user</text>
+<text x="425" y="595" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">회원 · 포인트</text>
+</g>
+<g class="icon">
+<rect x="529" y="528" width="40" height="40" rx="6" fill="#0f9d8a"/>
+<text x="549" y="553" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">ORD</text>
+<text x="549" y="582" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">order (Saga)</text>
+<text x="549" y="595" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">주문 오케스트레이션</text>
+</g>
+<g class="icon">
+<rect x="653" y="528" width="40" height="40" rx="6" fill="#0f9d8a"/>
+<text x="673" y="553" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">STR</text>
+<text x="673" y="582" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">store</text>
+<text x="673" y="595" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">입점 · 매장</text>
+</g>
+<g class="icon">
+<rect x="405" y="636" width="40" height="40" rx="6" fill="#ef7b4d"/>
+<text x="425" y="661" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">CD</text>
+<text x="425" y="690" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">ArgoCD</text>
+<text x="425" y="703" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">GitOps</text>
+</g>
+<g class="icon">
+<rect x="529" y="636" width="40" height="40" rx="6" fill="#0f9d8a"/>
+<text x="549" y="661" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">PRD</text>
+<text x="549" y="690" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">product</text>
+<text x="549" y="703" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">상품 · 재고</text>
+</g>
+<g class="icon">
+<rect x="653" y="636" width="40" height="40" rx="6" fill="#e6522c"/>
+<text x="673" y="661" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">PRM</text>
+<text x="673" y="690" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">Prometheus</text>
+<text x="673" y="703" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">지표</text>
+</g>
+<g class="icon">
+<rect x="653" y="744" width="40" height="40" rx="6" fill="#f46800"/>
+<text x="673" y="769" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">GRF</text>
+<text x="673" y="798" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">Grafana</text>
+<text x="673" y="811" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">System Status</text>
+</g>
+<g class="icon">
+<rect x="825" y="420" width="40" height="40" rx="6" fill="#8c4fff"/>
+<text x="845" y="445" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">GW</text>
+<text x="845" y="474" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">gateway #2</text>
+<text x="845" y="487" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">Spring Cloud Gateway</text>
+</g>
+<g class="icon">
+<rect x="949" y="420" width="40" height="40" rx="6" fill="#0f9d8a"/>
+<text x="969" y="445" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">STL</text>
+<text x="969" y="474" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">settlement</text>
+<text x="969" y="487" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">정산 · 리포트</text>
+</g>
+<g class="icon">
+<rect x="1073" y="420" width="40" height="40" rx="6" fill="#d82c20"/>
+<text x="1093" y="445" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">RDS</text>
+<text x="1093" y="474" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">Redis</text>
+<text x="1093" y="487" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">EBS · AOF · 장바구니</text>
+</g>
+<g class="icon">
+<rect x="825" y="528" width="40" height="40" rx="6" fill="#0f9d8a"/>
+<text x="845" y="553" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">PAY</text>
+<text x="845" y="582" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">payment</text>
+<text x="845" y="595" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">포트원 결제</text>
+</g>
+<g class="icon">
+<rect x="949" y="528" width="40" height="40" rx="6" fill="#0f9d8a"/>
+<text x="969" y="553" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">REV</text>
+<text x="969" y="582" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">review</text>
+<text x="969" y="595" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">리뷰</text>
+</g>
+<g class="icon">
+<rect x="1073" y="528" width="40" height="40" rx="6" fill="#0f9d8a"/>
+<text x="1093" y="553" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">ADM</text>
+<text x="1093" y="582" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">admin</text>
+<text x="1093" y="595" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">DB 없음 · /internal</text>
+</g>
+<g class="icon">
+<rect x="825" y="636" width="40" height="40" rx="6" fill="#5c6bc0"/>
+<text x="845" y="661" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">BBX</text>
+<text x="845" y="690" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">blackbox</text>
+<text x="845" y="703" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">헬스 체크 프로브</text>
+</g>
+<g class="icon">
+<rect x="949" y="636" width="40" height="40" rx="6" fill="#5c6bc0"/>
+<text x="969" y="661" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">KSM</text>
+<text x="969" y="690" font-size="10" font-weight="bold" fill="#222" text-anchor="middle">kube-state-metrics</text>
+<text x="969" y="703" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">K8s 지표</text>
+</g>
+<g class="icon">
+<rect x="825" y="744" width="40" height="40" rx="6" fill="#f5b800"/>
+<text x="845" y="769" font-size="11" font-weight="bold" fill="#fff" text-anchor="middle">LOKI</text>
+<text x="845" y="798" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">Loki</text>
+<text x="845" y="811" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">로그</text>
+</g>
+<g class="icon">
+<rect x="949" y="744" width="40" height="40" rx="6" fill="#5c6bc0"/>
+<text x="969" y="769" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">ZIP</text>
+<text x="969" y="798" font-size="11" font-weight="bold" fill="#222" text-anchor="middle">Zipkin</text>
+<text x="969" y="811" font-size="9.5" font-weight="normal" fill="#555" text-anchor="middle">트레이스</text>
+</g>
+<g class="icon">
+<rect x="1220" y="118" width="40" height="40" rx="6" fill="#3f8624"/>
+<text x="1240" y="143" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">S3</text>
+<text x="1270" y="134" font-size="12" font-weight="bold" fill="#222" text-anchor="start">S3 ×4</text>
+<text x="1270" y="148" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">images · seller-docs</text>
+<text x="1270" y="161" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">reports · log-archive</text>
+</g>
+<g class="icon">
+<rect x="1220" y="218" width="40" height="40" rx="6" fill="#e7157b"/>
+<text x="1240" y="243" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">SNS</text>
+<text x="1270" y="234" font-size="12" font-weight="bold" fill="#222" text-anchor="start">SNS 토픽 3</text>
+<text x="1270" y="248" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">store · order · settlement-events</text>
+</g>
+<g class="icon">
+<rect x="1220" y="318" width="40" height="40" rx="6" fill="#e7157b"/>
+<text x="1240" y="343" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">SQS</text>
+<text x="1270" y="334" font-size="12" font-weight="bold" fill="#222" text-anchor="start">SQS 큐 9 + DLQ</text>
+<text x="1270" y="348" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">user · product · review · settlement</text>
+<text x="1270" y="361" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">+ Lambda 구독</text>
+</g>
+<g class="icon">
+<rect x="1220" y="418" width="40" height="40" rx="6" fill="#ed7100"/>
+<text x="1240" y="443" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">LMB</text>
+<text x="1270" y="434" font-size="12" font-weight="bold" fill="#222" text-anchor="start">Lambda ×3</text>
+<text x="1270" y="448" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">order-notification</text>
+<text x="1270" y="461" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">settlement-report · log-archive</text>
+</g>
+<g class="icon">
+<rect x="1470" y="418" width="40" height="40" rx="6" fill="#2e73b8"/>
+<text x="1490" y="443" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">DDB</text>
+<text x="1520" y="434" font-size="12" font-weight="bold" fill="#222" text-anchor="start">DynamoDB ×2</text>
+<text x="1520" y="448" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">notifications</text>
+<text x="1520" y="461" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">settlement-reports</text>
+</g>
+<g class="icon">
+<rect x="1220" y="518" width="40" height="40" rx="6" fill="#dd344c"/>
+<text x="1240" y="543" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">SES</text>
+<text x="1270" y="534" font-size="12" font-weight="bold" fill="#222" text-anchor="start">SES</text>
+<text x="1270" y="548" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">주문 알림 · 정산 메일</text>
+</g>
+<g class="icon">
+<rect x="1220" y="618" width="40" height="40" rx="6" fill="#e7157b"/>
+<text x="1240" y="643" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">EVB</text>
+<text x="1270" y="634" font-size="12" font-weight="bold" fill="#222" text-anchor="start">EventBridge</text>
+<text x="1270" y="648" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">매일 03:00 KST</text>
+</g>
+<g class="icon">
+<rect x="1220" y="718" width="40" height="40" rx="6" fill="#e7157b"/>
+<text x="1240" y="743" font-size="14" font-weight="bold" fill="#fff" text-anchor="middle">CW</text>
+<text x="1270" y="734" font-size="12" font-weight="bold" fill="#222" text-anchor="start">CloudWatch Logs</text>
+<text x="1270" y="748" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">Lambda 로그 → S3 log-archive</text>
+<text x="1270" y="761" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">Grafana 데이터소스</text>
+</g>
+<g class="icon">
+<rect x="1220" y="838" width="40" height="40" rx="6" fill="#ed7100"/>
+<text x="1240" y="863" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">ECR</text>
+<text x="1270" y="854" font-size="12" font-weight="bold" fill="#222" text-anchor="start">ECR</text>
+<text x="1270" y="868" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">저장소 9개</text>
+</g>
+<g class="icon">
+<rect x="1470" y="838" width="40" height="40" rx="6" fill="#dd344c"/>
+<text x="1490" y="863" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">IAM</text>
+<text x="1520" y="854" font-size="12" font-weight="bold" fill="#222" text-anchor="start">IAM</text>
+<text x="1520" y="868" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">GitHub OIDC 역할</text>
+<text x="1520" y="881" font-size="9.5" font-weight="normal" fill="#555" text-anchor="start">IRSA 6개</text>
+</g>
+<path d="M155,205 V233" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="178" cy="219" r="11" fill="#e53935"/><text x="178" y="223.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">1</text></g>
+<path d="M155,305 V333" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="178" cy="319" r="11" fill="#e53935"/><text x="178" y="323.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">2</text></g>
+<path d="M270,365 H330 V136 H353" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="330" cy="250" r="11" fill="#e53935"/><text x="330" y="254.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">2</text></g>
+<path d="M395,136 H738" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<path d="M740,154 H425 V250" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<path d="M770,164 V184 H845 V250" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<path d="M425,322 V418" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="425" cy="370" r="11" fill="#e53935"/><text x="425" y="374.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">3</text></g>
+<path d="M845,322 V418" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="845" cy="370" r="11" fill="#e53935"/><text x="845" y="374.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">3</text></g>
+<path d="M445,440 H527" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<text x="486" y="436" font-size="10" font-weight="normal" fill="#37474f" text-anchor="middle">JWKS</text>
+<path d="M425,490 V526" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="443" cy="508" r="11" fill="#e53935"/><text x="443" y="512.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">4</text></g>
+<path d="M529,548 H447" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="488" cy="560" r="11" fill="#e53935"/><text x="488" y="564.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">5</text></g>
+<path d="M549,598 V616 H767 V548 H823" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="660" cy="616" r="11" fill="#e53935"/><text x="660" y="620.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">5</text></g>
+<path d="M549,616 V634" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<path d="M569,548 H616 V440 H651" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="616" cy="508" r="11" fill="#e53935"/><text x="616" y="512.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">6</text></g>
+<path d="M969,420 V411 H1183 V238 H1218" fill="none" stroke="#1e88e5" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-blue)"/>
+<g class="num"><circle cx="1183" cy="330" r="11" fill="#e53935"/><text x="1183" y="334.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">7</text></g>
+<path d="M1240,258 V316" fill="none" stroke="#1e88e5" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-blue)"/>
+<g class="num"><circle cx="1240" cy="288" r="11" fill="#e53935"/><text x="1240" y="292.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">7</text></g>
+<path d="M1220,338 H1191 V508 H969 V526" fill="none" stroke="#1e88e5" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-blue)"/>
+<g class="num"><circle cx="1080" cy="508" r="11" fill="#e53935"/><text x="1080" y="512.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">7</text></g>
+<path d="M845,528 V508 H767 V337 H734 V270 H712" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="767" cy="420" r="11" fill="#e53935"/><text x="767" y="424.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">8</text></g>
+<path d="M690,252 V196 H752 V166" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<path d="M760,124 V90 H272" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="520" cy="90" r="11" fill="#e53935"/><text x="520" y="94.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">8</text></g>
+<path d="M40,175 H22 V24 H1240 V116" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#ar-dark)"/>
+<g class="num"><circle cx="600" cy="24" r="11" fill="#e53935"/><text x="600" y="28.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">9</text></g>
+<text x="620" y="14" font-size="10" font-weight="normal" fill="#37474f" text-anchor="start">S3 presigned PUT: 상품 · 리뷰 이미지 · 입점 서류 (브라우저 직접 업로드)</text>
+<path d="M1240,358 V416" fill="none" stroke="#1e88e5" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-blue)"/>
+<g class="num"><circle cx="1240" cy="388" r="11" fill="#e53935"/><text x="1240" y="392.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">10</text></g>
+<path d="M1232,458 V516" fill="none" stroke="#1e88e5" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-blue)"/>
+<path d="M1250,458 V490 H1490 V460" fill="none" stroke="#1e88e5" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-blue)"/>
+<g class="num"><circle cx="1370" cy="490" r="11" fill="#e53935"/><text x="1370" y="494.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">10</text></g>
+<path d="M1240,658 V716" fill="none" stroke="#1e88e5" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-blue)"/>
+<g class="num"><circle cx="1240" cy="688" r="11" fill="#e53935"/><text x="1240" y="692.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">10</text></g>
+<path d="M162,736 V760" fill="none" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#ar-orange)"/>
+<text x="170" y="752" font-size="10" font-weight="normal" fill="#37474f" text-anchor="start">push</text>
+<path d="M275,800 H316 V951 H1240 V880" fill="none" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#ar-orange)"/>
+<g class="num"><circle cx="316" cy="900" r="11" fill="#e53935"/><text x="316" y="904.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">11</text></g>
+<text x="1150" y="946" font-size="10" font-weight="normal" fill="#ef6c00" text-anchor="end">OIDC → ECR push</text>
+<path d="M275,616 H425 V634" fill="none" stroke="#ef6c00" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-orange)"/>
+<g class="num"><circle cx="360" cy="616" r="11" fill="#e53935"/><text x="360" y="620.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">12</text></g>
+<path d="M1218,858 H1183 V830 H1160" fill="none" stroke="#ef6c00" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#ar-orange)"/>
+<g class="num"><circle cx="1200" cy="858" r="11" fill="#e53935"/><text x="1200" y="862.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">12</text></g>
+<text x="1150" y="845" font-size="10" font-weight="normal" fill="#ef6c00" text-anchor="end">이미지 pull</text>
+<path d="M275,780 H330 V870 H345" fill="none" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#ar-orange)"/>
+<g class="num"><circle cx="330" cy="825" r="11" fill="#e53935"/><text x="330" y="829.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">13</text></g>
+<path d="M569,656 H651" fill="none" stroke="#8d8d8d" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ar-gray)"/>
+<g class="num"><circle cx="610" cy="668" r="11" fill="#e53935"/><text x="610" y="672.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">14</text></g>
+<path d="M673,706 V742" fill="none" stroke="#8d8d8d" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ar-gray)"/>
+<g class="num"><circle cx="691" cy="724" r="11" fill="#e53935"/><text x="691" y="728.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">14</text></g>
+<path d="M825,764 H695" fill="none" stroke="#8d8d8d" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ar-gray)"/>
+<g class="num"><circle cx="760" cy="764" r="11" fill="#e53935"/><text x="760" y="768.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">14</text></g>
+<path d="M673,814 V822 H1191 V738 H1218" fill="none" stroke="#8d8d8d" stroke-width="1.6" stroke-dasharray="4 3" marker-end="url(#ar-gray)"/>
+<g class="num"><circle cx="930" cy="822" r="11" fill="#e53935"/><text x="930" y="826.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">14</text></g>
+<path d="M50,666 H22 V270 H38" fill="none" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#ar-orange)"/>
+<g class="num"><circle cx="22" cy="470" r="11" fill="#e53935"/><text x="22" y="474.5" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">15</text></g>
+<text x="40" y="420" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">① 사용자 → Vercel HTTPS (화면)</text>
+<text x="40" y="434" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">② /api/* → Vercel rewrite → DuckDNS → EIP → IGW → NLB</text>
+<text x="40" y="448" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑧ payment → NAT → IGW → 포트원 API 검증 · 취소</text>
+<text x="40" y="462" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">    포트원 웹훅 → NLB → gateway → payment</text>
+<text x="40" y="476" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑨ 브라우저 → S3 presigned PUT (이미지 · 입점 서류)</text>
+<text x="40" y="490" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑪ backend push → Actions(테스트 · SonarQube Cloud · 빌드)</text>
+<text x="40" y="504" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">    → OIDC → ECR push → gotgan-config values.yaml 태그 커밋</text>
+<text x="40" y="518" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑬ infra-schedule 08:00 Terraform apply · 22:00 destroy(cluster/)</text>
+<text x="40" y="532" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">    → bootstrap: k8s 기본 · secrets-sync · 관측성 · ArgoCD</text>
+<text x="40" y="546" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑮ gotgan-frontend push → Vercel 자동 배포 (PR 미리보기)</text>
+<text x="370" y="847" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">③ NLB → gateway(ip 타깃) · JWT 검증(Keycloak JWKS) · X-User-* 헤더</text>
+<text x="370" y="860" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">④ gateway → 업무 서비스 라우팅 · admin → 각 서비스 /internal/**</text>
+<text x="370" y="873" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑤ 주문 Saga: order → user(포인트) → product(재고) → payment</text>
+<text x="370" y="886" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">    (결제 준비 · 검증) · 동기 REST + Resilience4j</text>
+<text x="370" y="899" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑥ 서비스 → MySQL(JDBC · 서비스별 스키마) · order → Redis(캐시)</text>
+<text x="790" y="847" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑦ store · order · settlement → SNS → SQS(+DLQ)</text>
+<text x="790" y="860" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">    → user · product · review · settlement · Lambda (IRSA)</text>
+<text x="790" y="873" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑫ ArgoCD: gotgan-config pull → Deployment 롤링(무중단)</text>
+<text x="790" y="886" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">    노드 → ECR 이미지 pull</text>
+<text x="790" y="899" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑭ 서비스 → Prometheus · Loki · Zipkin → Grafana System Status</text>
+<text x="1206" y="797" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑨ settlement → S3 reports presign (정산 리포트 다운로드)</text>
+<text x="1206" y="810" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑩ SQS → Lambda → SES 메일 + DynamoDB 멱등 · SettlementPaid → CSV → S3 → SES</text>
+<text x="1206" y="823" font-size="9.5" font-weight="normal" fill="#333" text-anchor="start">⑩ EventBridge(03:00) → Lambda log-archive: CloudWatch Logs → S3 log-archive</text>
+<text x="1150" y="816" font-size="10" font-weight="normal" fill="#8d8d8d" text-anchor="end">→ CloudWatch (Lambda 로그)</text>
+<g class="legend"><rect x="1280" y="990" width="405" height="72" rx="6" fill="#fff" stroke="#9e9e9e"/>
+<path d="M1292,1006 H1328" stroke="#37474f" stroke-width="2" marker-end="url(#ar-dark)"/>
+<text x="1336" y="1010" font-size="10.5" font-weight="normal" fill="#222" text-anchor="start">실선 = 사용자 요청</text>
+<path d="M1487,1006 H1523" stroke="#1e88e5" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar-blue)"/>
+<text x="1531" y="1010" font-size="10.5" font-weight="normal" fill="#222" text-anchor="start">점선 = 메시지 · 배포</text>
+<path d="M1292,1026 H1328" stroke="#ef6c00" stroke-width="2" marker-end="url(#ar-orange)"/>
+<text x="1336" y="1030" font-size="10.5" font-weight="normal" fill="#222" text-anchor="start">주황 = CI/CD · GitOps</text>
+<path d="M1487,1026 H1523" stroke="#8d8d8d" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#ar-gray)"/>
+<text x="1531" y="1030" font-size="10.5" font-weight="normal" fill="#222" text-anchor="start">회색 점선 = 관측</text>
+<rect x="1292" y="1040" width="36" height="14" rx="3" fill="none" stroke="#ef6c00" stroke-dasharray="5 3"/>
+<text x="1336" y="1051" font-size="10" font-weight="normal" fill="#222" text-anchor="start">주황 점선 프레임 = 매일 08:00 생성 · 22:00 삭제 (EKS · 노드 · 파드 · EBS)</text>
+</g>
+<text x="760" y="1040" font-size="16" font-weight="bold" fill="#222" text-anchor="middle">곳간(GOTGAN) 아키텍처 구조도 — sesac-gojigi · 2026-10-13</text>
+<text x="760" y="1058" font-size="10" font-weight="normal" fill="#666" text-anchor="middle">Vercel + DuckDNS + AWS(EKS · NLB · SNS/SQS · Lambda · S3 · DynamoDB · SES) + GitHub Actions / ArgoCD GitOps</text>
+</svg>

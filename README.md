@@ -15,6 +15,14 @@
 
 ---
 
+## 전체 아키텍처
+
+![곳간 아키텍처 구조도](docs/aws-architecture.svg)
+
+빨간 번호가 흐름입니다 — ① 사용자 → Vercel ② `/api/*` → DuckDNS → EIP → NLB ③ gateway(JWT 검증 · X-User-* 헤더) ④ 서비스 라우팅 · admin → `/internal/**` ⑤ 주문 Saga(order → user · product · payment) ⑥ MySQL · Redis 캐시 ⑦ SNS → SQS 이벤트 ⑧ 포트원 검증 · 웹훅 ⑨ S3 presigned ⑩ Lambda(메일 · 명세서 · 로그 아카이브) ⑪ CI → ECR → config 태그 커밋 ⑫ ArgoCD GitOps ⑬ Terraform 일일 스케줄 · bootstrap · secrets-sync ⑭ 관측(Prometheus · Loki · Zipkin → Grafana) ⑮ Vercel 배포. 네트워크 상세는 [가이드라인 04장](https://gotganguide.vercel.app/guideline#s4).
+
+---
+
 ## 팀 gojigi
 
 | 이름 | GitHub | 인프라 | 서비스 · 도메인 |
