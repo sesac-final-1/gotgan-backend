@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  전 서비스 같은 파일 (가이드라인 13장 공통 규칙). 형식 임의 변경 금지 — 바꾸려면 박지연(관측성) 과 상의.
+  - 로그 한 줄: timestamp level app traceId spanId message (업무 키 orderNo · sagaId 는 MDC 또는 메시지)
+  - k8s 프로필: Loki 로 직접 전송 (loki4j). 라벨은 app · namespace · level 만 (카디널리티 폭발 방지)
+  TODO 박지연: Loki4j ${loki4jVersion} 설정 블록 작성 (LOKI_URL 환경 변수) · JSON 레이아웃 확정
+-->
+<configuration>
+    <springProperty scope="context" name="APP" source="spring.application.name" defaultValue="product-service"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level [${APP}] [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <springProfile name="!k8s">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="k8s">
+        <!-- TODO 박지연: Loki4jAppender 추가 (url=${LOKI_URL}, 라벨 app=${APP},namespace=sesac-gojigi,level=%level) -->
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+</configuration>

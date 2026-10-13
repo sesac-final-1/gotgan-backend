@@ -1,0 +1,24 @@
+# 폴더 소유권 (컨벤션 1-4) — 해당 경로를 바꾸는 PR 에 담당자가 자동 리뷰어로 붙는다
+# 담당: perish95(이경석) · VoC-100(박지연) · jongbeen97(이종빈) · jihoon-devstu(구지훈)
+
+# services — 서비스 하나 = 담당자 하나
+/services/gateway-service/      @perish95
+/services/user-service/         @perish95
+/services/store-service/        @VoC-100
+/services/product-service/      @VoC-100
+/services/order-service/        @jongbeen97
+/services/payment-service/      @jongbeen97
+/services/review-service/       @jongbeen97
+/services/settlement-service/   @jihoon-devstu
+/services/admin-service/        @jihoon-devstu
+
+# serverless
+/serverless/order-notification/ @jihoon-devstu
+/serverless/settlement-report/  @jihoon-devstu
+/serverless/log-archive/        @VoC-100
+
+# 워크플로 · 템플릿 (CI/CD 담당)
+/.github/                       @perish95
+
+# 공유 API 문서 — 네 명 모두 (OpenAPI · error-codes 는 서비스 경계에 걸친다)
+/docs/api/                      @perish95 @VoC-100 @jongbeen97 @jihoon-devstu

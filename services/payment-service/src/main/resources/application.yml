@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: payment-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:3306/paymentdb?connectionTimeZone=Asia/Seoul
+    username: ${DB_USERNAME:payment}       # 클러스터에서는 ESO 가 만든 Secret → 환경 변수
+    password: ${DB_PASSWORD:local-pass}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
+  flyway:
+    locations: classpath:db/migration       # 시드(db/seed) 는 local · k8s 프로필에서만 추가
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
+
+server:
+  port: 8086
+  shutdown: graceful                        # 롤링 업데이트 때 처리 중인 요청을 마치고 종료
+
+app:
+  client:
+    connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
+    read-timeout: 3s
+  portone:
+    api-base-url: https://api.portone.io
+    api-secret: ${PORTONE_API_SECRET:}            # Secrets Manager sesac-gojigi/payment-service
+    webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50          # 최근 10건 중 50% 실패면 OPEN → 바로 폴백
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+    instances:
+      portoneClient: { base-config: default }
+  retry:
+    configs:
+      default:
+        max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST 는 재시도 금지)
+        wait-duration: 200ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,circuitbreakers
+  endpoint:
+    health:
+      probes:
+        enabled: true                       # /actuator/health/liveness · readiness
+  health:
+    circuitbreakers:
+      enabled: false                        # 서킷이 열려도 내 파드는 건강함 — 다른 서비스 장애로 재시작되지 않게
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

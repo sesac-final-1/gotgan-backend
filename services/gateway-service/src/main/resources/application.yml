@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: gateway-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
+
+server:
+  port: 8080
+  shutdown: graceful                        # 롤링 업데이트 때 처리 중인 요청을 마치고 종료
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:                           # 경로 규칙: 정리 문서 8-3 · 컨벤션 2-4. /internal/** 은 라우트 없음 (외부에서 닿지 않음)
+            - id: user-service
+              uri: ${USER_SERVICE_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/auth/**,/api/users/**
+            - id: store-service
+              uri: ${STORE_SERVICE_URI:http://localhost:8082}
+              predicates:
+                - Path=/api/stores/**,/api/seller/apply/**,/api/seller/store/**,/api/seller/dashboard
+            - id: product-service
+              uri: ${PRODUCT_SERVICE_URI:http://localhost:8083}
+              predicates:
+                - Path=/api/products/**,/api/categories/**,/api/seller/products/**
+            - id: order-service
+              uri: ${ORDER_SERVICE_URI:http://localhost:8084}
+              predicates:
+                - Path=/api/carts/**,/api/orders/**,/api/seller/order-items/**,/api/seller/claims/**
+            - id: settlement-service
+              uri: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}
+              predicates:
+                - Path=/api/seller/settlements/**
+            - id: payment-service
+              uri: ${PAYMENT_SERVICE_URI:http://localhost:8086}
+              predicates:
+                - Path=/api/payments/webhook
+            - id: review-service
+              uri: ${REVIEW_SERVICE_URI:http://localhost:8087}
+              predicates:
+                - Path=/api/reviews/**,/api/inquiries/**,/api/seller/reviews/**,/api/seller/inquiries/**
+            - id: admin-service
+              uri: ${ADMIN_SERVICE_URI:http://localhost:8088}
+              predicates:
+                - Path=/api/admin/**
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan   # 토큰의 iss 와 정확히 같아야 함 (가이드라인 08장)
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

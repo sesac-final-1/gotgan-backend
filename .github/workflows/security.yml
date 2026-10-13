@@ -1,0 +1,10 @@
+# gitleaks — 시크릿 커밋 검사 (컨벤션 1-5) — 담당 이경석. 지금은 수동 실행 전용 스텁 (자동 실행 · 실패 없음).
+# TODO 이경석: pull_request · push 전체. 노출 시 즉시 키 폐기 · 재발급
+name: security
+on:
+  workflow_dispatch:
+jobs:
+  todo:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO 이경석 — gitleaks — 시크릿 커밋 검사 (컨벤션 1-5)"

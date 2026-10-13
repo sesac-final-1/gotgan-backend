@@ -1,0 +1,14 @@
+{
+  "name": "sesac-gojigi-log-archive",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "invoke:local": "npx serverless invoke local -f archive -p events/schedule.json",
+    "deploy": "npx serverless deploy --stage dev"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch-logs": "^3.0.0"
+  }
+}

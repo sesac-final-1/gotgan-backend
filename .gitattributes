@@ -1,0 +1,13 @@
+* text=auto eol=lf
+
+# Windows 에서 커밋해도 컨테이너 · CI 에서 실행되게 (가이드라인 15장 "Windows · WSL 혼용 팀의 함정")
+*.sh      text eol=lf
+gradlew   text eol=lf
+*.bat     text eol=crlf
+
+# 바이너리
+*.jar  binary
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.woff2 binary

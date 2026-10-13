@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: user-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:3306/userdb?connectionTimeZone=Asia/Seoul
+    username: ${DB_USERNAME:user}       # 클러스터에서는 ESO 가 만든 Secret → 환경 변수
+    password: ${DB_PASSWORD:local-pass}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
+  flyway:
+    locations: classpath:db/migration       # 시드(db/seed) 는 local · k8s 프로필에서만 추가
+
+  lifecycle:
+    timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
+
+server:
+  port: 8081
+  shutdown: graceful                        # 롤링 업데이트 때 처리 중인 요청을 마치고 종료
+
+app:
+  client:
+    connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
+    read-timeout: 3s
+  keycloak:
+    base-url: ${KEYCLOAK_URI:http://localhost:8180}          # 클러스터: http://keycloak:8080
+    realm: gotgan
+    token-uri: ${app.keycloak.base-url}/realms/gotgan/protocol/openid-connect/token
+    logout-uri: ${app.keycloak.base-url}/realms/gotgan/protocol/openid-connect/logout
+    admin-uri: ${app.keycloak.base-url}/admin/realms/gotgan
+    client-id: gotgan-backend
+    client-secret: ${KEYCLOAK_CLIENT_SECRET:}                 # 비밀 값은 환경 변수로만 (컨벤션 1-5)
+  auth:
+    refresh-cookie-path: /api/auth
+  point:
+    earn-rate: 0.05                                           # 실결제금액의 5% 적립 (정리 문서 8-5)
+  sqs:
+    queue-url: ${USER_EVENTS_QUEUE_URL:}   # 구독 큐 (sesac-gojigi-user-{도메인}-events)
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50          # 최근 10건 중 50% 실패면 OPEN → 바로 폴백
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+    instances:
+      keycloakClient: { base-config: default }
+  retry:
+    configs:
+      default:
+        max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST 는 재시도 금지)
+        wait-duration: 200ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,circuitbreakers
+  endpoint:
+    health:
+      probes:
+        enabled: true                       # /actuator/health/liveness · readiness
+  health:
+    circuitbreakers:
+      enabled: false                        # 서킷이 열려도 내 파드는 건강함 — 다른 서비스 장애로 재시작되지 않게
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "00000000-0000-0000-0000-000000000001",
+      "body": "{\"eventId\":\"6c1f0a6e-0b0e-4c5b-9a8b-2f3c8e7d1a10\",\"eventType\":\"OrderPaid\",\"occurredAt\":\"2026-10-21T09:12:33+09:00\",\"aggregateId\":\"20261021-000123\",\"version\":1,\"payload\":{\"orderNo\":\"20261021-000123\",\"buyerId\":1,\"ordererEmail\":\"buyer@example.com\",\"payAmt\":91700,\"earnedPoint\":4585}}"
+    }
+  ]
+}

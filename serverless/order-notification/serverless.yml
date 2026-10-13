@@ -1,0 +1,39 @@
+# order-notification — SQS(order-events · store-events) → SES 메일(주문 확인 · 배송 시작 · 취소/반품 · 입점 승인) + DynamoDB 멱등 · 이력
+# 담당 jihoon-devstu · 우선순위 Should · 가이드라인 11장. 서버리스는 배치 · 로깅만 (사용자 API 없음)
+# 공유 자원 ARN 은 하드코딩하지 않고 SSM 에서 읽는다 (Terraform app/ssm.tf 가 기록)
+service: sesac-gojigi-order-notification
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ap-northeast-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 30
+  logRetentionInDays: 14
+  environment:
+    TABLE: ${ssm:/sesac-gojigi/dev/dynamodb/notifications-table}
+    FROM_EMAIL: ${ssm:/sesac-gojigi/dev/ses/from-email}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+          Resource: "*"                     # TODO jihoon-devstu: 테이블 · 버킷 · SES identity ARN 으로 좁히기
+
+functions:
+  notify:
+    handler: src/notify.handler
+    events:
+      - sqs:
+          arn: ${ssm:/sesac-gojigi/dev/sqs/notification-order-queue-arn}
+          batchSize: 5
+          functionResponseType: ReportBatchItemFailures
+      - sqs:
+          arn: ${ssm:/sesac-gojigi/dev/sqs/notification-store-queue-arn}
+          batchSize: 5
+          functionResponseType: ReportBatchItemFailures

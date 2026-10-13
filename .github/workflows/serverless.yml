@@ -1,0 +1,73 @@
+# 서버리스 배포 — 바뀐 함수만 테스트 → serverless deploy --stage dev (OIDC 역할) — 담당 이경석 (가이드라인 11장 · 12장)
+# Secrets: AWS_ROLE_ARN · SERVERLESS_ACCESS_KEY(Serverless Framework v4 라이선스 키)  /  Variables: AWS_REGION
+# 함수 폴더 1개 = Serverless 서비스 1개 (sesac-gojigi-{폴더명}, 컨벤션 5-5). workflow_dispatch 는 세 함수 모두 배포
+name: serverless
+
+on:
+  push:
+    branches: [main]
+    paths: ["serverless/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: serverless-${{ github.ref }}
+  cancel-in-progress: false                  # 배포 중 취소하면 CloudFormation 스택이 어중간해진다
+
+permissions:
+  contents: read
+  id-token: write          # AWS OIDC
+
+jobs:
+  # 1) 어떤 함수가 바뀌었나 — 함수마다 output 하나 + matrix 용 JSON 배열(functions)
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      functions: ${{ github.event_name == 'workflow_dispatch' && '["order-notification","settlement-report","log-archive"]' || steps.filter.outputs.changes }}
+      order-notification: ${{ steps.filter.outputs.order-notification }}
+      settlement-report: ${{ steps.filter.outputs.settlement-report }}
+      log-archive: ${{ steps.filter.outputs.log-archive }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            order-notification: [serverless/order-notification/**]
+            settlement-report:  [serverless/settlement-report/**]
+            log-archive:        [serverless/log-archive/**]
+
+  # 2) 바뀐 함수마다 하나씩 — 테스트 → 배포
+  deploy:
+    needs: changes
+    if: needs.changes.outputs.functions != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        function: ${{ fromJSON(needs.changes.outputs.functions) }}
+    defaults:
+      run:
+        working-directory: serverless/${{ matrix.function }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: serverless/${{ matrix.function }}/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+
+      - name: AWS 자격 증명 (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: serverless deploy (dev)
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+        run: npx serverless deploy --stage dev   # serverless.yml 의 ${ssm:...} 은 배포 시점에 SSM 에서 읽는다

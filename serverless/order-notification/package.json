@@ -1,0 +1,16 @@
+{
+  "name": "sesac-gojigi-order-notification",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "invoke:local": "npx serverless invoke local -f notify -p events/order-paid.json",
+    "deploy": "npx serverless deploy --stage dev"
+  },
+  "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-dynamodb": "^3.0.0"
+  }
+}

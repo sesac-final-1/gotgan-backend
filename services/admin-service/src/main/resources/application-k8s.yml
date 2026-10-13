@@ -1,0 +1,8 @@
+# 클러스터용 — ConfigMap 의 SPRING_PROFILES_ACTIVE=k8s 로 활성화 (가이드라인 15장 6절)
+management:
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin.monitoring.svc.cluster.local:9411/api/v2/spans}
+  tracing:
+    sampling:
+      probability: 1.0                      # 데모 규모라 전부 수집 (TODO 박지연: 부하 시 조정)

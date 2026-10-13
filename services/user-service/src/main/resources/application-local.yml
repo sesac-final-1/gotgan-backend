@@ -1,0 +1,9 @@
+# 로컬 실행용 (IDE · ./gradlew bootRun --args='--spring.profiles.active=local')
+# docker compose up -d 로 MySQL · Redis · Keycloak 을 먼저 올린다 (루트 docker-compose.yml)
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed   # 시연용 시드 포함
+
+logging:
+  level:
+    org.hibernate.SQL: debug

@@ -1,0 +1,57 @@
+# 로컬 개발용 — MySQL(스키마 8개) + Redis + Keycloak. 자기 서비스는 IDE 에서 local 프로필로 띄운다 (가이드라인 15장 10절)
+# 스크립트(init-schemas.sh) 를 바꿨다면 docker compose down -v 후 다시 올린다
+#
+# 폴더 배치 (저장소 3분할 — 가이드라인 15장): 세 저장소를 D:\gotgan\ 아래 나란히 clone 한다
+#   D:\gotgan\gotgan-backend\   ← 이 파일
+#   D:\gotgan\gotgan-config\    ← 마운트하는 init-schemas.sh · realm-gotgan.json 의 정본 (deploy/k8s/**, 클러스터와 같은 파일)
+#   D:\gotgan\gotgan-frontend\
+# 아래 volumes 의 ../gotgan-config/... 상대 경로는 이 배치를 전제한다 — gotgan-config 가 없으면 먼저 clone 할 것
+services:
+  mysql:
+    image: mysql:8.4
+    command: ["mysqld", "--default-time-zone=+09:00", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      TZ: Asia/Seoul
+      USER_DB_PASSWORD: local-pass             # init-schemas.sh 가 스키마 8개 · 계정 8개를 만든다
+      STORE_DB_PASSWORD: local-pass
+      PRODUCT_DB_PASSWORD: local-pass
+      ORDER_DB_PASSWORD: local-pass
+      PAYMENT_DB_PASSWORD: local-pass
+      REVIEW_DB_PASSWORD: local-pass
+      SETTLEMENT_DB_PASSWORD: local-pass
+      KEYCLOAK_DB_PASSWORD: local-pass
+    ports: ["3306:3306"]
+    volumes:
+      - ../gotgan-config/deploy/k8s/db/init-schemas.sh:/docker-entrypoint-initdb.d/init-schemas.sh:ro   # 클러스터와 같은 스크립트 (gotgan-config)
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8      # 클러스터(deploy/k8s/keycloak) 와 같은 버전
+    command: ["start-dev", "--import-realm"]   # 개발 모드: HTTP · 캐시 끔 · 빠른 기동
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin       # 로컬 전용 값
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://mysql:3306/keycloakdb
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: local-pass
+      GOTGAN_BACKEND_CLIENT_SECRET: local-client-secret   # realm JSON 의 ${GOTGAN_BACKEND_CLIENT_SECRET} 자리표시자를 import 때 치환 (로컬 전용 값, 클러스터는 keycloak-secret)
+      TZ: Asia/Seoul
+    ports: ["8180:8080"]                       # 8080 은 gateway 가 쓰므로 8180 → issuer http://localhost:8180/realms/gotgan
+    volumes:
+      - ../gotgan-config/deploy/k8s/keycloak/realm-gotgan.json:/opt/keycloak/data/import/realm-gotgan.json:ro   # 클러스터와 같은 realm (gotgan-config)
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:

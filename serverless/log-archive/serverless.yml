@@ -1,0 +1,31 @@
+# log-archive — EventBridge 매일 03:00 KST → CloudWatch Logs 를 S3 log-archive 로 내보내기 (CreateExportTask) · 90일 후 Glacier
+# 담당 VoC-100 · 우선순위 Could · 가이드라인 11장. 서버리스는 배치 · 로깅만 (사용자 API 없음)
+# 공유 자원 ARN 은 하드코딩하지 않고 SSM 에서 읽는다 (Terraform app/ssm.tf 가 기록)
+service: sesac-gojigi-log-archive
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ap-northeast-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 30
+  logRetentionInDays: 14
+  environment:
+    BUCKET: ${ssm:/sesac-gojigi/dev/s3/log-archive-bucket}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - logs:CreateExportTask
+            - logs:DescribeExportTasks
+            - logs:DescribeLogGroups
+          Resource: "*"                     # TODO VoC-100: 테이블 · 버킷 · SES identity ARN 으로 좁히기
+
+functions:
+  archive:
+    handler: src/archive.handler
+    events:
+      - schedule: cron(0 18 * * ? *)      # UTC 18:00 = KST 03:00

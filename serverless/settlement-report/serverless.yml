@@ -1,0 +1,38 @@
+# settlement-report — SQS(SettlementPaid) → 정산 명세서 CSV → S3 reports → SES 로 판매자에게 다운로드 링크(presigned 7일) + DynamoDB 발송 이력
+# 담당 jihoon-devstu · 우선순위 Should · 가이드라인 11장. 서버리스는 배치 · 로깅만 (사용자 API 없음)
+# 공유 자원 ARN 은 하드코딩하지 않고 SSM 에서 읽는다 (Terraform app/ssm.tf 가 기록)
+service: sesac-gojigi-settlement-report
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ap-northeast-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 30
+  logRetentionInDays: 14
+  environment:
+    TABLE: ${ssm:/sesac-gojigi/dev/dynamodb/settlement-reports-table}
+    BUCKET: ${ssm:/sesac-gojigi/dev/s3/reports-bucket}
+    FROM_EMAIL: ${ssm:/sesac-gojigi/dev/ses/from-email}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - s3:PutObject
+            - s3:GetObject
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+          Resource: "*"                     # TODO jihoon-devstu: 테이블 · 버킷 · SES identity ARN 으로 좁히기
+
+functions:
+  report:
+    handler: src/report.handler
+    events:
+      - sqs:
+          arn: ${ssm:/sesac-gojigi/dev/sqs/report-settlement-queue-arn}
+          batchSize: 1
+          functionResponseType: ReportBatchItemFailures

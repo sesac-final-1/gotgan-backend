@@ -1,0 +1,23 @@
+# 빌드 산출물
+build/
+.gradle/
+out/
+bin/
+
+# Node (serverless/*)
+node_modules/
+.serverless/
+
+# 로그
+*.log
+
+# 로컬 환경 변수 — 비밀 값은 GitHub Secrets 만 (컨벤션 1-5). 예시 파일만 커밋
+.env
+.env.*
+!.env.example
+
+# IDE · OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
