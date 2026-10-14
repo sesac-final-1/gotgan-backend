@@ -82,7 +82,7 @@ gotgan-backend/
 ├── docs/api/                    OpenAPI 명세 · 에러 코드 목록
 ├── docs/CONVENTION.md           백엔드 · DB · 로깅 컨벤션 (문서 사이트 발췌본)
 ├── docker-compose.yml           로컬 MySQL(스키마 8) + Redis + Keycloak — gotgan-config의 스크립트 · realm을 마운트
-└── .github/workflows/           backend(테스트 → Sonar → ECR → config 태그 커밋) · serverless · security
+└── .github/workflows/           backend(테스트 · Sonar → ECR → config 태그 커밋) · serverless · security
 ```
 
 ---

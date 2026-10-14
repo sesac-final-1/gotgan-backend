@@ -2,10 +2,9 @@
 // 의존성 선택 기준: 가이드라인 15장 4절 "의존성 매트릭스". 버전 변수는 gradle.properties (전 서비스 동일)
 plugins {
     id 'java'
-    id 'jacoco'                                                 // SonarQube Cloud 커버리지 리포트
+    id 'jacoco'                                                 // SonarQube Cloud 커버리지 리포트 (루트 sonar-project.properties 가 XML 경로 참조)
     id 'org.springframework.boot' version '4.1.1'              // 전 서비스 같은 버전
     id 'io.spring.dependency-management' version '1.1.7'
-    id 'org.sonarqube' version '7.5.0.8588'                    // 가이드라인 12장 — 전 서비스 통일
 }
 
 group = 'com.sesac.gojigi'
@@ -58,13 +57,6 @@ dependencies {
     testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testcontainersVersion}"
     testImplementation "org.testcontainers:testcontainers-mysql:${testcontainersVersion}"
     testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
-}
-
-sonar {
-    properties {
-        property 'sonar.organization', 'sesac-gojigi'                    // TODO 구지훈: SonarQube Cloud 조직 키
-        property 'sonar.projectKey', 'sesac-gojigi_gotgan_product-service'
-    }
 }
 
 tasks.named('bootJar') { archiveFileName = 'app.jar' }   // Dockerfile 이 파일 이름을 고정해서 참조
