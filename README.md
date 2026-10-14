@@ -47,7 +47,7 @@
 | 메시징 | SNS → SQS (+DLQ) 도메인 이벤트 · 주문 Saga는 동기 REST 오케스트레이션 + 보상 |
 | 서버리스 | Serverless Framework v4 · Lambda (배치 · 로깅만: 알림 메일 · 정산 명세서 · 로그 아카이브) |
 | 결제 | 포트원(PortOne) V2 테스트 채널 |
-| 인프라 · CI (gotgan-config) | AWS EKS 3티어 (백 티어 `app` t3.large × 2 + DB 티어 `db` t3.medium × 1 — MySQL · Redis 전용, NetworkPolicy로 백 티어만 접근; 매일 08:00 생성 · 22:00 삭제) · Terraform · GitHub Actions (OIDC) · ArgoCD · SonarQube Cloud · Prometheus · Loki · Zipkin · Grafana |
+| 인프라 · CI (gotgan-config) | AWS EKS 3티어 (백 티어 `app` t3.xlarge × 2 + DB 티어 `db` t3.medium × 1 — MySQL · Redis 전용, NetworkPolicy로 백 티어만 접근; 매일 08:00 생성 · 22:00 삭제) · Terraform · GitHub Actions (OIDC) · ArgoCD · SonarQube Cloud · Prometheus · Loki · Zipkin · Grafana |
 
 ---
 
