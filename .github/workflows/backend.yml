@@ -11,7 +11,7 @@ on:
   pull_request:            # paths 필터 없음 — 필수 체크(ci-ok)가 모든 PR 에서 결과를 내야 머지가 막히지 않는다. 서비스 선별은 changes job 이 한다
   push:
     branches: [main]
-    paths: ["services/**"]
+    paths: ["services/**", "sonar-project.properties"]
 
 concurrency:
   group: backend-${{ github.ref }}
@@ -37,6 +37,7 @@ jobs:
       review: ${{ steps.filter.outputs.review }}
       settlement: ${{ steps.filter.outputs.settlement }}
       admin: ${{ steps.filter.outputs.admin }}
+      sonar-config: ${{ steps.config.outputs.sonar }}   # sonar-project.properties 만 바뀌어도 Sonar 재분석
     steps:
       - uses: actions/checkout@v4
       - id: filter
@@ -52,6 +53,11 @@ jobs:
             review:     [services/review-service/**]
             settlement: [services/settlement-service/**]
             admin:      [services/admin-service/**]
+      - id: config                           # 서비스 목록(services)에 섞이지 않게 필터를 따로 둔다
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            sonar: [sonar-project.properties]
 
   # 2) 바뀐 서비스마다 하나씩 — 테스트 → 이미지(main)
   build:
@@ -109,7 +115,7 @@ jobs:
   #    build 와 병렬로 돈다 — 바뀐 서비스가 없으면 build 처럼 건너뜀
   sonar:
     needs: changes
-    if: needs.changes.outputs.services != '[]'
+    if: needs.changes.outputs.services != '[]' || needs.changes.outputs.sonar-config == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
