@@ -1,7 +1,8 @@
 # 서비스 CI — 바뀐 서비스 감지 → 테스트 · 커버리지 → (main) 이미지 빌드 · ECR push(OIDC) → gotgan-config values.yaml 태그 커밋 — 담당 이경석 (가이드라인 12장)
-# PR 머지 조건 = 필수 체크 ci-ok + SonarCloud Code Analysis 통과 + 다른 팀원 승인 1명 (main 브랜치 Rulesets pull_request_ruleset)
-# SonarQube Cloud 는 자동 분석(Automatic Analysis) — 이 워크플로가 아니라 SonarQube Cloud GitHub 앱이 PR · main 을 직접 분석해 체크 · 코멘트를 단다 (토큰 불필요, 커버리지 미반영)
-# Secrets: AWS_ROLE_ARN · CONFIG_REPO_TOKEN(gotgan-config 쓰기용 fine-grained PAT)
+# PR 머지 조건 = 필수 체크 ci-ok(빌드 · 테스트 + SonarQube Cloud 품질 게이트) + 다른 팀원 승인 1명 (main 브랜치 Rulesets pull_request_ruleset)
+# SonarQube Cloud 는 CI 분석 — 서비스 9개를 저장소 하나 = 프로젝트 하나(sesac-final-1_gotgan-backend)로 스캔 (설정: 루트 sonar-project.properties)
+#   자동 분석은 Gradle 프로젝트가 루트가 아닌 services/ 아래에 있어 지원되지 않음
+# Secrets: AWS_ROLE_ARN · CONFIG_REPO_TOKEN(gotgan-config 쓰기용 fine-grained PAT) · SONAR_TOKEN
 # Variables: AWS_ACCOUNT_ID · AWS_REGION · DEPLOY_ENABLED ('true' 일 때만 ECR push · 태그 커밋, 그 외 = 건너뜀)
 # 이미지 태그 = 커밋 SHA 7자리 (latest 금지, 컨벤션 5-3). 배포 자체는 ArgoCD 가 gotgan-config 를 감시해서 수행한다
 name: backend
@@ -103,21 +104,63 @@ jobs:
           docker build -t "$REGISTRY/$REPOSITORY:$TAG" .
           docker push "$REGISTRY/$REPOSITORY:$TAG"
 
-  # 3) PR 머지 판정 — main 브랜치 보호의 필수 체크는 이 job 하나만 건다 (matrix job 이름은 서비스마다 달라 필수로 걸 수 없음)
-  #    바뀐 서비스의 빌드 · 테스트가 모두 성공했거나, 바뀐 서비스가 없어 build 가 skipped 면 통과
+  # 3) SonarQube Cloud — 저장소 전체를 한 번에 스캔하고 품질 게이트 결과를 기다린다 (실패 시 이 job 실패 → ci-ok 실패 → 머지 차단)
+  #    Java 분석에 컴파일 결과가 필요해 9개 서비스를 모두 컴파일. 테스트 · JaCoCo 는 바뀐 서비스만 (품질 게이트는 새 코드 기준이라 충분)
+  #    build 와 병렬로 돈다 — 바뀐 서비스가 없으면 build 처럼 건너뜀
+  sonar:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0                     # 새 코드 범위(blame) 계산에 전체 이력 필요
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: 컴파일(전체) · 테스트 + JaCoCo(바뀐 서비스)
+        env:
+          CHANGED: ${{ needs.changes.outputs.services }}   # 예: ["order","payment"]
+        run: |
+          for dir in services/*-service; do
+            name=$(basename "$dir" -service)
+            if echo "$CHANGED" | grep -q "\"$name\""; then tasks="test jacocoTestReport"; else tasks="compileJava compileTestJava"; fi
+            echo "::group::$name — $tasks"
+            (cd "$dir" && chmod +x gradlew && ./gradlew $tasks --no-daemon)
+            echo "::endgroup::"
+          done
+
+      - name: SonarQube Cloud 스캔 · 품질 게이트
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: -Dsonar.qualitygate.wait=true
+
+  # 4) PR 머지 판정 — main 브랜치 보호의 필수 체크는 이 job 하나만 건다 (matrix job 이름은 서비스마다 달라 필수로 걸 수 없음)
+  #    빌드 · 테스트와 Sonar 품질 게이트가 모두 성공했거나, 바뀐 서비스가 없어 둘 다 skipped 면 통과
   ci-ok:
-    needs: [changes, build]
+    needs: [changes, build, sonar]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - env:
           CHANGES: ${{ needs.changes.result }}
           BUILD: ${{ needs.build.result }}
+          SONAR: ${{ needs.sonar.result }}
         run: |
-          echo "changes=$CHANGES build=$BUILD"
-          [ "$CHANGES" = success ] && { [ "$BUILD" = success ] || [ "$BUILD" = skipped ]; }
+          echo "changes=$CHANGES build=$BUILD sonar=$SONAR"
+          ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
+          [ "$CHANGES" = success ] && ok "$BUILD" && ok "$SONAR"
 
-  # 4) gotgan-config 의 Helm values.yaml 에서 내 서비스의 tag 줄만 바꿔 커밋 → ArgoCD 가 감지해 배포
+  # 5) gotgan-config 의 Helm values.yaml 에서 내 서비스의 tag 줄만 바꿔 커밋 → ArgoCD 가 감지해 배포
   bump-tag:
     needs: [changes, build]
     if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'   # 이미지 push 를 건너뛰었으면 태그도 바꾸지 않는다 (없는 태그 배포 방지)
