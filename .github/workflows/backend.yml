@@ -1,6 +1,7 @@
 # 서비스 CI — 바뀐 서비스 감지 → 테스트 · 커버리지 → (main) 이미지 빌드 · ECR push(OIDC) → gotgan-config values.yaml 태그 커밋 — 담당 이경석 (가이드라인 12장)
-# PR 머지 조건 = 필수 체크 ci-ok 통과 + 다른 팀원 승인 1명 (main 브랜치 보호 규칙). SonarQube Cloud 는 차후 도입 — build job 의 주석 블록 참고
-# Secrets: AWS_ROLE_ARN · CONFIG_REPO_TOKEN(gotgan-config 쓰기용 fine-grained PAT) · (Sonar 도입 시) SONAR_TOKEN
+# PR 머지 조건 = 필수 체크 ci-ok + SonarCloud Code Analysis 통과 + 다른 팀원 승인 1명 (main 브랜치 Rulesets pull_request_ruleset)
+# SonarQube Cloud 는 자동 분석(Automatic Analysis) — 이 워크플로가 아니라 SonarQube Cloud GitHub 앱이 PR · main 을 직접 분석해 체크 · 코멘트를 단다 (토큰 불필요, 커버리지 미반영)
+# Secrets: AWS_ROLE_ARN · CONFIG_REPO_TOKEN(gotgan-config 쓰기용 fine-grained PAT)
 # Variables: AWS_ACCOUNT_ID · AWS_REGION · DEPLOY_ENABLED ('true' 일 때만 ECR push · 태그 커밋, 그 외 = 건너뜀)
 # 이미지 태그 = 커밋 SHA 7자리 (latest 금지, 컨벤션 5-3). 배포 자체는 ArgoCD 가 gotgan-config 를 감시해서 수행한다
 name: backend
@@ -65,7 +66,6 @@ jobs:
         working-directory: services/${{ matrix.service }}-service
     steps:
       - uses: actions/checkout@v4
-        # Sonar 도입 시 추가: with: { fetch-depth: 0 }  — 새 코드 범위(blame) 계산에 전체 이력 필요
 
       - uses: actions/setup-java@v4
         with:
@@ -80,15 +80,6 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew test jacocoTestReport --no-daemon
-
-      # TODO 구지훈: SonarQube Cloud 도입 시 주석 해제 (SONAR_TOKEN 등록 · 위 checkout 에 fetch-depth: 0 · 브랜치 보호 필수 체크는 ci-ok 그대로)
-      #   gradle 쪽(org.sonarqube 플러그인 · sonar.organization · projectKey · jacoco XML)은 각 build.gradle 에 이미 있음
-      # - name: SonarQube Cloud (PR 품질 게이트 · 코멘트)
-      #   if: github.event_name == 'pull_request' && github.base_ref == 'main'
-      #   env:
-      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   run: ./gradlew sonar --no-daemon
 
       # ── 여기부터 main push 에서만 ──
       - name: AWS 자격 증명 (OIDC)
