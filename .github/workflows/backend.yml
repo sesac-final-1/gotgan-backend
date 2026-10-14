@@ -1,11 +1,12 @@
-# 서비스 CI — 바뀐 서비스 감지 → 테스트 · 커버리지 → SonarQube Cloud(PR 품질 게이트 · 코멘트) → (main) 이미지 빌드 · ECR push(OIDC) → gotgan-config values.yaml 태그 커밋 — 담당 이경석 (가이드라인 12장)
-# Secrets: AWS_ROLE_ARN · SONAR_TOKEN · CONFIG_REPO_TOKEN(gotgan-config 쓰기용 fine-grained PAT)  /  Variables: AWS_ACCOUNT_ID · AWS_REGION
+# 서비스 CI — 바뀐 서비스 감지 → 테스트 · 커버리지 → (main) 이미지 빌드 · ECR push(OIDC) → gotgan-config values.yaml 태그 커밋 — 담당 이경석 (가이드라인 12장)
+# PR 머지 조건 = 필수 체크 ci-ok 통과 + 다른 팀원 승인 1명 (main 브랜치 보호 규칙). SonarQube Cloud 는 차후 도입 — build job 의 주석 블록 참고
+# Secrets: AWS_ROLE_ARN · CONFIG_REPO_TOKEN(gotgan-config 쓰기용 fine-grained PAT) · (Sonar 도입 시) SONAR_TOKEN
+# Variables: AWS_ACCOUNT_ID · AWS_REGION · DEPLOY_ENABLED ('true' 일 때만 ECR push · 태그 커밋, 그 외 = 건너뜀)
 # 이미지 태그 = 커밋 SHA 7자리 (latest 금지, 컨벤션 5-3). 배포 자체는 ArgoCD 가 gotgan-config 를 감시해서 수행한다
 name: backend
 
 on:
-  pull_request:
-    paths: ["services/**"]
+  pull_request:            # paths 필터 없음 — 필수 체크(ci-ok)가 모든 PR 에서 결과를 내야 머지가 막히지 않는다. 서비스 선별은 changes job 이 한다
   push:
     branches: [main]
     paths: ["services/**"]
@@ -50,7 +51,7 @@ jobs:
             settlement: [services/settlement-service/**]
             admin:      [services/admin-service/**]
 
-  # 2) 바뀐 서비스마다 하나씩 — 테스트 → Sonar(PR) → 이미지(main)
+  # 2) 바뀐 서비스마다 하나씩 — 테스트 → 이미지(main)
   build:
     needs: changes
     if: needs.changes.outputs.services != '[]'
@@ -64,8 +65,7 @@ jobs:
         working-directory: services/${{ matrix.service }}-service
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0                     # Sonar 가 새 코드 범위(blame) 를 계산하려면 전체 이력 필요
+        # Sonar 도입 시 추가: with: { fetch-depth: 0 }  — 새 코드 범위(blame) 계산에 전체 이력 필요
 
       - uses: actions/setup-java@v4
         with:
@@ -81,27 +81,29 @@ jobs:
           chmod +x gradlew
           ./gradlew test jacocoTestReport --no-daemon
 
-      - name: SonarQube Cloud (PR 품질 게이트 · 코멘트)
-        if: github.event_name == 'pull_request' && github.base_ref == 'main'
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew sonar --no-daemon        # sonar.organization · projectKey 는 각 build.gradle
+      # TODO 구지훈: SonarQube Cloud 도입 시 주석 해제 (SONAR_TOKEN 등록 · 위 checkout 에 fetch-depth: 0 · 브랜치 보호 필수 체크는 ci-ok 그대로)
+      #   gradle 쪽(org.sonarqube 플러그인 · sonar.organization · projectKey · jacoco XML)은 각 build.gradle 에 이미 있음
+      # - name: SonarQube Cloud (PR 품질 게이트 · 코멘트)
+      #   if: github.event_name == 'pull_request' && github.base_ref == 'main'
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   run: ./gradlew sonar --no-daemon
 
       # ── 여기부터 main push 에서만 ──
       - name: AWS 자격 증명 (OIDC)
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: ECR 로그인
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: 이미지 빌드 · push
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
         env:
           REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
           REPOSITORY: sesac-gojigi-${{ matrix.service }}     # Terraform ecr/ 가 만든 저장소 이름
@@ -110,10 +112,24 @@ jobs:
           docker build -t "$REGISTRY/$REPOSITORY:$TAG" .
           docker push "$REGISTRY/$REPOSITORY:$TAG"
 
-  # 3) gotgan-config 의 Helm values.yaml 에서 내 서비스의 tag 줄만 바꿔 커밋 → ArgoCD 가 감지해 배포
+  # 3) PR 머지 판정 — main 브랜치 보호의 필수 체크는 이 job 하나만 건다 (matrix job 이름은 서비스마다 달라 필수로 걸 수 없음)
+  #    바뀐 서비스의 빌드 · 테스트가 모두 성공했거나, 바뀐 서비스가 없어 build 가 skipped 면 통과
+  ci-ok:
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build.result }}
+        run: |
+          echo "changes=$CHANGES build=$BUILD"
+          [ "$CHANGES" = success ] && { [ "$BUILD" = success ] || [ "$BUILD" = skipped ]; }
+
+  # 4) gotgan-config 의 Helm values.yaml 에서 내 서비스의 tag 줄만 바꿔 커밋 → ArgoCD 가 감지해 배포
   bump-tag:
     needs: [changes, build]
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'   # 이미지 push 를 건너뛰었으면 태그도 바꾸지 않는다 (없는 태그 배포 방지)
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1                        # 같은 파일에 동시에 push 하면 충돌 — 서비스별로 차례대로
@@ -129,10 +145,11 @@ jobs:
       - name: values.yaml 태그 교체
         env:
           SERVICE: ${{ matrix.service }}
+
+        # yq 없이 sed 로: `  {service}-service:` 블록부터 다음 2칸 들여쓰기 키 전까지의 범위에서 `    tag: "..."` 값만 바꾼다 (뒤 주석은 유지)
         run: |
           TAG=${GITHUB_SHA::7}
           FILE=deploy/helm/sesac-gojigi-app/values.yaml
-          # yq 없이 sed 로: `  {service}-service:` 블록부터 다음 2칸 들여쓰기 키 전까지의 범위에서 `    tag: "..."` 값만 바꾼다 (뒤 주석은 유지)
           sed -i -E "/^  ${SERVICE}-service:/,/^  [a-z][a-z-]*:/ s|^(    tag: )\"[^\"]*\"|\1\"${TAG}\"|" "$FILE"
           grep -A2 "^  ${SERVICE}-service:" "$FILE"
 
