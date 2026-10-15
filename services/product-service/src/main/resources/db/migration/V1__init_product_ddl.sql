@@ -23,7 +23,7 @@ CREATE TABLE product (
   store_id                BIGINT       NOT NULL COMMENT 'store-service store.store_id (논리 참조)',
   name                    VARCHAR(100) NOT NULL COMMENT '상품명',
   price                   BIGINT       NOT NULL COMMENT '판매가 (원, 판매자 입력)',
-  discount_rate           INT          NOT NULL DEFAULT 0 COMMENT '즉시할인 % (0~90, 판매자 입력) — 수정 화면 표시용',
+  discount_rate           DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '즉시할인율 % (0~90, 판매자 입력) — 수정 화면 표시용, 비율이라 DECIMAL (컨벤션 3-6)',
   sale_price              BIGINT       NOT NULL COMMENT '할인 적용가 (원) — 서버가 price · discount_rate 로 계산(10원 단위 반올림). 정렬 · 주문 금액 기준',
   description             TEXT                  COMMENT '상세 설명 (sanitizer 정화 HTML)',
   option1_name            VARCHAR(30)           COMMENT '옵션 그룹 1 이름 예: 색상 — 옵션 없으면 NULL',
