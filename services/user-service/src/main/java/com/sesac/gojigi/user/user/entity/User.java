@@ -1,6 +1,9 @@
 package com.sesac.gojigi.user.user.entity;
 
 import com.sesac.gojigi.user.common.entity.BaseTimeEntity;
+import com.sesac.gojigi.user.user.entity.status.Grade;
+import com.sesac.gojigi.user.user.entity.status.SignupProvider;
+import com.sesac.gojigi.user.user.entity.status.UserStatus;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
 import jakarta.persistence.Column;
