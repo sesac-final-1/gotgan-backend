@@ -10,6 +10,7 @@ import com.sesac.gojigi.settlement.settlement.service.StoreStatusService.Result;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -58,7 +59,8 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    void 순서대로_도착하면_마지막_상태로_반영() {
+    @DisplayName("순서대로 도착하면 마지막 상태로 반영한다")
+    void applyStatusChanged_inOrder_appliesLatestStatus() {
         assertThat(service.applyStatusChanged(event("SUSPENDED", T1000))).isEqualTo(Result.APPLIED);
         assertThat(service.applyStatusChanged(event("ACTIVE", T1005))).isEqualTo(Result.APPLIED);
 
@@ -67,7 +69,8 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    void 늦게_도착한_옛_이벤트는_무시하고_최신_상태_유지() {
+    @DisplayName("늦게 도착한 옛 이벤트는 무시하고 최신 상태를 유지한다")
+    void applyStatusChanged_staleEventArrivesLate_keepsLatestStatus() {
         assertThat(service.applyStatusChanged(event("ACTIVE", T1005))).isEqualTo(Result.APPLIED);       // ② 먼저
         assertThat(service.applyStatusChanged(event("SUSPENDED", T1000))).isEqualTo(Result.STALE_IGNORED); // ① 나중
 
@@ -77,7 +80,8 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    void 같은_eventId_재전달은_중복으로_무시() {
+    @DisplayName("같은 eventId 재전달은 중복으로 무시한다")
+    void applyStatusChanged_sameEventIdRedelivered_returnsDuplicate() {
         var e = event("SUSPENDED", T1000);
         assertThat(service.applyStatusChanged(e)).isEqualTo(Result.APPLIED);
         assertThat(service.applyStatusChanged(e)).isEqualTo(Result.DUPLICATE);
@@ -85,7 +89,8 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    void 스냅샷이_없는_스토어는_재시도할_수_있게_처리_기록을_남기지_않음() {
+    @DisplayName("스냅샷이 없는 스토어는 재시도할 수 있게 처리 기록을 남기지 않는다")
+    void applyStatusChanged_storeSnapshotMissing_leavesNoRecordForRetry() {
         var e = new EventEnvelope<>(UUID.randomUUID().toString(), "StoreStatusChanged", T1000, "999", 1,
                 new StoreStatusChangedPayload(999L, "SUSPENDED"));
         assertThat(service.applyStatusChanged(e)).isEqualTo(Result.STORE_NOT_FOUND);
