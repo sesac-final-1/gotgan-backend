@@ -6,6 +6,7 @@ spring:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
 
 server:
+  # 외부 접속은 NLB 80 → 이 포트(8080) — gotgan-config Helm values gateway service.port: 80
   port: 8080
   shutdown: graceful                        # 롤링 업데이트 때 처리 중인 요청을 마치고 종료
 
