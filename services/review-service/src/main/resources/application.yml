@@ -17,6 +17,7 @@ spring:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
 
 server:
+  # 클러스터 내부 전용(ClusterIP) — 외부 요청은 gateway(NLB 80) 를 거쳐서만 들어온다
   port: 8087
   shutdown: graceful                        # 롤링 업데이트 때 처리 중인 요청을 마치고 종료
 
