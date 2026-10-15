@@ -547,8 +547,8 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
 ### 2-10. 테스트
 
 - 클래스: 단위 `{대상}Test` · 통합 `{대상}IntegrationTest`
-- 메서드: `{메서드}_{상황}_{결과}` + `@DisplayName`(한국어)
-  - `ship_배송준비가_아니면_예외()` + `@DisplayName("배송준비 상태가 아니면 송장을 등록할 수 없다")`
+- 메서드: **영어** `{메서드}_{상황}_{결과}` (각 조각 camelCase) + `@DisplayName`(한국어) — 메서드 이름에 한글 금지 (10/15)
+  - `ship_whenNotPreparing_throwsException()` + `@DisplayName("배송준비 상태가 아니면 송장을 등록할 수 없다")`
 - 필수 대상: 엔티티 상태 전이 · 정산 금액 계산 · Saga 보상 · 멱등 API · 소유권 검사
 - DB가 필요한 테스트는 Testcontainers(MySQL · Redis), H2 사용 안 함
 - given / when / then 주석으로 구분
