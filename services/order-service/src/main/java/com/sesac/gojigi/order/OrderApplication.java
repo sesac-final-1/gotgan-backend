@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * order-service (:8084) — 장바구니 · 주문 · 배송(status) · 취소/반품/교환 · Saga 오케스트레이터
- * 담당: jongbeen97 · 구조: 가이드라인 15장 · 컨벤션 2-1
+ * 담당: perish95 · 구조: 가이드라인 15장 · 컨벤션 2-1
  */
 @SpringBootApplication
 @EnableScheduling
