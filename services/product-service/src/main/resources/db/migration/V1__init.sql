@@ -1,3 +1,0 @@
--- productdb V1 — 담당 VoC-100 가 작성한다.
--- 규칙: 컨벤션 3장 (단수형 테이블 · PK {테이블}_id · pk_/fk_/uk_/idx_ · DATETIME(6) · utf8mb4_unicode_ci · 모든 COMMENT)
--- 예시 DDL: 가이드라인 06장 (orderdb) · 07장 (paymentdb). 머지된 파일은 수정 금지 — 바꿀 때는 V2 부터.
