@@ -1,2 +1,2 @@
 -- 시연용 시드 (local · k8s 프로필에서만 실행, 내용이 바뀌면 재실행 — R__ 반복 마이그레이션)
--- 목업(gotgan_expage/src/data/*.js) 데이터를 INSERT 로 옮긴다. 담당 jongbeen97
+-- 목업(gotgan_expage/src/data/*.js) 데이터를 INSERT 로 옮긴다. 담당 jihoon-devstu

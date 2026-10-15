@@ -27,10 +27,9 @@
 
 | 이름 | GitHub | 인프라 | 서비스 · 도메인 |
 |---|---|---|---|
-| 구지훈 | [@jihoon-devstu](https://github.com/jihoon-devstu) | AWS IaC (Terraform) · 일일 스케줄 · 시크릿 동기화 · SonarQube Cloud | `settlement` · `admin` — 스마트스토어 관리자 도메인 · 알림 · 명세서 Lambda |
-| 이경석 | [@perish95](https://github.com/perish95) | CI/CD (GitHub Actions · ArgoCD) · Keycloak | `gateway` · `user` — 회원 · 인증 · 인가 |
+| 구지훈 | [@jihoon-devstu](https://github.com/jihoon-devstu) | AWS IaC (Terraform) · 일일 스케줄 · 시크릿 동기화 | `settlement` · `admin` · `payment` — 정산 · 관리자 · 결제(포트원) · 알림 · 명세서 Lambda |
+| 이경석 | [@perish95](https://github.com/perish95) | CI/CD (GitHub Actions · ArgoCD) · Keycloak · SonarQube Cloud | `gateway` · `user` · `order` · `review` — 회원 · 인증 · 인가 · 주문(Saga) · 리뷰 |
 | 박지연 | [@VoC-100](https://github.com/VoC-100) | 로깅 · 관측성 (Prometheus · Loki · Grafana · Zipkin) · 헬스 체크 대시보드 | `product` · `store` — 판매자 스토어 도메인 · 로그 아카이브 Lambda |
-| 이종빈 | [@jongbeen97](https://github.com/jongbeen97) | — | `order` · `payment` · `review` — 구매 흐름 |
 
 - 기간 **2026-10-12 ~ 11-20** · **1~2주차 인프라 → 3~5주차 도메인 개발(프론트 포함) → 6주차 QA · 발표** · 개발은 **11-13(금) 기능 동결** · **11-20 발표**
 - 1~3일 스프린트 + 매주 금요일 중간 점검, 초반 데일리 스크럼
@@ -59,10 +58,10 @@
 | `user-service` | 8081 | `userdb` | 회원 · 가입/로그인(Keycloak 대리) · 배송지 · 포인트 · 등급 | 이경석 |
 | `store-service` | 8082 | `storedb` | 입점 신청 · 심사 · 스토어 · 판매자 대시보드(조합) | 박지연 |
 | `product-service` | 8083 | `productdb` | 카테고리 · 상품 · 옵션 · 재고 · 이미지 · QueryDSL 검색 | 박지연 |
-| `order-service` | 8084 | `orderdb` + Redis | 장바구니 · 주문 · 배송(status) · 취소/반품/교환 · **Saga 오케스트레이터** | 이종빈 |
+| `order-service` | 8084 | `orderdb` + Redis | 장바구니 · 주문 · 배송(status) · 취소/반품/교환 · **Saga 오케스트레이터** | 이경석 |
 | `settlement-service` | 8085 | `settlementdb` | 정산 적재 · 주간 집계 · 지급 · 카테고리별 수수료 | 구지훈 |
-| `payment-service` | 8086 | `paymentdb` | 결제 · 포트원 V2 검증/취소 · 웹훅 | 이종빈 |
-| `review-service` | 8087 | `reviewdb` | 리뷰 · 판매자 답글 · 상품문의 · 리뷰 작성 자격 · 관리자 블라인드 | 이종빈 |
+| `payment-service` | 8086 | `paymentdb` | 결제 · 포트원 V2 검증/취소 · 웹훅 | 구지훈 |
+| `review-service` | 8087 | `reviewdb` | 리뷰 · 판매자 답글 · 상품문의 · 리뷰 작성 자격 · 관리자 블라인드 | 이경석 |
 | `admin-service` | 8088 | — | 관리자 API 진입점 · `/internal/**` 조합 · 관리자 대시보드 | 구지훈 |
 
 규칙 요약: 모든 응답은 `ApiResponse<T>` 봉투 `{ code, message, data }` · 에러 코드는 의미형(`ORDER_OUT_OF_STOCK`) · 시간대는 DB · JDBC · JVM 모두 Asia/Seoul(`created_at` · `updated_at`은 DB가 기록) · 다른 서비스 DB에 FK · JOIN 금지 · 관리자 기능은 전부 `/api/admin/**` → admin-service → 각 서비스 `/internal/**` · 모든 동기 호출은 Resilience4j. 전체 규칙은 [docs/CONVENTION.md](docs/CONVENTION.md).
