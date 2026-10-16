@@ -2,8 +2,8 @@
 <!--
   전 서비스 같은 파일 (가이드라인 13장 공통 규칙). 형식 임의 변경 금지 — 바꾸려면 박지연(관측성) 과 상의.
   - 로그 한 줄: timestamp level app traceId spanId message (업무 키 orderNo · sagaId 는 MDC 또는 메시지)
-  - k8s 프로필: Loki 로 직접 전송 (loki4j). 라벨은 app · namespace · level 만 (카디널리티 폭발 방지)
-  TODO 박지연: Loki4j ${loki4jVersion} 설정 블록 작성 (LOKI_URL 환경 변수) · JSON 레이아웃 확정
+  - k8s 프로필: Loki 로 직접 전송 (loki4j 2.x). 라벨은 app · namespace · level 만 (카디널리티 폭발 방지)
+  - Loki 본문은 JSON. traceId 는 "traceId":"..." 그대로 — Grafana 로그 → 트레이스 링크 정규식 (gotgan-config deploy/observability/grafana.yaml)
 -->
 <configuration>
     <springProperty scope="context" name="APP" source="spring.application.name" defaultValue="review-service"/>
@@ -21,9 +21,26 @@
     </springProfile>
 
     <springProfile name="k8s">
-        <!-- TODO 박지연: Loki4jAppender 추가 (url=${LOKI_URL}, 라벨 app=${APP},namespace=sesac-gojigi,level=%level) -->
+        <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+            <http>
+                <url>${LOKI_URL}</url>                  <!-- ConfigMap 환경 변수 (gotgan-config deploy/k8s/01-configmap.yaml) -->
+            </http>
+            <labels>
+                app=${APP}
+                namespace=sesac-gojigi
+                level=%level
+            </labels>
+            <structuredMetadata>off</structuredMetadata> <!-- 같은 값이 JSON 본문에 있음. 검색은 | json 으로 -->
+            <message class="com.github.loki4j.logback.JsonLayout">
+                <mdc>
+                    <noPrefix>true</noPrefix>           <!-- 기본값이면 "mdc_traceId" 가 되어 Grafana 링크가 끊긴다 -->
+                </mdc>
+            </message>
+        </appender>
+
         <root level="INFO">
-            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="CONSOLE"/>             <!-- Loki 가 죽어도 kubectl logs 로 볼 수 있게 유지 -->
+            <appender-ref ref="LOKI"/>
         </root>
     </springProfile>
 </configuration>
