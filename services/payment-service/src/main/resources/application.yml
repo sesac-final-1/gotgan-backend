@@ -4,7 +4,7 @@ spring:
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/paymentdb?connectionTimeZone=Asia/Seoul
-    username: ${DB_USERNAME:payment}       # 클러스터에서는 ESO 가 만든 Secret → 환경 변수
+    username: ${DB_USERNAME:payment}       # 클러스터에서는 secrets-sync 가 만든 payment-service-secret → 환경 변수
     password: ${DB_PASSWORD:local-pass}
   jpa:
     open-in-view: false
@@ -27,8 +27,9 @@ app:
     read-timeout: 3s
   portone:
     api-base-url: https://api.portone.io
-    api-secret: ${PORTONE_API_SECRET:}            # Secrets Manager sesac-gojigi/payment-service
-    webhook-secret: ${PORTONE_WEBHOOK_SECRET:}
+    api-secret: ${PORTONE_API_SECRET:}            # GitHub Secret → secrets-sync → payment-service-secret (로그 금지)
+    webhook-secret: ${PORTONE_WEBHOOK_SECRET:}    # Standard Webhooks 서명 검증 (whsec_...)
+    webhook-tolerance: 5m                   # 웹훅 시각 허용 범위 — 재전송 공격 방지
 
 resilience4j:
   circuitbreaker:
@@ -39,13 +40,25 @@ resilience4j:
         failure-rate-threshold: 50          # 최근 10건 중 50% 실패면 OPEN → 바로 폴백
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
+        record-exceptions:                  # 장애로 세는 것: 연결 실패 · 타임아웃 · 5xx
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:                  # 포트원의 4xx 거절(비즈니스 오류로 변환)은 세지 않음
+          - com.sesac.gojigi.payment.common.exception.BusinessException
     instances:
-      portoneClient: { base-config: default }
+      portone: { base-config: default }     # 이름 = 대상 서비스 (가이드라인 06장)
   retry:
     configs:
       default:
         max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST 는 재시도 금지)
         wait-duration: 200ms
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:
+          - com.sesac.gojigi.payment.common.exception.BusinessException
+    instances:
+      portone: { base-config: default }     # PortOneClientAdapter#getPayment 에만 적용
 
 management:
   endpoints:
