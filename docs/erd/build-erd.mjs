@@ -60,6 +60,15 @@ for (const [svc, db, owner] of SERVICES) {
     for (const m of sql.matchAll(/CREATE TABLE\s+(\w+)\s*\(\n([\s\S]*?)\n\)([^;]*);/g)) {
       if (!SKIP_TABLES.has(m[1])) tables.push(parseTable(m[1], m[2], m[3]));
     }
+    // 이후 버전의 컬럼 추가 (ALTER TABLE t ADD COLUMN ... [AFTER x]) — 머지된 마이그레이션은 수정하지 않으므로
+    for (const m of sql.matchAll(/ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+([^;]+);/g)) {
+      const table = tables.find((t) => t.name === m[1]);
+      if (!table) continue;
+      const after = /\sAFTER\s+(\w+)\s*$/i.exec(m[2].trim())?.[1];
+      const [column] = parseTable(m[1], m[2].replace(/\sAFTER\s+\w+\s*$/i, '').replace(/\s+/g, ' ').trim(), '').columns;
+      const at = after ? table.columns.findIndex((c) => c.col === after) + 1 : table.columns.length;
+      table.columns.splice(at || table.columns.length, 0, column);
+    }
   }
   schemas.push({ svc, db, owner, files, tables });
 }
