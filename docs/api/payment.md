@@ -95,7 +95,7 @@ order는 응답의 `portonePaymentId`를 브라우저에 넘겨 결제창 `payme
 | 포트원 장애 · 타임아웃 | **502** `EXTERNAL_API_ERROR` — order는 이후 단계(재고 · 포인트)를 진행하지 않고 복구 스케줄러가 같은 `sagaId`로 재시도 |
 
 - 취소 금액(배송비 배분 · 반품 배송비 차감)은 **order가 계산**해서 보냅니다. payment는 받은 금액만 취소합니다.
-- 응답 `data`: `PaymentResponse` + `cancel: { sagaId, orderItemId, cancelAmount, portoneCancellationId, cancelledAt }`
+- 응답 `data`: `{ payment: PaymentResponse, cancel: { sagaId, orderItemId, cancelAmount, portoneCancellationId, cancelledAt } }` — 취소할 것이 없었으면 `cancel: null`, 결제 자체가 없으면 `data: null`
 
 ## 4. 결제 상태 조회 — `GET /internal/payments?orderNo=` (ORD-07 결제 대기 만료)
 
@@ -106,7 +106,8 @@ order는 응답의 `portonePaymentId`를 브라우저에 넘겨 결제창 `payme
 
 - 게이트웨이 permitAll(POST만, 이미 설정됨). 포트원 콘솔 등록 주소: `https://gotgan-ashy.vercel.app/api/payments/webhook`
 - 서명 검증: Standard Webhooks 형식(`webhook-id` · `webhook-timestamp` · `webhook-signature`, HMAC-SHA256, 시크릿 `PORTONE_WEBHOOK_SECRET`, 시각 허용 5분) — **구현 시 포트원 V2 문서로 재확인**. 실패하면 **400**, 처리 안 함
-- 본문은 "확인 요청"으로만 사용: `data.paymentId`로 `payment`를 찾아 **포트원을 다시 조회**하고 2번과 같은 비교(기대 금액 = `payment.amount`). 모르는 paymentId는 **200** 무시
+- 본문은 "확인 요청"으로만 사용: `data.paymentId`로 `payment`를 찾아 **포트원을 다시 조회**하고 2번과 같은 비교(기대 금액 = `payment.amount`). 모르는 type · paymentId는 **200** 무시
+- **FAILED 인데 포트원이 PAID**(결제 대기 만료 · 보상 후 사용자가 늦게 결제 완료) → 포트원 전액 자동 취소 + `payment_cancel`(사유 "결제 실패 처리 후 승인된 결제 자동 취소"), 상태는 FAILED 유지 — 주문 없는 결제가 남지 않게
 - 처리 중 오류는 **5xx** → 포트원이 재전송. `version`(@Version)으로 확인 요청과 웹훅이 동시에 와도 한 번만 반영
 
 ## 6. 오류 코드 (`PaymentErrorCode`, `docs/api/error-codes.md`)
