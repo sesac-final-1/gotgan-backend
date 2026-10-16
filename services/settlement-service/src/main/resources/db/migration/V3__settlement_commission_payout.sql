@@ -1,5 +1,5 @@
 -- settlementdb V3 — settlement-service (담당 구지훈)
--- 근거: 요구사항 STL-01~09 · 05장 정산 규칙 · events.md OrderItemConfirmed · 컨벤션 3장
+-- 근거: 요구사항 STL-01~09 · 05장 정산 규칙 · events.md OrderItemConfirmed · API 명세(관리자 정산 상세 items · history) · 컨벤션 3장
 -- 컬럼 순서: PK → 같은 서비스 FK → 다른 서비스 ID → 비즈니스 → 상태 · 플래그 → 도메인 시간 → 감사 컬럼 → version (컨벤션 3-9)
 -- V1(shedlock) · V2(settlement_store · processed_event)는 머지돼 수정 금지 — 나머지 정산 테이블을 V3 로 추가.
 -- 정산 규칙: 지급액 = 구매확정 매출 − 판매수수료(카테고리별) − 결제수수료 2.2%, 원 단위 내림, 포인트 사용분은 플랫폼 부담(매출은 포인트 차감 전 금액)
@@ -48,6 +48,7 @@ CREATE TABLE settlement_item (
   order_no           VARCHAR(20)  NOT NULL COMMENT 'order-service orders.order_no (논리 참조) — 판매자 정산 상세 표시용',
   store_id           BIGINT       NOT NULL COMMENT 'store-service store.store_id (논리 참조)',
   product_id         BIGINT       NOT NULL COMMENT 'product-service product.product_id (논리 참조)',
+  product_name       VARCHAR(100) NOT NULL COMMENT '구매확정 시점 상품명 스냅샷 (OrderItemConfirmed productName) — 정산 상세 표시용',
   category_id        BIGINT       NOT NULL COMMENT 'product-service category.category_id (논리 참조) — 상위 카테고리, 수수료율 조회 기준',
   item_amt           BIGINT       NOT NULL COMMENT '상품주문 금액 (원) — 포인트 차감 전 = 판매자 매출',
   commission_rate    DECIMAL(5,2) NOT NULL COMMENT '적재 시점 판매수수료율 (%) 스냅샷',
@@ -60,6 +61,19 @@ CREATE TABLE settlement_item (
   CONSTRAINT fk_settlement_item_settlement FOREIGN KEY (settlement_id) REFERENCES settlement (settlement_id) ON DELETE RESTRICT,
   INDEX idx_settlement_item_store_confirmed (store_id, confirmed_at)   -- 주간 집계: 스토어별 지난주 구매확정분 (다른 서비스 ID — 수동 인덱스, 컨벤션 3-8)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='정산 대상 상품주문 (STL-02 · 04)';
+
+-- 정산서 상태 이력 (INSERT 전용 — created_at만). 관리자 정산 상세의 history[] — 집계 · 보류 · 해제 · 지급
+CREATE TABLE settlement_history (
+  settlement_history_id BIGINT       NOT NULL AUTO_INCREMENT,
+  settlement_id         BIGINT       NOT NULL,
+  from_status           VARCHAR(20)           COMMENT '변경 전 상태 — 집계로 생성될 때만 NULL',
+  to_status             VARCHAR(20)  NOT NULL COMMENT '변경 후 상태 (SCHEDULED / HELD / PAID)',
+  actor_type            VARCHAR(10)  NOT NULL COMMENT 'SYSTEM(주간 집계 · 스토어 휴면/정지 자동 보류) / ADMIN — 관리자 ID는 남기지 않음 (storedb 이력과 같은 규칙)',
+  reason                VARCHAR(255)          COMMENT '보류 · 해제 사유',
+  created_at            DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '상태가 바뀐 시각',
+  CONSTRAINT pk_settlement_history PRIMARY KEY (settlement_history_id),
+  CONSTRAINT fk_settlement_history_settlement FOREIGN KEY (settlement_id) REFERENCES settlement (settlement_id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='정산서 상태 이력 (STL-05 상세 · STL-09)';
 
 -- 지급 실행 기록 (INSERT 전용 — created_at만). 지급 시점의 정산 계좌를 스냅샷 — 명세서 · 감사용
 CREATE TABLE payout (

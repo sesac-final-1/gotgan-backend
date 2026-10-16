@@ -340,6 +340,7 @@ CREATE TABLE `settlement_item` (
 	`order_no`	VARCHAR(20)	NOT NULL	COMMENT 'order-service orders.order_no (논리 참조) — 판매자 정산 상세 표시용',
 	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service store.store_id (논리 참조)',
 	`product_id`	BIGINT	NOT NULL	COMMENT 'product-service product.product_id (논리 참조)',
+	`product_name`	VARCHAR(100)	NOT NULL	COMMENT '구매확정 시점 상품명 스냅샷 (OrderItemConfirmed productName) — 정산 상세 표시용',
 	`category_id`	BIGINT	NOT NULL	COMMENT 'product-service category.category_id (논리 참조) — 상위 카테고리, 수수료율 조회 기준',
 	`item_amt`	BIGINT	NOT NULL	COMMENT '상품주문 금액 (원) — 포인트 차감 전 = 판매자 매출',
 	`commission_rate`	DECIMAL(5,2)	NOT NULL	COMMENT '적재 시점 판매수수료율 (%) 스냅샷',
@@ -347,6 +348,17 @@ CREATE TABLE `settlement_item` (
 	`payment_fee_amt`	BIGINT	NOT NULL	COMMENT '결제수수료 (원) = item_amt × 2.2%, 원 단위 내림',
 	`confirmed_at`	DATETIME(6)	NOT NULL	COMMENT '구매확정 시각 (KST) — 정산 주차 판정 기준',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '적재 시각'
+);
+
+-- 정산서 상태 이력 (STL-05 상세 · STL-09)
+CREATE TABLE `settlement_history` (
+	`settlement_history_id`	BIGINT	NOT NULL,
+	`settlement_id`	BIGINT	NOT NULL,
+	`from_status`	VARCHAR(20)	NULL	COMMENT '변경 전 상태 — 집계로 생성될 때만 NULL',
+	`to_status`	VARCHAR(20)	NOT NULL	COMMENT '변경 후 상태 (SCHEDULED / HELD / PAID)',
+	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'SYSTEM(주간 집계 · 스토어 휴면/정지 자동 보류) / ADMIN — 관리자 ID는 남기지 않음 (storedb 이력과 같은 규칙)',
+	`reason`	VARCHAR(255)	NULL	COMMENT '보류 · 해제 사유',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '상태가 바뀐 시각'
 );
 
 -- 지급 실행 기록 (STL-06)
@@ -385,6 +397,7 @@ ALTER TABLE `settlementdb_processed_event` ADD CONSTRAINT `PK_SETTLEMENTDB_PROCE
 ALTER TABLE `category_commission` ADD CONSTRAINT `PK_CATEGORY_COMMISSION` PRIMARY KEY (`category_commission_id`);
 ALTER TABLE `settlement` ADD CONSTRAINT `PK_SETTLEMENT` PRIMARY KEY (`settlement_id`);
 ALTER TABLE `settlement_item` ADD CONSTRAINT `PK_SETTLEMENT_ITEM` PRIMARY KEY (`settlement_item_id`);
+ALTER TABLE `settlement_history` ADD CONSTRAINT `PK_SETTLEMENT_HISTORY` PRIMARY KEY (`settlement_history_id`);
 ALTER TABLE `payout` ADD CONSTRAINT `PK_PAYOUT` PRIMARY KEY (`payout_id`);
 
 -- ============================================================ FK (같은 DB 안의 관계만)
@@ -401,4 +414,5 @@ ALTER TABLE `product_image` ADD CONSTRAINT `fk_product_image_product` FOREIGN KE
 ALTER TABLE `stock_history` ADD CONSTRAINT `fk_stock_history_product_option` FOREIGN KEY (`product_option_id`) REFERENCES `product_option` (`product_option_id`);
 ALTER TABLE `payment_cancel` ADD CONSTRAINT `fk_payment_cancel_payment` FOREIGN KEY (`payment_id`) REFERENCES `payment` (`payment_id`);
 ALTER TABLE `settlement_item` ADD CONSTRAINT `fk_settlement_item_settlement` FOREIGN KEY (`settlement_id`) REFERENCES `settlement` (`settlement_id`);
+ALTER TABLE `settlement_history` ADD CONSTRAINT `fk_settlement_history_settlement` FOREIGN KEY (`settlement_id`) REFERENCES `settlement` (`settlement_id`);
 ALTER TABLE `payout` ADD CONSTRAINT `fk_payout_settlement` FOREIGN KEY (`settlement_id`) REFERENCES `settlement` (`settlement_id`);
