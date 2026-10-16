@@ -23,6 +23,11 @@ public record PortOnePayment(String status, String id, Amount amount, Method met
         return amount == null ? 0 : amount.total();
     }
 
+    /** 포트원 기준 남은 취소 가능 금액 — 취소 요청의 currentCancellableAmount */
+    public long cancellableAmount() {
+        return amount == null ? 0 : amount.paid() - amount.cancelled();
+    }
+
     /** payment.method 컬럼 값 — PaymentMethodEasyPay → EASY_PAY */
     public String methodCode() {
         if (method == null || method.type() == null) {
