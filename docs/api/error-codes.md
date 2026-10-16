@@ -9,7 +9,7 @@
 | `APPLY` · `STORE` | store | | | |
 | `CATEGORY` · `PRODUCT` · `STOCK` | product | | | |
 | `CART` · `ORDER` · `CLAIM` | order | | | |
-| `PAYMENT` | payment | | | |
+| `PAYMENT` | payment | `PAYMENT_NOT_FOUND` · `PAYMENT_ORDER_CONFLICT` · `PAYMENT_NOT_COMPLETED` · `PAYMENT_AMOUNT_MISMATCH` · `PAYMENT_INVALID_STATUS` · `PAYMENT_CANCEL_AMOUNT_EXCEEDED` · `PAYMENT_WEBHOOK_INVALID_SIGNATURE` | 404 · 409 · 409 · 409 · 409 · 409 · 400 | 상황별 설명: `docs/api/payment.md` 6절 |
 | `REVIEW` · `INQUIRY` | review | | | |
 | `SETTLE` · `COMMISSION` | settlement | | | |
 | — | admin | 하위 서비스의 code · message · HTTP 상태를 그대로 전달. 연결 실패 · 타임아웃만 `EXTERNAL_API_ERROR` | | |
