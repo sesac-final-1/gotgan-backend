@@ -514,7 +514,7 @@
 <text x="2030" y="3477" font-size="24" font-weight="normal" fill="#222" text-anchor="start">NetworkPolicy</text>
 <rect class="badge" x="1494" y="3536" width="152" height="54" rx="26" fill="#ef6c00"/>
 <text x="1570" y="3573" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">매일 재생성</text>
-<text x="1666" y="3558" font-size="24" font-weight="normal" fill="#222" text-anchor="start">매일 08:00 생성 · 22:00 삭제</text>
+<text x="1666" y="3558" font-size="24" font-weight="normal" fill="#222" text-anchor="start">매일 07:00 생성 · 21:00 삭제</text>
 <text x="1666" y="3594" font-size="24" font-weight="normal" fill="#222" text-anchor="start">(EKS · 노드 · 파드 · EBS), 없으면 상시</text>
 <rect class="explain" x="16" y="3676" width="2348" height="604" rx="14" fill="#fafafa" stroke="#9e9e9e" stroke-width="2"/>
 <text x="40" y="3726" font-size="30" font-weight="bold" fill="#222" text-anchor="start">흐름 설명</text>
@@ -538,7 +538,7 @@
 <text x="1190" y="3990" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑪ backend push → Actions(테스트 · SonarQube Cloud · 빌드) → OIDC → ECR</text>
 <text x="1190" y="4032" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · gotgan-config values.yaml 이미지 태그 커밋</text>
 <text x="1190" y="4074" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑫ ArgoCD: gotgan-config pull → 롤링 배포(무중단) · 노드 → ECR 이미지 pull</text>
-<text x="1190" y="4116" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑬ infra-schedule 08:00 Terraform apply · 22:00 destroy(cluster/)</text>
+<text x="1190" y="4116" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑬ infra-schedule 07:00 Terraform apply · 21:00 destroy(cluster/)</text>
 <text x="1190" y="4158" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · bootstrap: k8s 기본 · secrets-sync · 관측성 · ArgoCD</text>
 <text x="1190" y="4200" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑭ 서비스 → Prometheus · Loki · Zipkin → Grafana System Status</text>
 <text x="1190" y="4242" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑮ gotgan-frontend push → Vercel 자동 배포 (PR 미리보기)</text>
