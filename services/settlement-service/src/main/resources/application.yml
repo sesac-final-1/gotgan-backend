@@ -31,8 +31,11 @@ app:
     order-events-queue-url: ${SETTLEMENT_ORDER_EVENTS_QUEUE_URL:}   # OrderItemConfirmed
     wait-seconds: 20                         # 롱폴링 (비어 있어도 20초 기다렸다 돌아옴 — 빈 요청 비용 절감)
     max-messages: 10
+  reports:
+    bucket: ${REPORTS_BUCKET:}                # 정산 명세서 CSV (Lambda settlement-report 가 생성) — presigned GET
   scheduler:
     zone: Asia/Seoul
+    weekly-aggregation-cron: "0 0 3 * * MON"   # 주간 정산 집계 (KST) — 시연은 관리자 "지금 집계"
 
 management:
   endpoints:

@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
@@ -22,5 +23,11 @@ public class AwsConfig {
     @Bean
     public SnsClient snsClient(@Value("${AWS_REGION:ap-northeast-2}") String region) {
         return SnsClient.builder().region(Region.of(region)).build();
+    }
+
+    /** 정산 명세서 다운로드 presigned GET (reports 버킷, IRSA s3:GetObject) */
+    @Bean
+    public S3Presigner s3Presigner(@Value("${AWS_REGION:ap-northeast-2}") String region) {
+        return S3Presigner.builder().region(Region.of(region)).build();
     }
 }
