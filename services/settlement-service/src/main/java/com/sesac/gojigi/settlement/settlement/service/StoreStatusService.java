@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * StoreStatusChanged 반영 → 지급 보류 / 해제 판단의 기준 상태. 담당 jihoon-devstu
  * SQS 표준 큐는 순서를 보장하지 않으므로 occurredAt 이 마지막 반영값보다 오래된 이벤트는 무시한다 (docs/events.md 순서 규칙, 10/15 A안).
- * TODO(jihoon-devstu): SQS 구독(StoreStatusChangedListener)이 이 메서드를 호출 — STORE_NOT_FOUND 면 예외로 메시지를 큐에 돌려 재시도
+ * StoreStatusChangedListener 가 호출 — STORE_NOT_FOUND 면 리스너가 예외를 던져 메시지를 큐에 돌려 재시도
  */
 @Slf4j
 @Service
