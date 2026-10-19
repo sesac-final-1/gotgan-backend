@@ -17,7 +17,7 @@ public record SettlementWeek(LocalDate start) {
     private static final int PAY_DAYS_AFTER_END = 4;
 
     public SettlementWeek {
-        if (start.getDayOfWeek() != DayOfWeek.MONDAY) {
+        if (!DayOfWeek.MONDAY.equals(start.getDayOfWeek())) {
             throw new IllegalArgumentException("정산 주차는 월요일 시작: " + start);
         }
     }
