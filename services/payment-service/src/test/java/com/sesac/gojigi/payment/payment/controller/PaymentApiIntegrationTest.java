@@ -324,6 +324,15 @@ class PaymentApiIntegrationTest {
         verify(portOneClient, never()).getPayment("pay-" + orderNo);
     }
 
+    @Test
+    @DisplayName("orderNo 누락은 400 INVALID_INPUT · 없는 경로는 404 NOT_FOUND (500 아님)")
+    void commonErrors_notGlobalError() throws Exception {
+        mockMvc.perform(get("/internal/payments")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(get("/internal/no-such-path")).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
     // ── 5. 웹훅
 
     @Nested
