@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.Duration;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -26,11 +26,22 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "인증", description = "로그인 · 토큰 재발급 · 로그아웃 — 인가: 공개 (Keycloak 대리 호출)")
 @RestController
 @RequestMapping("/api/auth")
-@RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-    private final RefreshCookieProperties cookieProperties;
+    private final String refreshCookieName;
+    private final String refreshCookiePath;
+    private final boolean refreshCookieSecure;
+
+    public AuthController(AuthService authService,
+            @Value("${app.auth.refresh-cookie-name:refresh_token}") String refreshCookieName,
+            @Value("${app.auth.refresh-cookie-path}") String refreshCookiePath,
+            @Value("${app.auth.refresh-cookie-secure:true}") boolean refreshCookieSecure) {
+        this.authService = authService;
+        this.refreshCookieName = refreshCookieName;
+        this.refreshCookiePath = refreshCookiePath;
+        this.refreshCookieSecure = refreshCookieSecure;
+    }
 
     @Operation(summary = "로그인", description = """
             인가: 공개. Access Token 은 body(data.accessToken), Refresh Token 은 Set-Cookie refresh_token
@@ -53,11 +64,11 @@ public class AuthController {
     }
 
     private ResponseCookie refreshCookie(String refreshToken, long maxAgeSeconds) {
-        return ResponseCookie.from(cookieProperties.refreshCookieName(), refreshToken)
+        return ResponseCookie.from(refreshCookieName, refreshToken)
                 .httpOnly(true)
-                .secure(cookieProperties.refreshCookieSecure())
+                .secure(refreshCookieSecure)
                 .sameSite("Strict")
-                .path(cookieProperties.refreshCookiePath())
+                .path(refreshCookiePath)
                 .maxAge(Duration.ofSeconds(maxAgeSeconds))   // Keycloak refresh_expires_in (세션 14일)
                 .build();
     }

@@ -30,9 +30,8 @@ import tools.jackson.databind.json.JsonMapper;
 /** Keycloak 토큰 응답 매핑 · 요청 모양 · 오류 변환 (서킷 브레이커 동작은 AOP 라 여기서 보지 않음) */
 class KeycloakClientAdapterTest {
 
-    private static final KeycloakProperties PROPERTIES =
-            new KeycloakProperties("http://keycloak:8080", "gotgan", "gotgan-backend", "test-secret");
-    private static final String TOKEN_URL = "http://keycloak:8080/realms/gotgan/protocol/openid-connect/token";
+    private static final String BASE = "http://keycloak:8080";
+    private static final String TOKEN_URL = BASE + "/realms/gotgan/protocol/openid-connect/token";
 
     private MockRestServiceServer server;
     private KeycloakClientAdapter adapter;
@@ -41,8 +40,8 @@ class KeycloakClientAdapterTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        adapter = new KeycloakClientAdapter(new KeycloakClientConfig().keycloakClient(builder, PROPERTIES), PROPERTIES,
-                JsonMapper.builder().build());
+        adapter = new KeycloakClientAdapter(new KeycloakClientConfig().keycloakClient(builder, BASE, "gotgan"),
+                JsonMapper.builder().build(), "gotgan-backend", "test-secret");
     }
 
     @Test

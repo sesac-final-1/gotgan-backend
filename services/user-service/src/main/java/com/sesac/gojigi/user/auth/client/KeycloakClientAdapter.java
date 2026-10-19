@@ -6,7 +6,7 @@ import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.common.exception.BusinessException;
 import com.sesac.gojigi.user.common.exception.CommonErrorCode;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -23,7 +23,6 @@ import tools.jackson.databind.json.JsonMapper;
  * - 여기서는 로그를 찍지 않는다 — 원인을 예외에 실어 던지면 GlobalExceptionHandler 가 warn 한 번 (컨벤션 5-6)
  */
 @Component
-@RequiredArgsConstructor
 public class KeycloakClientAdapter {
 
     private static final String CIRCUIT = "keycloak";
@@ -31,8 +30,18 @@ public class KeycloakClientAdapter {
     private static final String ACCOUNT_DISABLED = "Account disabled";   // Keycloak 이 enabled=false 계정에 주는 설명
 
     private final KeycloakClient keycloakClient;
-    private final KeycloakProperties properties;
     private final JsonMapper jsonMapper;
+    private final String clientId;
+    private final String clientSecret;
+
+    public KeycloakClientAdapter(KeycloakClient keycloakClient, JsonMapper jsonMapper,
+            @Value("${app.keycloak.client-id}") String clientId,
+            @Value("${app.keycloak.client-secret}") String clientSecret) {
+        this.keycloakClient = keycloakClient;
+        this.jsonMapper = jsonMapper;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+    }
 
     /** 로그인 — 이메일(= Keycloak username) · 비밀번호로 Direct Grant */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "tokenFallback")
@@ -50,8 +59,8 @@ public class KeycloakClientAdapter {
     private MultiValueMap<String, String> clientForm(String grantType) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", grantType);
-        form.add("client_id", properties.clientId());
-        form.add("client_secret", properties.clientSecret());
+        form.add("client_id", clientId);
+        form.add("client_secret", clientSecret);
         return form;
     }
 
