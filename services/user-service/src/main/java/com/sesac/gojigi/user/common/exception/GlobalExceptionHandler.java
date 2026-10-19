@@ -22,7 +22,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException e) {
         ErrorCode code = e.getErrorCode();
-        log.warn("business exception - code={}, message={}", code.getCode(), e.getMessage());
+        if (e.getCause() == null) {
+            log.warn("business exception - code={}, message={}", code.getCode(), e.getMessage());
+        } else {   // 원인(외부 호출 실패 등)은 한 줄로 — 예외 로그는 여기서만 (컨벤션 5-6)
+            log.warn("business exception - code={}, message={}, cause={}", code.getCode(), e.getMessage(), e.getCause().toString());
+        }
         return ResponseEntity.status(code.getStatus()).body(ApiResponse.error(code, e.getMessage()));
     }
 
