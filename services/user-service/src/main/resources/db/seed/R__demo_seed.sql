@@ -10,12 +10,12 @@
 
 INSERT INTO users (user_id, email, name, nick, phone, signup_provider, grade, status)
 VALUES
-  (1, 'admin@gotgan.com',   '곳간 관리자', '관리자',  '010-0000-0001', 'LOCAL', 'NORMAL', 'ACTIVE'),
-  (2, 'seller1@gotgan.com', '판매자1',     '판매자1', '010-0000-0002', 'LOCAL', 'NORMAL', 'ACTIVE'),
-  (3, 'seller2@gotgan.com', '판매자2',     '판매자2', '010-0000-0003', 'LOCAL', 'NORMAL', 'ACTIVE'),
-  (4, 'buyer1@gotgan.com',  '구매자1',     '구매자1', '010-0000-0004', 'LOCAL', 'NORMAL', 'ACTIVE'),
-  (5, 'buyer2@gotgan.com',  '구매자2',     '구매자2', '010-0000-0005', 'LOCAL', 'NORMAL', 'ACTIVE'),
-  (6, 'buyer3@gotgan.com',  '구매자3',     '구매자3', '010-0000-0006', 'LOCAL', 'NORMAL', 'ACTIVE')
+  (1, 'wlsgksvheh+admin@gmail.com',   '곳간 관리자', '관리자',  '010-0000-0001', 'LOCAL', 'NORMAL', 'ACTIVE'),
+  (2, 'wlsgksvheh+seller1@gmail.com', '판매자1',     '판매자1', '010-0000-0002', 'LOCAL', 'NORMAL', 'ACTIVE'),
+  (3, 'wlsgksvheh+seller2@gmail.com', '판매자2',     '판매자2', '010-0000-0003', 'LOCAL', 'NORMAL', 'ACTIVE'),
+  (4, 'wlsgksvheh+buyer1@gmail.com',  '구매자1',     '구매자1', '010-0000-0004', 'LOCAL', 'NORMAL', 'ACTIVE'),
+  (5, 'wlsgksvheh+buyer2@gmail.com',  '구매자2',     '구매자2', '010-0000-0005', 'LOCAL', 'NORMAL', 'ACTIVE'),
+  (6, 'wlsgksvheh+buyer3@gmail.com',  '구매자3',     '구매자3', '010-0000-0006', 'LOCAL', 'NORMAL', 'ACTIVE')
 AS seed
 ON DUPLICATE KEY UPDATE
   email = seed.email,
