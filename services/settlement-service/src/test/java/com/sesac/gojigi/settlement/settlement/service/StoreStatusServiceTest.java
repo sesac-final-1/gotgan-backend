@@ -46,7 +46,7 @@ class StoreStatusServiceTest {
 
     @BeforeEach
     void setUp() {
-        repository.save(SettlementStore.approved(STORE_ID, "오롯이 리넨"));
+        repository.save(SettlementStore.approved(STORE_ID, "오롯이 리넨", "seller@example.com", "기업은행", "010-0000-8812", "(주)오롯이리넨"));
     }
 
     private static EventEnvelope<StoreStatusChangedPayload> event(String status, OffsetDateTime at) {
