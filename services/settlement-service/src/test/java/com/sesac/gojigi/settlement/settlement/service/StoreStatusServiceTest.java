@@ -30,7 +30,7 @@ import org.testcontainers.mysql.MySQLContainer;
 @Testcontainers
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(StoreStatusService.class)
+@Import({StoreStatusService.class, SettlementCommandService.class, com.sesac.gojigi.settlement.common.config.ClockConfig.class})
 class StoreStatusServiceTest {
 
     @Container
