@@ -1,6 +1,5 @@
 package com.sesac.gojigi.user.auth.client;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
@@ -12,11 +11,9 @@ import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 public class KeycloakClientConfig {
 
     @Bean
-    public KeycloakClient keycloakClient(RestClient.Builder restClientBuilder,
-            @Value("${app.keycloak.base-url}") String baseUrl,
-            @Value("${app.keycloak.realm}") String realm) {
+    public KeycloakClient keycloakClient(RestClient.Builder restClientBuilder, KeycloakProperties properties) {
         RestClient client = restClientBuilder.clone()
-                .baseUrl(baseUrl + "/realms/" + realm)
+                .baseUrl(properties.realmUrl())
                 .build();
         return HttpServiceProxyFactory.builderFor(RestClientAdapter.create(client)).build()
                 .createClient(KeycloakClient.class);

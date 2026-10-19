@@ -39,7 +39,7 @@ class AuthControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new AuthController(authService, "refresh_token", "/api/auth", true))
+                .standaloneSetup(new AuthController(authService, new RefreshCookieProperties("refresh_token", "/api/auth", true)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
