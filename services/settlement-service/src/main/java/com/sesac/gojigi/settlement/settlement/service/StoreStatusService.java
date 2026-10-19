@@ -4,6 +4,7 @@ import com.sesac.gojigi.settlement.common.event.EventEnvelope;
 import com.sesac.gojigi.settlement.common.event.ProcessedEvent;
 import com.sesac.gojigi.settlement.common.event.ProcessedEventRepository;
 import com.sesac.gojigi.settlement.settlement.dto.event.StoreStatusChangedPayload;
+import com.sesac.gojigi.settlement.settlement.entity.SettlementStore;
 import com.sesac.gojigi.settlement.settlement.repository.SettlementStoreRepository;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -26,6 +27,7 @@ public class StoreStatusService {
 
     private final SettlementStoreRepository settlementStoreRepository;
     private final ProcessedEventRepository processedEventRepository;
+    private final SettlementCommandService settlementCommandService;
 
     public enum Result { APPLIED, STALE_IGNORED, DUPLICATE, STORE_NOT_FOUND }
 
@@ -47,6 +49,8 @@ public class StoreStatusService {
                     storeId, event.payload().status(), event.occurredAt(), event.eventId());
             return Result.STALE_IGNORED;
         }
+        // 최신 상태로 반영됐을 때만 정산서 자동 보류 · 해제 (옛 이벤트로 되돌리지 않음)
+        settlementCommandService.applyStoreStatus(storeId, !SettlementStore.ACTIVE.equals(event.payload().status()));
         return Result.APPLIED;
     }
 }

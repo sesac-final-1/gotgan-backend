@@ -44,6 +44,11 @@ public class CategoryCommission extends BaseTimeEntity {
         this.effectiveFrom = effectiveFrom;
     }
 
+    /** 같은 적용 시작일 예약을 고칠 때 — 이미 지난 날짜는 서비스가 막는다 */
+    public void changeRate(BigDecimal commissionRate) {
+        this.commissionRate = commissionRate;
+    }
+
     public static CategoryCommission of(Long categoryId, BigDecimal commissionRate, LocalDate effectiveFrom) {
         return new CategoryCommission(categoryId, commissionRate, effectiveFrom);
     }

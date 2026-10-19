@@ -9,7 +9,8 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum CommissionErrorCode implements ErrorCode {
-    COMMISSION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 카테고리의 판매수수료율이 등록되지 않았습니다.");
+    COMMISSION_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 카테고리의 판매수수료율이 등록되지 않았습니다."),
+    COMMISSION_PAST_EFFECTIVE_DATE(HttpStatus.BAD_REQUEST, "적용 시작일은 오늘 이후여야 합니다.");
 
     private final HttpStatus status;
     private final String message;
