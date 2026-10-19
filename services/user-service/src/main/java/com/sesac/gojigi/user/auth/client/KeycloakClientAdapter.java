@@ -6,7 +6,7 @@ import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.common.exception.BusinessException;
 import com.sesac.gojigi.user.common.exception.CommonErrorCode;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -19,10 +19,12 @@ import tools.jackson.databind.json.JsonMapper;
  * - 서킷 브레이커 "keycloak" — 연결 실패 · 타임아웃 · 5xx 만 장애로 센다. OPEN 이면 바로 EXTERNAL_API_ERROR(502)
  * - 토큰 요청(POST)은 재시도하지 않는다 (Brute Force 실패 횟수가 이중으로 쌓임)
  * - invalid_grant(비밀번호 불일치 · 임시 잠금 · 정지)는 도메인 예외로 바꾸고 서킷 실패로 세지 않는다
+ * - client 인증(client-id · secret)은 KeycloakClientConfig 가 Basic 헤더로 붙인다 — 여기서는 grant 별 폼만 만든다
  * - 비밀번호 · client secret · 토큰은 로그에 남기지 않는다
  * - 여기서는 로그를 찍지 않는다 — 원인을 예외에 실어 던지면 GlobalExceptionHandler 가 warn 한 번 (컨벤션 5-6)
  */
 @Component
+@RequiredArgsConstructor
 public class KeycloakClientAdapter {
 
     private static final String CIRCUIT = "keycloak";
@@ -31,22 +33,12 @@ public class KeycloakClientAdapter {
 
     private final KeycloakClient keycloakClient;
     private final JsonMapper jsonMapper;
-    private final String clientId;
-    private final String clientSecret;
-
-    public KeycloakClientAdapter(KeycloakClient keycloakClient, JsonMapper jsonMapper,
-            @Value("${app.keycloak.client-id}") String clientId,
-            @Value("${app.keycloak.client-secret}") String clientSecret) {
-        this.keycloakClient = keycloakClient;
-        this.jsonMapper = jsonMapper;
-        this.clientId = clientId;
-        this.clientSecret = clientSecret;
-    }
 
     /** 로그인 — 이메일(= Keycloak username) · 비밀번호로 Direct Grant */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "tokenFallback")
     public KeycloakTokenResponse passwordGrant(String email, String password) {
-        MultiValueMap<String, String> form = clientForm("password");
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "password");
         form.add("username", email);
         form.add("password", password);
         try {
@@ -54,14 +46,6 @@ public class KeycloakClientAdapter {
         } catch (HttpClientErrorException e) {
             throw toBusinessException(e);
         }
-    }
-
-    private MultiValueMap<String, String> clientForm(String grantType) {
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("grant_type", grantType);
-        form.add("client_id", clientId);
-        form.add("client_secret", clientSecret);
-        return form;
     }
 
     private BusinessException toBusinessException(HttpClientErrorException e) {

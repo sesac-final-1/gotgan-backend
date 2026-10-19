@@ -3,6 +3,7 @@ package com.sesac.gojigi.user.auth.client;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -13,15 +14,20 @@ import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.common.exception.BusinessException;
 import com.sesac.gojigi.user.common.exception.CommonErrorCode;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -40,19 +46,21 @@ class KeycloakClientAdapterTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        adapter = new KeycloakClientAdapter(new KeycloakClientConfig().keycloakClient(builder, BASE, "gotgan"),
-                JsonMapper.builder().build(), "gotgan-backend", "test-secret");
+        adapter = new KeycloakClientAdapter(
+                new KeycloakClientConfig().keycloakClient(builder, BASE, "gotgan", "gotgan-backend", "test-secret"),
+                JsonMapper.builder().build());
     }
 
     @Test
-    @DisplayName("Direct Grant — 폼에 grant_type · client 인증 · 이메일 · 비밀번호를 담고 토큰 응답을 읽는다")
+    @DisplayName("Direct Grant — client 인증은 Basic 헤더, 폼에는 grant_type · 이메일 · 비밀번호만 담고 토큰 응답을 읽는다")
     void passwordGrant_sendsFormAndReadsToken() {
         server.expect(requestTo(TOKEN_URL))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, basic("gotgan-backend:test-secret")))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))
-                .andExpect(content().formDataContains(Map.of(
-                        "grant_type", "password", "client_id", "gotgan-backend", "client_secret", "test-secret",
-                        "username", "buyer1@gotgan.com", "password", "Dem0!pass")))
+                .andExpect(content().formData(new LinkedMultiValueMap<>(Map.of(
+                        "grant_type", List.of("password"), "username", List.of("buyer1@gotgan.com"),
+                        "password", List.of("Dem0!pass")))))
                 .andRespond(withSuccess("""
                         {"access_token":"at","expires_in":1800,"refresh_token":"rt","refresh_expires_in":1209600,
                          "token_type":"Bearer","scope":"profile email","unknownField":true}
@@ -126,5 +134,28 @@ class KeycloakClientAdapterTest {
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "tokenFallback",
                 "buyer1@gotgan.com", "Dem0!pass", new AuthException(AuthErrorCode.AUTH_INVALID_CREDENTIALS)))
                 .isInstanceOf(AuthException.class);
+    }
+
+    @Test
+    @DisplayName("client-id · secret 의 특수문자는 URL 인코딩 후 Basic 헤더에 넣는다 (RFC 6749 2.3.1)")
+    void keycloakClient_urlEncodesCredentialsInBasicHeader() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer encodedServer = MockRestServiceServer.bindTo(builder).build();
+        KeycloakClientAdapter encodedAdapter = new KeycloakClientAdapter(
+                new KeycloakClientConfig().keycloakClient(builder, BASE, "gotgan", "gotgan-backend", "a+b/c:d%"),
+                JsonMapper.builder().build());
+        encodedServer.expect(requestTo(TOKEN_URL))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, basic("gotgan-backend:a%2Bb%2Fc%3Ad%25")))
+                .andRespond(withSuccess("""
+                        {"access_token":"at","expires_in":1800,"refresh_token":"rt","refresh_expires_in":1209600}
+                        """, MediaType.APPLICATION_JSON));
+
+        encodedAdapter.passwordGrant("buyer1@gotgan.com", "Dem0!pass");
+
+        encodedServer.verify();
+    }
+
+    private static String basic(String credentials) {
+        return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }
 }
