@@ -50,9 +50,9 @@ resilience4j:
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
     instances:
-      userClient: { base-config: default }
-      productClient: { base-config: default }
-      paymentClient: { base-config: default }
+      user: { base-config: default }
+      product: { base-config: default }
+      payment: { base-config: default }
       redisCart: { base-config: default }     # 장바구니 Redis 캐시 — OPEN 이면 MySQL cart_item 폴백 (결정 4, cart/package-info)
   retry:
     configs:

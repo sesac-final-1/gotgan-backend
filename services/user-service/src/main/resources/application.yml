@@ -49,7 +49,7 @@ resilience4j:
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
     instances:
-      keycloakClient: { base-config: default }
+      keycloak: { base-config: default }
   retry:
     configs:
       default:
