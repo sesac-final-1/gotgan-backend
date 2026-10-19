@@ -25,44 +25,41 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.support.RestClientAdapter;
-import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 서킷 브레이커(AOP) 없이 어댑터의 요청 형식 · 응답 · 오류 변환만 확인한다 */
+/** Keycloak 토큰 응답 매핑 · 요청 모양 · 오류 변환 (서킷 브레이커 동작은 AOP 라 여기서 보지 않음) */
 class KeycloakClientAdapterTest {
 
-    private static final String TOKEN_URL = "http://keycloak/realms/gotgan/protocol/openid-connect/token";
+    private static final String BASE = "http://keycloak:8080";
+    private static final String TOKEN_URL = BASE + "/realms/gotgan/protocol/openid-connect/token";
 
     private MockRestServiceServer server;
     private KeycloakClientAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        RestClient.Builder builder = RestClient.builder().baseUrl("http://keycloak/realms/gotgan");
+        RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        KeycloakClient client = HttpServiceProxyFactory.builderFor(RestClientAdapter.create(builder.build())).build()
-                .createClient(KeycloakClient.class);
-        adapter = new KeycloakClientAdapter(client, JsonMapper.builder().build(), "gotgan-backend", "secret");
+        adapter = new KeycloakClientAdapter(new KeycloakClientConfig().keycloakClient(builder, BASE, "gotgan"),
+                JsonMapper.builder().build(), "gotgan-backend", "test-secret");
     }
 
     @Test
-    @DisplayName("Direct Grant 폼(grant_type · client 인증 · 이메일 · 비밀번호)을 보내고 토큰 응답을 읽는다")
-    void passwordGrant_success_sendsFormAndReturnsToken() {
-        // given
+    @DisplayName("Direct Grant — 폼에 grant_type · client 인증 · 이메일 · 비밀번호를 담고 토큰 응답을 읽는다")
+    void passwordGrant_sendsFormAndReadsToken() {
         server.expect(requestTo(TOKEN_URL))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))
                 .andExpect(content().formDataContains(Map.of(
-                        "grant_type", "password", "client_id", "gotgan-backend", "client_secret", "secret",
+                        "grant_type", "password", "client_id", "gotgan-backend", "client_secret", "test-secret",
                         "username", "buyer1@gotgan.com", "password", "Dem0!pass")))
-                .andRespond(withSuccess("{\"access_token\":\"at\",\"expires_in\":1800,\"refresh_token\":\"rt\","
-                        + "\"refresh_expires_in\":1209600,\"token_type\":\"Bearer\"}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("""
+                        {"access_token":"at","expires_in":1800,"refresh_token":"rt","refresh_expires_in":1209600,
+                         "token_type":"Bearer","scope":"profile email","unknownField":true}
+                        """, MediaType.APPLICATION_JSON));
 
-        // when
         KeycloakTokenResponse token = adapter.passwordGrant("buyer1@gotgan.com", "Dem0!pass");
 
-        // then
         assertThat(token.accessToken()).isEqualTo("at");
         assertThat(token.expiresIn()).isEqualTo(1800);
         assertThat(token.refreshToken()).isEqualTo("rt");
@@ -71,66 +68,61 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("invalid_grant(비밀번호 불일치 · 임시 잠금)는 AUTH_INVALID_CREDENTIALS")
-    void passwordGrant_whenInvalidCredentials_throwsInvalidCredentials() {
-        // given
-        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.UNAUTHORIZED)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body("{\"error\":\"invalid_grant\",\"error_description\":\"Invalid user credentials\"}"));
+    @DisplayName("invalid_grant(비밀번호 불일치 · 없는 계정 · 임시 잠금)는 AUTH_INVALID_CREDENTIALS")
+    void passwordGrant_invalidGrant_becomesInvalidCredentials() {
+        server.expect(requestTo(TOKEN_URL))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"invalid_grant\",\"error_description\":\"Invalid user credentials\"}"));
 
-        // when · then
         assertThatThrownBy(() -> adapter.passwordGrant("buyer1@gotgan.com", "wrong"))
                 .isInstanceOf(AuthException.class)
-                .extracting(e -> ((AuthException) e).getErrorCode())
-                .isEqualTo(AuthErrorCode.AUTH_INVALID_CREDENTIALS);
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_INVALID_CREDENTIALS);
     }
 
     @Test
     @DisplayName("정지 계정(Account disabled)은 AUTH_ACCOUNT_DISABLED")
-    void passwordGrant_whenAccountDisabled_throwsDisabled() {
-        // given
-        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.BAD_REQUEST)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body("{\"error\":\"invalid_grant\",\"error_description\":\"Account disabled\"}"));
+    void passwordGrant_accountDisabled_becomesDisabled() {
+        server.expect(requestTo(TOKEN_URL))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"invalid_grant\",\"error_description\":\"Account disabled\"}"));
 
-        // when · then
         assertThatThrownBy(() -> adapter.passwordGrant("buyer1@gotgan.com", "Dem0!pass"))
                 .isInstanceOf(AuthException.class)
-                .extracting(e -> ((AuthException) e).getErrorCode())
-                .isEqualTo(AuthErrorCode.AUTH_ACCOUNT_DISABLED);
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_ACCOUNT_DISABLED);
     }
 
     @Test
-    @DisplayName("client 설정 오류(invalid_client) · 본문 없는 4xx 는 EXTERNAL_API_ERROR")
-    void passwordGrant_whenClientMisconfigured_throwsExternalApiError() {
-        // given
-        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.UNAUTHORIZED)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body("{\"error\":\"invalid_client\",\"error_description\":\"Invalid client credentials\"}"));
-        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.BAD_REQUEST).body("not json"));
+    @DisplayName("client 설정 오류(invalid_client)는 EXTERNAL_API_ERROR — 원인은 cause 로 넘겨 핸들러가 한 번만 기록")
+    void passwordGrant_invalidClient_becomesExternalApiError() {
+        server.expect(requestTo(TOKEN_URL))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"invalid_client\",\"error_description\":\"Invalid client credentials\"}"));
 
-        // when · then — 원인(Keycloak 응답)은 cause 로 넘겨 GlobalExceptionHandler 가 한 번만 기록
         assertThatThrownBy(() -> adapter.passwordGrant("buyer1@gotgan.com", "Dem0!pass"))
                 .isInstanceOf(BusinessException.class)
                 .hasCauseInstanceOf(HttpClientErrorException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
-        assertThatThrownBy(() -> adapter.passwordGrant("buyer1@gotgan.com", "Dem0!pass"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
     }
 
     @Test
-    @DisplayName("서킷 폴백 — 연결 실패는 EXTERNAL_API_ERROR, 이미 변환된 도메인 예외는 그대로")
+    @DisplayName("JSON 이 아닌 4xx 응답도 EXTERNAL_API_ERROR")
+    void passwordGrant_nonJsonError_becomesExternalApiError() {
+        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.BAD_REQUEST).body("not json"));
+
+        assertThatThrownBy(() -> adapter.passwordGrant("buyer1@gotgan.com", "Dem0!pass"))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
+    @Test
+    @DisplayName("서킷 폴백 — 연결 실패는 EXTERNAL_API_ERROR(cause 유지), 이미 변환된 도메인 예외는 그대로")
     void tokenFallback_mapsUnavailableAndKeepsBusiness() {
-        // when · then
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "tokenFallback",
                 "buyer1@gotgan.com", "Dem0!pass", new ResourceAccessException("connection refused")))
                 .isInstanceOf(BusinessException.class)
                 .hasCauseInstanceOf(ResourceAccessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "tokenFallback",
                 "buyer1@gotgan.com", "Dem0!pass", new AuthException(AuthErrorCode.AUTH_INVALID_CREDENTIALS)))
                 .isInstanceOf(AuthException.class);
