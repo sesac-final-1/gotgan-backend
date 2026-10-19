@@ -5,7 +5,7 @@
 | 접두어 | 서비스 | 코드 | HTTP | 메시지 |
 |---|---|---|---|---|
 | 공통 | 전체 | `INVALID_INPUT` · `UNAUTHORIZED` · `FORBIDDEN` · `NOT_FOUND` · `EXTERNAL_API_ERROR` · `GLOBAL_ERROR` | 400 · 401 · 403 · 404 · 502 · 500 | common/exception/CommonErrorCode |
-| `AUTH` · `USER` · `POINT` | user | (담당자 작성) | | |
+| `AUTH` · `USER` · `POINT` | user | `AUTH_INVALID_CREDENTIALS` · `AUTH_ACCOUNT_NOT_LINKED` · `AUTH_ACCOUNT_DISABLED` | 401 · 401 · 403 | 로그인(`POST /api/auth/login`) — 비밀번호 불일치 · 없는 계정 · 임시 잠금 / Keycloak 계정에 user_id 미연결 / 이용 정지. Keycloak 장애는 공통 `EXTERNAL_API_ERROR`(502) |
 | `APPLY` · `STORE` | store | | | |
 | `CATEGORY` · `PRODUCT` · `STOCK` | product | | | |
 | `CART` · `ORDER` · `CLAIM` | order | | | |

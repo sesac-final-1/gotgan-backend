@@ -33,7 +33,9 @@ app:
     client-id: gotgan-backend
     client-secret: ${KEYCLOAK_CLIENT_SECRET:}                 # 비밀 값은 환경 변수로만 (컨벤션 1-5)
   auth:
-    refresh-cookie-path: /api/auth
+    refresh-cookie-name: refresh_token
+    refresh-cookie-path: /api/auth                            # /api/auth/** 요청에만 실림 (refresh · logout)
+    refresh-cookie-secure: true                               # HTTPS 만 — 브라우저는 localhost 는 예외로 허용
   point:
     earn-rate: 0.05                                           # 실결제금액의 5% 적립 (정리 문서 8-5)
   sqs:
@@ -48,8 +50,13 @@ resilience4j:
         failure-rate-threshold: 50          # 최근 10건 중 50% 실패면 OPEN → 바로 폴백
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
+        record-exceptions:                  # 장애로 세는 것: 연결 실패 · 타임아웃 · 5xx
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:                  # 비밀번호 불일치 등 4xx(비즈니스 오류로 변환)는 세지 않음
+          - com.sesac.gojigi.user.common.exception.BusinessException
     instances:
-      keycloak: { base-config: default }
+      keycloak: { base-config: default }    # KeycloakClientAdapter — 토큰 요청(POST)은 재시도 없음
   retry:
     configs:
       default:
