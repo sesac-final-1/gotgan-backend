@@ -87,6 +87,11 @@ public class SettlementItem {
         this.confirmedAt = confirmedAt;
     }
 
+    /** 주간 집계 — 정산서에 연결 (금액 스냅샷은 그대로) */
+    public void assignTo(Long settlementId) {
+        this.settlementId = settlementId;
+    }
+
     /** 판매자 지급액 = 매출 − 판매수수료 − 결제수수료 */
     public long payoutAmt() {
         return itemAmt - commissionAmt - paymentFeeAmt;
