@@ -4,7 +4,7 @@ spring:
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/settlementdb?connectionTimeZone=Asia/Seoul
-    username: ${DB_USERNAME:settlement}       # 클러스터에서는 ESO 가 만든 Secret → 환경 변수
+    username: ${DB_USERNAME:settlement}       # 클러스터에서는 secrets-sync 가 만든 settlement-service-secret → 환경 변수
     password: ${DB_PASSWORD:local-pass}
   jpa:
     open-in-view: false
@@ -26,8 +26,11 @@ app:
     read-timeout: 3s
   events:
     topic-arn: ${SETTLEMENT_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-settlement-events
-  sqs:
-    queue-url: ${SETTLEMENT_EVENTS_QUEUE_URL:}   # 구독 큐 (sesac-gojigi-settlement-{도메인}-events)
+  sqs:                                       # 구독 큐 2개 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
+    store-events-queue-url: ${SETTLEMENT_STORE_EVENTS_QUEUE_URL:}   # StoreApproved · StoreStatusChanged
+    order-events-queue-url: ${SETTLEMENT_ORDER_EVENTS_QUEUE_URL:}   # OrderItemConfirmed
+    wait-seconds: 20                         # 롱폴링 (비어 있어도 20초 기다렸다 돌아옴 — 빈 요청 비용 절감)
+    max-messages: 10
   scheduler:
     zone: Asia/Seoul
 
