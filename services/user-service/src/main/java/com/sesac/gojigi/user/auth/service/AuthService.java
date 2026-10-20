@@ -81,6 +81,14 @@ public class AuthService {
         return new LoginResult(response, token.refreshToken(), token.refreshExpiresIn());
     }
 
+    /**
+     * 탈퇴 시 Keycloak 계정 삭제 — 로그인 · Refresh 가 더 이상 되지 않는다.
+     * 회원 행 처리 · 실패 시 정책은 호출하는 쪽(UserService.withdraw)이 정한다.
+     */
+    public void deleteAccount(String keycloakId, String email) {
+        keycloakClientAdapter.deleteUser(keycloakId, email);
+    }
+
     private Long createUserRow(String email, String name, String phone) {
         try {
             return transactionTemplate.execute(status ->
