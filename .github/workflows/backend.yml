@@ -11,7 +11,7 @@ on:
   pull_request:            # paths 필터 없음 — 필수 체크(ci-ok)가 모든 PR 에서 결과를 내야 머지가 막히지 않는다. 서비스 선별은 changes job 이 한다
   push:
     branches: [main]
-    paths: ["services/**", "sonar-project.properties"]
+    paths: ["services/**", "libs/**", "sonar-project.properties"]   # libs/common-web 만 바뀌어도 의존 서비스 재빌드 · 배포
 
 concurrency:
   group: backend-${{ github.ref }}
@@ -38,26 +38,30 @@ jobs:
       settlement: ${{ steps.filter.outputs.settlement }}
       admin: ${{ steps.filter.outputs.admin }}
       sonar-config: ${{ steps.config.outputs.sonar }}   # sonar-project.properties 만 바뀌어도 Sonar 재분석
+      lib: ${{ steps.config.outputs.lib }}              # libs/common-web 변경 — 모듈 자체 테스트(lib job)
     steps:
       - uses: actions/checkout@v4
+      # libs/common-web 은 composite build 로 서비스 jar 에 들어가므로, 바뀌면 의존 서비스 8개를 모두 테스트 · 이미지 재빌드 (결정 5번 B-1)
+      # gateway 는 WebFlux 라 common-web(Servlet 전용)을 쓰지 않아 제외
       - id: filter
         uses: dorny/paths-filter@v3
         with:
           filters: |
             gateway:    [services/gateway-service/**]
-            user:       [services/user-service/**]
-            store:      [services/store-service/**]
-            product:    [services/product-service/**]
-            order:      [services/order-service/**]
-            payment:    [services/payment-service/**]
-            review:     [services/review-service/**]
-            settlement: [services/settlement-service/**]
-            admin:      [services/admin-service/**]
+            user:       [services/user-service/**, libs/common-web/**]
+            store:      [services/store-service/**, libs/common-web/**]
+            product:    [services/product-service/**, libs/common-web/**]
+            order:      [services/order-service/**, libs/common-web/**]
+            payment:    [services/payment-service/**, libs/common-web/**]
+            review:     [services/review-service/**, libs/common-web/**]
+            settlement: [services/settlement-service/**, libs/common-web/**]
+            admin:      [services/admin-service/**, libs/common-web/**]
       - id: config                           # 서비스 목록(services)에 섞이지 않게 필터를 따로 둔다
         uses: dorny/paths-filter@v3
         with:
           filters: |
             sonar: [sonar-project.properties]
+            lib:   [libs/common-web/**]
 
   # 2) 바뀐 서비스마다 하나씩 — 테스트 → 이미지(main)
   build:
@@ -100,14 +104,17 @@ jobs:
         if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
+      # 빌드 컨텍스트 = 저장소 루트 — Dockerfile 이 libs/common-web 을 함께 복사해야 includeBuild('../../libs/common-web') 가 풀린다
       - name: 이미지 빌드 · push
         if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
+        working-directory: .
         env:
           REGISTRY: ${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
           REPOSITORY: sesac-gojigi-${{ matrix.service }}     # Terraform ecr/ 가 만든 저장소 이름
+          SERVICE: ${{ matrix.service }}
         run: |
           TAG=${GITHUB_SHA::7}
-          docker build -t "$REGISTRY/$REPOSITORY:$TAG" .
+          docker build -f "services/${SERVICE}-service/Dockerfile" -t "$REGISTRY/$REPOSITORY:$TAG" .
           docker push "$REGISTRY/$REPOSITORY:$TAG"
 
   # 3) SonarQube Cloud — 저장소 전체를 한 번에 스캔하고 PR 에서는 품질 게이트 결과를 기다린다 (실패 시 이 job 실패 → ci-ok 실패 → 머지 차단)
@@ -115,7 +122,7 @@ jobs:
   #    build 와 병렬로 돈다 — 바뀐 서비스가 없으면 build 처럼 건너뜀
   sonar:
     needs: changes
-    if: needs.changes.outputs.services != '[]' || needs.changes.outputs.sonar-config == 'true'
+    if: needs.changes.outputs.services != '[]' || needs.changes.outputs.sonar-config == 'true' || needs.changes.outputs.lib == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,10 +138,19 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: 컴파일(전체) · 테스트 + JaCoCo(바뀐 서비스)
+      - name: 컴파일(전체) · 테스트 + JaCoCo(바뀐 서비스 · libs)
         env:
           CHANGED: ${{ needs.changes.outputs.services }}   # 예: ["order","payment"]
+          LIB_CHANGED: ${{ needs.changes.outputs.lib }}
         run: |
+          # libs/common-web — 바뀌었으면 테스트 + JaCoCo(새 코드 커버리지), 아니면 컴파일만 (sonar.java.binaries 에 필요)
+          for dir in libs/*/; do
+            name=$(basename "$dir")
+            if [ "$LIB_CHANGED" = "true" ]; then tasks="test jacocoTestReport"; else tasks="compileJava compileTestJava"; fi
+            echo "::group::lib $name — $tasks"
+            (cd "$dir" && chmod +x gradlew && ./gradlew $tasks --no-daemon)
+            echo "::endgroup::"
+          done
           for dir in services/*-service; do
             name=$(basename "$dir" -service)
             if echo "$CHANGED" | grep -q "\"$name\""; then tasks="test jacocoTestReport"; else tasks="compileJava compileTestJava"; fi
@@ -151,10 +167,35 @@ jobs:
           # 품질 게이트는 PR 에서만 기다린다 — main push 는 다음 PR 의 "새 코드" 기준을 갱신하는 분석만 (첫 main 분석은 게이트가 계산되지 않아 실패로 처리됨)
           args: -Dsonar.qualitygate.wait=${{ github.event_name == 'pull_request' }}
 
+  # 3-1) libs/common-web 자체 테스트 — 서비스 build 와 병렬. 모듈이 깨졌으면 서비스 8개보다 먼저 원인이 보이도록 따로 둔다
+  lib:
+    needs: changes
+    if: needs.changes.outputs.lib == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: libs/common-web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Test + JaCoCo
+        run: |
+          chmod +x gradlew
+          ./gradlew test jacocoTestReport --no-daemon
+
   # 4) PR 머지 판정 — main 브랜치 보호의 필수 체크는 이 job 하나만 건다 (matrix job 이름은 서비스마다 달라 필수로 걸 수 없음)
-  #    빌드 · 테스트와 Sonar 품질 게이트가 모두 성공했거나, 바뀐 서비스가 없어 둘 다 skipped 면 통과
+  #    빌드 · 테스트 · libs 테스트와 Sonar 품질 게이트가 모두 성공했거나, 바뀐 것이 없어 skipped 면 통과
   ci-ok:
-    needs: [changes, build, sonar]
+    needs: [changes, build, sonar, lib]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -162,10 +203,11 @@ jobs:
           CHANGES: ${{ needs.changes.result }}
           BUILD: ${{ needs.build.result }}
           SONAR: ${{ needs.sonar.result }}
+          LIB: ${{ needs.lib.result }}
         run: |
-          echo "changes=$CHANGES build=$BUILD sonar=$SONAR"
+          echo "changes=$CHANGES build=$BUILD sonar=$SONAR lib=$LIB"
           ok() { [ "$1" = success ] || [ "$1" = skipped ]; }
-          [ "$CHANGES" = success ] && ok "$BUILD" && ok "$SONAR"
+          [ "$CHANGES" = success ] && ok "$BUILD" && ok "$SONAR" && ok "$LIB"
 
   # 5) gotgan-config 의 Helm values.yaml 에서 내 서비스의 tag 줄만 바꿔 커밋 → ArgoCD 가 감지해 배포
   bump-tag:
