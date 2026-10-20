@@ -29,6 +29,7 @@ import com.sesac.gojigi.payment.payment.service.PaymentCancelRecoveryScheduler;
 import com.sesac.gojigi.payment.payment.service.PaymentService;
 import com.sesac.gojigi.payment.payment.service.PaymentTxService;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -75,6 +76,7 @@ class PaymentCancelFailureIntegrationTest {
     @Autowired PaymentService paymentService;
     @Autowired PaymentCancelRecoveryScheduler recoveryScheduler;
     @Autowired CircuitBreakerRegistry circuitBreakerRegistry;
+    @Autowired MeterRegistry meterRegistry;
     @MockitoBean PortOneClient portOneClient;
     @MockitoSpyBean PaymentTxService paymentTx;
 
@@ -372,6 +374,42 @@ class PaymentCancelFailureIntegrationTest {
             assertThat(c.getReason()).isEqualTo("결제 실패 처리 후 승인된 결제 자동 취소");
         });
         verify(portOneClient, times(1)).cancel(eq("pay-" + orderNo), any());
+    }
+
+    @Test
+    @DisplayName("거절된 자동 환불인데 포트원 잔액이 없으면(콘솔에서 이미 취소) 다시 보내지 않고 시도 횟수만 올린다")
+    void rejectedAutoRefund_noBalance_notResent() throws Exception {
+        String orderNo = readyOrder();
+        doReturn(portOne("PAID", 1_000L, 0)).when(portOneClient).getPayment("pay-" + orderNo);
+        doThrow(rejected(HttpStatus.BAD_REQUEST, "INVALID_REQUEST")).when(portOneClient).cancel(eq("pay-" + orderNo), any());
+        verifyPayment(orderNo, AMOUNT).andExpect(status().isConflict());
+        int attemptsBefore = onlyCancel(orderNo).getAttemptCount();
+
+        doReturn(portOne("CANCELLED", 1_000L, 1_000L)).when(portOneClient).getPayment("pay-" + orderNo);
+        recoveryScheduler.recover();
+
+        verify(portOneClient, times(1)).cancel(eq("pay-" + orderNo), any());
+        assertThat(onlyCancel(orderNo).getStatus()).isEqualTo(CancelStatus.FAILED);
+        assertThat(onlyCancel(orderNo).getAttemptCount()).isEqualTo(attemptsBefore + 1);
+        assertThat(onlyCancel(orderNo).getLastError()).contains("수동 확인");
+    }
+
+    @Test
+    @DisplayName("시도 한도에 닿도록 확정되지 않으면 payment_cancel_unresolved_total 이 오른다 (수동 확인 경보)")
+    void stuckCancel_raisesUnresolvedMetric() throws Exception {
+        String orderNo = paidOrder();
+        doThrow(timeout()).when(portOneClient).cancel(eq("pay-" + orderNo), any());
+        doThrow(unavailable()).when(portOneClient).getPayment("pay-" + orderNo);
+        cancel(orderNo, "saga-" + orderNo, 10_000L).andExpect(status().isConflict());
+        double before = meterRegistry.counter("payment.cancel.unresolved").count();
+
+        for (int i = 0; i < 10; i++) {   // max-attempts 10 — 매 주기 대조 실패 → 시도 횟수 증가
+            recoveryScheduler.recover();
+            resetCircuit();
+        }
+
+        assertThat(onlyCancel(orderNo).getStatus()).isEqualTo(CancelStatus.PENDING);
+        assertThat(meterRegistry.counter("payment.cancel.unresolved").count()).isGreaterThan(before);
     }
 
     // ── 기록 밖의 취소
