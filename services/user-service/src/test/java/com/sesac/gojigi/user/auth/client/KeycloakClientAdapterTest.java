@@ -268,6 +268,74 @@ class KeycloakClientAdapterTest {
                 .isInstanceOf(AuthException.class);
     }
 
+    @Test
+    @DisplayName("계정 삭제 — 서비스 계정 토큰(Bearer)으로 DELETE /users/{keycloakId}")
+    void deleteUser_byKeycloakId_deletes() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-7"))
+                .andExpect(method(HttpMethod.DELETE))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sa-token"))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        adapter.deleteUser("kc-7", "new1@gotgan.com");
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("계정 삭제 — keycloak_id 가 없으면(첫 로그인 전) username 정확 일치로 찾아 삭제")
+    void deleteUser_withoutKeycloakId_findsByUsername() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=wlsgksvheh%2Bbuyer2%40gmail.com&exact=true"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"id\":\"kc-5\",\"username\":\"wlsgksvheh+buyer2@gmail.com\"}]",
+                        MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-5"))
+                .andExpect(method(HttpMethod.DELETE))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        adapter.deleteUser(null, "wlsgksvheh+buyer2@gmail.com");
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("계정 삭제 — 검색 결과가 없거나 이미 지워져 404 면 성공으로 본다")
+    void deleteUser_alreadyGone_succeeds() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=gone%40gotgan.com&exact=true")).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        adapter.deleteUser(null, "gone@gotgan.com");
+        server.verify();
+
+        server.reset();
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-gone")).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        adapter.deleteUser("kc-gone", "gone@gotgan.com");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("계정 삭제 403(서비스 계정 권한 없음)은 EXTERNAL_API_ERROR — 원인은 cause 로")
+    void deleteUser_forbidden_becomesExternalApiError() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-7")).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> adapter.deleteUser("kc-7", "new1@gotgan.com"))
+                .isInstanceOf(BusinessException.class)
+                .hasCauseInstanceOf(HttpClientErrorException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
+    @Test
+    @DisplayName("계정 삭제 폴백 — 연결 실패는 EXTERNAL_API_ERROR(cause 유지)")
+    void deleteUserFallback_mapsUnavailable() {
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "deleteUserFallback",
+                "kc-7", "new1@gotgan.com", new ResourceAccessException("connection refused")))
+                .isInstanceOf(BusinessException.class)
+                .hasCauseInstanceOf(ResourceAccessException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
     private static String basic(String credentials) {
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }

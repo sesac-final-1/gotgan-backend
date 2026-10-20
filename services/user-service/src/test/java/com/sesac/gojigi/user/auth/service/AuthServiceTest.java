@@ -317,4 +317,14 @@ class AuthServiceTest {
         assertThat(authService.isEmailAvailable("new1@gotgan.com")).isTrue();
         assertThat(authService.isEmailAvailable("seller1@gotgan.com")).isFalse();
     }
+
+    @Test
+    @DisplayName("탈퇴 시 계정 삭제 — Keycloak 계정 삭제를 그대로 맡긴다")
+    void deleteAccount_delegatesToKeycloak() {
+        // when
+        authService.deleteAccount("kc-7", "new1@gotgan.com");
+
+        // then
+        verify(keycloakClientAdapter).deleteUser("kc-7", "new1@gotgan.com");
+    }
 }
