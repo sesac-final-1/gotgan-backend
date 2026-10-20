@@ -62,9 +62,10 @@ public class UserService {
             authService.deleteAccount(user.getKeycloakId(), user.getEmail());
             return true;
         } catch (BusinessException e) {
-            log.warn("탈퇴 후 Keycloak 계정 삭제 실패 — 탈퇴는 유지. 남은 계정으로 로그인하면 AUTH_ACCOUNT_NOT_LINKED 로 막힘, "
-                    + "Keycloak 관리 콘솔에서 계정 수동 삭제 필요 userId={}, keycloakId={}, code={}, cause={}",
-                    user.getId(), user.getKeycloakId(), e.getErrorCode().getCode(), String.valueOf(e.getCause()));
+            // 관리 콘솔에서 수동 삭제가 필요한 실패 — 사람이 봐야 하므로 error + 스택트레이스 (컨벤션 2-8)
+            log.error("탈퇴 후 Keycloak 계정 삭제 실패 — 탈퇴는 유지. 남은 계정으로 로그인하면 AUTH_ACCOUNT_NOT_LINKED 로 막힘, "
+                    + "Keycloak 관리 콘솔에서 계정 수동 삭제 필요 userId={}, keycloakId={}, code={}",
+                    user.getId(), user.getKeycloakId(), e.getErrorCode().getCode(), e);
             return false;
         }
     }
