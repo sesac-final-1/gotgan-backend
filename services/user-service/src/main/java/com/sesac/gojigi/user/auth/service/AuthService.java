@@ -82,6 +82,44 @@ public class AuthService {
     }
 
     /**
+     * 로그아웃 — Keycloak 세션을 끝내 Refresh Token 을 무효로 한다. 쿠키 삭제는 컨트롤러.
+     * 쿠키가 없거나 Keycloak 이 실패해도 예외를 던지지 않는다 — 브라우저 쪽 로그아웃(쿠키 삭제)은 항상 끝나야 한다.
+     * Access Token 은 만료(최대 30분)까지 남는다 — 프론트가 메모리에서 버리는 것으로 끝 (blacklist:{jti} 는 Could).
+     *
+     * @return Keycloak 세션을 끝냈으면 true (쿠키 없음 · 실패면 false)
+     */
+    public boolean logout(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            log.info("로그아웃 — Refresh 쿠키 없음, 쿠키 삭제만");
+            return false;
+        }
+        Long userId = userIdForLog(refreshToken);
+        try {
+            keycloakClientAdapter.logout(refreshToken);
+            log.info("로그아웃 userId={}, keycloakSessionEnded=true", userId);
+            return true;
+        } catch (BusinessException e) {
+            log.warn("로그아웃 중 Keycloak 세션 종료 실패 — 쿠키는 삭제. 브라우저에선 로그아웃됐지만 세션은 Refresh 만료(최대 14일)까지 남음 "
+                    + "(쿠키가 사라져 쓸 수 없음, 탈취된 경우만 위험) userId={}, code={}, cause={}",
+                    userId, e.getErrorCode().getCode(), String.valueOf(e.getCause()));
+            return false;
+        }
+    }
+
+    /**
+     * 로그 전용 — Refresh Token(JWT)의 sub(Keycloak 사용자 ID)로 회원을 찾는다. 서명 검증 없이 읽으므로 판단에 쓰지 않는다
+     * (세션 종료 판단은 Keycloak 이 한다). 읽을 수 없는 토큰 · 연결 안 된 계정이면 null.
+     */
+    private Long userIdForLog(String refreshToken) {
+        try {
+            String keycloakId = AccessTokenClaims.parse(refreshToken, jsonMapper).keycloakId();
+            return keycloakId == null ? null : userRepository.findByKeycloakId(keycloakId).map(User::getId).orElse(null);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
      * 탈퇴 시 Keycloak 계정 삭제 — 로그인 · Refresh 가 더 이상 되지 않는다.
      * 회원 행 처리 · 실패 시 정책은 호출하는 쪽(UserService.withdraw)이 정한다.
      */
