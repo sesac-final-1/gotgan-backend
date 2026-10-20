@@ -28,6 +28,8 @@
 
 카테고리 · 스토어를 다시 켜면 상품은 별도 작업 없이 원래대로 보입니다.
 
+`is_store_active` 는 `StoreStatusChanged` 의 `status` 가 **`ACTIVE` 일 때만 TRUE** 입니다. 그 밖의 값(`DORMANT` · `SUSPENDED`, 나중에 생길 수 있는 값 포함)은 모두 FALSE.
+
 ---
 
 ## 1. 재고 예약 — `POST /internal/stock/reservations` (PRD-08)
@@ -201,3 +203,82 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 - **상위를 켜기 전 수수료율 확인은 admin 이 합니다**(settlement 현재 율 조회 → 없으면 켜지 않음). product 는 다른 서비스를 부르지 않습니다(CAT-03).
 - 하위를 켜도 상위가 꺼져 있으면 여전히 숨겨집니다.
 - 시드 카테고리 ID(1 식품 · 2 리빙 · 3 패션 · 4 신발가방 · 5 뷰티 · 6 디지털, 하위 = 상위 × 100 + 순번)는 맨 아래 "설계 정리"에 둡니다.
+
+## 8. 카테고리 트리 — `GET /api/categories` (CAT-01)
+
+공개. 쇼핑몰 탐색 · 판매자 상품 등록의 카테고리 선택 · 입점 신청 희망 카테고리가 **같은 API** 를 씁니다.
+
+```json
+[
+  { "id": 3, "name": "패션의류", "nameEn": "Apparel",
+    "children": [ { "id": 301, "name": "셔츠", "nameEn": null }, { "id": 302, "name": "팬츠", "nameEn": null } ] }
+]
+```
+
+- **사용 중인 것만**: 꺼진 상위는 하위까지 통째로 빠지고, 꺼진 하위는 그 하위만 빠집니다.
+- 상위 · 하위 모두 `sortOrder` 순으로 정렬해서 줍니다(응답에 `sortOrder` 는 넣지 않음).
+- 판매수수료율은 넣지 않습니다(settlement 소관, 관리자 화면은 admin 이 조합).
+
+## 9. 상품 목록 · 검색 — `GET /api/products` (PRD-06 · PRD-14 · STR-12)
+
+공개. 목록 · 검색 · 메인 화면 · 스토어 홈이 모두 이 API 를 씁니다. **`displayable = true` 인 상품만** 나옵니다.
+
+| 파라미터 | 기본값 | 설명 |
+|---|---|---|
+| `categoryId` | — | 상위 ID 면 그 아래 하위 전부, 하위 ID 면 그 하위만 |
+| `storeId` | — | 스토어 홈 |
+| `q` | — | 상품명 · 하위 카테고리 이름에 포함(LIKE). 앞뒤 공백 제거 후 1~50자 |
+| `minPrice` · `maxPrice` | — | `salePrice` 기준, `minPrice ≤ salePrice < maxPrice` (화면 가격대 버튼과 같은 경계) |
+| `excludeSoldOut` | `false` | `true` 면 품절 상품 제외 |
+| `sort` | `NEW` | `NEW`(신상품) · `PRICE_ASC`(낮은 가격) · `PRICE_DESC`(높은 가격). 같으면 `productId` 큰 순 — 페이지가 바뀌어도 순서가 흔들리지 않게 |
+| `page` · `size` | `0` · `20` | `page` 는 0부터, `size` 최대 100 |
+
+응답 `PageResponse<ProductSummary>`:
+
+```json
+{ "productId": 3, "name": "프렌치 리넨 오버핏 셔츠", "storeId": 1, "categoryId": 301, "topCategoryId": 3,
+  "price": 89000, "discountRate": 15.00, "salePrice": 75650,
+  "imageUrl": "https://.../products/3/a1b2.jpg", "soldOut": false, "createdAt": "2026-10-20T10:00:00+09:00" }
+```
+
+| 경우 | 응답 |
+|---|---|
+| 조건에 맞는 상품 없음 · 없거나 꺼진 카테고리 · 운영 안 하는 스토어 | **200** 빈 페이지 |
+| `minPrice > maxPrice` · 음수 · 모르는 `sort` · `size > 100` · `q` 50자 초과 | **400** `INVALID_INPUT` |
+
+- `soldOut`: 삭제 안 된 옵션의 재고가 모두 0.
+- **메인 화면(PRD-14)**: 카테고리마다 `?categoryId={상위}&sort=NEW&size=8`. 판매량 랭킹 · 리뷰순 · 평점순은 범위 밖입니다(판매량은 order, 리뷰는 review 데이터 — product 는 다른 서비스를 부르지 않음).
+- 카드에 별점 · 리뷰 수는 없습니다. 스토어 이름은 화면이 스토어 목록(`GET /api/stores`)으로 붙입니다.
+
+## 10. 상품 상세 — `GET /api/products/{productId}` (PRD-07)
+
+공개.
+
+```json
+{
+  "productId": 3, "storeId": 1,
+  "categoryId": 301, "categoryName": "셔츠", "topCategoryId": 3, "topCategoryName": "패션의류",
+  "name": "프렌치 리넨 오버핏 셔츠",
+  "price": 89000, "discountRate": 15.00, "salePrice": 75650,
+  "description": "<p>…</p>", "material": "리넨 100%", "origin": "대한민국",
+  "images": [ "https://.../products/3/a1b2.jpg", "https://.../products/3/c3d4.jpg" ],
+  "option1Name": "컬러", "option2Name": "사이즈",
+  "options": [
+    { "productOptionId": 11, "option1Value": "오트밀", "option2Value": "M", "extraPrice": 0, "soldOut": false },
+    { "productOptionId": 12, "option1Value": "오트밀", "option2Value": "L", "extraPrice": 2000, "soldOut": true }
+  ],
+  "purchasable": true, "soldOut": false,
+  "createdAt": "2026-10-20T10:00:00+09:00"
+}
+```
+
+| 경우 | 응답 | 화면 |
+|---|---|---|
+| 판매 중 | **200** `purchasable: true` | 품절 옵션만 비활성 |
+| 판매중지 · 강제 판매중지 · 카테고리 꺼짐 · 스토어 휴면/정지 | **200** `purchasable: false` | "현재 구매할 수 없는 상품" · 담기 · 구매 버튼 비활성 |
+| 없거나 삭제된 상품 | **404** `PRODUCT_NOT_FOUND` | 없는 상품 안내 |
+
+- `images`: 첫 번째가 대표, 최대 5장.
+- `options`: 삭제된 조합은 빠집니다. **옵션 없는 상품도 옵션 1개**(`option1Value · option2Value = null`)가 있어서, 장바구니는 언제나 `productOptionId` 로 담습니다.
+- 재고 수는 공개하지 않고 `soldOut` 만 줍니다. 담을 때 재고를 넘으면 주문 단계(1절)에서 `STOCK_INSUFFICIENT`.
+- 스토어 정보(이름 · 배송비)는 화면이 `GET /api/stores/{storeId}` 를, 별점 · 리뷰는 review API 를 따로 부릅니다.
