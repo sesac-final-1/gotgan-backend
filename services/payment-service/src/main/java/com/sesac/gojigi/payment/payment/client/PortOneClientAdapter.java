@@ -1,7 +1,7 @@
 package com.sesac.gojigi.payment.payment.client;
 
-import com.sesac.gojigi.payment.common.exception.BusinessException;
-import com.sesac.gojigi.payment.common.exception.CommonErrorCode;
+import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelRequest;
 import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelResponse;
 import com.sesac.gojigi.payment.payment.client.dto.PortOnePayment;
