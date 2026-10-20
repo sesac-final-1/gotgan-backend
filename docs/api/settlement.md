@@ -29,6 +29,22 @@
 - `PUT` `[{categoryId, rate, effectiveFrom?}]` → 위와 같은 목록
   - `effectiveFrom` 생략 = 다음 주 월요일 · 지난 날짜 400 `COMMISSION_PAST_EFFECTIVE_DATE` · `rate` 0~100
   - 같은 (카테고리, 적용 시작일)이 있으면 율만 수정, 이력은 지우지 않음
+  - 오늘 날짜는 허용 — 등록 즉시 `current` 로 조회됨 (아래 신규 상위 카테고리 흐름에서 사용)
+
+### 신규 상위 카테고리 — 수수료 등록 후에만 노출 (CAT-02 · STL-01, 10/20 박지연 합의)
+
+수수료율이 없는 상위 카테고리가 노출되면 구매확정이 적재되지 못하고 DLQ 로 간다. 그래서 상위 카테고리는 **비활성으로 생성 → 수수료 등록 → 활성화** 순서로만 연다.
+
+| 순서 | 호출 | 비고 |
+|---|---|---|
+| 1 | admin → product 상위 카테고리 생성 | product 가 상위(`parentId` 없음)는 `active=false` 로 생성 — 하위는 활성 생성, 상위가 꺼져 있으면 함께 숨김 |
+| 2 | admin → settlement `PUT /internal/commissions` `[{categoryId, rate, effectiveFrom: 오늘}]` | 관리자 생성 요청에 초기 수수료율 필수 (상위만) |
+| 3 | admin → settlement `GET /internal/commissions` | 해당 `categoryId` 의 `current` 확인 |
+| 4 | `current` 가 있으면 admin → product `PATCH /internal/categories/{id}` `{active: true}` | `null` 이면 활성화 호출 안 함. product 는 다른 서비스를 부르지 않으므로(CAT-03) 확인은 admin 몫 |
+
+- 수수료는 삭제 API 가 없어 한 번 활성화된 카테고리는 율이 계속 존재 — 활성화 시점 한 번만 막으면 된다
+- 그래도 적재 시 율이 없으면 `COMMISSION_NOT_FOUND` 로 재전달 → DLQ (안전장치 유지)
+- 시드 상위 카테고리 1~6 은 활성 상태 + 수수료 시드(적용 시작일 `2026-01-01`)로 함께 들어간다
 
 ## 3. 정산 — `/internal/settlements` (admin-service)
 
