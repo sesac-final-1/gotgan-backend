@@ -2,6 +2,7 @@ package com.sesac.gojigi.user.auth.client;
 
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserCreateRequest;
+import com.sesac.gojigi.user.auth.client.dto.KeycloakUserSummary;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.common.exception.BusinessException;
@@ -23,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
  * - 서킷 브레이커 "keycloak" — 연결 실패 · 타임아웃 · 5xx 만 장애로 센다. OPEN 이면 바로 EXTERNAL_API_ERROR(502)
  * - 토큰 요청(POST)은 재시도하지 않는다 (Brute Force 실패 횟수가 이중으로 쌓임)
  * - invalid_grant(비밀번호 불일치 · 임시 잠금 · 정지)는 도메인 예외로 바꾸고 서킷 실패로 세지 않는다
- * - 계정 생성(Admin API)은 서비스 계정 토큰(client_credentials)으로 — 409 는 이메일 중복, 비밀번호 정책 위반 400 은 도메인 예외
+ * - 계정 생성 · 삭제(Admin API)는 서비스 계정 토큰(client_credentials)으로 — 409 는 이메일 중복, 비밀번호 정책 위반 400 은 도메인 예외
  * - client 인증(client-id · secret)은 KeycloakClientConfig 가 Basic 헤더로 붙인다 — 여기서는 grant 별 폼만 만든다
  * - 비밀번호 · client secret · 토큰은 로그에 남기지 않는다
  * - 여기서는 로그를 찍지 않는다 — 원인을 예외에 실어 던지면 GlobalExceptionHandler 가 warn 한 번 (컨벤션 5-6)
@@ -68,6 +69,37 @@ public class KeycloakClientAdapter {
         } catch (HttpClientErrorException e) {
             throw toCreateUserException(e);
         }
+    }
+
+    /**
+     * 탈퇴 — Keycloak 계정 삭제 (세션 · Refresh Token 도 함께 무효).
+     * keycloakId 가 없으면(첫 로그인 전 회원) username 으로 찾는다. 이미 없으면(404 · 검색 결과 없음) 성공으로 본다.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "deleteUserFallback")
+    public void deleteUser(String keycloakId, String email) {
+        String bearer = "Bearer " + serviceAccountToken();
+        try {
+            String targetId = keycloakId != null ? keycloakId : findIdByUsername(bearer, email);
+            if (targetId == null) {
+                return;
+            }
+            keycloakAdminClient.deleteUser(bearer, targetId);
+        } catch (HttpClientErrorException.NotFound e) {
+            // 이미 삭제됨 — 탈퇴 재시도 등
+        } catch (HttpClientErrorException e) {
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    private String findIdByUsername(String bearer, String email) {
+        return keycloakAdminClient.findByUsername(bearer, email, true).stream()
+                .findFirst()
+                .map(KeycloakUserSummary::id)
+                .orElse(null);
+    }
+
+    private void deleteUserFallback(String keycloakId, String email, Throwable t) {
+        throw unavailable(t);
     }
 
     private String serviceAccountToken() {
