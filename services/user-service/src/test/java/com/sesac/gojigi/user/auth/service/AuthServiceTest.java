@@ -327,4 +327,51 @@ class AuthServiceTest {
         // then
         verify(keycloakClientAdapter).deleteUser("kc-7", "new1@gotgan.com");
     }
+
+    @Test
+    @DisplayName("로그아웃 — Refresh 쿠키의 Keycloak 세션을 끝낸다")
+    void logout_endsKeycloakSession() {
+        // given — Refresh Token 의 sub 로 회원을 찾아 로그에 userId 를 남긴다
+        String refreshToken = AccessTokenClaimsTest.token("{\"sub\":\"kc-2\",\"typ\":\"Refresh\"}");
+        given(userRepository.findByKeycloakId("kc-2")).willReturn(Optional.of(user(2L)));
+
+        // when
+        boolean ended = authService.logout(refreshToken);
+
+        // then
+        assertThat(ended).isTrue();
+        verify(keycloakClientAdapter).logout(refreshToken);
+        verify(userRepository).findByKeycloakId("kc-2");
+    }
+
+    @Test
+    @DisplayName("로그아웃 — 읽을 수 없는 토큰이어도 Keycloak 에 맡기고 로그의 userId 만 비운다")
+    void logout_unreadableToken_stillCallsKeycloak() {
+        // when
+        boolean ended = authService.logout("not-a-jwt");
+
+        // then
+        assertThat(ended).isTrue();
+        verify(keycloakClientAdapter).logout("not-a-jwt");
+        verify(userRepository, never()).findByKeycloakId(anyString());
+    }
+
+    @Test
+    @DisplayName("로그아웃 — 쿠키가 없으면 Keycloak 을 부르지 않는다 (쿠키 삭제만)")
+    void logout_withoutCookie_skipsKeycloak() {
+        // when · then
+        assertThat(authService.logout(null)).isFalse();
+        assertThat(authService.logout(" ")).isFalse();
+        verify(keycloakClientAdapter, never()).logout(anyString());
+    }
+
+    @Test
+    @DisplayName("로그아웃 — Keycloak 이 실패해도 예외를 던지지 않는다 (브라우저 로그아웃은 끝나야 함)")
+    void logout_keycloakFails_doesNotThrow() {
+        // given
+        willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR)).given(keycloakClientAdapter).logout("rt-1");
+
+        // when · then
+        assertThat(authService.logout("rt-1")).isFalse();
+    }
 }

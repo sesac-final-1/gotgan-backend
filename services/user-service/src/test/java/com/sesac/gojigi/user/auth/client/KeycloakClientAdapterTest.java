@@ -336,6 +336,57 @@ class KeycloakClientAdapterTest {
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
     }
 
+    private static final String LOGOUT_URL = BASE + "/realms/gotgan/protocol/openid-connect/logout";
+
+    @Test
+    @DisplayName("로그아웃 — client 인증은 Basic 헤더, 폼에는 refresh_token 만 보낸다 (204)")
+    void logout_sendsRefreshToken() {
+        server.expect(requestTo(LOGOUT_URL))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, basic("gotgan-backend:test-secret")))
+                .andExpect(content().formData(new LinkedMultiValueMap<>(Map.of("refresh_token", List.of("rt-1")))))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        adapter.logout("rt-1");
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("로그아웃 — 만료 · 잘못된 토큰(invalid_grant)은 이미 로그아웃된 것으로 보고 성공")
+    void logout_invalidGrant_succeeds() {
+        server.expect(requestTo(LOGOUT_URL))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"invalid_grant\",\"error_description\":\"Invalid refresh token\"}"));
+
+        adapter.logout("expired");
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("로그아웃 — client 설정 오류(invalid_client)는 EXTERNAL_API_ERROR")
+    void logout_invalidClient_becomesExternalApiError() {
+        server.expect(requestTo(LOGOUT_URL))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"invalid_client\"}"));
+
+        assertThatThrownBy(() -> adapter.logout("rt-1"))
+                .isInstanceOf(BusinessException.class)
+                .hasCauseInstanceOf(HttpClientErrorException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
+    @Test
+    @DisplayName("로그아웃 폴백 — 연결 실패는 EXTERNAL_API_ERROR(cause 유지)")
+    void logoutFallback_mapsUnavailable() {
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "logoutFallback",
+                "rt-1", new ResourceAccessException("connection refused")))
+                .isInstanceOf(BusinessException.class)
+                .hasCauseInstanceOf(ResourceAccessException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
     private static String basic(String credentials) {
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }
