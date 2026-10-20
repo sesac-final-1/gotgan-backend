@@ -1,6 +1,6 @@
 package com.sesac.gojigi.settlement.settlement.exception;
 
-import com.sesac.gojigi.settlement.common.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.BusinessException;
 
 public class SettlementException extends BusinessException {
 

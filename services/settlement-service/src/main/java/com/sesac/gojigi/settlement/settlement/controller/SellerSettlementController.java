@@ -1,8 +1,8 @@
 package com.sesac.gojigi.settlement.settlement.controller;
 
-import com.sesac.gojigi.settlement.common.auth.AuthUser;
-import com.sesac.gojigi.settlement.common.auth.CurrentUser;
-import com.sesac.gojigi.settlement.common.dto.ApiResponse;
+import com.sesac.gojigi.common.web.auth.AuthUser;
+import com.sesac.gojigi.common.web.auth.CurrentUser;
+import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.ReportUrlResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SellerSettlementsResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementDetailResponse;

@@ -1,6 +1,6 @@
 package com.sesac.gojigi.settlement.commission.exception;
 
-import com.sesac.gojigi.settlement.common.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.BusinessException;
 
 public class CommissionException extends BusinessException {
 

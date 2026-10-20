@@ -1,0 +1,38 @@
+// common-web — 서비스 공통 응답 봉투 · 예외 처리 · 게이트웨이 사용자 헤더 (결정 5번 B-1, 10/20)
+// 각 서비스 settings.gradle 의 includeBuild('../../libs/common-web') 로 연결되는 composite build — 따로 배포하지 않는다
+// Spring 의존은 compileOnly — 서비스가 이미 가진 Spring Boot 버전을 그대로 쓴다 (버전 충돌 방지)
+plugins {
+    id 'java-library'
+    id 'jacoco'
+    id 'org.springframework.boot' version '4.1.1' apply false   // BOM 좌표만 사용 — 서비스와 같은 버전
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.sesac.gojigi'
+version = '0.0.1'
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+repositories { mavenCentral() }
+
+dependencyManagement {
+    imports { mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES }
+}
+
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-starter-webmvc'
+    compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+    compileOnly 'org.springframework.data:spring-data-commons'       // PageResponse.from(Page) — JPA 를 쓰는 서비스에만 있음
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-validation'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.data:spring-data-commons'
+    testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test')    { useJUnitPlatform(); finalizedBy jacocoTestReport }
+jacocoTestReport       { reports { xml.required = true } }

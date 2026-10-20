@@ -1,6 +1,6 @@
 package com.sesac.gojigi.payment.payment.controller;
 
-import com.sesac.gojigi.payment.common.dto.ApiResponse;
+import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.payment.payment.client.PortOneWebhookVerifier;
 import com.sesac.gojigi.payment.payment.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;

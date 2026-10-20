@@ -44,7 +44,7 @@ resilience4j:
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
         ignore-exceptions:                  # 포트원의 4xx 거절(비즈니스 오류로 변환)은 세지 않음
-          - com.sesac.gojigi.payment.common.exception.BusinessException
+          - com.sesac.gojigi.common.web.exception.BusinessException
     instances:
       portone: { base-config: default }     # 이름 = 대상 서비스 (가이드라인 06장)
   retry:
@@ -56,7 +56,7 @@ resilience4j:
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
         ignore-exceptions:
-          - com.sesac.gojigi.payment.common.exception.BusinessException
+          - com.sesac.gojigi.common.web.exception.BusinessException
     instances:
       portone: { base-config: default }     # PortOneClientAdapter#getPayment 에만 적용
 

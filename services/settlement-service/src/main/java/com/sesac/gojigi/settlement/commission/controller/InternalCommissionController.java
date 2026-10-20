@@ -3,7 +3,7 @@ package com.sesac.gojigi.settlement.commission.controller;
 import com.sesac.gojigi.settlement.commission.dto.request.CommissionUpdateRequest;
 import com.sesac.gojigi.settlement.commission.dto.response.CommissionResponse;
 import com.sesac.gojigi.settlement.commission.service.CommissionService;
-import com.sesac.gojigi.settlement.common.dto.ApiResponse;
+import com.sesac.gojigi.common.web.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

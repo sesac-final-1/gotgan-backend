@@ -1,6 +1,6 @@
 package com.sesac.gojigi.payment.payment.controller;
 
-import com.sesac.gojigi.payment.common.dto.ApiResponse;
+import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.payment.payment.dto.request.CancelPaymentRequest;
 import com.sesac.gojigi.payment.payment.dto.request.PreparePaymentRequest;
 import com.sesac.gojigi.payment.payment.dto.request.VerifyPaymentRequest;

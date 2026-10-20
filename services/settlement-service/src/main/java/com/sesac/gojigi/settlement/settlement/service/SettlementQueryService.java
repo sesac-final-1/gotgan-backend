@@ -1,7 +1,7 @@
 package com.sesac.gojigi.settlement.settlement.service;
 
-import com.sesac.gojigi.settlement.common.exception.BusinessException;
-import com.sesac.gojigi.settlement.common.exception.CommonErrorCode;
+import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.settlement.settlement.dto.response.SellerSettlementsResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementDetailResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementListResponse;
