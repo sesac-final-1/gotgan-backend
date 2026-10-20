@@ -311,7 +311,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | 내 스토어 상품 | **200** |
 | 다른 스토어 상품 · 없거나 삭제된 상품 | **404** `PRODUCT_NOT_FOUND` — 다른 스토어 상품이 있는지도 알려 주지 않음 |
 
-판매자 API(11~17절) 공통: `X-Store-Id` 가 없으면 **403** `FORBIDDEN`, 다른 스토어 상품은 **404** `PRODUCT_NOT_FOUND`.
+판매자 API(11~17절) 공통: 역할 확인은 **게이트웨이**가 합니다(`/api/seller/**` = SELLER — 토큰 없으면 401 `UNAUTHORIZED`, SELLER 가 아니면 403 `FORBIDDEN`, 같은 봉투). product 는 **소유권**만 봅니다 — `X-Store-Id` 스토어의 상품이 아니면 **404** `PRODUCT_NOT_FOUND`, 헤더가 없으면 **403** `FORBIDDEN`.
 
 ## 13. 상품 등록 · 수정 — `POST /api/seller/products` · `PUT /api/seller/products/{productId}` (PRD-01 · 02 · 03)
 
@@ -431,3 +431,84 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 - 버킷 `sesac-gojigi-images-4380` 의 `products/` 는 공개 읽기, 쓰기는 presigned PUT 만. CORS(PUT · HEAD, vercel · `localhost:5173`)는 설정돼 있습니다.
 - 올리고 저장하지 않은 파일은 S3 에 남습니다(삭제 권한 없음 — 학습 프로젝트라 보류).
 - 권장 크기 1000×1250px 이상은 화면 안내만, 서버는 검사하지 않습니다.
+
+## 18. 오류 코드 (`docs/api/error-codes.md`)
+
+도메인 코드는 product-service 안 도메인별 enum(`{domain}/exception/{Domain}ErrorCode`), 공통 코드는 `libs/common-web` 의 `CommonErrorCode` 입니다. 옵션 · 이미지 코드도 접두어가 `PRODUCT` 라 `ProductErrorCode` 에 둡니다.
+
+| 코드 | HTTP | enum | 언제 |
+|---|---|---|---|
+| `CATEGORY_NOT_FOUND` | 404 | `CategoryErrorCode` | 없는 카테고리 (관리 · 생성 때 `parentId`) |
+| `CATEGORY_NAME_DUPLICATED` | 409 | `CategoryErrorCode` | 같은 부모 아래 같은 이름 |
+| `CATEGORY_DEPTH_EXCEEDED` | 400 | `CategoryErrorCode` | 하위 아래에 생성 (3단계) |
+| `PRODUCT_NOT_FOUND` | 404 | `ProductErrorCode` | 없거나 삭제된 상품 · 다른 스토어 상품 |
+| `PRODUCT_OPTION_NOT_FOUND` | 404 | `ProductErrorCode` | 없는 옵션 ID (재고 예약 · 복원) · 이 상품의 옵션이 아님 (재고 수정) |
+| `PRODUCT_NOT_PURCHASABLE` | 409 | `ProductErrorCode` | 재고 예약 때 판매중지 · 차단 · 카테고리/스토어 비활성 · 삭제된 상품/옵션 |
+| `PRODUCT_BLOCKED` | 409 | `ProductErrorCode` | 강제 판매중지 상품을 판매자가 재개 |
+| `PRODUCT_BLOCK_REASON_REQUIRED` | 400 | `ProductErrorCode` | 강제 판매중지에 사유 없음 |
+| `PRODUCT_CATEGORY_INVALID` | 400 | `ProductErrorCode` | 등록 · 수정 때 상위 · 사용 중지 · 없는 카테고리 |
+| `PRODUCT_OPTION_INVALID` | 400 | `ProductErrorCode` | 옵션 그룹 · 조합 규칙 위반, 기존 조합의 값 변경 |
+| `PRODUCT_IMAGE_INVALID` | 400 | `ProductErrorCode` | 이미지 개수 · 형식 · 크기, 내 스토어 키가 아님 |
+| `STOCK_INSUFFICIENT` | 409 | `StockErrorCode` | 재고 예약 때 재고 부족 |
+| `STOCK_RESERVATION_RELEASED` | 409 | `StockErrorCode` | 해제 표식이 있는 `sagaId` 로 늦게 도착한 예약 |
+| `STOCK_CHANGED` | 409 | `StockErrorCode` | 판매자 재고 수정 때 그 사이 재고가 바뀜 |
+| `INVALID_INPUT` · `FORBIDDEN` (공통) | 400 · 403 | `CommonErrorCode` | 형식 오류 · 판매자 헤더 없음 |
+
+호출하는 서비스는 409 · 404 · 400 을 자기 도메인 코드로 바꾸거나 그대로 전달하고, **서킷 실패로 세지 않습니다**(`ignore-exceptions` = `BusinessException`).
+
+## 19. 호출 쪽 준비 사항
+
+**order (이경석)**
+- 서킷 브레이커 인스턴스 이름은 **`product`**(대상 서비스 이름). 재시도는 4절(GET)만. 1~3절은 POST 지만 멱등 키(`sagaId` · `claimId`)가 있어 복구 스케줄러가 같은 키로 다시 불러도 됩니다.
+- **해제(2절) 요청에 예약 때 보낸 `items` 를 그대로 담아 주세요** — 늦게 도착한 예약을 막는 표식에 씁니다.
+- 예약 409: `STOCK_INSUFFICIENT` · `PRODUCT_NOT_PURCHASABLE` → 보상 + 화면 안내, `STOCK_RESERVATION_RELEASED` 는 이미 보상한 주문이라 무시.
+- 4절 응답의 `topCategoryId` 를 상품주문 스냅샷에 저장 → `OrderItemConfirmed.topCategoryId`.
+- 제안: 장바구니 표시 · 담기에서 4절 `purchasable` 사용, 4절 응답에서 빠진 옵션 ID 는 구매 불가로 처리.
+
+**store (박지연)**: 판매자 대시보드에서 5절을 `storeId` 로 호출. 타임아웃이면 상품 칸만 비우고 부분 응답(STR-07).
+
+**admin (구지훈)**
+- 관리자 대시보드 5절(`storeId` 없이), 스토어 상세 6-1 · 강제 판매중지 6-2, 카테고리 관리 7절.
+- **상위 카테고리를 켜기 전(7절 PATCH `active: true`)에 settlement 현재 수수료율을 확인**하고, 없으면 켜지 않음(10/20 결정 A안).
+- product 오류의 code · message · HTTP 상태를 그대로 전달.
+
+**frontend (박지연, `features/product` · `features/store`)**
+- 응답은 컨벤션대로(숫자 ID · 영문 상태값), 목업 모양으로 바꾸는 건 `productApi.js` 안에서: 카테고리 문자열 ID → 숫자, `status` 영문 → 한글, `discount` 0.15 ↔ `discountRate` 15, 페이지 번호 0부터.
+- 스토어 정보는 `GET /api/stores/{id}`, 별점 · 리뷰는 review API 를 따로 호출. 상세 `purchasable: false` 면 버튼 비활성.
+- 화면 정리 목록은 13절 끝.
+
+## 10/20 설계 정리
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | 상품 상세의 스토어 정보 | 화면이 store 를 따로 호출 — product 는 다른 서비스를 부르지 않음(CAT-03) |
+| 2 | 판매자 재고 수정 | PUT 과 분리한 PATCH + `seenStock` 비교 (DDL 주석 "본 값 비교") |
+| 3 | 목업과 응답 모양 차이 | 서버는 컨벤션, 매핑은 프론트 api 함수(내 담당) |
+| 4 | 이미지 최대 장수 | 5장 — 10/15 ERD 결정 4-12(스펙 우선). 화면 문구 "추가 9장"은 고칠 대상 |
+| 5 | 타임아웃 뒤 늦게 도착한 예약 | 해제 요청에 `items`, 예약 기록이 없으면 수량 0 해제 표식 → 늦은 예약 409 |
+| 6 | 재고 API 경로 | 컨벤션 2-4 예시 `/internal/stock/reservations`(동사 경로 대신 자원 경로) |
+| 7 | 정렬 · 랭킹 | 신상품 · 가격 2종만. 판매량 · 리뷰 · 평점 정렬과 메인 랭킹은 범위 밖 |
+| 8 | 검색 범위 | 상품명 + 하위 카테고리 이름 (스토어 이름 제외) |
+| 9 | 판매자 · 관리자 상품 목록 | 전체 조회 — 프론트 컨벤션 4-7 (스펙 PRD-04 "서버 페이징"보다 나중 결정) |
+| 10 | 상품정보 제공고시 | 소재 · 제조국만 저장(10/19 V2), 나머지는 상세 설명 |
+| 11 | 카테고리 이동 | 수정에서 `parentId` 변경 불가 — 수수료 기준이 조용히 바뀜 |
+| 12 | 강제 판매중지 상품 | 재개만 막고 수정 · 재고 · 삭제는 허용 |
+| 13 | 노출 · 구매 판단 | `status` 는 그대로 두고 `displayable` · `purchasable` 계산(10/20 카테고리 결정) |
+| 14 | 옵션 없는 상품 | 값이 `null` 인 옵션 1개 — 장바구니 · 주문은 언제나 옵션 ID |
+| 15 | 공개 상세의 재고 수 | 비공개, `soldOut` 만 |
+| 16 | 스토어 운영 중 | `StoreStatusChanged.status = ACTIVE` 일 때만 (값이 늘어도 자동으로 숨김) |
+
+**스펙 반영 필요 (가이드 PR, 박지연)**: CAT-02 상위 비활성 생성 · PRD-04 전체 조회 · PRD-06 정렬 3종 · 검색 범위 · PRD-06~08 노출 · 구매 규칙 · PRD-10 응답에 `topCategoryId` · `imageUrl` · `stock` · PRD-13 관리자 상품 목록(6-1).
+
+### 시드 카테고리 ID (10/20 확정 — product 시드는 6주차, settlement 수수료 시드도 같은 ID)
+
+| category_id | 상위 | name_en | sort_order | 판매수수료율 | 하위 |
+|---|---|---|---|---|---|
+| 1 | 식품 | Food | 4 | 7% | 101 과일 · 102 꿀·잼 · 103 쌀·잡곡 · 104 커피 |
+| 2 | 리빙·인테리어 | Living | 3 | 9% | 201 식기 · 202 화병 · 203 조명 · 204 침구 · 205 수납 · 206 캔들 |
+| 3 | 패션의류 | Apparel | 1 | 11% | 301 셔츠 · 302 팬츠 · 303 원피스 · 304 니트 · 305 아우터 · 306 티셔츠 |
+| 4 | 신발·가방 | Shoes & Bags | 2 | 11% | 401 로퍼 · 402 스니커즈 · 403 토트백 · 404 백팩 · 405 크로스백 |
+| 5 | 뷰티 | Beauty | 5 | 10% | 501 스킨케어 · 502 바디·핸드 · 503 립 · 504 선케어 |
+| 6 | 디지털·가전 | Digital | 6 | 6% | 601 키보드 · 602 음향 · 603 데스크 |
+
+하위 ID = 상위 × 100 + 순번. 시드 카테고리는 모두 사용 중. store 시드의 store 1 = 1(식품) · store 2 = 2(리빙).
