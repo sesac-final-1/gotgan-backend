@@ -283,3 +283,232 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 - 재고 수는 공개하지 않고 `soldOut` 만 줍니다. 담을 때 재고를 넘으면 주문 단계(1절)에서 `STOCK_INSUFFICIENT`.
 - 스토어 정보(이름 · 배송비)는 화면이 `GET /api/stores/{storeId}` 를, 별점 · 리뷰는 review API 를 따로 부릅니다.
 
+## 11. 판매자 상품 목록 — `GET /api/seller/products` (PRD-04)
+
+SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징 · 필터 없음 — 화면이 상태별 개수 · 검색 · 정렬 · 페이징, 프론트 컨벤션 4-7). 삭제된 상품만 빠지고 상태와 상관없이 모두 보입니다. 등록일 최신 순.
+
+```json
+[
+  { "productId": 3, "name": "프렌치 리넨 오버핏 셔츠",
+    "categoryId": 301, "categoryName": "셔츠", "topCategoryName": "패션의류",
+    "price": 89000, "discountRate": 15.00, "salePrice": 75650,
+    "imageUrl": "https://.../products/1/a1b2.jpg", "totalStock": 142, "soldOut": false,
+    "status": "ON_SALE", "statusReason": null,
+    "displayable": true, "hiddenReason": null,
+    "createdAt": "2026-10-20T10:00:00+09:00" }
+]
+```
+
+- `hiddenReason`: 쇼핑몰에 안 보이는 이유 — `STOPPED` · `BLOCKED` · `CATEGORY_INACTIVE` · `STORE_INACTIVE` 중 하나, 보이면 `null`. 화면은 "쇼핑몰 미노출" 표시와 이유를 보여 줍니다.
+- 화면 상태 탭(판매중 · 품절 · 판매중지)은 `status` 와 `soldOut` 으로 셉니다. `BLOCKED` 는 판매중지 탭에 사유와 함께.
+
+## 12. 판매자 상품 상세 — `GET /api/seller/products/{productId}`
+
+수정 화면용. 10절 응답에 판매자만 보는 값을 더합니다: `status` · `statusReason` · `hiddenReason`, 옵션별 `stock`, 이미지 `[{ key, url }]`(13절 수정 때 `imageKeys` 로 그대로 돌려보냄).
+
+| 경우 | 응답 |
+|---|---|
+| 내 스토어 상품 | **200** |
+| 다른 스토어 상품 · 없거나 삭제된 상품 | **404** `PRODUCT_NOT_FOUND` — 다른 스토어 상품이 있는지도 알려 주지 않음 |
+
+판매자 API(11~17절) 공통: 역할 확인은 **게이트웨이**가 합니다(`/api/seller/**` = SELLER — 토큰 없으면 401 `UNAUTHORIZED`, SELLER 가 아니면 403 `FORBIDDEN`, 같은 봉투). product 는 **소유권**만 봅니다 — `X-Store-Id` 스토어의 상품이 아니면 **404** `PRODUCT_NOT_FOUND`, 헤더가 없으면 **403** `FORBIDDEN`.
+
+## 13. 상품 등록 · 수정 — `POST /api/seller/products` · `PUT /api/seller/products/{productId}` (PRD-01 · 02 · 03)
+
+옵션 · 이미지를 포함해 **통째로** 보냅니다. **수정(PUT)은 재고 · 판매 상태를 바꾸지 않습니다** — 재고는 14절, 상태는 15절.
+
+```json
+{
+  "categoryId": 301,
+  "name": "프렌치 리넨 오버핏 셔츠",
+  "price": 89000, "discountRate": 15,
+  "description": "<p>…</p>", "material": "리넨 100%", "origin": "대한민국",
+  "option1Name": "컬러", "option2Name": "사이즈",
+  "options": [
+    { "productOptionId": null, "option1Value": "오트밀", "option2Value": "M", "extraPrice": 0, "stock": 30 }
+  ],
+  "imageKeys": [ "products/1/a1b2.jpg", "products/1/c3d4.jpg" ],
+  "status": "ON_SALE"
+}
+```
+
+**입력 규칙**
+
+| 항목 | 규칙 | 어기면 |
+|---|---|---|
+| `categoryId` | 사용 중인 **하위** 카테고리 (상위가 꺼져 있어도 안 됨) — product 자기 DB 로 검증(CAT-03) | **400** `PRODUCT_CATEGORY_INVALID` |
+| `name` · `material` · `origin` | 1~100자 · 1~100자 · 1~50자 | **400** `INVALID_INPUT` |
+| `price` · `discountRate` | 100원 이상 · 0~90 정수(%) — `salePrice` 는 서버 계산 | **400** `INVALID_INPUT` |
+| `description` | HTML. 서버가 sanitizer 로 위험한 태그 · 속성(script · on* 등)을 지우고 저장 | — |
+| 옵션 그룹 | 0~2개. **없으면 `options` 에 값이 `null` 인 1개만** | **400** `PRODUCT_OPTION_INVALID` |
+| `options` | 1~100개 · 조합 중복 없음 · 옵션 그룹 수와 값 개수가 맞음 · `extraPrice ≥ 0` · `stock ≥ 0` | **400** `PRODUCT_OPTION_INVALID` |
+| `imageKeys` | 1~5개, 순서대로 저장(첫 번째가 대표) · 17절에서 받은 **내 스토어 키**(`products/{storeId}/`)만 | **400** `PRODUCT_IMAGE_INVALID` |
+| `status` | 등록 때만 `ON_SALE`(기본) · `STOPPED`. 수정 때는 무시 | **400** `INVALID_INPUT` |
+
+**등록 (POST)** → **201** 12절 응답. 화면의 "상품 복사"는 12절로 읽은 내용을 `status: STOPPED` 로 다시 등록하면 됩니다(이미지 키 재사용 가능).
+
+**수정 (PUT)** — 옵션은 `productOptionId` 로 맞춥니다.
+
+| 요청의 옵션 | 처리 |
+|---|---|
+| `productOptionId` 있음 | 그 조합 유지, `extraPrice` 만 바꿈. `stock` 은 무시. 값(`option1Value` · `option2Value`)이 기존과 다르면 **400** `PRODUCT_OPTION_INVALID` |
+| `productOptionId` 없음 | 새 조합 생성, `stock` 으로 시작 |
+| 기존에 있었는데 요청에 없음 | **소프트 삭제**(`deleted_at`) — 지난 주문 · 장바구니 · 재고 이력이 옵션 ID 를 참조 |
+
+| 경우 | 응답 |
+|---|---|
+| 정상 | **200** 12절 응답 |
+| `BLOCKED` 상품 | 수정 가능 (사유를 고치는 용도) — 상태는 그대로 BLOCKED |
+| 이미지 | 요청 순서대로 다시 저장, 빠진 이미지는 행 삭제 (S3 객체는 남음 — 삭제 권한 없음) |
+
+- 화면 정리(내 담당 `features/product`): 옵션 최대 3개 → 2개, 이미지 "추가 최대 9장" → 최대 5장, 상품정보 제공고시는 소재 · 제조국만(나머지는 상세 설명에), 상품별 배송비 · 출고 소요일 · 엑셀 일괄등록 버튼 제거(배송 정책은 스토어 단위, STR-06). 조합표의 "판매" 체크를 푼 조합은 `options` 에서 뺍니다.
+
+## 14. 재고 수정 — `PATCH /api/seller/products/{productId}/stocks` (PRD-02)
+
+판매자가 **화면에서 본 재고(`seenStock`)** 를 같이 보냅니다. 그 사이 주문으로 재고가 바뀌었으면 덮어쓰지 않습니다.
+
+```json
+{ "items": [ { "productOptionId": 11, "stock": 50, "seenStock": 42 } ] }
+```
+
+| 경우 | product 처리 | 응답 | 화면 |
+|---|---|---|---|
+| 모두 `현재 재고 = seenStock` | `UPDATE … SET stock = :stock WHERE product_option_id = :id AND stock = :seen` | **200** `{ options[{ productOptionId, stock }] }` | 저장 완료 |
+| 하나라도 재고가 그 사이 바뀜 | 전체 롤백 | **409** `STOCK_CHANGED` | "그 사이 주문이 들어와 재고가 바뀌었어요" → 12절 다시 읽고 재입력 |
+| 이 상품의 옵션이 아니거나 삭제된 옵션 | 전체 롤백 | **404** `PRODUCT_OPTION_NOT_FOUND` | |
+| `stock < 0` · `items` 비었음 | 없음 | **400** `INVALID_INPUT` | |
+
+- 재고 0 이면 자동으로 품절, 다시 채우면 판매 — `status` 는 바꾸지 않습니다.
+- `BLOCKED` 상품도 재고 수정은 가능합니다.
+
+## 15. 판매중지 · 재개 (일괄) — `PATCH /api/seller/products/status` (PRD-05 · PRD-15)
+
+한 개든 여러 개든 같은 API. **건마다 따로 처리**하고 결과를 나눠 줍니다(settlement 일괄 지급과 같은 모양).
+
+```json
+{ "productIds": [3, 4, 7], "status": "STOPPED" }
+```
+
+**200** `{ "success": [3, 4], "failed": [ { "productId": 7, "code": "PRODUCT_BLOCKED", "message": "관리자가 판매중지한 상품은 재개할 수 없습니다." } ] }`
+
+| 경우 | 결과 |
+|---|---|
+| `ON_SALE` ↔ `STOPPED` | `success` |
+| 이미 그 상태 | `success` (멱등) |
+| `BLOCKED` 상품 | `failed` · `PRODUCT_BLOCKED` |
+| 없음 · 삭제됨 · 다른 스토어 상품 | `failed` · `PRODUCT_NOT_FOUND` |
+| `status` 가 `ON_SALE` · `STOPPED` 가 아님 · `productIds` 비었음 · 100개 초과 | **400** `INVALID_INPUT` (아무것도 처리 안 함) |
+
+- 재고 0 인 상품도 재개할 수 있습니다(품절로 보임).
+
+## 16. 상품 삭제 — `DELETE /api/seller/products/{productId}` (PRD-05)
+
+| 경우 | 처리 | 응답 |
+|---|---|---|
+| 내 스토어 상품 (상태 무관, BLOCKED 포함) | **소프트 삭제**(`product.deleted_at`) — 옵션 · 재고 이력은 그대로 | **200** |
+| 없음 · 이미 삭제 · 다른 스토어 상품 | 없음 | **404** `PRODUCT_NOT_FOUND` |
+
+- 지난 주문은 스냅샷이라 영향 없음. 장바구니에 담긴 옵션은 4절에서 `purchasable: false` 가 됩니다.
+- 화면의 일괄 삭제는 선택한 개수만큼 이 API 를 부릅니다(데모 규모).
+
+## 17. 이미지 업로드 주소 발급 — `POST /api/seller/products/images/presign` (PRD-03)
+
+브라우저가 S3 에 **직접** 올립니다(서버를 거치지 않음).
+
+```json
+{ "files": [ { "contentType": "image/jpeg", "size": 834512 } ] }
+```
+
+**200** `[ { "key": "products/1/7f3c9e2a.jpg", "uploadUrl": "https://sesac-gojigi-images-4380.s3...", "expiresAt": "2026-10-20T10:10:00+09:00" } ]`
+
+| 경우 | 응답 |
+|---|---|
+| 1~5개 · `image/jpeg` · `image/png` · `image/webp` · 각 10MB 이하 | **200** — 키는 `products/{storeId}/{UUID}.{확장자}`, 주소 유효 10분 |
+| 개수 · 형식 · 크기 위반 | **400** `PRODUCT_IMAGE_INVALID` |
+
+**업로드 순서**: ① 이 API → ② 브라우저가 `uploadUrl` 로 `PUT`(요청 `Content-Type` 을 발급 때와 같게) → ③ 13절 `imageKeys` 에 키를 넣어 저장.
+
+- 버킷 `sesac-gojigi-images-4380` 의 `products/` 는 공개 읽기, 쓰기는 presigned PUT 만. CORS(PUT · HEAD, vercel · `localhost:5173`)는 설정돼 있습니다.
+- 올리고 저장하지 않은 파일은 S3 에 남습니다(삭제 권한 없음 — 학습 프로젝트라 보류).
+- 권장 크기 1000×1250px 이상은 화면 안내만, 서버는 검사하지 않습니다.
+
+## 18. 오류 코드 (`docs/api/error-codes.md`)
+
+도메인 코드는 product-service 안 도메인별 enum(`{domain}/exception/{Domain}ErrorCode`), 공통 코드는 `libs/common-web` 의 `CommonErrorCode` 입니다. 옵션 · 이미지 코드도 접두어가 `PRODUCT` 라 `ProductErrorCode` 에 둡니다.
+
+| 코드 | HTTP | enum | 언제 |
+|---|---|---|---|
+| `CATEGORY_NOT_FOUND` | 404 | `CategoryErrorCode` | 없는 카테고리 (관리 · 생성 때 `parentId`) |
+| `CATEGORY_NAME_DUPLICATED` | 409 | `CategoryErrorCode` | 같은 부모 아래 같은 이름 |
+| `CATEGORY_DEPTH_EXCEEDED` | 400 | `CategoryErrorCode` | 하위 아래에 생성 (3단계) |
+| `PRODUCT_NOT_FOUND` | 404 | `ProductErrorCode` | 없거나 삭제된 상품 · 다른 스토어 상품 |
+| `PRODUCT_OPTION_NOT_FOUND` | 404 | `ProductErrorCode` | 없는 옵션 ID (재고 예약 · 복원) · 이 상품의 옵션이 아님 (재고 수정) |
+| `PRODUCT_NOT_PURCHASABLE` | 409 | `ProductErrorCode` | 재고 예약 때 판매중지 · 차단 · 카테고리/스토어 비활성 · 삭제된 상품/옵션 |
+| `PRODUCT_BLOCKED` | 409 | `ProductErrorCode` | 강제 판매중지 상품을 판매자가 재개 |
+| `PRODUCT_BLOCK_REASON_REQUIRED` | 400 | `ProductErrorCode` | 강제 판매중지에 사유 없음 |
+| `PRODUCT_CATEGORY_INVALID` | 400 | `ProductErrorCode` | 등록 · 수정 때 상위 · 사용 중지 · 없는 카테고리 |
+| `PRODUCT_OPTION_INVALID` | 400 | `ProductErrorCode` | 옵션 그룹 · 조합 규칙 위반, 기존 조합의 값 변경 |
+| `PRODUCT_IMAGE_INVALID` | 400 | `ProductErrorCode` | 이미지 개수 · 형식 · 크기, 내 스토어 키가 아님 |
+| `STOCK_INSUFFICIENT` | 409 | `StockErrorCode` | 재고 예약 때 재고 부족 |
+| `STOCK_RESERVATION_RELEASED` | 409 | `StockErrorCode` | 해제 표식이 있는 `sagaId` 로 늦게 도착한 예약 |
+| `STOCK_CHANGED` | 409 | `StockErrorCode` | 판매자 재고 수정 때 그 사이 재고가 바뀜 |
+| `INVALID_INPUT` · `FORBIDDEN` (공통) | 400 · 403 | `CommonErrorCode` | 형식 오류 · 판매자 헤더 없음 |
+
+호출하는 서비스는 409 · 404 · 400 을 자기 도메인 코드로 바꾸거나 그대로 전달하고, **서킷 실패로 세지 않습니다**(`ignore-exceptions` = `BusinessException`).
+
+## 19. 호출 쪽 준비 사항
+
+**order (이경석)**
+- 서킷 브레이커 인스턴스 이름은 **`product`**(대상 서비스 이름). 재시도는 4절(GET)만. 1~3절은 POST 지만 멱등 키(`sagaId` · `claimId`)가 있어 복구 스케줄러가 같은 키로 다시 불러도 됩니다.
+- **해제(2절) 요청에 예약 때 보낸 `items` 를 그대로 담아 주세요** — 늦게 도착한 예약을 막는 표식에 씁니다.
+- 예약 409: `STOCK_INSUFFICIENT` · `PRODUCT_NOT_PURCHASABLE` → 보상 + 화면 안내, `STOCK_RESERVATION_RELEASED` 는 이미 보상한 주문이라 무시.
+- 4절 응답의 `topCategoryId` 를 상품주문 스냅샷에 저장 → `OrderItemConfirmed.topCategoryId`.
+- 제안: 장바구니 표시 · 담기에서 4절 `purchasable` 사용, 4절 응답에서 빠진 옵션 ID 는 구매 불가로 처리.
+
+**store (박지연)**: 판매자 대시보드에서 5절을 `storeId` 로 호출. 타임아웃이면 상품 칸만 비우고 부분 응답(STR-07).
+
+**admin (구지훈)**
+- 관리자 대시보드 5절(`storeId` 없이), 스토어 상세 6-1 · 강제 판매중지 6-2, 카테고리 관리 7절.
+- **상위 카테고리를 켜기 전(7절 PATCH `active: true`)에 settlement 현재 수수료율을 확인**하고, 없으면 켜지 않음(10/20 결정 A안).
+- product 오류의 code · message · HTTP 상태를 그대로 전달.
+
+**frontend (박지연, `features/product` · `features/store`)**
+- 응답은 컨벤션대로(숫자 ID · 영문 상태값), 목업 모양으로 바꾸는 건 `productApi.js` 안에서: 카테고리 문자열 ID → 숫자, `status` 영문 → 한글, `discount` 0.15 ↔ `discountRate` 15, 페이지 번호 0부터.
+- 스토어 정보는 `GET /api/stores/{id}`, 별점 · 리뷰는 review API 를 따로 호출. 상세 `purchasable: false` 면 버튼 비활성.
+- 화면 정리 목록은 13절 끝.
+
+## 10/20 설계 정리
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | 상품 상세의 스토어 정보 | 화면이 store 를 따로 호출 — product 는 다른 서비스를 부르지 않음(CAT-03) |
+| 2 | 판매자 재고 수정 | PUT 과 분리한 PATCH + `seenStock` 비교 (DDL 주석 "본 값 비교") |
+| 3 | 목업과 응답 모양 차이 | 서버는 컨벤션, 매핑은 프론트 api 함수(내 담당) |
+| 4 | 이미지 최대 장수 | 5장 — 10/15 ERD 결정 4-12(스펙 우선). 화면 문구 "추가 9장"은 고칠 대상 |
+| 5 | 타임아웃 뒤 늦게 도착한 예약 | 해제 요청에 `items`, 예약 기록이 없으면 수량 0 해제 표식 → 늦은 예약 409 |
+| 6 | 재고 API 경로 | 컨벤션 2-4 예시 `/internal/stock/reservations`(동사 경로 대신 자원 경로) |
+| 7 | 정렬 · 랭킹 | 신상품 · 가격 2종만. 판매량 · 리뷰 · 평점 정렬과 메인 랭킹은 범위 밖 |
+| 8 | 검색 범위 | 상품명 + 하위 카테고리 이름 (스토어 이름 제외) |
+| 9 | 판매자 · 관리자 상품 목록 | 전체 조회 — 프론트 컨벤션 4-7 (스펙 PRD-04 "서버 페이징"보다 나중 결정) |
+| 10 | 상품정보 제공고시 | 소재 · 제조국만 저장(10/19 V2), 나머지는 상세 설명 |
+| 11 | 카테고리 이동 | 수정에서 `parentId` 변경 불가 — 수수료 기준이 조용히 바뀜 |
+| 12 | 강제 판매중지 상품 | 재개만 막고 수정 · 재고 · 삭제는 허용 |
+| 13 | 노출 · 구매 판단 | `status` 는 그대로 두고 `displayable` · `purchasable` 계산(10/20 카테고리 결정) |
+| 14 | 옵션 없는 상품 | 값이 `null` 인 옵션 1개 — 장바구니 · 주문은 언제나 옵션 ID |
+| 15 | 공개 상세의 재고 수 | 비공개, `soldOut` 만 |
+| 16 | 스토어 운영 중 | `StoreStatusChanged.status = ACTIVE` 일 때만 (값이 늘어도 자동으로 숨김) |
+
+**스펙 반영 필요 (가이드 PR, 박지연)**: CAT-02 상위 비활성 생성 · PRD-04 전체 조회 · PRD-06 정렬 3종 · 검색 범위 · PRD-06~08 노출 · 구매 규칙 · PRD-10 응답에 `topCategoryId` · `imageUrl` · `stock` · PRD-13 관리자 상품 목록(6-1).
+
+### 시드 카테고리 ID (10/20 확정 — product 시드는 6주차, settlement 수수료 시드도 같은 ID)
+
+| category_id | 상위 | name_en | sort_order | 판매수수료율 | 하위 |
+|---|---|---|---|---|---|
+| 1 | 식품 | Food | 4 | 7% | 101 과일 · 102 꿀·잼 · 103 쌀·잡곡 · 104 커피 |
+| 2 | 리빙·인테리어 | Living | 3 | 9% | 201 식기 · 202 화병 · 203 조명 · 204 침구 · 205 수납 · 206 캔들 |
+| 3 | 패션의류 | Apparel | 1 | 11% | 301 셔츠 · 302 팬츠 · 303 원피스 · 304 니트 · 305 아우터 · 306 티셔츠 |
+| 4 | 신발·가방 | Shoes & Bags | 2 | 11% | 401 로퍼 · 402 스니커즈 · 403 토트백 · 404 백팩 · 405 크로스백 |
+| 5 | 뷰티 | Beauty | 5 | 10% | 501 스킨케어 · 502 바디·핸드 · 503 립 · 504 선케어 |
+| 6 | 디지털·가전 | Digital | 6 | 6% | 601 키보드 · 602 음향 · 603 데스크 |
+
+하위 ID = 상위 × 100 + 순번. 시드 카테고리는 모두 사용 중. store 시드의 store 1 = 1(식품) · store 2 = 2(리빙).
