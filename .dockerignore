@@ -1,0 +1,12 @@
+# Docker 빌드 컨텍스트 = 저장소 루트 (서비스 Dockerfile 이 libs/common-web 을 함께 복사 — 결정 5번 B-1)
+# 컨텍스트가 루트라 서비스 폴더의 .dockerignore 는 적용되지 않는다 → 여기 하나로 관리
+**/build/
+**/.gradle/
+**/out/
+**/.idea/
+**/*.iml
+**/.vscode/
+.git/
+.github/
+docs/
+serverless/
