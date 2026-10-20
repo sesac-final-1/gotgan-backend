@@ -13,6 +13,8 @@ import com.sesac.gojigi.user.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.WebUtils;
 
 /**
  * 인증 API — 게이트웨이에서 공개 경로(/api/auth/**). Access Token 은 body, Refresh Token 은 HttpOnly 쿠키 (컨벤션 4-4).
@@ -106,13 +109,25 @@ public class AuthController {
                 .body(ApiResponse.success("회원가입이 완료되었습니다.", new SignupResponse(result.userId(), login.response())));
     }
 
+    @Operation(summary = "로그아웃", description = """
+            인가: 공개(Refresh 쿠키로 처리 — Authorization 헤더 불필요). Keycloak 세션을 끝내고 refresh_token 쿠키를 지운다(Max-Age=0).
+            쿠키가 없거나 이미 끝난 세션이어도 200 — 여러 번 눌러도 같다. 프론트는 메모리의 Access Token 을 버린다.""")
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request) {
+        Cookie cookie = WebUtils.getCookie(request, refreshCookieName);
+        authService.logout(cookie == null ? null : cookie.getValue());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, refreshCookie("", 0).toString())   // 같은 이름 · 경로로 덮어써야 브라우저가 지운다
+                .body(ApiResponse.success("로그아웃되었습니다."));
+    }
+
     private ResponseCookie refreshCookie(String refreshToken, long maxAgeSeconds) {
         return ResponseCookie.from(refreshCookieName, refreshToken)
                 .httpOnly(true)
                 .secure(refreshCookieSecure)
                 .sameSite("Strict")
                 .path(refreshCookiePath)
-                .maxAge(Duration.ofSeconds(maxAgeSeconds))   // Keycloak refresh_expires_in (세션 14일)
+                .maxAge(Duration.ofSeconds(maxAgeSeconds))   // Keycloak refresh_expires_in (세션 14일) · 로그아웃은 0 (삭제)
                 .build();
     }
 }

@@ -72,6 +72,28 @@ public class KeycloakClientAdapter {
     }
 
     /**
+     * 로그아웃 — Refresh Token 의 Keycloak 세션 종료.
+     * 이미 끝난 세션 · 만료 · 잘못된 토큰(invalid_grant)은 로그아웃된 것과 같으니 성공으로 본다.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "logoutFallback")
+    public void logout(String refreshToken) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("refresh_token", refreshToken);
+        try {
+            keycloakClient.logout(form);
+        } catch (HttpClientErrorException e) {
+            if (INVALID_GRANT.equals(readBody(e).path("error").asString(""))) {
+                return;   // Session not active · Token is not active · Invalid refresh token
+            }
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    private void logoutFallback(String refreshToken, Throwable t) {
+        throw unavailable(t);
+    }
+
+    /**
      * 탈퇴 — Keycloak 계정 삭제 (세션 · Refresh Token 도 함께 무효).
      * keycloakId 가 없으면(첫 로그인 전 회원) username 으로 찾는다. 이미 없으면(404 · 검색 결과 없음) 성공으로 본다.
      */

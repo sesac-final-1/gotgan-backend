@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -18,6 +19,7 @@ import com.sesac.gojigi.user.auth.service.AuthService;
 import com.sesac.gojigi.user.auth.service.LoginResult;
 import com.sesac.gojigi.user.auth.service.SignupResult;
 import com.sesac.gojigi.user.common.exception.GlobalExceptionHandler;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -177,5 +179,26 @@ class AuthControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("로그아웃 — Refresh 쿠키 값으로 세션을 끝내고, 같은 이름 · 경로로 Max-Age=0 쿠키를 내려 지운다")
+    void logout_withCookie_endsSessionAndClearsCookie() throws Exception {
+        mockMvc.perform(post("/api/auth/logout").cookie(new Cookie("refresh_token", "rt-1")))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(
+                        containsString("refresh_token=;"), containsString("Max-Age=0"), containsString("Path=/api/auth"),
+                        containsString("HttpOnly"), containsString("SameSite=Strict"))))
+                .andExpect(jsonPath("$.message").value("로그아웃되었습니다."));
+        verify(authService).logout("rt-1");
+    }
+
+    @Test
+    @DisplayName("로그아웃 — 쿠키가 없어도 200, 쿠키 삭제 응답")
+    void logout_withoutCookie_returns200() throws Exception {
+        mockMvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
+        verify(authService).logout(null);
     }
 }

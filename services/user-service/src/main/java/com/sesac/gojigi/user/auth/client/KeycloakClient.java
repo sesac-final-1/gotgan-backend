@@ -22,4 +22,8 @@ public interface KeycloakClient {
     /** 서비스 계정 토큰 — grant_type=client_credentials (Admin API 호출용, refresh_token 없음) */
     @PostExchange(url = "/token", contentType = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     KeycloakServiceAccountToken serviceAccountToken(@RequestBody MultiValueMap<String, String> form);
+
+    /** 로그아웃 — refresh_token 의 Keycloak 세션을 끝낸다 (204). 그 세션의 Refresh Token 은 더 이상 쓸 수 없다 */
+    @PostExchange(url = "/logout", contentType = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    void logout(@RequestBody MultiValueMap<String, String> form);
 }
