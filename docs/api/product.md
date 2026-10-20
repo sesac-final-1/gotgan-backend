@@ -30,7 +30,7 @@
 
 ---
 
-## 1. 재고 예약 — `POST /internal/stocks/reserve` (PRD-08)
+## 1. 재고 예약 — `POST /internal/stock/reservations` (PRD-08)
 
 주문 Saga 3단계. 상품주문 여러 개를 **한 번에 전부 예약하거나 하나도 예약하지 않습니다.**
 
@@ -51,15 +51,15 @@
 - 데드락을 피하려고 product 는 옵션 ID 오름차순으로 UPDATE 합니다.
 - 가격은 확인하지 않습니다. 주문 금액은 order 가 Saga 1단계에서 4번 조회로 스냅샷합니다.
 
-## 2. 재고 해제 — `POST /internal/stocks/release` (PRD-08)
+## 2. 재고 해제 — `POST /internal/stock/reservations/{sagaId}/release` (PRD-08)
 
 주문 Saga 보상(결제 실패 · 금액 불일치 · 결제 대기 만료). **"되돌릴 게 없으면 아무 일도 안 함."**
 
 ```json
-{ "sagaId": "6c1f0a6e-...", "items": [ { "productOptionId": 11, "quantity": 2 }, { "productOptionId": 25, "quantity": 1 } ] }
+{ "items": [ { "productOptionId": 11, "quantity": 2 }, { "productOptionId": 25, "quantity": 1 } ] }
 ```
 
-`items` 는 **1번 예약 때 보낸 목록 그대로** 보냅니다. 되돌리는 수량은 product 의 RESERVE 기록 기준이고, `items` 는 예약 기록이 없을 때 표식을 남길 옵션을 알기 위해 씁니다.
+`sagaId` 는 경로에, `items` 는 **1번 예약 때 보낸 목록 그대로** 보냅니다. 되돌리는 수량은 product 의 RESERVE 기록 기준이고, `items` 는 예약 기록이 없을 때 표식을 남길 옵션을 알기 위해 씁니다.
 
 | 경우 | product 처리 | 응답 |
 |---|---|---|
@@ -71,7 +71,7 @@
 - 구현 메모(product 내부): 예약은 RESERVE 행을 넣은 뒤 표식을, 해제는 RESERVE 행을 **잠금 읽기(`SELECT … FOR UPDATE`)** 로 확인해 두 요청이 동시에 와도 한쪽만 반영되게 합니다.
 - 옵션 · 상품이 그 사이 삭제 · 판매중지돼도 해제합니다(재고 수만 돌려놓음).
 
-## 3. 재고 복원 — `POST /internal/stocks/restore` (PRD-09)
+## 3. 재고 복원 — `POST /internal/stock/restorations` (PRD-09)
 
 취소 · 반품 Saga 단계. 클레임 1건 = 상품주문 1건 = 옵션 1개.
 
@@ -122,3 +122,82 @@
 - `optionName`: 옵션 값 1 · 2 를 ` / ` 로 이은 표시용 문자열, 옵션 없는 상품은 `null`.
 - `topCategoryId`: order 가 상품주문 스냅샷에 저장 → 구매확정 때 `OrderItemConfirmed.topCategoryId` 로 settlement 에 전달(판매수수료는 상위 카테고리 기준).
 - `stock` 은 표시용(장바구니 수량 상한 안내). 실제 초과 판매 방지는 1번 예약의 조건부 UPDATE.
+
+## 5. 상품 통계 — `GET /internal/stats/products?storeId=` (PRD-11)
+
+판매자 대시보드(store `dashboard`, STR-07) · 관리자 대시보드(admin `dashboard`, ADM-02)가 다른 서비스 통계와 **병렬로** 부릅니다. DB 조회만 하므로 재시도 가능(GET).
+
+**세는 기준** — 삭제 안 된 `ON_SALE` 상품만, 옵션 재고 합계로 나눕니다(카테고리 · 스토어 상태는 보지 않음 — 판매자는 자기 상품 현황을 그대로 봐야 하므로).
+
+| 구분 | 조건 |
+|---|---|
+| 판매중 `onSaleCount` | 재고 합계 1 이상 (재고 부족 포함) |
+| 재고 부족 `lowStockCount` | 재고 합계 1~19 (`LOW_STOCK_THRESHOLD = 20`) |
+| 품절 `soldOutCount` | 재고 합계 0 |
+
+| 경우 | 응답 |
+|---|---|
+| `storeId` 있음 (판매자 대시보드) | **200** `{ store: { onSaleCount, lowStockCount, soldOutCount, stoppedCount, lowStockProducts[{ productId, name, stock, imageUrl }] } }` — `lowStockProducts` 는 재고 적은 순 최대 10개, `stoppedCount` 는 `STOPPED` · `BLOCKED` 합계 |
+| `storeId` 없음 (관리자 대시보드) | **200** `{ platform: { onSaleCount, lowStockCount, soldOutCount, blockedCount } }` |
+| 상품 없는 스토어 | **200** 모두 0, `lowStockProducts: []` |
+
+- 응답 모양은 settlement `/internal/stats/settlements` 와 같게 `store` / `platform` 중 하나만 채웁니다.
+
+## 6. 관리자 상품 조회 · 강제 판매중지 (PRD-13)
+
+admin 이 스토어 상세 화면에서 상품을 찾아 차단합니다. 차단 · 해제 알림은 없고, 판매자는 판매자 상품 목록에서 상태와 사유를 봅니다.
+
+### 6-1. 스토어 상품 목록 — `GET /internal/products?storeId=&status=&q=&page=&size=`
+
+판매자 상품 목록(11절)과 같은 응답 · 같은 필터를 스토어를 지정해서 씁니다. 삭제된 상품은 빠지고, 상태와 상관없이 모두 보입니다. `storeId` 없으면 **400** `INVALID_INPUT`.
+
+### 6-2. 강제 판매중지 · 해제 — `PATCH /internal/products/{productId}/block`
+
+```json
+{ "blocked": true, "reason": "상품 정보 고시 누락 — 원산지 표기 필요" }
+```
+
+| 경우 | product 처리 | 응답 |
+|---|---|---|
+| `blocked: true` | `status = BLOCKED` · `status_reason = reason` (이미 BLOCKED 면 사유만 바꿈) | **200** `{ productId, status, statusReason }` |
+| `blocked: false` · 지금 BLOCKED | `status = STOPPED` · 사유 지움 → 판매자가 점검 후 직접 재개 | **200** |
+| `blocked: false` · BLOCKED 아님 | 없음 | **200** (현재 상태) |
+| `blocked: true` 인데 `reason` 비었음 | 없음 | **400** `PRODUCT_BLOCK_REASON_REQUIRED` |
+| 없거나 삭제된 상품 | 없음 | **404** `PRODUCT_NOT_FOUND` |
+
+- BLOCKED 상품은 판매자가 재개 · 수정해도 **409** `PRODUCT_BLOCKED`(14절). 삭제는 가능합니다.
+- settlement `PATCH /internal/settlements/{id}/hold {hold, reason}` 와 같은 모양입니다.
+
+## 7. 카테고리 관리 — `/internal/categories` (CAT-02 · 10/20 결정)
+
+admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않습니다**(store 희망 카테고리 · settlement 수수료가 `category_id` 를 논리 참조) — 사용 중지만 합니다.
+
+| API | 요청 | 응답 |
+|---|---|---|
+| `GET /internal/categories` | | **200** 트리 — 비활성 포함 `[{ id, name, nameEn, sortOrder, active, children[{ id, name, nameEn, sortOrder, active }] }]` |
+| `POST /internal/categories` | `{ parentId?, name, nameEn?, sortOrder? }` | **201** 만든 카테고리 |
+| `PUT /internal/categories/{id}` | `{ name, nameEn?, sortOrder }` | **200** — 상위 · 하위 이동(`parentId` 변경)은 안 됨 |
+| `PATCH /internal/categories/{id}` | `{ active }` | **200** — 사용 / 사용 중지 |
+
+**생성 규칙**
+
+| 경우 | 처리 | 응답 |
+|---|---|---|
+| 상위 (`parentId` 없음) | **`active = false` 로 생성** → 수수료 등록 뒤 PATCH 로 켬 | **201** |
+| 하위 (`parentId` = 상위) | `active = true` 로 생성 (상위가 꺼져 있으면 함께 숨겨짐) | **201** |
+| `parentId` 가 하위 카테고리 (3단계) | 없음 | **400** `CATEGORY_DEPTH_EXCEEDED` |
+| 없는 `parentId` | 없음 | **404** `CATEGORY_NOT_FOUND` |
+| 같은 부모 아래 같은 이름 (생성 · 수정) | 없음 | **409** `CATEGORY_NAME_DUPLICATED` |
+| `sortOrder` 생략 | 같은 부모 안 맨 뒤 | — |
+
+**사용 / 사용 중지 (PATCH)**
+
+| 경우 | 처리 | 응답 |
+|---|---|---|
+| 값이 바뀜 | `is_active` 변경 — 그 아래 상품의 `status` 는 그대로, `displayable` · `purchasable` 만 계산으로 바뀜 | **200** |
+| 같은 값 | 없음 | **200** (멱등) |
+| 없는 카테고리 | 없음 | **404** `CATEGORY_NOT_FOUND` |
+
+- **상위를 켜기 전 수수료율 확인은 admin 이 합니다**(settlement 현재 율 조회 → 없으면 켜지 않음). product 는 다른 서비스를 부르지 않습니다(CAT-03).
+- 하위를 켜도 상위가 꺼져 있으면 여전히 숨겨집니다.
+- 시드 카테고리 ID(1 식품 · 2 리빙 · 3 패션 · 4 신발가방 · 5 뷰티 · 6 디지털, 하위 = 상위 × 100 + 순번)는 맨 아래 "설계 정리"에 둡니다.
