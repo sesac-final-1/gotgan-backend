@@ -14,6 +14,7 @@ import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.common.exception.BusinessException;
 import com.sesac.gojigi.user.common.exception.CommonErrorCode;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -38,6 +39,7 @@ class KeycloakClientAdapterTest {
 
     private static final String BASE = "http://keycloak:8080";
     private static final String TOKEN_URL = BASE + "/realms/gotgan/protocol/openid-connect/token";
+    private static final String USERS_URL = BASE + "/admin/realms/gotgan/users";
 
     private MockRestServiceServer server;
     private KeycloakClientAdapter adapter;
@@ -46,8 +48,10 @@ class KeycloakClientAdapterTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
+        KeycloakClientConfig config = new KeycloakClientConfig();
         adapter = new KeycloakClientAdapter(
-                new KeycloakClientConfig().keycloakClient(builder, BASE, "gotgan", "gotgan-backend", "test-secret"),
+                config.keycloakClient(builder, BASE, "gotgan", "gotgan-backend", "test-secret"),
+                config.keycloakAdminClient(builder, BASE, "gotgan"),
                 JsonMapper.builder().build());
     }
 
@@ -141,8 +145,10 @@ class KeycloakClientAdapterTest {
     void keycloakClient_urlEncodesCredentialsInBasicHeader() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer encodedServer = MockRestServiceServer.bindTo(builder).build();
+        KeycloakClientConfig config = new KeycloakClientConfig();
         KeycloakClientAdapter encodedAdapter = new KeycloakClientAdapter(
-                new KeycloakClientConfig().keycloakClient(builder, BASE, "gotgan", "gotgan-backend", "a+b/c:d%"),
+                config.keycloakClient(builder, BASE, "gotgan", "gotgan-backend", "a+b/c:d%"),
+                config.keycloakAdminClient(builder, BASE, "gotgan"),
                 JsonMapper.builder().build());
         encodedServer.expect(requestTo(TOKEN_URL))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, basic("gotgan-backend:a%2Bb%2Fc%3Ad%25")))
@@ -153,6 +159,113 @@ class KeycloakClientAdapterTest {
         encodedAdapter.passwordGrant("buyer1@gotgan.com", "Dem0!pass");
 
         encodedServer.verify();
+    }
+
+    private void expectServiceAccountToken() {
+        server.expect(requestTo(TOKEN_URL))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, basic("gotgan-backend:test-secret")))
+                .andExpect(content().formData(new LinkedMultiValueMap<>(Map.of("grant_type", List.of("client_credentials")))))
+                .andRespond(withSuccess("""
+                        {"access_token":"sa-token","expires_in":300,"refresh_expires_in":0,"token_type":"Bearer","scope":"profile email"}
+                        """, MediaType.APPLICATION_JSON));
+    }
+
+    @Test
+    @DisplayName("계정 생성 — 서비스 계정 토큰(Bearer)으로 username=email · 비밀번호 · user_id 속성을 보내고 Location 의 ID 를 돌려준다")
+    void createUser_sendsUserWithServiceAccountToken() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sa-token"))
+                .andExpect(content().json("""
+                        {"username":"new1@gotgan.com","email":"new1@gotgan.com","enabled":true,
+                         "attributes":{"user_id":["7"]},
+                         "credentials":[{"type":"password","value":"Newbie!pass1","temporary":false}]}
+                        """, true))
+                .andRespond(withStatus(HttpStatus.CREATED).location(URI.create(USERS_URL + "/2439b1b2-0000-4000-8000-000000000007")));
+
+        String keycloakId = adapter.createUser("new1@gotgan.com", "Newbie!pass1", 7L);
+
+        assertThat(keycloakId).isEqualTo("2439b1b2-0000-4000-8000-000000000007");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("계정 생성 409(User exists with same email)는 AUTH_EMAIL_DUPLICATE")
+    void createUser_conflict_becomesEmailDuplicate() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL))
+                .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"errorMessage\":\"User exists with same email\"}"));
+
+        assertThatThrownBy(() -> adapter.createUser("ghost@gotgan.com", "Ghost!pass1", 8L))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_EMAIL_DUPLICATE);
+    }
+
+    @Test
+    @DisplayName("계정 생성 400 비밀번호 정책 위반(invalidPassword...)은 AUTH_PASSWORD_POLICY_VIOLATION")
+    void createUser_passwordPolicy_becomesPolicyViolation() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON).body("""
+                        {"error":"invalidPasswordMinSpecialCharsMessage",
+                         "error_description":"Invalid password: must contain at least 1 special characters."}
+                        """));
+
+        assertThatThrownBy(() -> adapter.createUser("new2@gotgan.com", "abcdefgh", 9L))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
+    }
+
+    @Test
+    @DisplayName("계정 생성 403(서비스 계정 권한 없음)은 EXTERNAL_API_ERROR — 원인은 cause 로")
+    void createUser_forbidden_becomesExternalApiError() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> adapter.createUser("new3@gotgan.com", "Newbie!pass1", 10L))
+                .isInstanceOf(BusinessException.class)
+                .hasCauseInstanceOf(HttpClientErrorException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
+    @Test
+    @DisplayName("서비스 계정 토큰 발급 거절(unauthorized_client)은 EXTERNAL_API_ERROR — 계정 생성 요청은 보내지 않는다")
+    void createUser_serviceAccountRejected_becomesExternalApiError() {
+        server.expect(requestTo(TOKEN_URL))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"unauthorized_client\"}"));
+
+        assertThatThrownBy(() -> adapter.createUser("new4@gotgan.com", "Newbie!pass1", 11L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("계정 생성 응답에 Location 이 없으면 EXTERNAL_API_ERROR")
+    void createUser_missingLocation_becomesExternalApiError() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL)).andRespond(withStatus(HttpStatus.CREATED));
+
+        assertThatThrownBy(() -> adapter.createUser("new5@gotgan.com", "Newbie!pass1", 12L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
+    @Test
+    @DisplayName("계정 생성 폴백 — 연결 실패는 EXTERNAL_API_ERROR(cause 유지), 도메인 예외는 그대로")
+    void createUserFallback_mapsUnavailableAndKeepsBusiness() {
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "createUserFallback",
+                "new6@gotgan.com", "Newbie!pass1", 13L, new ResourceAccessException("connection refused")))
+                .isInstanceOf(BusinessException.class)
+                .hasCauseInstanceOf(ResourceAccessException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "createUserFallback",
+                "new6@gotgan.com", "Newbie!pass1", 13L, new AuthException(AuthErrorCode.AUTH_EMAIL_DUPLICATE)))
+                .isInstanceOf(AuthException.class);
     }
 
     private static String basic(String credentials) {
