@@ -6,12 +6,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.user.auth.service.AuthService;
 import com.sesac.gojigi.user.common.exception.BusinessException;
 import com.sesac.gojigi.user.common.exception.CommonErrorCode;
+import com.sesac.gojigi.user.user.client.StoreClient;
+import com.sesac.gojigi.user.user.client.StoreStatus;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
@@ -44,15 +48,18 @@ class UserServiceTest {
     private AuthService authService;
 
     @Mock
+    private StoreClient storeClient;
+
+    @Mock
     private TransactionTemplate transactionTemplate;
 
     private UserService userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, authService, transactionTemplate, CLOCK);
+        userService = new UserService(userRepository, authService, storeClient, transactionTemplate, CLOCK);
         // 트랜잭션 템플릿은 콜백을 그대로 실행
-        given(transactionTemplate.execute(any())).willAnswer(invocation ->
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(new SimpleTransactionStatus()));
     }
 
@@ -71,7 +78,7 @@ class UserServiceTest {
         given(userRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(user));
 
         // when
-        userService.withdraw(7L);
+        userService.withdraw(7L, null);
 
         // then
         assertThat(user.getDeletedAt()).isEqualTo(LocalDateTime.now(CLOCK));
@@ -86,7 +93,7 @@ class UserServiceTest {
         given(userRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.empty());
 
         // when · then
-        assertThatThrownBy(() -> userService.withdraw(7L))
+        assertThatThrownBy(() -> userService.withdraw(7L, null))
                 .isInstanceOf(UserException.class)
                 .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
         verify(authService, never()).deleteAccount(any(), anyString());
@@ -102,9 +109,64 @@ class UserServiceTest {
                 .given(authService).deleteAccount("kc-7", "new1@gotgan.com");
 
         // when
-        userService.withdraw(7L);
+        userService.withdraw(7L, null);
 
         // then
         assertThat(user.isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("구매자(X-Store-Id 없음)는 스토어를 확인하지 않는다")
+    void withdraw_buyer_skipsStoreCheck() {
+        // given
+        given(userRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(member(7L, "kc-7")));
+
+        // when
+        userService.withdraw(7L, null);
+
+        // then
+        verifyNoInteractions(storeClient);
+    }
+
+    @Test
+    @DisplayName("판매자 — 스토어가 폐점(CLOSED)이 아니면 USER_SELLER_STORE_NOT_CLOSED, 회원 · 계정은 그대로")
+    void withdraw_sellerWithOpenStore_throws() {
+        // given
+        given(storeClient.getStoreStatus(1L)).willReturn(StoreStatus.ACTIVE);
+
+        // when · then
+        assertThatThrownBy(() -> userService.withdraw(2L, 1L))
+                .isInstanceOf(UserException.class)
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_SELLER_STORE_NOT_CLOSED);
+        verify(userRepository, never()).findByIdAndDeletedAtIsNull(any());
+        verify(authService, never()).deleteAccount(any(), anyString());
+    }
+
+    @Test
+    @DisplayName("판매자 — 휴면 · 정지 스토어도 폐점이 아니라 탈퇴 불가")
+    void withdraw_sellerWithDormantOrSuspendedStore_throws() {
+        // given
+        given(storeClient.getStoreStatus(1L)).willReturn(StoreStatus.DORMANT);
+        given(storeClient.getStoreStatus(2L)).willReturn(StoreStatus.SUSPENDED);
+
+        // when · then
+        assertThatThrownBy(() -> userService.withdraw(2L, 1L)).isInstanceOf(UserException.class);
+        assertThatThrownBy(() -> userService.withdraw(3L, 2L)).isInstanceOf(UserException.class);
+    }
+
+    @Test
+    @DisplayName("판매자 — 스토어가 폐점(CLOSED)이면 탈퇴된다")
+    void withdraw_sellerWithClosedStore_withdraws() {
+        // given
+        User seller = member(2L, "kc-2");
+        given(storeClient.getStoreStatus(1L)).willReturn(StoreStatus.CLOSED);
+        given(userRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(seller));
+
+        // when
+        userService.withdraw(2L, 1L);
+
+        // then
+        assertThat(seller.isDeleted()).isTrue();
+        verify(authService).deleteAccount("kc-2", "new1@gotgan.com");
     }
 }

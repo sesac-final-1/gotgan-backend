@@ -44,7 +44,7 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.message").value("회원 탈퇴가 완료되었습니다."));
-        verify(userService).withdraw(7L);
+        verify(userService).withdraw(7L, null);
     }
 
     @Test
@@ -59,10 +59,21 @@ class UserControllerTest {
     @Test
     @DisplayName("이미 탈퇴한 회원은 404 USER_NOT_FOUND")
     void withdraw_alreadyWithdrawn_returns404() throws Exception {
-        willThrow(new UserException(UserErrorCode.USER_NOT_FOUND)).given(userService).withdraw(7L);
+        willThrow(new UserException(UserErrorCode.USER_NOT_FOUND)).given(userService).withdraw(7L, null);
 
         mockMvc.perform(delete("/api/users/me").header("X-User-Id", "7"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("판매자 — X-Store-Id 를 함께 넘기고, 스토어 미폐점이면 409 USER_SELLER_STORE_NOT_CLOSED")
+    void withdraw_sellerWithOpenStore_returns409() throws Exception {
+        willThrow(new UserException(UserErrorCode.USER_SELLER_STORE_NOT_CLOSED)).given(userService).withdraw(2L, 1L);
+
+        mockMvc.perform(delete("/api/users/me").header("X-User-Id", "2").header("X-User-Roles", "BUYER,SELLER")
+                        .header("X-Store-Id", "1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USER_SELLER_STORE_NOT_CLOSED"));
     }
 }
