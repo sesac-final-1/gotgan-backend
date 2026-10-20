@@ -8,11 +8,23 @@
 -- 지난 4주 정산 — 스토어별 지난주 1건 지급예정(SCHEDULED) + 그 전 3주 지급완료(PAID) · 상품주문 2건씩 · 지급 기록 · 상태 이력
 --   날짜는 시드 실행일(KST) 기준 상대값 — 클러스터는 매일 빈 DB 로 다시 만들어지므로 "지난주"가 항상 실제 지난주
 --   상품주문 · 상품 ID 는 order · product 시드와 겹치지 않게 900000 대 (정산 상세 표시용 스냅샷, 다른 서비스 행은 없음)
---   판매수수료율 7.00(category 1) · 9.00(category 2) 은 정산 당시 스냅샷 — category_commission 은 상위 카테고리 ID 확정(product 시드) 후 추가
+--   판매수수료율 7.00(category 1) · 9.00(category 2) 은 정산 당시 스냅샷 — 아래 category_commission 과 같은 율
 -- 재실행 안전: PK 가 이미 있으면 건너뜀(INSERT IGNORE)
 
 SET @today := DATE(UTC_TIMESTAMP() + INTERVAL 9 HOUR);            -- KST 오늘 (DB 시간대와 무관)
 SET @w1    := @today - INTERVAL (WEEKDAY(@today) + 7) DAY;        -- 지난주 월요일
+
+-- 상위 카테고리 판매수수료율 — 상위 ID 1~6 은 product 시드와 같은 번호 (박지연 확인 요청 답변 10/20, 율은 프론트 목업 catalog.js)
+--   effective_from 2026-01-01 — 시연 · 테스트용 구매확정일보다 앞서야 적재 시 COMMISSION_NOT_FOUND(→ DLQ) 가 나지 않는다
+--   새 상위 카테고리는 이 시드가 아니라 admin 이 등록(오늘부터 적용) → 활성화 (docs/api/settlement.md 2절)
+INSERT IGNORE INTO category_commission (category_id, commission_rate, effective_from)
+VALUES
+  (1, 7.00,  '2026-01-01'),   -- 식품
+  (2, 9.00,  '2026-01-01'),   -- 리빙·인테리어
+  (3, 11.00, '2026-01-01'),   -- 패션의류
+  (4, 11.00, '2026-01-01'),   -- 신발·가방
+  (5, 10.00, '2026-01-01'),   -- 뷰티
+  (6, 6.00,  '2026-01-01');   -- 디지털·가전
 
 INSERT IGNORE INTO settlement_store (settlement_store_id, store_id, store_name, seller_email, bank_name, account_number, account_holder, store_status)
 VALUES
