@@ -68,6 +68,7 @@ class InternalStoreControllerTest {
     @DisplayName("storeId 가 숫자가 아니면 400 — 서비스를 부르지 않는다")
     void get_whenStoreIdNotNumber_returns400() throws Exception {
         mockMvc.perform(get("/internal/stores/abc"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 }
