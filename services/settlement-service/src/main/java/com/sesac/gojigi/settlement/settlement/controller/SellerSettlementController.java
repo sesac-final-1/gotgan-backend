@@ -41,7 +41,7 @@ public class SellerSettlementController {
         return ApiResponse.success("정산 상세를 조회했습니다.", settlementQueryService.detailForStore(id, user.storeId()));
     }
 
-    @Operation(summary = "정산 명세서 다운로드 링크", description = "지급 완료 건만 · presigned GET 7일. 지급 전 409 SETTLE_REPORT_NOT_READY")
+    @Operation(summary = "정산 명세서 다운로드 링크", description = "지급 완료 건만 · presigned GET 10분(클릭할 때마다 발급). 지급 전 · CSV 생성 전 409 SETTLE_REPORT_NOT_READY")
     @GetMapping("/{id}/report")
     public ApiResponse<ReportUrlResponse> report(@CurrentUser AuthUser user, @PathVariable Long id) {
         return ApiResponse.success("명세서 링크를 만들었습니다.", settlementReportService.reportUrl(id, user.storeId()));
