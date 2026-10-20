@@ -48,8 +48,13 @@ spring:
         jwt:
           issuer-uri: ${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan   # 토큰의 iss 와 정확히 같아야 함 (가이드라인 08장)
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}         # 차단 목록 조회 (user-service 가 탈퇴 시 저장)
+      timeout: 500ms                        # 응답이 늦으면 기다리지 않고 통과 — 요청마다 붙는 확인이라 짧게
+
 server:
-  # 외부 접속은 NLB 80 → 이 포트(8080) — gotgan-config Helm values gateway service.port: 80
+  # 외부 접속은 NLB 443(TLS 종료) → 이 포트(8080) — gotgan-config Helm values gateway service.port: 443
   port: 8080
   shutdown: graceful                        # 롤링 업데이트 때 처리 중인 요청을 마치고 종료
 
@@ -62,3 +67,13 @@ management:
     health:
       probes:
         enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      redisBlocklist:                       # BlockedUserFilter — Redis 장애 시 OPEN 이면 조회 없이 바로 통과 (fail-open)
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3

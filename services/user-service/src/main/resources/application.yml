@@ -13,6 +13,11 @@ spring:
   flyway:
     locations: classpath:db/migration       # 시드(db/seed) 는 local · k8s 프로필에서만 추가
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}         # 차단 목록 저장 (gateway 가 확인)
+      timeout: 500ms                        # 탈퇴 응답을 오래 붙잡지 않게 — 실패해도 탈퇴는 유지(warn)
+
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
 
@@ -36,6 +41,7 @@ app:
     refresh-cookie-name: refresh_token
     refresh-cookie-path: /api/auth                            # /api/auth/** 요청에만 실림 (refresh · logout)
     refresh-cookie-secure: true                               # HTTPS 만 — 브라우저는 localhost 는 예외로 허용
+    blocked-user-ttl: 30m                                     # 차단 목록 TTL = Keycloak realm Access Token 수명(accessTokenLifespan 1800초) — realm 을 바꾸면 같이
   store:
     mock-closed-store-ids:                                    # TODO(store 개발 완료 시 삭제) MockStoreClient — 폐점으로 볼 store_id (기본: 없음 = 전부 ACTIVE)
   point:

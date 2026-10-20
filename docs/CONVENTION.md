@@ -50,7 +50,7 @@
 | 5 | 에러 코드 형식 | 의미형 `{도메인}_{상황}` — `ORDER_OUT_OF_STOCK` | 2-5 |
 | 6 | 프론트 언어 | JavaScript (`.js` / `.jsx`) — 목업 그대로 | 4-1 |
 | 7 | 프론트 페이지 위치 | `pages/{shop · mypage · seller · admin}/` — 로직은 `features/` | 4-2 |
-| 8 | Redis 키 이름 | `{용도}:{식별자}` — `cart:{userId}`(캐시, 원본은 `orderdb.cart_item`) · `blacklist:{jti}`(Could). 리프레시 토큰 키는 폐지(Keycloak이 관리) | 2-2 |
+| 8 | Redis 키 이름 | `{용도}:{식별자}` — `cart:{userId}`(캐시, 원본은 `orderdb.cart_item`) · `blacklist:{jti}`(Could) · `blocked:user:{userId}`(탈퇴 회원 토큰 차단, user 쓰기 · gateway 읽기). 리프레시 토큰 키는 폐지(Keycloak이 관리) | 2-2 |
 
 ### 0-4. 10/12 추가 확정
 
@@ -245,8 +245,9 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
 |---|---|---|
 | `cart:{userId}` | order | 장바구니 Hash — **캐시**, 원본은 MySQL `orderdb.cart_item`. 쓰기는 MySQL 먼저 → Redis 갱신(실패 무시 · WARN), 읽기는 Redis → 미스 · 장애 시 MySQL. 서킷 인스턴스 `redisCart` (Must) |
 | `blacklist:{jti}` | gateway | 로그아웃한 Access Token 즉시 무효화 — Redis 전용, 원본 없음 (Could) |
+| `blocked:user:{userId}` | user(쓰기) · gateway(읽기) | 탈퇴 회원의 남은 Access Token 차단 — 값은 사유(`withdrawn`, 이용정지 시 `suspended` 예정), TTL = Keycloak Access Token 수명(`app.auth.blocked-user-ttl`, realm `accessTokenLifespan` 과 같이 바꿈). Redis 전용, 원본 없음. gateway 는 Redis 장애 시 확인 없이 통과(fail-open, 서킷 `redisBlocklist`), user 는 저장 실패해도 탈퇴 유지(WARN) |
 
-- 한 Redis를 여러 서비스가 공유하므로 **다른 서비스의 키 접두어 사용 금지**
+- 한 Redis를 여러 서비스가 공유하므로 **다른 서비스의 키 접두어 사용 금지** — 예외는 표에 쓰기 · 읽기 서비스를 함께 적은 키(`blocked:user:`)만
 - 리프레시 토큰은 Keycloak이 관리 — Redis에 `refresh:` 키를 만들지 않음. 상품 캐시 키도 없음
 - 새 키가 필요하면 이 표에 먼저 추가 (PR `[영향]`)
 
