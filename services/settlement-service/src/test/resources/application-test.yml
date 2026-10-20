@@ -3,3 +3,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+
+app:
+  scheduler:
+    catch-up-on-startup: false             # 통합 테스트가 공유 DB 에 지난주 정산서를 만들지 않게 — SettlementSchedulerTest 가 직접 검증

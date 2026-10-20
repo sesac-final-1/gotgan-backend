@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -54,6 +55,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
@@ -89,6 +94,7 @@ class SettlementApiIntegrationTest {
     @Autowired StoreStatusChangedListener storeStatusChangedListener;
     @MockitoBean SnsEventPublisher snsEventPublisher;
     @MockitoBean S3Presigner s3Presigner;
+    @MockitoBean S3Client s3Client;
 
     // ── 도우미
 
@@ -384,7 +390,7 @@ class SettlementApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("판매자 명세서 — 지급 전 409, 지급 후 presigned 링크 (reports/{storeId}/{주차}.csv)")
+        @DisplayName("판매자 명세서 — 지급 전 409, 지급 후에도 CSV 가 없으면 409, 생기면 10분짜리 presigned 링크, S3 장애는 502")
         @SuppressWarnings("unchecked")
         void seller_report() throws Exception {
             long storeId = store(true);
@@ -399,9 +405,30 @@ class SettlementApiIntegrationTest {
             when(s3Presigner.presignGetObject(any(Consumer.class))).thenReturn(presigned);
             pay(id);
 
+            // Lambda 가 아직 CSV 를 만들지 않음 — S3 오류 화면 대신 409
+            when(s3Client.headObject(any(Consumer.class))).thenThrow(NoSuchKeyException.builder().statusCode(404).build());
+            asSeller(get("/api/seller/settlements/" + id + "/report"), storeId).andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("SETTLE_REPORT_NOT_READY"))
+                    .andExpect(jsonPath("$.message").value("명세서를 만들고 있습니다. 잠시 후 다시 시도해 주세요."));
+
+            // HeadObject 404 는 본문이 없어 일반 S3Exception 으로 올 때도 같은 409
+            reset(s3Client);
+            when(s3Client.headObject(any(Consumer.class))).thenThrow(S3Exception.builder().statusCode(404).build());
+            asSeller(get("/api/seller/settlements/" + id + "/report"), storeId).andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("SETTLE_REPORT_NOT_READY"));
+
+            // 권한 · 장애 — 502
+            reset(s3Client);
+            when(s3Client.headObject(any(Consumer.class))).thenThrow(S3Exception.builder().statusCode(403).build());
+            asSeller(get("/api/seller/settlements/" + id + "/report"), storeId).andExpect(status().isBadGateway())
+                    .andExpect(jsonPath("$.code").value("EXTERNAL_API_ERROR"));
+
+            // 생성됨 — IRSA 임시 자격 증명 수명 안쪽인 10분 링크
+            reset(s3Client);
+            when(s3Client.headObject(any(Consumer.class))).thenReturn(HeadObjectResponse.builder().build());
             asSeller(get("/api/seller/settlements/" + id + "/report"), storeId).andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.url").value("https://bucket.s3/reports/" + storeId + "/" + W43 + ".csv?sig"))
-                    .andExpect(jsonPath("$.data.expiresAt").value("2026-11-02T10:00:00+09:00"));
+                    .andExpect(jsonPath("$.data.expiresAt").value("2026-10-26T10:10:00+09:00"));
         }
 
         @Test

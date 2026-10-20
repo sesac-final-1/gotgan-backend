@@ -1,9 +1,11 @@
 package com.sesac.gojigi.settlement.common.config;
 
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -23,6 +25,14 @@ public class AwsConfig {
     @Bean
     public SnsClient snsClient(@Value("${AWS_REGION:ap-northeast-2}") String region) {
         return SnsClient.builder().region(Region.of(region)).build();
+    }
+
+    /** 명세서 CSV 존재 확인(HeadObject — IRSA s3:GetObject 로 허용). 판매자 요청 경로라 호출 전체 3초 · 시도 1초로 끊는다 */
+    @Bean
+    public S3Client s3Client(@Value("${AWS_REGION:ap-northeast-2}") String region) {
+        return S3Client.builder().region(Region.of(region))
+                .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(3)).apiCallAttemptTimeout(Duration.ofSeconds(1)))
+                .build();
     }
 
     /** 정산 명세서 다운로드 presigned GET (reports 버킷, IRSA s3:GetObject) */

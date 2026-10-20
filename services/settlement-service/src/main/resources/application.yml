@@ -36,6 +36,7 @@ app:
   scheduler:
     zone: Asia/Seoul
     weekly-aggregation-cron: "0 0 3 * * MON"   # 주간 정산 집계 (KST) — 시연은 관리자 "지금 집계"
+    catch-up-on-startup: true                # 기동 시 지난주 집계 — 클러스터가 07:00~21:00 만 떠 있어 03:00 cron 이 안 도는 문제 보완 (멱등)
 
 management:
   endpoints:
