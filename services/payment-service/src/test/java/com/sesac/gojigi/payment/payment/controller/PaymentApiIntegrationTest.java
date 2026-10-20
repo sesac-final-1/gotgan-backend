@@ -201,7 +201,7 @@ class PaymentApiIntegrationTest {
 
             ArgumentCaptor<PortOneCancelRequest> sent = ArgumentCaptor.forClass(PortOneCancelRequest.class);
             verify(portOneClient).cancel(eq("pay-" + orderNo), sent.capture());
-            assertThat(sent.getValue().amount()).isNull();                       // 전액
+            assertThat(sent.getValue().amount()).isEqualTo(1_000L);              // 전액도 금액 명시 (포트원 잔액)
             assertThat(sent.getValue().currentCancellableAmount()).isEqualTo(1_000L);
             assertThat(payment(orderNo).getStatus()).isEqualTo(PaymentStatus.FAILED);
             assertThat(cancels(orderNo)).singleElement()

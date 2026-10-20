@@ -39,6 +39,9 @@ dependencies {
     // 복원력 — 모든 동기 호출의 표준: 타임아웃 · 서킷 브레이커 · 폴백 (가이드라인 06장 · 13장)
     implementation "io.github.resilience4j:resilience4j-spring-boot4:${resilience4jVersion}"
     implementation 'org.springframework.boot:spring-boot-starter-aspectj'
+    // 취소 복구 스케줄러 — 레플리카 중 한 파드만 실행 (가이드라인 10장)
+    implementation "net.javacrumbs.shedlock:shedlock-spring:${shedlockVersion}"
+    implementation "net.javacrumbs.shedlock:shedlock-provider-jdbc-template:${shedlockVersion}"
     // 관측성 (가이드라인 13장)
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     runtimeOnly    'io.micrometer:micrometer-registry-prometheus'

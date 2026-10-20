@@ -8,3 +8,7 @@ app:
   portone:
     api-secret: test-api-secret
     webhook-secret: whsec_dGVzdC13ZWJob29rLXNlY3JldC1rZXktMzItYnl0ZXM=   # 테스트 전용 값 (PortOneWebhookVerifierTest.KEY)
+  cancel-recovery:                          # 테스트에서는 스케줄러가 저절로 돌지 않게 — 필요한 테스트가 recover() 를 직접 부른다
+    interval: 1h
+    initial-delay: 1h
+    stale-after: 0s                         # recover() 를 부르면 방금 남은 PENDING 도 바로 대상

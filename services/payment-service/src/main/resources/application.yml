@@ -30,6 +30,12 @@ app:
     api-secret: ${PORTONE_API_SECRET:}            # GitHub Secret → secrets-sync → payment-service-secret (로그 금지)
     webhook-secret: ${PORTONE_WEBHOOK_SECRET:}    # Standard Webhooks 서명 검증 (whsec_...)
     webhook-tolerance: 5m                   # 웹훅 시각 허용 범위 — 재전송 공격 방지
+  cancel-recovery:                          # 취소 복구 스케줄러 (PaymentCancelRecoveryScheduler · payment.md 8절)
+    interval: 60s                           # 주기 (끝난 뒤 60초)
+    initial-delay: 30s
+    stale-after: 60s                        # 이만큼 확정되지 않은 PENDING 만 — 진행 중인 요청과 겹치지 않게
+    batch-size: 20
+    max-attempts: 10                        # 넘으면 ERROR 로그 + payment_cancel_unresolved_total (수동 확인)
 
 resilience4j:
   circuitbreaker:
