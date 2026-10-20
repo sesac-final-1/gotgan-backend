@@ -35,6 +35,8 @@ dependencies {
     runtimeOnly    'com.mysql:mysql-connector-j'
     // 복원력 — 모든 동기 호출의 표준: 타임아웃 · 서킷 브레이커 · 폴백 (가이드라인 06장 · 13장)
     implementation "io.github.resilience4j:resilience4j-spring-boot4:${resilience4jVersion}"
+    // 차단 목록(blocked:user:{id}) 저장 — 탈퇴 시 남은 Access Token 을 gateway 가 막도록
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-aspectj'
     // AWS SDK v2 — sqs (버전은 BOM)
     implementation 'software.amazon.awssdk:sqs'
