@@ -3,6 +3,7 @@ package com.sesac.gojigi.settlement.settlement.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sesac.gojigi.settlement.common.event.EventEnvelope;
+import com.sesac.gojigi.settlement.common.event.EventOutboxService;
 import com.sesac.gojigi.settlement.settlement.dto.event.StoreStatusChangedPayload;
 import com.sesac.gojigi.settlement.settlement.entity.SettlementStore;
 import com.sesac.gojigi.settlement.settlement.repository.SettlementStoreRepository;
@@ -18,6 +19,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
@@ -39,6 +41,7 @@ class StoreStatusServiceTest {
 
     @Autowired StoreStatusService service;
     @Autowired SettlementStoreRepository repository;
+    @MockitoBean EventOutboxService eventOutboxService;   // SettlementCommandService 의존 — 이 테스트는 지급 · 발행을 다루지 않음
 
     static final long STORE_ID = 1L;
     static final OffsetDateTime T1000 = OffsetDateTime.parse("2026-10-21T10:00:00+09:00");

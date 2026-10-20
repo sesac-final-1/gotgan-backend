@@ -26,6 +26,11 @@ app:
     read-timeout: 3s
   events:
     topic-arn: ${SETTLEMENT_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-settlement-events
+    outbox:                                  # 이벤트 아웃박스 (EventOutboxService · V7) — 커밋 후 바로 발행, 실패분은 발행기가 다시
+      publish-interval: 30s
+      initial-delay: 20s
+      retry-after: 10s                       # 커밋 직후 발행과 겹치지 않게 이만큼 지난 PENDING 만
+      max-attempts: 10                       # 넘으면 ERROR 로그 (수동 확인)
   sqs:                                       # 구독 큐 2개 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
     store-events-queue-url: ${SETTLEMENT_STORE_EVENTS_QUEUE_URL:}   # StoreApproved · StoreStatusChanged
     order-events-queue-url: ${SETTLEMENT_ORDER_EVENTS_QUEUE_URL:}   # OrderItemConfirmed

@@ -74,7 +74,7 @@
 
 **폐점 · 탈퇴 조건** (결정 3번 A안) — 판매자 탈퇴는 스토어 폐점 후. 폐점 조건 중 정산 쪽은 `/internal/settlements/outstanding` 의 `clear=true` (진행 중 주문 0건은 order, 폐점 · 탈퇴 판단은 store · user)
 
-**지급 규칙** — `SCHEDULED` · 스토어 운영중 · 계좌 있음일 때만. 지급 시 `payout`(계좌 스냅샷) 기록 → 커밋 후 `SettlementPaid` 발행
+**지급 규칙** — `SCHEDULED` · 스토어 운영중 · 계좌 있음일 때만. 지급 시 `payout`(계좌 스냅샷) 기록 + `SettlementPaid` 를 **같은 트랜잭션의 `event_outbox` 에 남김** → 커밋 직후 SNS 발행, 실패하면 아웃박스 발행기(30초 · ShedLock)가 같은 `eventId` 로 다시 보냄(최소 1회 전달 — 소비자는 `eventId` 로 중복 제거, 10/20). SNS 가 죽어도 지급은 성공
 - 실패 코드: `SETTLE_INVALID_STATUS`(보류 · 이미 지급) · `SETTLE_STORE_PAYOUT_HELD` · `SETTLE_PAYOUT_ACCOUNT_MISSING` · `SETTLE_NOT_FOUND`
 
 ## 4. 판매자 — `/api/seller/settlements` (STL-07 · 10)

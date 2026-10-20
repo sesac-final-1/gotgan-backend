@@ -24,7 +24,10 @@ public class AwsConfig {
 
     @Bean
     public SnsClient snsClient(@Value("${AWS_REGION:ap-northeast-2}") String region) {
-        return SnsClient.builder().region(Region.of(region)).build();
+        // 아웃박스 발행 — 느린 SNS 가 커밋 후 처리 · 발행기를 붙잡지 않게 호출 전체 3초 · 시도 1초 (실패는 아웃박스가 재발행)
+        return SnsClient.builder().region(Region.of(region))
+                .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(3)).apiCallAttemptTimeout(Duration.ofSeconds(1)))
+                .build();
     }
 
     /** 명세서 CSV 존재 확인(HeadObject — IRSA s3:GetObject 로 허용). 판매자 요청 경로라 호출 전체 3초 · 시도 1초로 끊는다 */
