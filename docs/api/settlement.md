@@ -91,3 +91,49 @@
 | `COMMISSION_NOT_FOUND` | 404 | 수수료율 미등록 (적재 시 — 재전달) |
 | `COMMISSION_PAST_EFFECTIVE_DATE` | 400 | 지난 적용 시작일 |
 | `INVALID_INPUT` (공통) | 400 | 주차 형식 · 율 범위 등 |
+
+## 6. 운영 — DLQ 재처리
+
+SQS 큐는 처리 실패 시 메시지를 지우지 않아 재전달되고, **3회 실패하면 DLQ** 로 간다 (`maxReceiveCount=3`). 실패한 메시지는 `processed_event` 에 기록되지 않으므로 원인을 고친 뒤 그대로 다시 보내면 정상 처리된다.
+
+| 큐 | DLQ | 주로 가는 경우 |
+|---|---|---|
+| `sesac-gojigi-settlement-order-events` | `…-dlq` | 구매확정일에 유효한 수수료율 없음 (`COMMISSION_NOT_FOUND`) |
+| `sesac-gojigi-settlement-store-events` | `…-dlq` | `StoreStatusChanged` 가 `StoreApproved` 보다 먼저 와서 3회 안에 스냅샷이 안 생김 (`SETTLE_STORE_NOT_FOUND`) |
+
+### 1) 원인 확인
+
+```bash
+# DLQ 메시지 수
+aws sqs get-queue-attributes --queue-url https://sqs.ap-northeast-2.amazonaws.com/<계정>/sesac-gojigi-settlement-order-events-dlq \
+  --attribute-names ApproximateNumberOfMessages
+# 실패 원인 — settlement 로그의 "이벤트 처리 실패 — 재전달 대기" 줄 (eventType · cause)
+kubectl -n sesac-gojigi logs deploy/settlement-service --since=24h | grep "이벤트 처리 실패"
+```
+
+### 2) 원인 해결
+
+- **수수료율 없음**: 수수료 API 는 지난 적용일을 거부(`COMMISSION_PAST_EFFECTIVE_DATE`)하므로, 구매확정일이 이미 지난 경우는 **운영자가 DB 에 그 날짜부터 적용되는 율을 직접 넣는다** (율은 관리자 확인 후)
+
+  ```sql
+  INSERT INTO category_commission (category_id, commission_rate, effective_from) VALUES (<상위 ID>, <율>, '<구매확정일 이전 날짜>');
+  ```
+
+  - 정상 흐름(상위 카테고리는 수수료 등록 후 활성화, 2절)과 시드(2026-01-01)를 지키면 생기지 않아야 한다
+- **스토어 스냅샷 없음**: `StoreApproved` 가 처리됐는지(`settlement_store`) 확인 — 있으면 그대로 재처리, 없으면 store 쪽 발행부터 확인
+
+### 3) 재처리 — DLQ → 원래 큐
+
+```bash
+A=arn:aws:sqs:ap-northeast-2:<계정>
+aws sqs start-message-move-task --source-arn $A:sesac-gojigi-settlement-order-events-dlq --destination-arn $A:sesac-gojigi-settlement-order-events
+aws sqs list-message-move-tasks --source-arn $A:sesac-gojigi-settlement-order-events-dlq   # Status=COMPLETED · ApproximateNumberOfMessagesMoved
+```
+
+- DLQ 의 메시지 전부를 옮긴다 — 시험 메시지가 섞여 있으면 먼저 받아서 지운다(storeId 확인)
+- 같은 원인이 남아 있으면 다시 3회 실패 후 DLQ 로 돌아온다 (무한 반복 없음)
+
+### 4) 확인
+
+- `settlement_item` 에 해당 `order_item_id` 적재(`settlement_id` 는 다음 집계 때 연결) — 지난주 분이면 "지금 집계"
+- 10/20 클러스터 검증: 수수료 없는 상위 99 구매확정 → DLQ → 율 등록 → move task `COMPLETED 1` → 10,000원 · 8% → 판매수수료 800 · 결제수수료 220 적재
