@@ -3,18 +3,20 @@ package com.sesac.gojigi.payment.payment.service;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.payment.payment.client.PortOneClientAdapter;
-import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelRequest;
-import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelResponse;
 import com.sesac.gojigi.payment.payment.client.dto.PortOnePayment;
 import com.sesac.gojigi.payment.payment.dto.request.CancelPaymentRequest;
 import com.sesac.gojigi.payment.payment.dto.request.PreparePaymentRequest;
 import com.sesac.gojigi.payment.payment.dto.request.VerifyPaymentRequest;
 import com.sesac.gojigi.payment.payment.dto.response.PaymentCancelResponse;
 import com.sesac.gojigi.payment.payment.dto.response.PaymentResponse;
+import com.sesac.gojigi.payment.payment.entity.CancelStatus;
 import com.sesac.gojigi.payment.payment.entity.Payment;
 import com.sesac.gojigi.payment.payment.entity.PaymentStatus;
 import com.sesac.gojigi.payment.payment.exception.PaymentErrorCode;
 import com.sesac.gojigi.payment.payment.exception.PaymentException;
+import com.sesac.gojigi.payment.payment.service.PaymentCancelExecutor.Result;
+import com.sesac.gojigi.payment.payment.service.PaymentTxService.Begun;
+import com.sesac.gojigi.payment.payment.service.PaymentTxService.CancelRef;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
@@ -24,8 +26,10 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 /**
- * 결제 준비 · 검증 · 취소 · 웹훅 반영 (docs/api/payment.md). 트랜잭션 없음 — 포트원 호출 → PaymentTxService 짧은 쓰기 순서.
- * PAID 판정은 포트원 조회 결과로만 한다. 브라우저 응답 · 웹훅 본문은 "확인 요청" 신호일 뿐이다.
+ * 결제 흐름 — DB 쓰기는 PaymentTxService(짧은 트랜잭션), 포트원 취소 · 확정은 PaymentCancelExecutor.
+ * 모든 포트원 호출 · DB 쓰기가 실패할 수 있다고 보고, 어느 지점에서 끊겨도 "돈과 기록이 어긋난 채 끝나는" 경로가 없게 한다:
+ * - 취소 · 환불은 포트원 호출 전에 PENDING 선기록 → 결과 미확정이면 대조 → 그래도 모르면 복구 스케줄러가 마무리
+ * - 성립하면 안 되는 결제(금액 불일치 · 늦은 결제)는 FAILED 확정과 환불 선기록을 한 트랜잭션에 — 환불이 끊겨도 스케줄러가 끝까지 돌려준다
  */
 @Slf4j
 @Service
@@ -36,11 +40,14 @@ public class PaymentService {
 
     private final PaymentTxService paymentTx;
     private final PortOneClientAdapter portOne;
+    private final PaymentCancelExecutor cancelExecutor;
     private final Counter mismatchCounter;
 
-    public PaymentService(PaymentTxService paymentTx, PortOneClientAdapter portOne, MeterRegistry meterRegistry) {
+    public PaymentService(PaymentTxService paymentTx, PortOneClientAdapter portOne, PaymentCancelExecutor cancelExecutor,
+            MeterRegistry meterRegistry) {
         this.paymentTx = paymentTx;
         this.portOne = portOne;
+        this.cancelExecutor = cancelExecutor;
         this.mismatchCounter = Counter.builder("payment.mismatch")   // Prometheus: payment_mismatch_total (스펙 관측 지표)
                 .description("결제 금액 불일치로 자동 취소한 건수")
                 .register(meterRegistry);
@@ -74,13 +81,21 @@ public class PaymentService {
         return markPaid(payment, portOnePayment);
     }
 
-    /** 3. 결제 취소 — 금액 생략 = 전액(주문 Saga 보상), 금액 있음 = 부분. sagaId 멱등 */
+    /**
+     * 3. 결제 취소 — 금액 생략 = 전액(주문 Saga 보상), 금액 있음 = 부분. sagaId 멱등.
+     * 결과 미확정이면 409 PAYMENT_CANCEL_PENDING — order 는 같은 sagaId 로 다시 요청한다 (그사이 복구 스케줄러가 확정할 수 있음).
+     */
     public PaymentCancelResponse cancel(String orderNo, CancelPaymentRequest request) {
-        Optional<PaymentCancelResponse> done = paymentTx.findCancelBySagaId(request.sagaId());
-        if (done.isPresent()) {
-            return done.get();
+        Optional<CancelRef> existing = paymentTx.findCancelBySagaId(request.sagaId());
+        if (existing.isPresent()) {
+            return continueCancel(existing.get());
         }
-        return request.isFull() ? cancelAll(orderNo, request) : cancelPartial(orderNo, request);
+        try {
+            return request.isFull() ? cancelAll(orderNo, request) : cancelPartial(orderNo, request);
+        } catch (DataIntegrityViolationException e) {
+            // 같은 sagaId 동시 요청 — 선기록 경합에서 진 쪽. 먼저 남은 행 기준으로 이어서 처리
+            return continueCancel(paymentTx.findCancelBySagaId(request.sagaId()).orElseThrow(() -> e));
+        }
     }
 
     /** 4. 결제 상태 조회 (결제 대기 만료 스케줄러) — 포트원을 부르지 않는다 */
@@ -90,7 +105,8 @@ public class PaymentService {
 
     /**
      * 5. 웹훅 — 포트원을 다시 조회해 반영. 웹훅은 재전송되므로 예외 없이 끝나는 경우가 대부분이다.
-     * READY + 포트원 PAID → 검증과 같은 비교 / FAILED + 포트원 PAID(만료 후 늦은 결제) → 포트원 취소
+     * 먼저 이 결제의 미확정 취소를 마무리하고(취소 완료 · 실패 알림), 그다음
+     * READY + 포트원 PAID → 검증과 같은 비교 / FAILED + 포트원 PAID(만료 후 늦은 결제) → 환불
      */
     public void reconcile(String portonePaymentId) {
         Optional<Payment> found = paymentTx.findByPortonePaymentId(portonePaymentId);
@@ -99,8 +115,9 @@ public class PaymentService {
             return;
         }
         Payment payment = found.get();
+        paymentTx.pendingCancelsOf(payment.getId()).forEach(cancelExecutor::reconcileOnly);
         if (payment.getStatus() != PaymentStatus.READY && payment.getStatus() != PaymentStatus.FAILED) {
-            return;   // 이미 반영됨 · 우리가 요청한 취소의 알림
+            return;   // 이미 반영됨 · 우리가 요청한 취소의 알림 (위에서 미확정 취소는 정리)
         }
         Optional<PortOnePayment> portOnePayment = portOne.getPayment(portonePaymentId).filter(PortOnePayment::isPaid);
         if (portOnePayment.isEmpty()) {
@@ -109,12 +126,26 @@ public class PaymentService {
         PortOnePayment paid = portOnePayment.get();
         if (payment.getStatus() == PaymentStatus.FAILED) {
             log.warn("결제 실패 처리 후 승인된 결제 - orderNo={}, amount={}", payment.getOrderNo(), paid.totalAmount());
-            refund(payment, null, paid, LATE_PAYMENT_REASON);
+            refundInBackground(payment, paid, LATE_PAYMENT_REASON);
         } else if (paid.totalAmount() != payment.getAmount()) {
             refundMismatch(payment, paid, payment.getAmount());
         } else {
             markPaid(payment, paid);
         }
+    }
+
+    /** 이미 선기록된 취소(같은 sagaId 재요청 · 동시 요청 경합)를 이어서 처리 */
+    private PaymentCancelResponse continueCancel(CancelRef cancel) {
+        return switch (cancel.status()) {
+            case SUCCEEDED -> paymentTx.cancelResponse(cancel.cancelId());
+            case PENDING -> toResponse(cancelExecutor.resume(cancel));
+            case FAILED -> {
+                // 포트원이 확정 거절했던 취소 — 최신 잔액으로 다시. 조회가 실패하면 502 (선기록 상태는 그대로 FAILED)
+                PortOnePayment latest = portOne.getPayment(cancel.portonePaymentId())
+                        .orElseThrow(() -> new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "포트원에 결제가 없습니다."));
+                yield toResponse(cancelExecutor.execute(paymentTx.retryFailed(cancel.cancelId(), latest.cancellableAmount())));
+            }
+        };
     }
 
     private PaymentCancelResponse cancelAll(String orderNo, CancelPaymentRequest request) {
@@ -126,39 +157,32 @@ public class PaymentService {
         return switch (payment.getStatus()) {
             case FAILED, CANCELLED -> PaymentCancelResponse.of(payment, null);
             case READY -> {
-                // 타임아웃 등으로 결과를 모르는 상태 — 포트원에 결제가 있으면 취소까지 끝내고 FAILED
+                // 타임아웃 등으로 결과를 모르는 상태 — 포트원에 결제가 있으면 FAILED 확정 + 환불, 없으면 FAILED
                 Optional<PortOnePayment> paid = portOne.getPayment(payment.getPortonePaymentId()).filter(PortOnePayment::isPaid);
-                yield paid.isPresent()
-                        ? refund(payment, request.sagaId(), paid.get(), request.reason())
-                        : paymentTx.markFailed(payment.getId());
+                if (paid.isEmpty()) {
+                    yield paymentTx.markFailed(payment.getId());
+                }
+                Begun begun = paymentTx.beginRefund(payment.getId(), request.sagaId(), paid.get().cancellableAmount(),
+                        request.reason());
+                yield toResponse(begun.created() ? cancelExecutor.execute(begun.cancel()) : cancelExecutor.resume(begun.cancel()));
             }
-            case PAID, PARTIAL_CANCELLED -> {
-                long remaining = payment.remainingAmount();
-                PortOneCancelResponse.Cancellation cancellation = cancelAtPortOne(payment,
-                        PortOneCancelRequest.full(request.reason(), remaining));
-                yield paymentTx.recordCancel(payment.getId(), request.sagaId(), null, remaining, request.reason(), cancellation);
-            }
+            case PAID, PARTIAL_CANCELLED -> toResponse(cancelExecutor.execute(
+                    paymentTx.beginCancel(payment.getId(), request.sagaId(), null, null, request.reason())));
         };
     }
 
     private PaymentCancelResponse cancelPartial(String orderNo, CancelPaymentRequest request) {
         Payment payment = paymentTx.getByOrderNo(orderNo);
-        if (!payment.getStatus().isCancellable()) {
-            throw new PaymentException(PaymentErrorCode.PAYMENT_INVALID_STATUS);
-        }
-        long remaining = payment.remainingAmount();
-        if (request.amount() > remaining) {
-            throw new PaymentException(PaymentErrorCode.PAYMENT_CANCEL_AMOUNT_EXCEEDED);
-        }
-        PortOneCancelResponse.Cancellation cancellation = cancelAtPortOne(payment,
-                PortOneCancelRequest.partial(request.amount(), request.reason(), remaining));
-        try {
-            return paymentTx.recordCancel(payment.getId(), request.sagaId(), request.orderItemId(), request.amount(),
-                    request.reason(), cancellation);
-        } catch (DataIntegrityViolationException | ObjectOptimisticLockingFailureException e) {
-            // 같은 sagaId 동시 요청 — 두 번째 포트원 취소는 currentCancellableAmount 불일치로 거절되므로 여기 오는 쪽이 기록 경합에서 진 것
-            return paymentTx.findCancelBySagaId(request.sagaId()).orElseThrow(() -> e);
-        }
+        return toResponse(cancelExecutor.execute(paymentTx.beginCancel(payment.getId(), request.sagaId(),
+                request.orderItemId(), request.amount(), request.reason())));
+    }
+
+    private static PaymentCancelResponse toResponse(Result result) {
+        return switch (result.status()) {
+            case SUCCEEDED -> result.response();
+            case PENDING -> throw new PaymentException(PaymentErrorCode.PAYMENT_CANCEL_PENDING);
+            case FAILED -> throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "포트원 취소 요청이 거절되었습니다.");
+        };
     }
 
     private PaymentResponse markPaid(Payment payment, PortOnePayment portOnePayment) {
@@ -178,23 +202,22 @@ public class PaymentService {
         log.warn("결제 금액 불일치 - orderNo={}, expected={}, prepared={}, actual={}",
                 payment.getOrderNo(), expectedAmount, payment.getAmount(), portOnePayment.totalAmount());
         mismatchCounter.increment();
-        refund(payment, null, portOnePayment, MISMATCH_REASON);
+        refundInBackground(payment, portOnePayment, MISMATCH_REASON);
     }
 
-    /** 성립하면 안 되는 결제를 포트원에서 전액 취소하고 FAILED 로 기록 */
-    private PaymentCancelResponse refund(Payment payment, String sagaId, PortOnePayment portOnePayment, String reason) {
-        long cancellable = portOnePayment.cancellableAmount();
-        PortOneCancelResponse.Cancellation cancellation = cancelAtPortOne(payment, PortOneCancelRequest.full(reason, cancellable));
-        return paymentTx.recordRefundAndFail(payment.getId(), sagaId, cancellable, reason, cancellation);
-    }
-
-    private PortOneCancelResponse.Cancellation cancelAtPortOne(Payment payment, PortOneCancelRequest request) {
-        PortOneCancelResponse.Cancellation cancellation = portOne.cancel(payment.getPortonePaymentId(), request).cancellation();
-        if (cancellation == null || "FAILED".equals(cancellation.status())) {
-            log.error("포트원 취소 실패 응답 - orderNo={}, status={}", payment.getOrderNo(),
-                    cancellation == null ? null : cancellation.status());
-            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "포트원 취소에 실패했습니다.");
+    /**
+     * 성립하면 안 되는 결제 환불 — FAILED 확정 + 선기록은 반드시 남기고(실패하면 예외로 호출자에게), 포트원 환불 결과는 기다리지 않는다.
+     * 환불이 미확정 · 거절이어도 PENDING / FAILED 기록이 남아 복구 스케줄러 · 경보로 이어진다.
+     */
+    private void refundInBackground(Payment payment, PortOnePayment portOnePayment, String reason) {
+        Begun begun = paymentTx.beginRefund(payment.getId(), null, portOnePayment.cancellableAmount(), reason);
+        if (!begun.created()) {
+            return;   // 이미 진행 중인 환불 — 웹훅 · 확인 요청 중복
         }
-        return cancellation;
+        Result result = cancelExecutor.execute(begun.cancel());
+        if (result.status() != CancelStatus.SUCCEEDED) {
+            log.error("자동 환불 미완료 — 복구 스케줄러가 이어서 처리 orderNo={}, cancelId={}, status={}, cause={}",
+                    payment.getOrderNo(), begun.cancel().cancelId(), result.status(), result.error());
+        }
     }
 }

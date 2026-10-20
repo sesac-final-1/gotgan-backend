@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.sesac.gojigi.payment.TestcontainersConfiguration;
 import com.sesac.gojigi.payment.payment.entity.Payment;
 import com.sesac.gojigi.payment.payment.entity.PaymentCancel;
-import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,15 +45,14 @@ class PaymentRepositoryIntegrationTest {
     void paymentCancel_sagaIdUnique_nullAllowed() {
         // given
         Payment payment = paymentRepository.saveAndFlush(Payment.ready(1L, "20261021-000123", 64_400L));
-        LocalDateTime now = LocalDateTime.now();
-        paymentCancelRepository.saveAndFlush(PaymentCancel.of(payment, 10L, "saga-1", 1_000L, "구매자 취소", "c-1", now));
-        paymentCancelRepository.saveAndFlush(PaymentCancel.of(payment, null, null, 1_000L, "자동 취소", "c-2", now));
-        paymentCancelRepository.saveAndFlush(PaymentCancel.of(payment, null, null, 1_000L, "자동 취소", "c-3", now));
+        paymentCancelRepository.saveAndFlush(PaymentCancel.pending(payment, 10L, "saga-1", 1_000L, 64_400L, "구매자 취소"));
+        paymentCancelRepository.saveAndFlush(PaymentCancel.pending(payment, null, null, 1_000L, 64_400L, "자동 취소"));
+        paymentCancelRepository.saveAndFlush(PaymentCancel.pending(payment, null, null, 1_000L, 64_400L, "자동 취소"));
 
         // when · then
         assertThat(paymentCancelRepository.findBySagaId("saga-1")).isPresent();
         assertThatThrownBy(() -> paymentCancelRepository.saveAndFlush(
-                PaymentCancel.of(payment, 10L, "saga-1", 1_000L, "구매자 취소", "c-4", now)))
+                PaymentCancel.pending(payment, 10L, "saga-1", 1_000L, 64_400L, "구매자 취소")))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

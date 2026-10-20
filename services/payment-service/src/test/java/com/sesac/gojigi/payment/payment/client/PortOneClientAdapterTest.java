@@ -9,7 +9,6 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelRequest;
 import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelResponse;
@@ -84,33 +83,45 @@ class PortOneClientAdapterTest {
                          "vatAmount":0,"reason":"구매자 취소","cancelledAt":"2026-10-22T01:00:00Z","requestedAt":"2026-10-22T01:00:00Z"}}
                         """, MediaType.APPLICATION_JSON));
 
-        PortOneCancelResponse response = adapter.cancel("pay-1", PortOneCancelRequest.partial(32_200L, "구매자 취소", 64_400L));
+        PortOneCancelResponse response = adapter.cancel("pay-1", PortOneCancelRequest.of(32_200L, "구매자 취소", 64_400L));
 
         assertThat(response.cancellation().id()).isEqualTo("cancel-1");
         assertThat(response.cancellation().totalAmount()).isEqualTo(32_200L);
     }
 
     @Test
-    @DisplayName("전액 취소 요청은 amount 를 보내지 않는다")
-    void cancel_fullCancelOmitsAmount() {
+    @DisplayName("전액 취소도 amount 를 명시한다 — 선기록 금액과 포트원 처리 금액을 대조하려고")
+    void cancel_fullCancelSendsAmount() {
         server.expect(requestTo(BASE + "/payments/pay-1/cancel"))
-                .andExpect(content().json("{\"reason\":\"주문 처리 실패\",\"currentCancellableAmount\":64400}", true))
+                .andExpect(content().json("{\"amount\":64400,\"reason\":\"주문 처리 실패\",\"currentCancellableAmount\":64400}", true))
                 .andRespond(withSuccess("{\"cancellation\":{\"status\":\"SUCCEEDED\",\"id\":\"c\",\"totalAmount\":64400}}",
                         MediaType.APPLICATION_JSON));
 
-        adapter.cancel("pay-1", PortOneCancelRequest.full("주문 처리 실패", 64_400L));
+        adapter.cancel("pay-1", PortOneCancelRequest.of(64_400L, "주문 처리 실패", 64_400L));
         server.verify();
     }
 
     @Test
-    @DisplayName("포트원 4xx 거절은 EXTERNAL_API_ERROR(BusinessException) 로 바꾼다 — 서킷 실패로 세지 않음")
-    void cancel_clientError_becomesBusinessException() {
+    @DisplayName("포트원 4xx 거절은 EXTERNAL_API_ERROR + 포트원 오류 type 으로 바꾼다 — 서킷 실패로 세지 않음")
+    void cancel_clientError_becomesRejectedWithType() {
         server.expect(requestTo(BASE + "/payments/pay-1/cancel"))
                 .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
                         .body("{\"type\":\"CANCELLABLE_AMOUNT_CONSISTENCY_BROKEN\"}"));
 
-        assertThatThrownBy(() -> adapter.cancel("pay-1", PortOneCancelRequest.full("x", 1L)))
-                .isInstanceOf(BusinessException.class)
-                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        assertThatThrownBy(() -> adapter.cancel("pay-1", PortOneCancelRequest.of(1L, "x", 1L)))
+                .isInstanceOfSatisfying(PortOneRejectedException.class, e -> {
+                    assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+                    assertThat(e.getPortoneType()).isEqualTo("CANCELLABLE_AMOUNT_CONSISTENCY_BROKEN");
+                    assertThat(e.maybeAlreadyDone()).isTrue();
+                });
+    }
+
+    @Test
+    @DisplayName("오류 본문에서 포트원 type 을 꺼낸다 — 없거나 형식이 다르면 null")
+    void errorType() {
+        assertThat(PortOneClientAdapter.errorType("{\"type\" : \"PAYMENT_ALREADY_CANCELLED\",\"message\":\"x\"}"))
+                .isEqualTo("PAYMENT_ALREADY_CANCELLED");
+        assertThat(PortOneClientAdapter.errorType("<html>bad gateway</html>")).isNull();
+        assertThat(PortOneClientAdapter.errorType(null)).isNull();
     }
 }

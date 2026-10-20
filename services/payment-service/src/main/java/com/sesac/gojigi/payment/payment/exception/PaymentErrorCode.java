@@ -15,6 +15,7 @@ public enum PaymentErrorCode implements ErrorCode {
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.CONFLICT, "결제 금액이 일치하지 않아 결제를 취소했습니다."),
     PAYMENT_INVALID_STATUS(HttpStatus.CONFLICT, "현재 결제 상태에서 처리할 수 없는 요청입니다."),
     PAYMENT_CANCEL_AMOUNT_EXCEEDED(HttpStatus.CONFLICT, "취소 금액이 남은 결제 금액보다 큽니다."),
+    PAYMENT_CANCEL_PENDING(HttpStatus.CONFLICT, "취소 결과를 확인하고 있습니다. 같은 sagaId 로 잠시 후 다시 요청해 주세요."),
     PAYMENT_WEBHOOK_INVALID_SIGNATURE(HttpStatus.BAD_REQUEST, "웹훅 서명이 올바르지 않습니다.");
 
     private final HttpStatus status;
