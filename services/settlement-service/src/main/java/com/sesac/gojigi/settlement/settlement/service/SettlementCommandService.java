@@ -1,5 +1,6 @@
 package com.sesac.gojigi.settlement.settlement.service;
 
+import com.sesac.gojigi.settlement.common.event.EventOutboxService;
 import com.sesac.gojigi.settlement.settlement.dto.event.SettlementPaidPayload;
 import com.sesac.gojigi.settlement.settlement.entity.Payout;
 import com.sesac.gojigi.settlement.settlement.entity.Settlement;
@@ -27,7 +28,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,7 +48,7 @@ public class SettlementCommandService {
     private final SettlementHistoryRepository settlementHistoryRepository;
     private final SettlementStoreRepository settlementStoreRepository;
     private final PayoutRepository payoutRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final EventOutboxService eventOutboxService;
     private final Clock clock;
 
     /** carriedOver = 지난 주차(지급 완료 · 정산서 없음)에서 이번 주차 정산서로 이월한 상품주문 수 */
@@ -154,7 +154,7 @@ public class SettlementCommandService {
                 });
     }
 
-    /** 정산서 1건 지급 — 지급예정 · 스토어 운영중 · 계좌 있음일 때만. 커밋 후 SettlementPaid 발행 */
+    /** 정산서 1건 지급 — 지급예정 · 스토어 운영중 · 계좌 있음일 때만. SettlementPaid 는 아웃박스에 남기고 커밋 후 발행 */
     @Transactional
     public Settlement payOne(Long settlementId) {
         Settlement settlement = load(settlementId);
@@ -173,8 +173,10 @@ public class SettlementCommandService {
         settlement.markPaid(now);
         payoutRepository.save(Payout.of(settlement, store, now));
         history(settlement, SettlementStatus.SCHEDULED, Actor.ADMIN, null);
-        eventPublisher.publishEvent(new SettlementPaidPayload(settlement.getId(), settlement.getStoreId(),
-                new SettlementWeek(settlement.getWeekStart()).isoWeek(), settlement.getPayoutAmt(), store.getSellerEmail()));
+        // 지급과 같은 트랜잭션에 이벤트를 남긴다 — 커밋 후 발행, 실패하면 아웃박스 발행기가 다시 (V7)
+        eventOutboxService.enqueue("SettlementPaid", String.valueOf(settlement.getId()), new SettlementPaidPayload(settlement.getId(),
+                settlement.getStoreId(), new SettlementWeek(settlement.getWeekStart()).isoWeek(), settlement.getPayoutAmt(),
+                store.getSellerEmail()));
         return settlement;
     }
 

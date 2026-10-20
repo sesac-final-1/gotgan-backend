@@ -3,10 +3,13 @@ package com.sesac.gojigi.settlement.settlement.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -17,8 +20,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.settlement.TestcontainersConfiguration;
+import com.sesac.gojigi.settlement.common.event.EventOutbox;
+import com.sesac.gojigi.settlement.common.event.EventOutboxRepository;
+import com.sesac.gojigi.settlement.common.event.EventOutboxService;
 import com.sesac.gojigi.settlement.common.event.SnsEventPublisher;
-import com.sesac.gojigi.settlement.settlement.dto.event.SettlementPaidPayload;
 import com.sesac.gojigi.settlement.settlement.entity.Settlement;
 import com.sesac.gojigi.settlement.settlement.entity.SettlementItem;
 import com.sesac.gojigi.settlement.settlement.entity.SettlementStatus;
@@ -35,6 +40,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -55,12 +61,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 정산 2단계 — 내부 API(관리자) · 판매자 API · 수수료 API 를 HTTP 로. 실제 MySQL · Flyway V1~V5.
@@ -92,11 +101,20 @@ class SettlementApiIntegrationTest {
     @Autowired SettlementRepository settlementRepository;
     @Autowired PayoutRepository payoutRepository;
     @Autowired StoreStatusChangedListener storeStatusChangedListener;
+    @Autowired EventOutboxRepository eventOutboxRepository;
+    @Autowired EventOutboxService eventOutboxService;
+    @Autowired JsonMapper jsonMapper;
     @MockitoBean SnsEventPublisher snsEventPublisher;
     @MockitoBean S3Presigner s3Presigner;
     @MockitoBean S3Client s3Client;
 
     // ── 도우미
+
+    private List<EventOutbox> outboxOf(long settlementId) {
+        return eventOutboxRepository.findAll().stream()
+                .filter(o -> o.getEventType().equals("SettlementPaid") && o.getAggregateId().equals(String.valueOf(settlementId)))
+                .toList();
+    }
 
     private long store(boolean withAccount) {
         long storeId = SEQ.incrementAndGet();
@@ -282,18 +300,41 @@ class SettlementApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("지급 — PAID · 지급 기록(계좌 스냅샷) · 커밋 후 SettlementPaid(주차 · 판매자 이메일), 다시 지급하면 실패 목록 (이중 지급 없음)")
+        @DisplayName("지급 — PAID · 지급 기록(계좌 스냅샷) · 아웃박스에 남긴 SettlementPaid 를 커밋 후 발행(SENT), 다시 지급하면 실패 목록 (이중 지급 없음)")
         void pay_success_publishesSettlementPaid() throws Exception {
             pay(settlementId).andExpect(status().isOk()).andExpect(jsonPath("$.data.success[0]").value(settlementId));
             pay(settlementId).andExpect(jsonPath("$.data.failed[0].code").value("SETTLE_INVALID_STATUS"));
 
             assertThat(settlementRepository.findById(settlementId).orElseThrow().getStatus()).isEqualTo(SettlementStatus.PAID);
             assertThat(payoutRepository.findBySettlementId(settlementId).orElseThrow().getBankName()).isEqualTo("기업은행");
-            ArgumentCaptor<SettlementPaidPayload> payload = ArgumentCaptor.forClass(SettlementPaidPayload.class);
-            verify(snsEventPublisher).publish(eq("SettlementPaid"), eq(String.valueOf(settlementId)), payload.capture());
-            assertThat(payload.getValue().week()).isEqualTo(W43);
-            assertThat(payload.getValue().sellerEmail()).isEqualTo("s" + storeId + "@example.com");
-            assertThat(payload.getValue().payoutAmt()).isEqualTo(59_000L - 6_490L - 1_298L);
+            ArgumentCaptor<String> envelope = ArgumentCaptor.forClass(String.class);
+            verify(snsEventPublisher).send(eq("SettlementPaid"), eq(String.valueOf(settlementId)), anyString(), envelope.capture());
+            JsonNode payload = jsonMapper.readTree(envelope.getValue()).path("payload");
+            assertThat(payload.path("week").asString()).isEqualTo(W43);
+            assertThat(payload.path("sellerEmail").asString()).isEqualTo("s" + storeId + "@example.com");
+            assertThat(payload.path("payoutAmt").asLong()).isEqualTo(59_000L - 6_490L - 1_298L);
+            assertThat(outboxOf(settlementId)).singleElement().satisfies(o -> assertThat(o.isSent()).isTrue());
+        }
+
+        @Test
+        @DisplayName("SNS 가 죽어도 지급은 성공 — 이벤트는 아웃박스에 PENDING 으로 남고, 발행기가 같은 eventId 로 다시 보낸다")
+        void pay_snsDown_outboxRetriesWithSameEventId() throws Exception {
+            doThrow(SdkClientException.create("SNS 연결 실패")).doNothing()
+                    .when(snsEventPublisher).send(eq("SettlementPaid"), eq(String.valueOf(settlementId)), anyString(), anyString());
+
+            pay(settlementId).andExpect(status().isOk()).andExpect(jsonPath("$.data.success[0]").value(settlementId));
+            assertThat(settlementRepository.findById(settlementId).orElseThrow().getStatus()).isEqualTo(SettlementStatus.PAID);
+            EventOutbox pending = outboxOf(settlementId).getFirst();
+            assertThat(pending.isSent()).isFalse();
+            assertThat(pending.getAttemptCount()).isEqualTo(1);
+            assertThat(pending.getLastError()).contains("SNS 연결 실패");
+
+            eventOutboxService.publishPending();
+
+            ArgumentCaptor<String> eventIds = ArgumentCaptor.forClass(String.class);
+            verify(snsEventPublisher, times(2)).send(eq("SettlementPaid"), eq(String.valueOf(settlementId)), eventIds.capture(), anyString());
+            assertThat(eventIds.getAllValues()).containsOnly(pending.getEventId());   // 소비자가 중복을 거를 수 있게 같은 eventId
+            assertThat(outboxOf(settlementId)).singleElement().satisfies(o -> assertThat(o.isSent()).isTrue());
         }
 
         @Test
@@ -308,7 +349,8 @@ class SettlementApiIntegrationTest {
                     .andExpect(jsonPath("$.data.success.length()").value(1))
                     .andExpect(jsonPath("$.data.failed[0].code").value("SETTLE_PAYOUT_ACCOUNT_MISSING"))
                     .andExpect(jsonPath("$.data.failed[1].code").value("SETTLE_NOT_FOUND"));
-            verify(snsEventPublisher, never()).publish(eq("SettlementPaid"), eq(String.valueOf(noAccountSettlement)), any());
+            verify(snsEventPublisher, never()).send(eq("SettlementPaid"), eq(String.valueOf(noAccountSettlement)), any(), any());
+            assertThat(outboxOf(noAccountSettlement)).isEmpty();   // 지급이 롤백되면 이벤트도 남지 않음
         }
 
         @Test
