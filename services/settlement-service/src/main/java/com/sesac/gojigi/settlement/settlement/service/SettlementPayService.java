@@ -1,6 +1,6 @@
 package com.sesac.gojigi.settlement.settlement.service;
 
-import com.sesac.gojigi.settlement.common.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.settlement.settlement.dto.response.PayResultResponse;
 import java.util.ArrayList;
 import java.util.List;

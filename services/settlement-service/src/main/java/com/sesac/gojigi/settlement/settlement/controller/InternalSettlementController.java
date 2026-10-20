@@ -1,6 +1,6 @@
 package com.sesac.gojigi.settlement.settlement.controller;
 
-import com.sesac.gojigi.settlement.common.dto.ApiResponse;
+import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.settlement.settlement.dto.request.AggregateRequest;
 import com.sesac.gojigi.settlement.settlement.dto.request.HoldRequest;
 import com.sesac.gojigi.settlement.settlement.dto.request.PayRequest;
