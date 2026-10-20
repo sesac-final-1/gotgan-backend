@@ -13,7 +13,11 @@ public enum AuthErrorCode implements ErrorCode {
     /** 이용정지 회원 (Keycloak enabled=false · users.status SUSPENDED) */
     AUTH_ACCOUNT_DISABLED(HttpStatus.FORBIDDEN, "이용이 정지된 계정입니다."),
     /** Keycloak 계정은 있으나 userdb 회원과 연결되지 않음 (토큰에 user_id 없음 · users 행 없음) */
-    AUTH_ACCOUNT_NOT_LINKED(HttpStatus.UNAUTHORIZED, "회원 정보가 연결되지 않은 계정입니다.");
+    AUTH_ACCOUNT_NOT_LINKED(HttpStatus.UNAUTHORIZED, "회원 정보가 연결되지 않은 계정입니다."),
+    /** 가입 — 이미 가입된 이메일 (탈퇴 회원 포함, uk_users_email) · Keycloak 에 같은 username 존재 */
+    AUTH_EMAIL_DUPLICATE(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
+    /** 가입 — Keycloak 비밀번호 정책 위반 (8자 이상 · 영문 · 특수문자 · 이메일과 다름) */
+    AUTH_PASSWORD_POLICY_VIOLATION(HttpStatus.BAD_REQUEST, "비밀번호는 8자 이상이며 영문과 특수문자를 포함하고, 이메일과 달라야 합니다.");
 
     private final HttpStatus status;
     private final String message;

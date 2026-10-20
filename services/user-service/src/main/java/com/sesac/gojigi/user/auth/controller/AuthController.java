@@ -1,9 +1,14 @@
 package com.sesac.gojigi.user.auth.controller;
 
+import com.sesac.gojigi.user.auth.dto.request.EmailAvailabilityRequest;
 import com.sesac.gojigi.user.auth.dto.request.LoginRequest;
+import com.sesac.gojigi.user.auth.dto.request.SignupRequest;
+import com.sesac.gojigi.user.auth.dto.response.EmailAvailabilityResponse;
 import com.sesac.gojigi.user.auth.dto.response.LoginResponse;
+import com.sesac.gojigi.user.auth.dto.response.SignupResponse;
 import com.sesac.gojigi.user.auth.service.AuthService;
 import com.sesac.gojigi.user.auth.service.LoginResult;
+import com.sesac.gojigi.user.auth.service.SignupResult;
 import com.sesac.gojigi.user.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -12,8 +17,11 @@ import jakarta.validation.Valid;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 인증 API — 게이트웨이에서 공개 경로(/api/auth/**). Access Token 은 body, Refresh Token 은 HttpOnly 쿠키 (컨벤션 4-4).
  * 쿠키: HttpOnly · Secure · SameSite=Strict · Path=/api/auth — 프론트 JS 가 읽지 못하고 /api/auth/** 요청에만 실린다.
  */
-@Tag(name = "인증", description = "로그인 · 토큰 재발급 · 로그아웃 — 인가: 공개 (Keycloak 대리 호출)")
+@Tag(name = "인증", description = "회원가입 · 로그인 · 토큰 재발급 · 로그아웃 — 인가: 공개 (Keycloak 대리 호출)")
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -61,6 +69,41 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, refreshCookie(result.refreshToken(), result.refreshExpiresIn()).toString())
                 .body(ApiResponse.success("로그인되었습니다.", result.response()));
+    }
+
+    @Operation(summary = "이메일 중복 확인", description = """
+            인가: 공개. available=false 면 이미 가입된 이메일 (탈퇴 회원 포함). 대소문자 구분 없음.
+            에러: 400 INVALID_INPUT(이메일 형식)""")
+    @GetMapping("/email-availability")
+    public ApiResponse<EmailAvailabilityResponse> emailAvailability(@Valid @ModelAttribute EmailAvailabilityRequest request) {
+        String email = request.normalizedEmail();
+        boolean available = authService.isEmailAvailable(email);
+        return ApiResponse.success(available ? "사용할 수 있는 이메일입니다." : "이미 가입된 이메일입니다.",
+                new EmailAvailabilityResponse(email, available));
+    }
+
+    @Operation(summary = "회원가입", description = """
+            인가: 공개. 가입 후 자동 로그인 — data.login 은 로그인 응답과 같고 Refresh Token 은 Set-Cookie refresh_token.
+            data.login 이 null 이면 가입은 됐지만 자동 로그인 실패 → 로그인 화면으로 (쿠키 없음).
+            에러: 400 INVALID_INPUT(형식) · 400 AUTH_PASSWORD_POLICY_VIOLATION · 409 AUTH_EMAIL_DUPLICATE
+            · 502 EXTERNAL_API_ERROR(인증 서버 장애 — 가입 안 됨)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "가입 완료 — 자동 로그인 성공 시 Set-Cookie 로 Refresh Token"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT · AUTH_PASSWORD_POLICY_VIOLATION"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "AUTH_EMAIL_DUPLICATE — 이미 가입된 이메일"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR — Keycloak 연결 실패 · 서킷 OPEN")
+    })
+    @PostMapping("/signup")
+    public ResponseEntity<ApiResponse<SignupResponse>> signup(@Valid @RequestBody SignupRequest request) {
+        SignupResult result = authService.signup(request);
+        if (result.login() == null) {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponse.success("회원가입이 완료되었습니다. 로그인해 주세요.", new SignupResponse(result.userId(), null)));
+        }
+        LoginResult login = result.login();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .header(HttpHeaders.SET_COOKIE, refreshCookie(login.refreshToken(), login.refreshExpiresIn()).toString())
+                .body(ApiResponse.success("회원가입이 완료되었습니다.", new SignupResponse(result.userId(), login.response())));
     }
 
     private ResponseCookie refreshCookie(String refreshToken, long maxAgeSeconds) {

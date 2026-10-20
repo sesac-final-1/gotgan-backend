@@ -1,5 +1,6 @@
 package com.sesac.gojigi.user.auth.client;
 
+import com.sesac.gojigi.user.auth.client.dto.KeycloakServiceAccountToken;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import org.springframework.http.MediaType;
 import org.springframework.util.MultiValueMap;
@@ -17,4 +18,8 @@ public interface KeycloakClient {
     /** 토큰 발급 — grant_type=password(로그인) · refresh_token(재발급) */
     @PostExchange(url = "/token", contentType = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     KeycloakTokenResponse token(@RequestBody MultiValueMap<String, String> form);
+
+    /** 서비스 계정 토큰 — grant_type=client_credentials (Admin API 호출용, refresh_token 없음) */
+    @PostExchange(url = "/token", contentType = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    KeycloakServiceAccountToken serviceAccountToken(@RequestBody MultiValueMap<String, String> form);
 }
