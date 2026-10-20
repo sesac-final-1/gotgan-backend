@@ -57,6 +57,11 @@ public record SettlementWeek(LocalDate start) {
         return start.plusWeeks(1).atStartOfDay();
     }
 
+    /** 이 주차 구매확정인지 — 아니면 지난 주차에서 이월된 항목 */
+    public boolean contains(LocalDateTime confirmedAt) {
+        return !confirmedAt.isBefore(from()) && confirmedAt.isBefore(until());
+    }
+
     public LocalDate scheduledPayDate() {
         return end().plusDays(PAY_DAYS_AFTER_END);
     }

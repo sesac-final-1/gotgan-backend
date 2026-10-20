@@ -3,6 +3,7 @@ package com.sesac.gojigi.settlement.settlement.entity;
 import com.sesac.gojigi.settlement.common.entity.BaseTimeEntity;
 import com.sesac.gojigi.settlement.settlement.exception.SettlementErrorCode;
 import com.sesac.gojigi.settlement.settlement.exception.SettlementException;
+import com.sesac.gojigi.settlement.settlement.util.SettlementWeek;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -45,6 +46,9 @@ public class Settlement extends BaseTimeEntity {
 
     @Column(name = "item_count", nullable = false)
     private int itemCount;
+
+    @Column(name = "carried_over_count", nullable = false)
+    private int carriedOverCount;
 
     @Column(name = "sales_amt", nullable = false)
     private long salesAmt;
@@ -96,6 +100,8 @@ public class Settlement extends BaseTimeEntity {
             throw new SettlementException(SettlementErrorCode.SETTLE_INVALID_STATUS);
         }
         this.itemCount = items.size();
+        SettlementWeek week = new SettlementWeek(weekStart);
+        this.carriedOverCount = (int) items.stream().filter(i -> !week.contains(i.getConfirmedAt())).count();
         this.salesAmt = items.stream().mapToLong(SettlementItem::getItemAmt).sum();
         this.commissionAmt = items.stream().mapToLong(SettlementItem::getCommissionAmt).sum();
         this.paymentFeeAmt = items.stream().mapToLong(SettlementItem::getPaymentFeeAmt).sum();

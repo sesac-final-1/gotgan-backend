@@ -12,12 +12,14 @@ import java.util.List;
 public record SettlementDetailResponse(SettlementSummaryResponse settlement, List<Item> items, List<History> history) {
 
     public record Item(Long orderItemId, String orderNo, String productName, OffsetDateTime confirmedAt, long itemAmt,
-            Long categoryId, BigDecimal rate, long commission, long paymentFee, long payout) {
+            Long categoryId, BigDecimal rate, long commission, long paymentFee, long payout, boolean carriedOver) {
 
-        public static Item of(SettlementItem i) {
+        /** carriedOver — 구매확정일이 정산서 주차 밖 = 지난 주차에서 이월된 항목 */
+        public static Item of(SettlementItem i, SettlementWeek week) {
             return new Item(i.getOrderItemId(), i.getOrderNo(), i.getProductName(),
                     i.getConfirmedAt().atZone(SettlementWeek.KST).toOffsetDateTime(), i.getItemAmt(), i.getCategoryId(),
-                    i.getCommissionRate(), i.getCommissionAmt(), i.getPaymentFeeAmt(), i.payoutAmt());
+                    i.getCommissionRate(), i.getCommissionAmt(), i.getPaymentFeeAmt(), i.payoutAmt(),
+                    !week.contains(i.getConfirmedAt()));
         }
     }
 

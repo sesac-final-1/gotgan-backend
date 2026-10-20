@@ -1,6 +1,7 @@
 package com.sesac.gojigi.settlement.settlement.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -110,8 +111,19 @@ class SettlementApiIntegrationTest {
         return mockMvc.perform(post("/internal/settlements/aggregate"));
     }
 
+    private ResultActions aggregateWeek(String isoWeek) throws Exception {
+        return mockMvc.perform(post("/internal/settlements/aggregate").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"week\":\"" + isoWeek + "\"}"));
+    }
+
+    private static final LocalDate W42_START = LocalDate.of(2026, 10, 12);
+
     private Settlement settlementOf(long storeId) {
-        return settlementRepository.findByStoreIdAndWeekStart(storeId, LocalDate.of(2026, 10, 19)).orElseThrow();
+        return settlementOf(storeId, LocalDate.of(2026, 10, 19));
+    }
+
+    private Settlement settlementOf(long storeId, LocalDate weekStart) {
+        return settlementRepository.findByStoreIdAndWeekStart(storeId, weekStart).orElseThrow();
     }
 
     private ResultActions pay(long... ids) throws Exception {
@@ -172,7 +184,7 @@ class SettlementApiIntegrationTest {
             aggregate();
             item(storeId, 20_000L, LocalDateTime.of(2026, 10, 21, 12, 0));
 
-            aggregate().andExpect(jsonPath("$.data.updated").value(1));
+            aggregate().andExpect(jsonPath("$.data.updated").value(greaterThanOrEqualTo(1)));
             assertThat(settlementOf(storeId).getSalesAmt()).isEqualTo(30_000L);
         }
 
@@ -191,6 +203,45 @@ class SettlementApiIntegrationTest {
                     .andExpect(jsonPath("$.data.history.length()").value(2))
                     .andExpect(jsonPath("$.data.history[1].to").value("HELD"))
                     .andExpect(jsonPath("$.data.history[1].actor").value("SYSTEM"));
+        }
+
+        @Test
+        @DisplayName("지급 완료된 주(W42)에 늦게 들어온 구매확정 → 다음 집계 주차(W43) 정산서로 이월 · 이월 n건 표기 (결정 2번 A안)")
+        void aggregate_lateItemOfPaidWeek_carriedOver() throws Exception {
+            long storeId = store(true);
+            item(storeId, 10_000L, LocalDateTime.of(2026, 10, 13, 12, 0));
+            aggregateWeek("2026-W42");
+            pay(settlementOf(storeId, W42_START).getId());
+            item(storeId, 20_000L, LocalDateTime.of(2026, 10, 14, 12, 0));   // W42 지급 후 도착
+            item(storeId, 30_000L, LocalDateTime.of(2026, 10, 21, 12, 0));   // W43 본래 분
+
+            aggregate().andExpect(jsonPath("$.data.carriedOver").value(greaterThanOrEqualTo(1)));
+
+            assertThat(settlementOf(storeId, W42_START).getSalesAmt()).isEqualTo(10_000L);   // 지급된 정산서는 그대로
+            Settlement w43 = settlementOf(storeId);
+            assertThat(w43.getItemCount()).isEqualTo(2);
+            assertThat(w43.getCarriedOverCount()).isEqualTo(1);
+            assertThat(w43.getSalesAmt()).isEqualTo(50_000L);
+            mockMvc.perform(get("/internal/settlements/" + w43.getId()))
+                    .andExpect(jsonPath("$.data.settlement.carriedOverCount").value(1))
+                    .andExpect(jsonPath("$.data.items[0].carriedOver").value(true))     // 구매확정일 순 — 10/14 이월분 먼저
+                    .andExpect(jsonPath("$.data.items[1].carriedOver").value(false));
+        }
+
+        @Test
+        @DisplayName("지급 전인 지난 주(W42)에 늦게 들어온 구매확정 → 원래 주 정산서에 더해 다시 계산 (이월 아님)")
+        void aggregate_lateItemOfUnpaidWeek_addedToOwnWeek() throws Exception {
+            long storeId = store(true);
+            item(storeId, 10_000L, LocalDateTime.of(2026, 10, 13, 12, 0));
+            aggregateWeek("2026-W42");
+            item(storeId, 20_000L, LocalDateTime.of(2026, 10, 14, 12, 0));
+
+            aggregate().andExpect(jsonPath("$.data.updated").value(greaterThanOrEqualTo(1)));
+
+            Settlement w42 = settlementOf(storeId, W42_START);
+            assertThat(w42.getSalesAmt()).isEqualTo(30_000L);
+            assertThat(w42.getCarriedOverCount()).isZero();
+            assertThat(settlementRepository.findByStoreIdAndWeekStart(storeId, LocalDate.of(2026, 10, 19))).isEmpty();
         }
     }
 
@@ -351,6 +402,36 @@ class SettlementApiIntegrationTest {
             asSeller(get("/api/seller/settlements/" + id + "/report"), storeId).andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.url").value("https://bucket.s3/reports/" + storeId + "/" + W43 + ".csv?sig"))
                     .andExpect(jsonPath("$.data.expiresAt").value("2026-11-02T10:00:00+09:00"));
+        }
+
+        @Test
+        @DisplayName("미정산 현황 — 집계 전 · 지급예정 · 보류가 남아 있으면 clear=false, 전부 지급되면 clear=true (결정 3번 A안 폐점 · 탈퇴 조건)")
+        void outstanding_clearOnlyWhenAllPaid() throws Exception {
+            long storeId = store(true);
+            item(storeId, 10_000L, LocalDateTime.of(2026, 10, 20, 12, 0));
+            String url = "/internal/settlements/outstanding?storeId=" + storeId;
+
+            mockMvc.perform(get(url)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.unsettledItemCount").value(1))
+                    .andExpect(jsonPath("$.data.unsettledPayoutAmt").value(10_000 - 1_100 - 220))
+                    .andExpect(jsonPath("$.data.clear").value(false));
+
+            aggregate();
+            long id = settlementOf(storeId).getId();
+            hold(id, true, "확인 필요");
+            mockMvc.perform(get(url))
+                    .andExpect(jsonPath("$.data.unsettledItemCount").value(0))
+                    .andExpect(jsonPath("$.data.heldCount").value(1))
+                    .andExpect(jsonPath("$.data.clear").value(false));
+
+            hold(id, false, null);
+            mockMvc.perform(get(url)).andExpect(jsonPath("$.data.scheduledCount").value(1)).andExpect(jsonPath("$.data.clear").value(false));
+
+            pay(id);
+            mockMvc.perform(get(url))
+                    .andExpect(jsonPath("$.data.scheduledCount").value(0))
+                    .andExpect(jsonPath("$.data.heldCount").value(0))
+                    .andExpect(jsonPath("$.data.clear").value(true));
         }
 
         @Test

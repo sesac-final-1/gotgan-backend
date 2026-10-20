@@ -7,6 +7,7 @@ import com.sesac.gojigi.settlement.settlement.dto.request.PayRequest;
 import com.sesac.gojigi.settlement.settlement.dto.response.PayResultResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementDetailResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementListResponse;
+import com.sesac.gojigi.settlement.settlement.dto.response.SettlementOutstandingResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementStatsResponse;
 import com.sesac.gojigi.settlement.settlement.entity.SettlementHistory.Actor;
 import com.sesac.gojigi.settlement.settlement.entity.SettlementStatus;
@@ -82,6 +83,12 @@ public class InternalSettlementController {
     @GetMapping("/internal/stats/settlements")
     public ApiResponse<SettlementStatsResponse> stats(@RequestParam(required = false) Long storeId) {
         return ApiResponse.success("정산 통계를 조회했습니다.", settlementQueryService.stats(storeId));
+    }
+
+    @Operation(summary = "스토어 미정산 현황", description = "스토어 폐점 · 판매자 탈퇴 전 확인 — 집계 전 구매확정 · 지급예정 · 보류 정산이 모두 0 이면 clear=true")
+    @GetMapping("/internal/settlements/outstanding")
+    public ApiResponse<SettlementOutstandingResponse> outstanding(@RequestParam Long storeId) {
+        return ApiResponse.success("미정산 현황을 조회했습니다.", settlementQueryService.outstanding(storeId));
     }
 
     private SettlementWeek week(String isoWeek) {

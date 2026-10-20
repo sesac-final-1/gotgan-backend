@@ -24,6 +24,14 @@ public interface SettlementItemRepository extends JpaRepository<SettlementItem, 
             """)
     List<SettlementItem> findUnassigned(@Param("from") LocalDateTime from, @Param("until") LocalDateTime until);
 
+    /** 지난 주차에 구매확정됐는데 아직 정산서에 연결되지 않은 상품주문 — 늦게 들어온 구매확정 (이월 판단 대상) */
+    @Query("""
+            select i from SettlementItem i
+             where i.settlementId is null and i.confirmedAt < :until
+             order by i.storeId, i.confirmedAt
+            """)
+    List<SettlementItem> findUnassignedBefore(@Param("until") LocalDateTime until);
+
     /** 스토어의 집계 전 구매확정분 (판매자 대시보드 "이번 주 정산 예정") */
     List<SettlementItem> findByStoreIdAndSettlementIdIsNull(Long storeId);
 
