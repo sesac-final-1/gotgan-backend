@@ -1,5 +1,8 @@
 package com.sesac.gojigi.settlement.common.event;
 
+import java.net.ConnectException;
+import java.sql.SQLRecoverableException;
+import java.sql.SQLTransientException;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -7,9 +10,13 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.CannotCreateTransactionException;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.services.sqs.model.MessageSystemAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -65,7 +72,9 @@ public class SqsEventPoller implements SmartLifecycle {
 
     private void poll(String queueUrl) {
         ReceiveMessageRequest request = ReceiveMessageRequest.builder()
-                .queueUrl(queueUrl).waitTimeSeconds(waitSeconds).maxNumberOfMessages(maxMessages).build();
+                .queueUrl(queueUrl).waitTimeSeconds(waitSeconds).maxNumberOfMessages(maxMessages)
+                .messageSystemAttributeNames(MessageSystemAttributeName.APPROXIMATE_RECEIVE_COUNT)   // 일시 장애 재시도 간격 계산용
+                .build();
         while (running) {
             try {
                 sqsClient.receiveMessage(request).messages().forEach(m -> dispatch(queueUrl, m));
@@ -92,8 +101,58 @@ public class SqsEventPoller implements SmartLifecycle {
             }
             sqsClient.deleteMessage(b -> b.queueUrl(queueUrl).receiptHandle(message.receiptHandle()));
         } catch (RuntimeException e) {
+            if (isTransient(e)) {
+                delayRetry(queueUrl, message, eventType, e);
+                return;
+            }
             log.warn("이벤트 처리 실패 — 재전달 대기 - eventType={}, messageId={}, cause={}", eventType, message.messageId(), e.toString());
         }
+    }
+
+    /**
+     * DB 연결 끊김 같은 일시 장애 — 큐 기본 가시성(60초)대로 바로 다시 받으면 3회(maxReceiveCount)를 몇 분 만에 다 써서
+     * 정상 메시지가 DLQ 로 몰린다. 받은 횟수에 따라 1분 → 5분 → 15분 뒤에 다시 보이게 해 짧은 장애는 저절로 넘긴다.
+     * 업무 오류(수수료율 없음 등)는 그대로 — 원인을 고치고 DLQ 재처리하는 절차(settlement.md 6절)를 따른다.
+     */
+    private void delayRetry(String queueUrl, Message message, String eventType, RuntimeException cause) {
+        int delay = retryDelaySeconds(receiveCount(message));
+        log.warn("이벤트 처리 일시 실패 — {}초 뒤 재시도 eventType={}, messageId={}, receiveCount={}, cause={}",
+                delay, eventType, message.messageId(), receiveCount(message), cause.toString());
+        try {
+            sqsClient.changeMessageVisibility(b -> b.queueUrl(queueUrl).receiptHandle(message.receiptHandle())
+                    .visibilityTimeout(delay));
+        } catch (RuntimeException e) {
+            log.warn("재시도 간격 설정 실패 — 기본 가시성 타임아웃으로 재전달 messageId={}, cause={}", message.messageId(), e.toString());
+        }
+    }
+
+    static int retryDelaySeconds(int receiveCount) {
+        return switch (receiveCount) {
+            case 0, 1 -> 60;
+            case 2 -> 300;
+            default -> 900;
+        };
+    }
+
+    private static int receiveCount(Message message) {
+        String count = message.attributes().get(MessageSystemAttributeName.APPROXIMATE_RECEIVE_COUNT);
+        try {
+            return count == null ? 1 : Integer.parseInt(count);
+        } catch (NumberFormatException e) {
+            return 1;
+        }
+    }
+
+    /** 원인 사슬에 DB · 네트워크 일시 장애가 있는가 */
+    static boolean isTransient(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof TransientDataAccessException || t instanceof DataAccessResourceFailureException
+                    || t instanceof CannotCreateTransactionException || t instanceof SQLTransientException
+                    || t instanceof SQLRecoverableException || t instanceof ConnectException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void sleepQuietly() {
