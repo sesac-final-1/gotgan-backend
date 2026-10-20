@@ -110,7 +110,7 @@
     "unitPrice": 75650,
     "stock": 142,
     "purchasable": true,
-    "imageUrl": "https://.../products/3/a1b2.jpg"
+    "imageUrl": "https://.../products/1/a1b2.jpg"
   }
 ]
 ```
@@ -149,9 +149,9 @@
 
 admin 이 스토어 상세 화면에서 상품을 찾아 차단합니다. 차단 · 해제 알림은 없고, 판매자는 판매자 상품 목록에서 상태와 사유를 봅니다.
 
-### 6-1. 스토어 상품 목록 — `GET /internal/products?storeId=&status=&q=&page=&size=`
+### 6-1. 스토어 상품 목록 — `GET /internal/products?storeId=`
 
-판매자 상품 목록(11절)과 같은 응답 · 같은 필터를 스토어를 지정해서 씁니다. 삭제된 상품은 빠지고, 상태와 상관없이 모두 보입니다. `storeId` 없으면 **400** `INVALID_INPUT`.
+판매자 상품 목록(11절)과 같은 응답을 스토어를 지정해서 씁니다. **전체 조회**(페이징 없음 — 화면이 검색 · 정렬 · 페이징, 프론트 컨벤션 4-7). 삭제된 상품은 빠지고, 상태와 상관없이 모두 보입니다. `storeId` 없으면 **400** `INVALID_INPUT`.
 
 ### 6-2. 강제 판매중지 · 해제 — `PATCH /internal/products/{productId}/block`
 
@@ -167,7 +167,7 @@ admin 이 스토어 상세 화면에서 상품을 찾아 차단합니다. 차단
 | `blocked: true` 인데 `reason` 비었음 | 없음 | **400** `PRODUCT_BLOCK_REASON_REQUIRED` |
 | 없거나 삭제된 상품 | 없음 | **404** `PRODUCT_NOT_FOUND` |
 
-- BLOCKED 상품은 판매자가 재개 · 수정해도 **409** `PRODUCT_BLOCKED`(14절). 삭제는 가능합니다.
+- BLOCKED 상품은 판매자가 **재개할 수 없습니다**(15절, `PRODUCT_BLOCKED`). 사유를 고치도록 **수정 · 삭제는 가능**하고, 고친 뒤 관리자가 해제합니다.
 - settlement `PATCH /internal/settlements/{id}/hold {hold, reason}` 와 같은 모양입니다.
 
 ## 7. 카테고리 관리 — `/internal/categories` (CAT-02 · 10/20 결정)
@@ -238,7 +238,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 ```json
 { "productId": 3, "name": "프렌치 리넨 오버핏 셔츠", "storeId": 1, "categoryId": 301, "topCategoryId": 3,
   "price": 89000, "discountRate": 15.00, "salePrice": 75650,
-  "imageUrl": "https://.../products/3/a1b2.jpg", "soldOut": false, "createdAt": "2026-10-20T10:00:00+09:00" }
+  "imageUrl": "https://.../products/1/a1b2.jpg", "soldOut": false, "createdAt": "2026-10-20T10:00:00+09:00" }
 ```
 
 | 경우 | 응답 |
@@ -261,7 +261,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
   "name": "프렌치 리넨 오버핏 셔츠",
   "price": 89000, "discountRate": 15.00, "salePrice": 75650,
   "description": "<p>…</p>", "material": "리넨 100%", "origin": "대한민국",
-  "images": [ "https://.../products/3/a1b2.jpg", "https://.../products/3/c3d4.jpg" ],
+  "images": [ "https://.../products/1/a1b2.jpg", "https://.../products/1/c3d4.jpg" ],
   "option1Name": "컬러", "option2Name": "사이즈",
   "options": [
     { "productOptionId": 11, "option1Value": "오트밀", "option2Value": "M", "extraPrice": 0, "soldOut": false },
@@ -282,3 +282,4 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 - `options`: 삭제된 조합은 빠집니다. **옵션 없는 상품도 옵션 1개**(`option1Value · option2Value = null`)가 있어서, 장바구니는 언제나 `productOptionId` 로 담습니다.
 - 재고 수는 공개하지 않고 `soldOut` 만 줍니다. 담을 때 재고를 넘으면 주문 단계(1절)에서 `STOCK_INSUFFICIENT`.
 - 스토어 정보(이름 · 배송비)는 화면이 `GET /api/stores/{storeId}` 를, 별점 · 리뷰는 review API 를 따로 부릅니다.
+
