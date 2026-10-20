@@ -19,6 +19,7 @@ import com.sesac.gojigi.user.user.client.StoreStatus;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
+import com.sesac.gojigi.user.user.repository.BlockedUserRedisRepository;
 import com.sesac.gojigi.user.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -51,13 +52,16 @@ class UserServiceTest {
     private StoreClient storeClient;
 
     @Mock
+    private BlockedUserRedisRepository blockedUserRedisRepository;
+
+    @Mock
     private TransactionTemplate transactionTemplate;
 
     private UserService userService;
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, authService, storeClient, transactionTemplate, CLOCK);
+        userService = new UserService(userRepository, authService, storeClient, blockedUserRedisRepository, transactionTemplate, CLOCK);
         // 트랜잭션 템플릿은 콜백을 그대로 실행
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(new SimpleTransactionStatus()));
@@ -84,6 +88,7 @@ class UserServiceTest {
         assertThat(user.getDeletedAt()).isEqualTo(LocalDateTime.now(CLOCK));
         assertThat(user.getEmail()).isEqualTo("new1@gotgan.com");
         verify(authService).deleteAccount("kc-7", "new1@gotgan.com");
+        verify(blockedUserRedisRepository).block(7L, BlockedUserRedisRepository.WITHDRAWN);   // 남은 Access Token 차단
     }
 
     @Test
@@ -168,5 +173,38 @@ class UserServiceTest {
         // then
         assertThat(seller.isDeleted()).isTrue();
         verify(authService).deleteAccount("kc-2", "new1@gotgan.com");
+    }
+
+    @Test
+    @DisplayName("차단 목록 저장(Redis)이 실패해도 탈퇴는 유지 — gateway 차단만 빠지고 user-service 는 deleted_at 으로 막는다")
+    void withdraw_blocklistFails_keepsWithdrawal() {
+        // given
+        User user = member(7L, "kc-7");
+        given(userRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(user));
+        willThrow(new IllegalStateException("redis down")).given(blockedUserRedisRepository)
+                .block(7L, BlockedUserRedisRepository.WITHDRAWN);
+
+        // when
+        userService.withdraw(7L, null);
+
+        // then
+        assertThat(user.isDeleted()).isTrue();
+        verify(authService).deleteAccount("kc-7", "new1@gotgan.com");
+    }
+
+    @Test
+    @DisplayName("Keycloak 삭제가 실패해도 차단 목록은 저장한다 — 남은 토큰은 여전히 막아야 한다")
+    void withdraw_keycloakFails_stillBlocksTokens() {
+        // given
+        User user = member(7L, "kc-7");
+        given(userRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.of(user));
+        willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR))
+                .given(authService).deleteAccount("kc-7", "new1@gotgan.com");
+
+        // when
+        userService.withdraw(7L, null);
+
+        // then
+        verify(blockedUserRedisRepository).block(7L, BlockedUserRedisRepository.WITHDRAWN);
     }
 }

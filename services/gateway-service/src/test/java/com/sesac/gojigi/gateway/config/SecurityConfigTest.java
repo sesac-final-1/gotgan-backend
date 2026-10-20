@@ -1,0 +1,58 @@
+package com.sesac.gojigi.gateway.config;
+
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockJwt;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.springSecurity;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.web.reactive.server.WebTestClient;
+
+/** 경로별 인가 — 401 · 403 은 업무 서비스와 같은 봉투. (라우팅 대상 서비스는 띄우지 않는다) */
+@SpringBootTest(properties = "spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:1/realms/gotgan")
+class SecurityConfigTest {
+
+    @Autowired
+    private ApplicationContext context;
+
+    private WebTestClient client;
+
+    @BeforeEach
+    void setUp() {
+        client = WebTestClient.bindToApplicationContext(context).apply(springSecurity()).configureClient().build();
+    }
+
+    @Test
+    @DisplayName("토큰 없이 인증 필요 경로 → 401 { code: UNAUTHORIZED }")
+    void protectedPath_withoutToken_returns401Envelope() {
+        client.delete().uri("/api/users/me").exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("UNAUTHORIZED")
+                .jsonPath("$.message").isEqualTo("인증이 필요합니다.")
+                .jsonPath("$.data").doesNotExist();
+    }
+
+    @Test
+    @DisplayName("구매자가 판매자 경로 → 403 { code: FORBIDDEN }")
+    void sellerPath_withBuyerRole_returns403Envelope() {
+        client.mutateWith(mockJwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER")))
+                .get().uri("/api/seller/settlements").exchange()
+                .expectStatus().isForbidden()
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("FORBIDDEN")
+                .jsonPath("$.message").isEqualTo("권한이 없습니다.");
+    }
+
+    @Test
+    @DisplayName("판매자가 관리자 경로 → 403")
+    void adminPath_withSellerRole_returns403() {
+        client.mutateWith(mockJwt().authorities(new SimpleGrantedAuthority("ROLE_BUYER"), new SimpleGrantedAuthority("ROLE_SELLER")))
+                .get().uri("/api/admin/users").exchange()
+                .expectStatus().isForbidden();
+    }
+}
