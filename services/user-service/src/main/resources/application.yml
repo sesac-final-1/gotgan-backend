@@ -36,6 +36,8 @@ app:
     refresh-cookie-name: refresh_token
     refresh-cookie-path: /api/auth                            # /api/auth/** 요청에만 실림 (refresh · logout)
     refresh-cookie-secure: true                               # HTTPS 만 — 브라우저는 localhost 는 예외로 허용
+  store:
+    mock-closed-store-ids:                                    # TODO(store 개발 완료 시 삭제) MockStoreClient — 폐점으로 볼 store_id (기본: 없음 = 전부 ACTIVE)
   point:
     earn-rate: 0.05                                           # 실결제금액의 5% 적립 (정리 문서 8-5)
   sqs:

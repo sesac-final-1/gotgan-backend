@@ -2,6 +2,7 @@ package com.sesac.gojigi.user.user.service;
 
 import com.sesac.gojigi.user.auth.service.AuthService;
 import com.sesac.gojigi.user.common.exception.BusinessException;
+import com.sesac.gojigi.user.user.client.StoreClient;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
@@ -15,10 +16,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 회원 — 탈퇴.
- * 탈퇴 = users 소프트 삭제(deleted_at, 이메일은 그대로 → 같은 이메일 재가입 불가) + Keycloak 계정 삭제.
+ * 탈퇴 = (판매자면 스토어 폐점 확인) → users 소프트 삭제(deleted_at, 이메일은 그대로 → 같은 이메일 재가입 불가) + Keycloak 계정 삭제.
  * 순서는 DB 먼저: Keycloak 삭제가 실패해도 탈퇴는 유지 — 남은 Keycloak 계정으로 로그인하면
  * 토큰의 user_id 가 탈퇴 회원이라 AUTH_ACCOUNT_NOT_LINKED 로 막힌다.
- * Keycloak 호출 동안 DB 커넥션을 잡지 않도록 트랜잭션은 짧게 (TransactionTemplate).
+ * 외부 호출(store · Keycloak) 동안 DB 커넥션을 잡지 않도록 트랜잭션은 짧게 (TransactionTemplate).
  */
 @Slf4j
 @Service
@@ -26,10 +27,17 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class UserService {
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final StoreClient storeClient;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
 
-    public void withdraw(Long userId) {
+    /**
+     * @param storeId 게이트웨이가 넣어 준 X-Store-Id — 판매자만 있다 (토큰 store_id 클레임)
+     */
+    public void withdraw(Long userId, Long storeId) {
+        if (storeId != null && !storeClient.getStoreStatus(storeId).isClosed()) {
+            throw new UserException(UserErrorCode.USER_SELLER_STORE_NOT_CLOSED);   // 판매자는 폐점 후 탈퇴
+        }
         User user = transactionTemplate.execute(status -> softDelete(userId));
         try {
             authService.deleteAccount(user.getKeycloakId(), user.getEmail());
