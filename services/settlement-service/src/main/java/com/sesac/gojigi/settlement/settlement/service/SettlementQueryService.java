@@ -5,6 +5,7 @@ import com.sesac.gojigi.settlement.common.exception.CommonErrorCode;
 import com.sesac.gojigi.settlement.settlement.dto.response.SellerSettlementsResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementDetailResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementListResponse;
+import com.sesac.gojigi.settlement.settlement.dto.response.SettlementOutstandingResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementStatsResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementSummaryResponse;
 import com.sesac.gojigi.settlement.settlement.entity.Settlement;
@@ -104,6 +105,17 @@ public class SettlementQueryService {
                 paidThisMonth, commissionThisMonth));
     }
 
+    /** 스토어 미정산 현황 — 폐점 · 판매자 탈퇴 전 확인 (집계 전 구매확정 · 지급예정 · 보류가 모두 0 이어야 clear) */
+    public SettlementOutstandingResponse outstanding(Long storeId) {
+        List<SettlementItem> unsettled = settlementItemRepository.findByStoreIdAndSettlementIdIsNull(storeId);
+        List<Settlement> scheduled = settlementRepository.findByStoreIdAndStatus(storeId, SettlementStatus.SCHEDULED);
+        List<Settlement> held = settlementRepository.findByStoreIdAndStatus(storeId, SettlementStatus.HELD);
+        return SettlementOutstandingResponse.of(storeId,
+                unsettled.size(), unsettled.stream().mapToLong(SettlementItem::payoutAmt).sum(),
+                scheduled.size(), scheduled.stream().mapToLong(Settlement::getPayoutAmt).sum(),
+                held.size(), held.stream().mapToLong(Settlement::getPayoutAmt).sum());
+    }
+
     /** 판매자 명세서 — 내 스토어 · 지급 완료 정산서만 */
     public Settlement paidSettlementForStore(Long settlementId, Long storeId) {
         Settlement settlement = load(settlementId);
@@ -136,7 +148,7 @@ public class SettlementQueryService {
         SettlementStore store = settlementStoreRepository.findByStoreId(settlement.getStoreId()).orElse(null);
         return new SettlementDetailResponse(SettlementSummaryResponse.of(settlement, store),
                 settlementItemRepository.findBySettlementIdOrderByConfirmedAtAsc(settlement.getId()).stream()
-                        .map(SettlementDetailResponse.Item::of).toList(),
+                        .map(i -> SettlementDetailResponse.Item.of(i, new SettlementWeek(settlement.getWeekStart()))).toList(),
                 settlementHistoryRepository.findBySettlementIdOrderByIdAsc(settlement.getId()).stream()
                         .map(SettlementDetailResponse.History::of).toList());
     }

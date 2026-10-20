@@ -17,7 +17,9 @@ import com.sesac.gojigi.settlement.settlement.repository.SettlementRepository;
 import com.sesac.gojigi.settlement.settlement.repository.SettlementStoreRepository;
 import com.sesac.gojigi.settlement.settlement.util.SettlementWeek;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,33 +51,51 @@ public class SettlementCommandService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    public record AggregateResult(String week, int created, int updated, int autoHeld) {
+    /** carriedOver = 지난 주차(지급 완료 · 정산서 없음)에서 이번 주차 정산서로 이월한 상품주문 수 */
+    public record AggregateResult(String week, int created, int updated, int autoHeld, int carriedOver) {
     }
 
     /**
      * 그 주 구매확정분 중 정산서에 아직 연결되지 않은 상품주문을 스토어별로 묶는다. 멱등 — 스토어 × 주차 1건(UK), 두 번 돌려도 같은 결과.
-     * 이미 집계된 주에 늦게 들어온 구매확정은 기존 정산서(지급 전)에 더해 금액을 다시 계산. 지급 완료된 주라면 연결하지 않고 경고만.
+     * 지난 주차에 늦게 들어온 구매확정(결정 2번 A안): 원래 주 정산서가 지급 전이면 거기에 더해 다시 계산,
+     * 지급 완료이거나 정산서가 없으면 이번 주 정산서로 이월(원래 구매확정일은 그대로 — 화면에 "이월 n건").
+     * 이번 주 정산서까지 이미 지급됐다면 연결하지 않고 다음 집계에서 이월.
      */
     @Transactional
     public AggregateResult aggregate(SettlementWeek week, Actor actor) {
-        Map<Long, List<SettlementItem>> byStore = settlementItemRepository.findUnassigned(week.from(), week.until()).stream()
-                .collect(Collectors.groupingBy(SettlementItem::getStoreId, LinkedHashMap::new, Collectors.toList()));
-        int created = 0;
+        Map<Long, List<SettlementItem>> byStore = new LinkedHashMap<>();
         int updated = 0;
+        int carriedOver = 0;
+        Map<Long, Map<LocalDate, List<SettlementItem>>> late = settlementItemRepository.findUnassignedBefore(week.from()).stream()
+                .collect(Collectors.groupingBy(SettlementItem::getStoreId, LinkedHashMap::new, Collectors.groupingBy(
+                        i -> SettlementWeek.of(i.getConfirmedAt().toLocalDate()).start(), LinkedHashMap::new, Collectors.toList())));
+        for (Map.Entry<Long, Map<LocalDate, List<SettlementItem>>> store : late.entrySet()) {
+            for (Map.Entry<LocalDate, List<SettlementItem>> ownWeek : store.getValue().entrySet()) {
+                Optional<Settlement> own = settlementRepository.findByStoreIdAndWeekStart(store.getKey(), ownWeek.getKey());
+                if (own.isPresent() && own.get().getStatus() != SettlementStatus.PAID) {
+                    assignAndRecalculate(own.get(), ownWeek.getValue());
+                    updated++;
+                    continue;
+                }
+                byStore.computeIfAbsent(store.getKey(), k -> new ArrayList<>()).addAll(ownWeek.getValue());
+                carriedOver += ownWeek.getValue().size();
+            }
+        }
+        settlementItemRepository.findUnassigned(week.from(), week.until())
+                .forEach(i -> byStore.computeIfAbsent(i.getStoreId(), k -> new ArrayList<>()).add(i));
+        int created = 0;
         int autoHeld = 0;
         for (Map.Entry<Long, List<SettlementItem>> entry : byStore.entrySet()) {
             Long storeId = entry.getKey();
             Optional<Settlement> existing = settlementRepository.findByStoreIdAndWeekStart(storeId, week.start());
             if (existing.isPresent() && existing.get().getStatus() == SettlementStatus.PAID) {
-                log.warn("지급 완료된 주차에 늦게 들어온 구매확정 — 연결하지 않음 storeId={} week={} items={}",
+                log.warn("이번 주차 정산서가 이미 지급됨 — 다음 집계에서 이월 storeId={} week={} items={}",
                         storeId, week.isoWeek(), entry.getValue().size());
                 continue;
             }
             Settlement settlement = existing.orElseGet(() -> settlementRepository.save(
                     Settlement.create(storeId, week.start(), week.end(), week.scheduledPayDate())));
-            entry.getValue().forEach(item -> item.assignTo(settlement.getId()));
-            settlementItemRepository.flush();
-            settlement.recalculate(settlementItemRepository.findBySettlementIdOrderByConfirmedAtAsc(settlement.getId()));
+            assignAndRecalculate(settlement, entry.getValue());
             if (existing.isPresent()) {
                 updated++;
                 continue;
@@ -87,8 +107,15 @@ public class SettlementCommandService {
                 autoHeld++;
             }
         }
-        log.info("주간 집계 week={} actor={} created={} updated={} autoHeld={}", week.isoWeek(), actor, created, updated, autoHeld);
-        return new AggregateResult(week.isoWeek(), created, updated, autoHeld);
+        log.info("주간 집계 week={} actor={} created={} updated={} autoHeld={} carriedOver={}",
+                week.isoWeek(), actor, created, updated, autoHeld, carriedOver);
+        return new AggregateResult(week.isoWeek(), created, updated, autoHeld, carriedOver);
+    }
+
+    private void assignAndRecalculate(Settlement settlement, List<SettlementItem> items) {
+        items.forEach(item -> item.assignTo(settlement.getId()));
+        settlementItemRepository.flush();
+        settlement.recalculate(settlementItemRepository.findBySettlementIdOrderByConfirmedAtAsc(settlement.getId()));
     }
 
     /** 관리자 보류 · 해제 (STL-09) */
