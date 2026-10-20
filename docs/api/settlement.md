@@ -13,7 +13,7 @@
 | 금액 | `long` 원. 지급액 = 매출 − 판매수수료 − 결제수수료(2.2%), 상품주문마다 원 단위 내림 후 합계 |
 | 율 | % 값 (`11.50` = 11.5%) |
 | 상태 | `SCHEDULED`(지급예정) · `HELD`(지급보류) · `PAID`(지급완료) |
-| 지급 예정일 | 주차 종료(일) + 4일 = 다음 주 목요일 |
+| 지급 예정일 | 주차 종료(일) + 4일 = 다음 주 목요일 — **확정**(10/20 결정 1번) |
 
 ## 1. 이벤트 수신 (SQS)
 
@@ -51,18 +51,28 @@
 | API | 요청 | 응답 |
 |---|---|---|
 | `GET /internal/settlements?week=&storeId=&status=` | | `{week, totals{count, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt}, settlements[Summary]}` |
-| `GET /internal/settlements/{id}` | | `{settlement: Summary, items[{orderItemId, orderNo, productName, confirmedAt, itemAmt, categoryId, rate, commission, paymentFee, payout}], history[{at, actor(SYSTEM/ADMIN), from, to, reason}]}` |
-| `POST /internal/settlements/aggregate` | `{week?}` | `{week, created, updated, autoHeld}` — 멱등(스토어 × 주차 1건) |
+| `GET /internal/settlements/{id}` | | `{settlement: Summary, items[{orderItemId, orderNo, productName, confirmedAt, itemAmt, categoryId, rate, commission, paymentFee, payout, carriedOver}], history[{at, actor(SYSTEM/ADMIN), from, to, reason}]}` |
+| `POST /internal/settlements/aggregate` | `{week?}` | `{week, created, updated, autoHeld, carriedOver}` — 멱등(스토어 × 주차 1건) |
 | `POST /internal/settlements/pay` | `{ids[]}` | `{success[ids], failed[{id, code, message}]}` — 건마다 따로 커밋 |
 | `PATCH /internal/settlements/{id}/hold` | `{hold, reason}` | 상세 — `hold=true` 면 reason 필수 |
+| `GET /internal/settlements/outstanding?storeId=` | | `{storeId, unsettledItemCount, unsettledPayoutAmt, scheduledCount, scheduledPayoutAmt, heldCount, heldPayoutAmt, clear}` — 스토어 폐점 · 판매자 탈퇴 전 확인, 셋 다 0 이면 `clear=true` |
 | `GET /internal/stats/settlements?storeId=` | | storeId 있으면 `store{pendingItemCount, pendingPayoutAmt, nextPayout, recentPaid[8주]}`, 없으면 `platform{scheduledCount, scheduledAmt, heldCount, heldAmt, paidThisMonthAmt, commissionRevenueThisMonth}` |
 
-`Summary` = `{id, storeId, storeName, week, weekStart, weekEnd, itemCount, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt, status, holdReason, scheduledPayDate, paidAt, bank{bankName, accountNumber, accountHolder}}`
+`Summary` = `{id, storeId, storeName, week, weekStart, weekEnd, itemCount, carriedOverCount, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt, status, holdReason, scheduledPayDate, paidAt, bank{bankName, accountNumber, accountHolder}}`
 
 **집계 규칙**
 - 매주 월 03:00(KST) 자동 — 클러스터가 07~21시에만 떠 있어 **시연은 "지금 집계"(`aggregate`)로**
-- 집계 뒤 늦게 들어온 구매확정은 지급 전 정산서에 더해 다시 계산, 지급 완료된 주는 연결하지 않음(경고 로그)
+- **늦게 들어온 구매확정**(10/20 결정 2번 A안) — 집계 때 지난 주차의 안 묶인 구매확정을 함께 처리
+  - 원래 주 정산서가 지급 전 → 거기에 더해 다시 계산
+  - 지급 완료 · 정산서 없음 → **이번 주 정산서로 이월** (항목의 구매확정일은 그대로). 정산서 `carriedOverCount` · 항목 `carriedOver` 로 "이월 n건" 표시
+  - 이번 주 정산서까지 지급됐다면 다음 집계에서 이월
 - 휴면 · 정지 스토어는 집계 때 바로 `HELD`
+
+**대시보드 기준** (결정 2번 의견) — 같은 숫자처럼 보여도 기준이 다르다
+- "얼마 팔렸나"(매출 · 판매 추이) = **구매확정일** 기준 — 항목 `confirmedAt` (또는 order 의 구매확정 집계)
+- "얼마 받나 · 줬나"(지급 예정 · 지급액 · 수수료 수익) = **정산서** 기준 — 이월분이 다음 주 정산서에 포함되므로 주차별 매출 합과 정산서 합이 다를 수 있음
+
+**폐점 · 탈퇴 조건** (결정 3번 A안) — 판매자 탈퇴는 스토어 폐점 후. 폐점 조건 중 정산 쪽은 `/internal/settlements/outstanding` 의 `clear=true` (진행 중 주문 0건은 order, 폐점 · 탈퇴 판단은 store · user)
 
 **지급 규칙** — `SCHEDULED` · 스토어 운영중 · 계좌 있음일 때만. 지급 시 `payout`(계좌 스냅샷) 기록 → 커밋 후 `SettlementPaid` 발행
 - 실패 코드: `SETTLE_INVALID_STATUS`(보류 · 이미 지급) · `SETTLE_STORE_PAYOUT_HELD` · `SETTLE_PAYOUT_ACCOUNT_MISSING` · `SETTLE_NOT_FOUND`
