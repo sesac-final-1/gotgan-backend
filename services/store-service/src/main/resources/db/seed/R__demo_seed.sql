@@ -2,8 +2,8 @@
 -- 목업(gotgan_expage/src/data/*.js) 데이터를 INSERT 로 옮긴다. 담당 VoC-100
 --
 -- 시연 판매자 스토어 2개 — Keycloak 시드(gotgan-config scripts/keycloak-seed.sh) · userdb 시드와 **user_id · store_id 가 같아야 한다**
---   seller1@gotgan.com  user_id 2 → store_id 1 (Keycloak 속성 store_id=1 → 게이트웨이 X-Store-Id)
---   seller2@gotgan.com  user_id 3 → store_id 2
+--   wlsgksvheh+seller1@gmail.com  user_id 2 → store_id 1 (Keycloak 속성 store_id=1 → 게이트웨이 X-Store-Id)
+--   wlsgksvheh+seller2@gmail.com  user_id 3 → store_id 2
 -- store 는 승인된 입점 신청서(store_application, FK)에서 생기므로 신청서 · 이력도 함께 넣는다 (승인 흐름을 거친 것과 같은 상태)
 -- category_id 1 · 2 는 productdb category 논리 참조 — product 시드에서 같은 번호의 카테고리를 만들어야 한다
 -- 사업자 · 계좌 정보는 시연용 가짜 값. 서류(application_document)는 S3 객체가 없어 넣지 않는다
@@ -16,13 +16,13 @@ INSERT IGNORE INTO store_application
    bank_name, account_no, account_holder, status, marketing_agreed, terms_agreed_at, status_changed_at)
 VALUES
   (1, 2, 1, 'INDIVIDUAL', '곳간상회', '판매자1', '123-45-67890', '2026-서울강남-0001',
-   '010-0000-0002', 'seller1@gotgan.com', '서울 강남구 테헤란로 1', '곳간상회', 'gotgan-sanghoe', '<p>매일 고르는 제철 먹거리</p>',
+   '010-0000-0002', 'wlsgksvheh+seller1@gmail.com', '서울 강남구 테헤란로 1', '곳간상회', 'gotgan-sanghoe', '<p>매일 고르는 제철 먹거리</p>',
    JSON_ARRAY(JSON_OBJECT('name', '제철 사과 3kg', 'subCategory', '과일', 'price', 25000),
               JSON_OBJECT('name', '햇배 5kg', 'subCategory', '과일', 'price', 32000),
               JSON_OBJECT('name', '감귤 5kg', 'subCategory', '과일', 'price', 18000)),
    '곳간은행', '100-0000-000001', '판매자1', 'APPROVED', FALSE, NOW(6), NOW(6)),
   (2, 3, 2, 'CORPORATE', '(주)곳간리빙', '판매자2', '234-56-78901', '2026-서울마포-0002',
-   '010-0000-0003', 'seller2@gotgan.com', '서울 마포구 월드컵북로 1', '곳간리빙', 'gotgan-living', '<p>집을 채우는 생활용품</p>',
+   '010-0000-0003', 'wlsgksvheh+seller2@gmail.com', '서울 마포구 월드컵북로 1', '곳간리빙', 'gotgan-living', '<p>집을 채우는 생활용품</p>',
    JSON_ARRAY(JSON_OBJECT('name', '세라믹 머그컵', 'subCategory', '주방', 'price', 12000),
               JSON_OBJECT('name', '린넨 앞치마', 'subCategory', '주방', 'price', 19000),
               JSON_OBJECT('name', '원목 도마', 'subCategory', '주방', 'price', 27000)),

@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 
 /** 로그인 요청 — 이메일 = Keycloak username */
 public record LoginRequest(
-        @Schema(description = "이메일 (= Keycloak username)", example = "seller1@gotgan.com")
+        @Schema(description = "이메일 (= Keycloak username)", example = "wlsgksvheh+seller1@gmail.com")
         @NotBlank(message = "이메일을 입력해 주세요.")
         @Email(message = "이메일 형식이 올바르지 않습니다.")
         String email,
