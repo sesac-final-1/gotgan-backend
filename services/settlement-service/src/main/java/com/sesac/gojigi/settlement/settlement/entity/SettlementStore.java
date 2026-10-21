@@ -24,6 +24,8 @@ import lombok.NoArgsConstructor;
 public class SettlementStore extends BaseTimeEntity {
 
     public static final String ACTIVE = "ACTIVE";
+    /** 폐점 — 되돌릴 수 없음 (store 10/21 결정: status = CLOSED). 지급 보류는 ACTIVE 가 아닌 다른 상태와 같게 처리 */
+    public static final String CLOSED = "CLOSED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

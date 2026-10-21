@@ -30,6 +30,7 @@ import com.sesac.gojigi.settlement.settlement.entity.SettlementStatus;
 import com.sesac.gojigi.settlement.settlement.entity.SettlementStore;
 import com.sesac.gojigi.settlement.settlement.repository.PayoutRepository;
 import com.sesac.gojigi.settlement.settlement.repository.SettlementItemRepository;
+import com.sesac.gojigi.settlement.settlement.repository.SettlementHistoryRepository;
 import com.sesac.gojigi.settlement.settlement.repository.SettlementRepository;
 import com.sesac.gojigi.settlement.settlement.repository.SettlementStoreRepository;
 import com.sesac.gojigi.settlement.settlement.service.StoreStatusChangedListener;
@@ -99,6 +100,7 @@ class SettlementApiIntegrationTest {
     @Autowired SettlementStoreRepository settlementStoreRepository;
     @Autowired SettlementItemRepository settlementItemRepository;
     @Autowired SettlementRepository settlementRepository;
+    @Autowired SettlementHistoryRepository settlementHistoryRepository;
     @Autowired PayoutRepository payoutRepository;
     @Autowired StoreStatusChangedListener storeStatusChangedListener;
     @Autowired EventOutboxRepository eventOutboxRepository;
@@ -370,6 +372,17 @@ class SettlementApiIntegrationTest {
             storeStatus(other, "ACTIVE", "2026-10-26T09:30:00+09:00");
             assertThat(settlementRepository.findById(settlementId).orElseThrow().getStatus()).isEqualTo(SettlementStatus.SCHEDULED);
             assertThat(settlementRepository.findById(adminHeld).orElseThrow().getStatus()).isEqualTo(SettlementStatus.HELD);
+        }
+
+        @Test
+        @DisplayName("스토어 폐점(CLOSED) → 지급예정 자동 보류, 사유는 '스토어 폐점 — 자동 보류' · 지급 거절 (폐점 요청 10/21 답변 6번)")
+        void storeClosed_autoHoldWithClosedReason() throws Exception {
+            storeStatus(storeId, "CLOSED", "2026-10-26T09:00:00+09:00");
+
+            assertThat(settlementRepository.findById(settlementId).orElseThrow().getStatus()).isEqualTo(SettlementStatus.HELD);
+            assertThat(settlementHistoryRepository.findFirstBySettlementIdOrderByIdDesc(settlementId).orElseThrow().getReason())
+                    .isEqualTo("스토어 폐점 — 자동 보류");
+            pay(settlementId).andExpect(jsonPath("$.data.failed[0].code").value("SETTLE_INVALID_STATUS"));
         }
     }
 
