@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.common.web.logging.UserIdMdcFilter;
+import com.sesac.gojigi.common.web.observation.ActuatorObservationPredicate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -24,7 +25,16 @@ class CommonWebAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(GlobalExceptionHandler.class);
                     assertThat(context).hasSingleBean(UserIdMdcFilter.class);
+                    assertThat(context).hasSingleBean(ActuatorObservationPredicate.class);
                 });
+    }
+
+    @Test
+    @DisplayName("app.tracing.exclude-actuator=false 면 /actuator 관측 제외를 끈다")
+    void actuatorExclusion_disabledByProperty() {
+        new WebApplicationContextRunner().withConfiguration(config)
+                .withPropertyValues("app.tracing.exclude-actuator=false")
+                .run(context -> assertThat(context).doesNotHaveBean(ActuatorObservationPredicate.class));
     }
 
     @Test
