@@ -1,4 +1,4 @@
-package com.sesac.gojigi.user.auth.service;
+package com.sesac.gojigi.user.auth.component;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;

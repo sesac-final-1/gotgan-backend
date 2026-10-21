@@ -2,9 +2,17 @@ package com.sesac.gojigi.user.auth.service;
 
 import com.sesac.gojigi.user.auth.client.KeycloakClientAdapter;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
+import com.sesac.gojigi.user.auth.component.AccessTokenClaims;
+import com.sesac.gojigi.user.auth.component.SocialLoginState;
+import com.sesac.gojigi.user.auth.component.SocialLoginUrls;
+import com.sesac.gojigi.user.auth.component.SocialProvider;
 import com.sesac.gojigi.user.auth.dto.request.LoginRequest;
 import com.sesac.gojigi.user.auth.dto.request.SignupRequest;
 import com.sesac.gojigi.user.auth.dto.response.LoginResponse;
+import com.sesac.gojigi.user.auth.dto.result.LoginResult;
+import com.sesac.gojigi.user.auth.dto.result.SignupResult;
+import com.sesac.gojigi.user.auth.dto.result.SocialLoginResult;
+import com.sesac.gojigi.user.auth.dto.result.SocialLoginStart;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.common.exception.BusinessException;

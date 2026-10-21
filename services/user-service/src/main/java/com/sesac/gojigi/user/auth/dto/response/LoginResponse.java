@@ -1,6 +1,6 @@
 package com.sesac.gojigi.user.auth.dto.response;
 
-import com.sesac.gojigi.user.auth.service.AccessTokenClaims;
+import com.sesac.gojigi.user.auth.component.AccessTokenClaims;
 import com.sesac.gojigi.user.user.entity.User;
 import java.util.List;
 

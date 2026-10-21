@@ -1,4 +1,4 @@
-package com.sesac.gojigi.user.auth.service;
+package com.sesac.gojigi.user.auth.component;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

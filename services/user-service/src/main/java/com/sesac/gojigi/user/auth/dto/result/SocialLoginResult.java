@@ -1,4 +1,4 @@
-package com.sesac.gojigi.user.auth.service;
+package com.sesac.gojigi.user.auth.dto.result;
 
 /**
  * 소셜 로그인 콜백 결과 — 브라우저 리다이렉트로 끝나서 예외 대신 결과로 돌려준다.

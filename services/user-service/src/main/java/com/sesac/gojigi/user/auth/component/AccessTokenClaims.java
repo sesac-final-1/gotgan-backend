@@ -1,4 +1,4 @@
-package com.sesac.gojigi.user.auth.service;
+package com.sesac.gojigi.user.auth.component;
 
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
