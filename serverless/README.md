@@ -2,7 +2,7 @@
 
 | 함수 | 트리거 | 쓰는 자원 | 담당 | 우선순위 |
 |---|---|---|---|---|
-| `order-notification` | SQS notification-order/store-events | SES 메일(주문 확인 · 배송 시작 · 취소/반품 · 입점 승인) + DynamoDB 멱등 · 이력 | jihoon-devstu | Should |
+| `order-notification` | SQS notification-order/store-events (**10/21 구현 · 연결은 꺼 둠** — order · store 발행 시작 때 켬) | SES 메일 — 주문 확인 · 배송 시작 · 취소/반품 완료 · 입점 승인 · 반려 · 보완요청(NTF-01~04) + DynamoDB 발송 이력 · 멱등(NTF-05) | jihoon-devstu | Should |
 | `settlement-report` | SQS report-settlement-events | 정산 명세서 CSV → S3 `reports/{storeId}/{week}.csv` → SES 메일(판매자 정산 화면 링크 — 다운로드는 화면에서 10분 presigned) + DynamoDB 발송 이력. 명세서 내용은 SettlementPaid payload(10/21 방식 B) | jihoon-devstu | Should |
 | `log-archive` | EventBridge cron (매일 03:00 KST) | CloudWatch Logs 를 S3 log-archive 로 내보내기 (CreateExportTask) · 90일 후 Glacier | VoC-100 | Could |
 

@@ -1,4 +1,4 @@
-# order-notification — SQS(order-events · store-events) → SES 메일(주문 확인 · 배송 시작 · 취소/반품 · 입점 승인) + DynamoDB 멱등 · 이력
+# order-notification — SQS(order-events · store-events) → SES 메일(주문 확인 · 배송 시작 · 취소/반품 · 입점 승인 · 반려 · 보완요청, NTF-01~05) + DynamoDB 멱등 · 이력
 # 담당 jihoon-devstu · 우선순위 Should · 가이드라인 11장. 서버리스는 배치 · 로깅만 (사용자 API 없음)
 # 공유 자원 ARN 은 하드코딩하지 않고 SSM 에서 읽는다 (Terraform app/ssm.tf 가 기록)
 service: sesac-gojigi-order-notification
@@ -15,28 +15,31 @@ provider:
   environment:
     TABLE: ${ssm:/sesac-gojigi/dev/dynamodb/notifications-table}
     FROM_EMAIL: ${ssm:/sesac-gojigi/dev/ses/from-email}
+    FRONT_URL: https://gotgan-ashy.vercel.app        # 메일 속 주문 상세 · 판매자 센터 · 입점 신청 링크
   iam:
     role:
       statements:
+        # 발송 이력 · 멱등 — 선점(조건부 Put) · 발송 완료(Update)
         - Effect: Allow
-          Action:
-            - ses:SendEmail
-            - dynamodb:GetItem
-            - dynamodb:PutItem
-          Resource: "*"                     # TODO jihoon-devstu: 테이블 · 버킷 · SES identity ARN 으로 좁히기
+          Action: [dynamodb:PutItem, dynamodb:UpdateItem]
+          Resource: arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${ssm:/sesac-gojigi/dev/dynamodb/notifications-table}
+        # 메일 — SES 샌드박스는 발신 · 수신 모두 인증된 identity 여야 해서 이 계정의 identity 로 한정
+        - Effect: Allow
+          Action: [ses:SendEmail]
+          Resource: arn:aws:ses:${aws:region}:${aws:accountId}:identity/*
 
 functions:
   notify:
     handler: src/notify.handler
-    # 10/21 첫 배포 때 뼈대가 실제 큐에 연결됨 — 구현 전까지 SQS 연결을 꺼 둔다 (구지훈)
+    # 핸들러는 10/21 구현 — order · store 가 이벤트를 발행하기 시작하면 enabled: true 로 켜고 E2E (구지훈)
     events:
       - sqs:
           arn: ${ssm:/sesac-gojigi/dev/sqs/notification-order-queue-arn}
           batchSize: 5
           functionResponseType: ReportBatchItemFailures
-          enabled: false                     # 핸들러 구현 전 — 켜 두면 메일 없이 메시지만 지워진다(뼈대). 구현 PR 에서 true 로 (메시지는 큐에 4일 보관)
+          enabled: false                     # 발행 전이라 꺼 둠 — 켜기 전까지 메시지는 큐에 4일 보관
       - sqs:
           arn: ${ssm:/sesac-gojigi/dev/sqs/notification-store-queue-arn}
           batchSize: 5
           functionResponseType: ReportBatchItemFailures
-          enabled: false                     # 핸들러 구현 전 — 켜 두면 메일 없이 메시지만 지워진다(뼈대). 구현 PR 에서 true 로 (메시지는 큐에 4일 보관)
+          enabled: false                     # 발행 전이라 꺼 둠 — 켜기 전까지 메시지는 큐에 4일 보관

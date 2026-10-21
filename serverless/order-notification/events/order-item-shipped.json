@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "00000000-0000-0000-0000-000000000002",
+      "body": "{\"eventId\":\"9b1d2c3e-0000-4000-8000-000000000002\",\"eventType\":\"OrderItemShipped\",\"occurredAt\":\"2026-10-21T12:00:00+09:00\",\"aggregateId\":\"20261021-000123\",\"version\":1,\"payload\":{\"orderItemId\":1,\"orderNo\":\"20261021-000123\",\"buyerId\":4,\"ordererEmail\":\"wlsgksvheh+buyer1@gmail.com\",\"ordererName\":\"김구매\",\"productName\":\"제철 사과 3kg\",\"optionName\":\"특\",\"courier\":\"CJ대한통운\",\"trackingNo\":\"123456789012\"}}"
+    }
+  ]
+}
