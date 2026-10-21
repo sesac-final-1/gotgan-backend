@@ -536,7 +536,8 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
   - `debug` — 개발 확인용 (운영 미출력)
 - 로그 메시지에 업무 키 포함: `orderNo` · `sagaId` · `paymentId` (MDC 또는 메시지)
 - **비밀번호 · 토큰 · 포트원 키 · 카드 정보 · 이메일 · 전화 · 주소는 info 이상에 남기지 않음**
-- 형식은 JSON (공통 `logback-spring.xml`), traceId 자동 포함 — 형식 임의 변경 금지
+- 형식은 JSON (공통 `logback-spring.xml`), traceId · spanId · userId 자동 포함 — 형식 임의 변경 금지
+  - userId 는 common-web `UserIdMdcFilter` 가 `X-User-Id`(숫자일 때만)를 요청마다 MDC 에 넣음 → 로그에 직접 쓰지 않아도 됨. 콘솔은 `[traceId,spanId,userId]`, Loki JSON 은 `"userId"` 필드(라벨 아님). 비로그인 요청 · `@Async` 등 다른 스레드는 빈 값 (10/21)
 
 ### 2-9. API 문서 (Swagger)
 
