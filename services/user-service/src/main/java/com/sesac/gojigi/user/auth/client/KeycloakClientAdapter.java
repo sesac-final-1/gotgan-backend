@@ -9,6 +9,9 @@ import com.sesac.gojigi.user.common.exception.BusinessException;
 import com.sesac.gojigi.user.common.exception.CommonErrorCode;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import java.net.URI;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -53,6 +56,78 @@ public class KeycloakClientAdapter {
         } catch (HttpClientErrorException e) {
             throw toBusinessException(e);
         }
+    }
+
+    /**
+     * 토큰 재발급 — Refresh Token 으로 새 Access · Refresh Token (realm 설정상 Refresh Token 은 한 번 쓰면 바뀐다).
+     * 만료 · 로그아웃 · 이미 쓴 토큰(invalid_grant)은 AUTH_SESSION_EXPIRED.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "refreshGrantFallback")
+    public KeycloakTokenResponse refreshGrant(String refreshToken) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "refresh_token");
+        form.add("refresh_token", refreshToken);
+        try {
+            return keycloakClient.token(form);
+        } catch (HttpClientErrorException e) {
+            if (INVALID_GRANT.equals(readBody(e).path("error").asString(""))) {
+                throw new AuthException(AuthErrorCode.AUTH_SESSION_EXPIRED);
+            }
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    /**
+     * 소셜 로그인 콜백 — Keycloak 이 준 code 를 토큰으로 바꾼다 (PKCE code_verifier, 시작할 때와 같은 redirect_uri).
+     * 만료 · 재사용 · 위조 code(invalid_grant)는 AUTH_SOCIAL_LOGIN_FAILED.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "authorizationCodeGrantFallback")
+    public KeycloakTokenResponse authorizationCodeGrant(String code, String codeVerifier, String redirectUri) {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "authorization_code");
+        form.add("code", code);
+        form.add("code_verifier", codeVerifier);
+        form.add("redirect_uri", redirectUri);
+        try {
+            return keycloakClient.token(form);
+        } catch (HttpClientErrorException e) {
+            if (INVALID_GRANT.equals(readBody(e).path("error").asString(""))) {
+                throw new AuthException(AuthErrorCode.AUTH_SOCIAL_LOGIN_FAILED);
+            }
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    /**
+     * 소셜 첫 로그인 — Keycloak 이 만든 계정에 userdb 회원 번호(user_id 속성)를 붙인다. 다음 토큰부터 user_id 클레임이 들어간다.
+     * PUT 은 보낸 표현으로 덮어써서, 현재 표현을 받아 attributes 만 바꿔 보낸다.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "setUserIdAttributeFallback")
+    @SuppressWarnings("unchecked")
+    public void setUserIdAttribute(String keycloakId, long userId) {
+        String bearer = "Bearer " + serviceAccountToken();
+        try {
+            Map<String, Object> user = new HashMap<>(keycloakAdminClient.getUser(bearer, keycloakId));
+            Map<String, Object> attributes = new HashMap<>(
+                    (Map<String, Object>) user.getOrDefault("attributes", Map.of()));
+            attributes.put("user_id", List.of(String.valueOf(userId)));
+            user.put("attributes", attributes);
+            keycloakAdminClient.updateUser(bearer, keycloakId, user);
+        } catch (HttpClientErrorException e) {
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    private KeycloakTokenResponse refreshGrantFallback(String refreshToken, Throwable t) {
+        throw unavailable(t);
+    }
+
+    private KeycloakTokenResponse authorizationCodeGrantFallback(String code, String codeVerifier, String redirectUri, Throwable t) {
+        throw unavailable(t);
+    }
+
+    private void setUserIdAttributeFallback(String keycloakId, long userId, Throwable t) {
+        throw unavailable(t);
     }
 
     /**

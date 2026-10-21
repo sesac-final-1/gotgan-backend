@@ -12,6 +12,7 @@ import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.repository.UserRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -30,6 +31,7 @@ public class AuthService {
     private final KeycloakClientAdapter keycloakClientAdapter;
     private final UserRepository userRepository;
     private final TransactionTemplate transactionTemplate;
+    private final SocialLoginUrls socialLoginUrls;
     private final JsonMapper jsonMapper;
     private final Clock clock;
 
@@ -79,6 +81,111 @@ public class AuthService {
         log.info("로그인 userId={} roles={}", user.getId(), claims.roles());   // 이메일 · 토큰은 남기지 않음 (컨벤션 5-6)
 
         return new LoginResult(response, token.refreshToken(), token.refreshExpiresIn());
+    }
+
+    /**
+     * 토큰 재발급 — Refresh 쿠키로 새 Access Token 을 받고(Refresh Token 도 바뀐다) 로그인과 같은 응답을 만든다.
+     * 쿠키 없음 · 만료 · 로그아웃된 세션은 AUTH_SESSION_EXPIRED. 탈퇴 · 정지 회원은 로그인과 같이 막는다 (마지막 로그인은 기록하지 않음).
+     */
+    public LoginResult refresh(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new AuthException(AuthErrorCode.AUTH_SESSION_EXPIRED);
+        }
+        KeycloakTokenResponse token = keycloakClientAdapter.refreshGrant(refreshToken);
+        AccessTokenClaims claims = AccessTokenClaims.parse(token.accessToken(), jsonMapper);
+        User user = transactionTemplate.execute(status -> loadLinkedActiveUser(claims));
+        LoginResponse response = LoginResponse.of(token.accessToken(), token.expiresIn(), user, claims);
+        return new LoginResult(response, token.refreshToken(), token.refreshExpiresIn());
+    }
+
+    /**
+     * 소셜 로그인 시작 — state · PKCE 를 만들고 Keycloak 로그인 주소(kc_idp_hint=제공자)를 돌려준다.
+     * 컨트롤러가 state 를 HttpOnly 쿠키에 담고 브라우저를 그 주소로 보낸다.
+     */
+    public SocialLoginStart startSocialLogin(String providerAlias) {
+        SocialLoginState login = SocialLoginState.start(SocialProvider.fromAlias(providerAlias));
+        return new SocialLoginStart(socialLoginUrls.authorizationUrl(login), login.cookieValue());
+    }
+
+    /**
+     * 소셜 로그인 콜백 (keycloak README 소셜 로그인):
+     * 1. 쿠키의 state 와 돌려받은 state 비교 · 제공자 오류 확인
+     * 2. code → 토큰 (PKCE)
+     * 3. 첫 소셜 로그인(토큰에 user_id 없음): users 행 생성 → Keycloak 계정에 user_id 저장 → 토큰 재발급(user_id 클레임 포함)
+     *    같은 이메일의 자체 계정은 Keycloak 이 비밀번호 확인 후 연결해서 처음부터 user_id 가 있다
+     * 4. 로그인 기록 (keycloak_id 연결 · 마지막 로그인)
+     * 브라우저 리다이렉트로 끝나서 예외 대신 결과로 돌려준다 — 실패 원인은 여기서 warn 한 번.
+     */
+    public SocialLoginResult completeSocialLogin(String cookieValue, String code, String returnedState, String providerError) {
+        SocialLoginState login = SocialLoginState.fromCookieValue(cookieValue);
+        if (login == null || !login.matches(returnedState) || providerError != null || code == null) {
+            log.warn("소셜 로그인 콜백 거절 — 쿠키 {} · state {} · 제공자 오류 {}",
+                    login == null ? "없음/형식 오류" : "있음", login != null && login.matches(returnedState) ? "일치" : "불일치",
+                    providerError);
+            return SocialLoginResult.failure(AuthErrorCode.AUTH_SOCIAL_LOGIN_FAILED.getCode());
+        }
+        try {
+            return SocialLoginResult.success(socialLogin(login, code));
+        } catch (BusinessException e) {
+            log.warn("소셜 로그인 실패 provider={}, code={}, message={}, cause={}", login.provider(),
+                    e.getErrorCode().getCode(), e.getMessage(), String.valueOf(e.getCause()));
+            return SocialLoginResult.failure(e.getErrorCode().getCode());
+        }
+    }
+
+    private LoginResult socialLogin(SocialLoginState login, String code) {
+        KeycloakTokenResponse token = keycloakClientAdapter.authorizationCodeGrant(code, login.codeVerifier(),
+                socialLoginUrls.callbackUrl());
+        AccessTokenClaims claims = AccessTokenClaims.parse(token.accessToken(), jsonMapper);
+        if (claims.userId() == null) {
+            Long userId = createSocialUserRow(claims, login.provider());
+            try {
+                keycloakClientAdapter.setUserIdAttribute(claims.keycloakId(), userId);
+            } catch (RuntimeException e) {
+                deleteUserRow(userId);
+                throw e;
+            }
+            token = keycloakClientAdapter.refreshGrant(token.refreshToken());   // user_id 클레임이 들어간 토큰으로
+            claims = AccessTokenClaims.parse(token.accessToken(), jsonMapper);
+            log.info("소셜 첫 로그인 — 회원 생성 userId={}, provider={}", userId, login.provider());
+        }
+        AccessTokenClaims linked = claims;
+        User user = transactionTemplate.execute(status -> recordLogin(linked));
+        LoginResponse response = LoginResponse.of(token.accessToken(), token.expiresIn(), user, linked);
+        log.info("소셜 로그인 userId={} provider={} roles={}", user.getId(), login.provider(), linked.roles());
+        return new LoginResult(response, token.refreshToken(), token.refreshExpiresIn());
+    }
+
+    /**
+     * 소셜 회원 행 — 이메일은 Keycloak 이 보장한다(없으면 첫 로그인 화면에서 입력). 이름이 없으면 이메일 앞부분.
+     * 같은 이메일 행이 있으면 탈퇴 회원이다 — 탈퇴 때 Keycloak 계정(과 소셜 연결)이 지워져서 Keycloak 이 이번 로그인으로
+     * 새 계정을 만든 상태. 행을 만들지 않고 그 Keycloak 계정을 지운 뒤 AUTH_EMAIL_DUPLICATE (재가입 불가, #36).
+     * (살아 있는 자체 계정이면 Keycloak 이 비밀번호 확인 후 연결해서 처음부터 user_id 가 있다 — 여기로 오지 않는다)
+     */
+    private Long createSocialUserRow(AccessTokenClaims claims, SocialProvider provider) {
+        if (claims.email() == null || claims.email().isBlank()) {
+            throw new AuthException(AuthErrorCode.AUTH_SOCIAL_LOGIN_FAILED);
+        }
+        String email = claims.email().toLowerCase(Locale.ROOT);
+        String name = claims.name() != null ? claims.name() : email.substring(0, email.indexOf('@'));
+        try {
+            return transactionTemplate.execute(status -> userRepository.saveAndFlush(
+                    User.fromSocialLogin(claims.keycloakId(), email, name, provider.signupProvider())).getId());
+        } catch (DataIntegrityViolationException e) {
+            deleteWithdrawnMemberAccount(claims, provider);
+            throw new AuthException(AuthErrorCode.AUTH_EMAIL_DUPLICATE);
+        }
+    }
+
+    private void deleteWithdrawnMemberAccount(AccessTokenClaims claims, SocialProvider provider) {
+        try {
+            keycloakClientAdapter.deleteUser(claims.keycloakId(), null);
+            log.warn("탈퇴한 이메일로 소셜 로그인 — 재가입 불가로 거절, 이번에 생긴 Keycloak 계정 삭제 provider={}, keycloakId={}",
+                    provider, claims.keycloakId());
+        } catch (RuntimeException e) {
+            log.error("탈퇴한 이메일로 소셜 로그인 — 거절했지만 Keycloak 계정 삭제 실패. 로그인은 user_id 가 없어 계속 거절되나 "
+                    + "관리 콘솔에서 계정 수동 삭제 필요 provider={}, keycloakId={}", provider, claims.keycloakId(), e);
+        }
     }
 
     /**
@@ -137,7 +244,7 @@ public class AuthService {
     }
 
     private void deleteUserRow(Long userId) {
-        log.warn("가입 보상 — Keycloak 계정 생성 실패로 회원 행 삭제 userId={}", userId);
+        log.warn("가입 보상 — Keycloak 계정 생성 · 연결 실패로 회원 행 삭제 userId={}", userId);
         transactionTemplate.execute(status -> {
             userRepository.deleteById(userId);
             return null;
@@ -164,7 +271,8 @@ public class AuthService {
         }
     }
 
-    private User recordLogin(AccessTokenClaims claims) {
+    /** 토큰의 user_id 로 연결된 활성 회원 — 연결 안 됨 · 탈퇴는 AUTH_ACCOUNT_NOT_LINKED, 정지는 AUTH_ACCOUNT_DISABLED */
+    private User loadLinkedActiveUser(AccessTokenClaims claims) {
         if (claims.userId() == null) {
             throw new AuthException(AuthErrorCode.AUTH_ACCOUNT_NOT_LINKED);   // Keycloak 속성 user_id 미설정
         }
@@ -173,6 +281,11 @@ public class AuthService {
         if (!user.isActive()) {
             throw new AuthException(AuthErrorCode.AUTH_ACCOUNT_DISABLED);   // userdb 정지 — Keycloak 동기화가 늦어도 막는다
         }
+        return user;
+    }
+
+    private User recordLogin(AccessTokenClaims claims) {
+        User user = loadLinkedActiveUser(claims);
         if (user.getKeycloakId() == null) {
             user.linkKeycloak(claims.keycloakId());   // 시드 계정 · 가입 직후 미연결 — 첫 로그인 때 연결
             log.info("Keycloak 계정 연결 userId={}", user.getId());

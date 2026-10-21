@@ -3,6 +3,7 @@ package com.sesac.gojigi.user.auth.client;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserCreateRequest;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserSummary;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.service.annotation.DeleteExchange;
 import org.springframework.web.service.annotation.GetExchange;
 import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PostExchange;
+import org.springframework.web.service.annotation.PutExchange;
 
 /**
  * Keycloak Admin REST API ({base-url}/admin/realms/gotgan). gotgan-backend 서비스 계정 토큰(Bearer)으로 호출한다
@@ -32,6 +34,16 @@ public interface KeycloakAdminClient {
     @GetExchange
     List<KeycloakUserSummary> findByUsername(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @RequestParam("username") String username, @RequestParam("exact") boolean exact);
+
+    /** 사용자 조회 — 수정 전 전체 표현을 받아 필요한 값만 바꿔 다시 보낸다 (PUT 은 보낸 값으로 덮어씀) */
+    @GetExchange("/{keycloakId}")
+    Map<String, Object> getUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @PathVariable("keycloakId") String keycloakId);
+
+    /** 사용자 수정 — 204 */
+    @PutExchange(url = "/{keycloakId}", contentType = MediaType.APPLICATION_JSON_VALUE)
+    void updateUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @PathVariable("keycloakId") String keycloakId, @RequestBody Map<String, Object> user);
 
     /** 계정 삭제 — 204. 세션 · Refresh Token 도 함께 무효. 없으면 404 */
     @DeleteExchange("/{keycloakId}")

@@ -35,6 +35,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/auth/**").permitAll()                                   // 가입 · 로그인 · refresh (user-service 가 Keycloak 대리 호출)
                         .pathMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()          // 포트원 웹훅 (서명은 payment 가 검증)
                         .pathMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
+                        .pathMatchers("/realms/gotgan/**", "/resources/**").permitAll()                // Keycloak 로그인 · 소셜 복귀 화면 (라우트 keycloak)
                         .pathMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**",
                                 "/api/stores/**", "/api/reviews/**", "/api/inquiries/**").permitAll()
                         .pathMatchers("/api/seller/apply/**").hasRole("BUYER")                      // 입점 신청은 구매자

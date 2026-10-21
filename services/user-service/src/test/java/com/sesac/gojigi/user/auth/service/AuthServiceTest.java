@@ -56,11 +56,14 @@ class AuthServiceTest {
     @Mock
     private TransactionTemplate transactionTemplate;
 
+    private static final SocialLoginUrls URLS = new SocialLoginUrls("https://api.example", "gotgan", "gotgan-backend",
+            "https://front.example/api/auth/social/callback", "https://front.example/auth/callback");
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(keycloakClientAdapter, userRepository, transactionTemplate,
+        authService = new AuthService(keycloakClientAdapter, userRepository, transactionTemplate, URLS,
                 JsonMapper.builder().build(), CLOCK);
         // 트랜잭션 템플릿은 콜백을 그대로 실행 (중복 이메일처럼 트랜잭션 전에 끝나는 경우가 있어 lenient)
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
@@ -373,5 +376,201 @@ class AuthServiceTest {
 
         // when · then
         assertThat(authService.logout("rt-1")).isFalse();
+    }
+
+    // ── 토큰 재발급
+
+    private static KeycloakTokenResponse tokenOf(String payload, String refreshToken) {
+        return new KeycloakTokenResponse(AccessTokenClaimsTest.token(payload), 1800, refreshToken, 1209600);
+    }
+
+    @Test
+    @DisplayName("재발급 — 새 토큰 · 새 Refresh Token 을 돌려주고, 마지막 로그인은 기록하지 않는다")
+    void refresh_returnsNewTokensWithoutRecordingLogin() {
+        // given
+        User user = user(2L);
+        given(keycloakClientAdapter.refreshGrant("old-rt"))
+                .willReturn(tokenOf("{\"sub\":\"kc-2\",\"user_id\":2,\"roles\":[\"BUYER\"]}", "new-rt"));
+        given(userRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(user));
+
+        // when
+        LoginResult result = authService.refresh("old-rt");
+
+        // then
+        assertThat(result.refreshToken()).isEqualTo("new-rt");
+        assertThat(result.response().user().userId()).isEqualTo(2L);
+        assertThat(user.getLastLoginAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("재발급 — 쿠키가 없으면 Keycloak 을 부르지 않고 AUTH_SESSION_EXPIRED")
+    void refresh_withoutCookie_throwsSessionExpired() {
+        // when · then
+        assertThatThrownBy(() -> authService.refresh(null))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_SESSION_EXPIRED);
+        verify(keycloakClientAdapter, never()).refreshGrant(anyString());
+    }
+
+    @Test
+    @DisplayName("재발급 — 정지 회원은 AUTH_ACCOUNT_DISABLED (Keycloak 동기화가 늦어도)")
+    void refresh_suspendedUser_throwsDisabled() {
+        // given
+        User user = user(2L);
+        user.suspend("부정 거래", LocalDateTime.now(CLOCK));
+        given(keycloakClientAdapter.refreshGrant("old-rt"))
+                .willReturn(tokenOf("{\"sub\":\"kc-2\",\"user_id\":2,\"roles\":[\"BUYER\"]}", "new-rt"));
+        given(userRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(user));
+
+        // when · then
+        assertThatThrownBy(() -> authService.refresh("old-rt"))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_ACCOUNT_DISABLED);
+    }
+
+    // ── 소셜 로그인
+
+    @Test
+    @DisplayName("소셜 시작 — Keycloak 로그인 주소(kc_idp_hint · PKCE S256 · 콜백) 와 state 쿠키 값")
+    void startSocialLogin_buildsKeycloakUrlAndState() {
+        // when
+        SocialLoginStart start = authService.startSocialLogin("kakao");
+
+        // then
+        SocialLoginState state = SocialLoginState.fromCookieValue(start.cookieValue());
+        assertThat(state.provider()).isEqualTo(SocialProvider.KAKAO);
+        assertThat(start.authorizationUrl())
+                .startsWith("https://api.example/realms/gotgan/protocol/openid-connect/auth?")
+                .contains("client_id=gotgan-backend", "response_type=code", "kc_idp_hint=kakao",
+                        "code_challenge_method=S256", "code_challenge=" + state.codeChallenge(), "state=" + state.state(),
+                        "redirect_uri=https://front.example/api/auth/social/callback");
+    }
+
+    @Test
+    @DisplayName("소셜 콜백 — state 불일치 · 쿠키 없음 · 제공자 오류(로그인 취소)는 Keycloak 을 부르지 않고 실패")
+    void completeSocialLogin_invalidCallback_failsWithoutKeycloak() {
+        // given
+        SocialLoginState state = SocialLoginState.start(SocialProvider.KAKAO);
+
+        // when · then
+        assertThat(authService.completeSocialLogin(state.cookieValue(), "code", "forged", null).errorCode())
+                .isEqualTo("AUTH_SOCIAL_LOGIN_FAILED");
+        assertThat(authService.completeSocialLogin(null, "code", state.state(), null).succeeded()).isFalse();
+        assertThat(authService.completeSocialLogin(state.cookieValue(), null, state.state(), "access_denied").succeeded())
+                .isFalse();
+        verify(keycloakClientAdapter, never()).authorizationCodeGrant(anyString(), anyString(), anyString());
+    }
+
+    private SocialLoginState givenSocialToken(String payload) {
+        SocialLoginState state = SocialLoginState.start(SocialProvider.KAKAO);
+        given(keycloakClientAdapter.authorizationCodeGrant("code", state.codeVerifier(), "https://front.example/api/auth/social/callback"))
+                .willReturn(tokenOf(payload, "rt-1"));
+        return state;
+    }
+
+    @Test
+    @DisplayName("소셜 첫 로그인 — 회원 행(KAKAO) 생성 → Keycloak user_id 저장 → 토큰 재발급 → 로그인 기록")
+    void completeSocialLogin_firstLogin_createsMemberAndLinks() {
+        // given
+        SocialLoginState state = givenSocialToken("{\"sub\":\"kc-7\",\"email\":\"Kakao@Example.com\",\"given_name\":\"카카오회원\",\"roles\":[\"BUYER\"]}");
+        User[] saved = givenSavedAs(7L);
+        given(keycloakClientAdapter.refreshGrant("rt-1"))
+                .willReturn(tokenOf("{\"sub\":\"kc-7\",\"user_id\":7,\"email\":\"kakao@example.com\",\"roles\":[\"BUYER\"]}", "rt-2"));
+        given(userRepository.findByIdAndDeletedAtIsNull(7L)).willAnswer(invocation -> Optional.of(saved[0]));
+
+        // when
+        SocialLoginResult result = authService.completeSocialLogin(state.cookieValue(), "code", state.state(), null);
+
+        // then
+        assertThat(result.succeeded()).isTrue();
+        assertThat(result.login().refreshToken()).isEqualTo("rt-2");
+        assertThat(result.login().response().user().userId()).isEqualTo(7L);
+        assertThat(saved[0].getEmail()).isEqualTo("kakao@example.com");
+        assertThat(saved[0].getName()).isEqualTo("카카오회원");
+        assertThat(saved[0].getSignupProvider()).isEqualTo(SignupProvider.KAKAO);
+        assertThat(saved[0].getKeycloakId()).isEqualTo("kc-7");
+        assertThat(saved[0].getLastLoginAt()).isEqualTo(LocalDateTime.now(CLOCK));
+        verify(keycloakClientAdapter).setUserIdAttribute("kc-7", 7L);
+    }
+
+    @Test
+    @DisplayName("소셜 첫 로그인 — 이름이 없으면 이메일 앞부분")
+    void completeSocialLogin_firstLoginWithoutName_usesEmailLocalPart() {
+        // given
+        SocialLoginState state = givenSocialToken("{\"sub\":\"kc-7\",\"email\":\"nameless@example.com\",\"roles\":[\"BUYER\"]}");
+        User[] saved = givenSavedAs(7L);
+        given(keycloakClientAdapter.refreshGrant("rt-1"))
+                .willReturn(tokenOf("{\"sub\":\"kc-7\",\"user_id\":7,\"roles\":[\"BUYER\"]}", "rt-2"));
+        given(userRepository.findByIdAndDeletedAtIsNull(7L)).willAnswer(invocation -> Optional.of(saved[0]));
+
+        // when
+        authService.completeSocialLogin(state.cookieValue(), "code", state.state(), null);
+
+        // then
+        assertThat(saved[0].getName()).isEqualTo("nameless");
+    }
+
+    @Test
+    @DisplayName("소셜 첫 로그인 — Keycloak user_id 저장이 실패하면 회원 행을 지우고(보상) 실패")
+    void completeSocialLogin_attributeFails_deletesRow() {
+        // given
+        SocialLoginState state = givenSocialToken("{\"sub\":\"kc-7\",\"email\":\"kakao@example.com\",\"roles\":[\"BUYER\"]}");
+        givenSavedAs(7L);
+        willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR))
+                .given(keycloakClientAdapter).setUserIdAttribute("kc-7", 7L);
+
+        // when
+        SocialLoginResult result = authService.completeSocialLogin(state.cookieValue(), "code", state.state(), null);
+
+        // then
+        assertThat(result.errorCode()).isEqualTo("EXTERNAL_API_ERROR");
+        verify(userRepository).deleteById(7L);
+        verify(keycloakClientAdapter, never()).refreshGrant(anyString());
+    }
+
+    @Test
+    @DisplayName("소셜 첫 로그인 — 탈퇴 회원 이메일(재가입 불가)이면 행을 만들지 않고 이번에 생긴 Keycloak 계정을 지운 뒤 AUTH_EMAIL_DUPLICATE")
+    void completeSocialLogin_withdrawnEmail_deletesKeycloakAccountAndFails() {
+        // given
+        SocialLoginState state = givenSocialToken("{\"sub\":\"kc-7\",\"email\":\"left@example.com\",\"roles\":[\"BUYER\"]}");
+        given(userRepository.saveAndFlush(any(User.class))).willThrow(new DataIntegrityViolationException("uk_users_email"));
+
+        // when
+        SocialLoginResult result = authService.completeSocialLogin(state.cookieValue(), "code", state.state(), null);
+
+        // then
+        assertThat(result.errorCode()).isEqualTo("AUTH_EMAIL_DUPLICATE");
+        verify(keycloakClientAdapter).deleteUser("kc-7", null);
+        verify(keycloakClientAdapter, never()).setUserIdAttribute(anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("소셜 첫 로그인 — 탈퇴 이메일 계정 삭제가 실패해도 거절은 그대로 (로그인은 user_id 가 없어 계속 거절)")
+    void completeSocialLogin_withdrawnEmailDeleteFails_stillRejects() {
+        // given
+        SocialLoginState state = givenSocialToken("{\"sub\":\"kc-7\",\"email\":\"left@example.com\",\"roles\":[\"BUYER\"]}");
+        given(userRepository.saveAndFlush(any(User.class))).willThrow(new DataIntegrityViolationException("uk_users_email"));
+        willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR)).given(keycloakClientAdapter).deleteUser("kc-7", null);
+
+        // when · then
+        assertThat(authService.completeSocialLogin(state.cookieValue(), "code", state.state(), null).errorCode())
+                .isEqualTo("AUTH_EMAIL_DUPLICATE");
+    }
+
+    @Test
+    @DisplayName("소셜 로그인 — 이미 연결된 회원(재로그인 · 자체 계정 연결)은 행을 만들지 않고 로그인")
+    void completeSocialLogin_linkedMember_logsIn() {
+        // given
+        SocialLoginState state = givenSocialToken("{\"sub\":\"kc-4\",\"user_id\":4,\"roles\":[\"BUYER\"]}");
+        User member = user(4L);
+        given(userRepository.findByIdAndDeletedAtIsNull(4L)).willReturn(Optional.of(member));
+
+        // when
+        SocialLoginResult result = authService.completeSocialLogin(state.cookieValue(), "code", state.state(), null);
+
+        // then
+        assertThat(result.login().refreshToken()).isEqualTo("rt-1");
+        verify(userRepository, never()).saveAndFlush(any());
+        verify(keycloakClientAdapter, never()).setUserIdAttribute(anyString(), anyLong());
     }
 }
