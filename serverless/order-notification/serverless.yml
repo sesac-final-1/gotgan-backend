@@ -28,12 +28,15 @@ provider:
 functions:
   notify:
     handler: src/notify.handler
+    # 10/21 첫 배포 때 뼈대가 실제 큐에 연결됨 — 구현 전까지 SQS 연결을 꺼 둔다 (구지훈)
     events:
       - sqs:
           arn: ${ssm:/sesac-gojigi/dev/sqs/notification-order-queue-arn}
           batchSize: 5
           functionResponseType: ReportBatchItemFailures
+          enabled: false                     # 핸들러 구현 전 — 켜 두면 메일 없이 메시지만 지워진다(뼈대). 구현 PR 에서 true 로 (메시지는 큐에 4일 보관)
       - sqs:
           arn: ${ssm:/sesac-gojigi/dev/sqs/notification-store-queue-arn}
           batchSize: 5
           functionResponseType: ReportBatchItemFailures
+          enabled: false                     # 핸들러 구현 전 — 켜 두면 메일 없이 메시지만 지워진다(뼈대). 구현 PR 에서 true 로 (메시지는 큐에 4일 보관)
