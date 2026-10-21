@@ -1,6 +1,6 @@
 package com.sesac.gojigi.user.point.exception;
 
-import com.sesac.gojigi.user.common.exception.ErrorCode;
+import com.sesac.gojigi.common.web.exception.ErrorCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

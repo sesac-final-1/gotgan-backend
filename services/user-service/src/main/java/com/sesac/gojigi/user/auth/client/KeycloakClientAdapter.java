@@ -1,12 +1,12 @@
 package com.sesac.gojigi.user.auth.client;
 
+import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserCreateRequest;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserSummary;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
-import com.sesac.gojigi.user.common.exception.BusinessException;
-import com.sesac.gojigi.user.common.exception.CommonErrorCode;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import java.net.URI;
 import java.util.HashMap;

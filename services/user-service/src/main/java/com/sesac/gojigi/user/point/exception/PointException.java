@@ -1,6 +1,6 @@
 package com.sesac.gojigi.user.point.exception;
 
-import com.sesac.gojigi.user.common.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.BusinessException;
 
 public class PointException extends BusinessException {
 

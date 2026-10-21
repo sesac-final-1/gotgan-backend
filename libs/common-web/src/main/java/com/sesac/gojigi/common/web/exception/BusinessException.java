@@ -15,6 +15,12 @@ public class BusinessException extends RuntimeException {
         this.errorCode = errorCode;
     }
 
+    /** 외부 호출 실패처럼 원인을 남겨야 할 때 — 로그는 GlobalExceptionHandler 가 한 번만 (컨벤션 5-6) */
+    public BusinessException(ErrorCode errorCode, String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+    }
+
     public ErrorCode getErrorCode() {
         return errorCode;
     }

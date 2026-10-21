@@ -48,6 +48,21 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("원인을 담은 BusinessException(외부 호출 실패) — 원인은 로그에만, 응답은 코드 · 메시지 그대로")
+    void businessWithCause() throws Exception {
+        BusinessException e = new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버에 연결할 수 없습니다.",
+                new IllegalStateException("connection refused"));
+        assertThat(e.getCause()).hasMessage("connection refused");
+        assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+
+        mockMvc.perform(get("/test/external"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("EXTERNAL_API_ERROR"))
+                .andExpect(jsonPath("$.message").value("인증 서버에 연결할 수 없습니다."))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
     @DisplayName("본문 @Valid 실패는 400 INVALID_INPUT, 메시지는 필드 메시지")
     void bodyValidation() throws Exception {
         mockMvc.perform(post("/test/body").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"\"}"))
@@ -125,6 +140,12 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/business")
         ApiResponse<Void> business() {
             throw new BusinessException(CommonErrorCode.FORBIDDEN);
+        }
+
+        @GetMapping("/test/external")
+        ApiResponse<Void> external() {
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버에 연결할 수 없습니다.",
+                    new IllegalStateException("connection refused"));
         }
 
         @PostMapping("/test/body")

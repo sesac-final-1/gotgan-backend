@@ -67,7 +67,7 @@ resilience4j:
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
         ignore-exceptions:                  # 비밀번호 불일치 등 4xx(비즈니스 오류로 변환)는 세지 않음
-          - com.sesac.gojigi.user.common.exception.BusinessException
+          - com.sesac.gojigi.common.web.exception.BusinessException
     instances:
       keycloak: { base-config: default }    # KeycloakClientAdapter — 토큰 요청(POST)은 재시도 없음
   retry:

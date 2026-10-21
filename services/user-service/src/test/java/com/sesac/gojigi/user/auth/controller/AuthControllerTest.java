@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.user.auth.component.AuthCookies;
 import com.sesac.gojigi.user.auth.component.SocialLoginUrls;
 import com.sesac.gojigi.user.auth.dto.response.LoginResponse;
 import com.sesac.gojigi.user.auth.dto.result.LoginResult;
@@ -23,7 +25,6 @@ import com.sesac.gojigi.user.auth.dto.result.SocialLoginStart;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.auth.service.AuthService;
-import com.sesac.gojigi.user.common.exception.GlobalExceptionHandler;
 import jakarta.servlet.http.Cookie;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,13 +46,14 @@ class AuthControllerTest {
 
     private static final SocialLoginUrls URLS = new SocialLoginUrls("https://api.example", "gotgan", "gotgan-backend",
             "https://front.example/api/auth/social/callback", "https://front.example/auth/callback");
+    private static final AuthCookies COOKIES = new AuthCookies("social_login", "refresh_token", "/api/auth", true);
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new AuthController(authService, URLS, "social_login", "refresh_token", "/api/auth", true))
+                .standaloneSetup(new AuthController(authService, URLS, COOKIES))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }

@@ -7,8 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.sesac.gojigi.user.common.auth.CurrentUserArgumentResolver;
-import com.sesac.gojigi.user.common.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
+import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
 import com.sesac.gojigi.user.user.service.UserService;
