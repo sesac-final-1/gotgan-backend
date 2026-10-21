@@ -5,6 +5,7 @@ import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelRequest;
 import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelResponse;
 import com.sesac.gojigi.payment.payment.client.dto.PortOnePayment;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import java.util.Optional;
@@ -79,11 +80,16 @@ public class PortOneClientAdapter {
         return m.find() ? m.group(1) : null;
     }
 
-    private BusinessException unavailable(String action, String portonePaymentId, Throwable t) {
+    BusinessException unavailable(String action, String portonePaymentId, Throwable t) {
         if (t instanceof BusinessException business) {
             return business;   // 4xx 거절 — 이미 변환됨
         }
-        log.error("포트원 {} 실패 - paymentId={}, cause={}", action, portonePaymentId, t.toString());
+        if (t instanceof CallNotPermittedException) {
+            // 서킷 OPEN 동안 호출마다 스택이 쌓이지 않게 한 줄 — 원인 스택은 OPEN 직전 실패 로그에 있다
+            log.warn("포트원 {} 차단(서킷 OPEN) - paymentId={}", action, portonePaymentId);
+        } else {
+            log.error("포트원 {} 실패 - paymentId={}", action, portonePaymentId, t);   // 연결 실패 · 타임아웃 · 5xx — 스택트레이스 포함 (컨벤션 2-8)
+        }
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "포트원 " + action + "에 실패했습니다.");
     }
 }

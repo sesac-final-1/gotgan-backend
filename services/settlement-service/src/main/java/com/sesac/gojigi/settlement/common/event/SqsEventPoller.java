@@ -28,6 +28,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class SqsEventPoller implements SmartLifecycle {
 
+    /** 연속 수신 실패 요약 로그 간격 — sleepQuietly 5초 × 12 = 1분 */
+    static final int FAILURE_SUMMARY_EVERY = 12;
+
     private final SqsClient sqsClient;
     private final JsonMapper jsonMapper;
     private final Map<String, SqsEventListener> listeners;
@@ -75,16 +78,38 @@ public class SqsEventPoller implements SmartLifecycle {
                 .queueUrl(queueUrl).waitTimeSeconds(waitSeconds).maxNumberOfMessages(maxMessages)
                 .messageSystemAttributeNames(MessageSystemAttributeName.APPROXIMATE_RECEIVE_COUNT)   // 일시 장애 재시도 간격 계산용
                 .build();
+        int consecutiveFailures = 0;
         while (running) {
             try {
                 sqsClient.receiveMessage(request).messages().forEach(m -> dispatch(queueUrl, m));
+                if (consecutiveFailures > 0) {
+                    log.info("SQS 수신 복구 - queue={}, 연속 실패 {}회 후", queueUrl, consecutiveFailures);
+                    consecutiveFailures = 0;
+                }
             } catch (RuntimeException e) {
                 if (!running) {
                     return;
                 }
-                log.error("SQS 수신 실패 - queue={}, cause={}", queueUrl, e.toString());
+                consecutiveFailures++;
+                logReceiveFailure(queueUrl, consecutiveFailures, e);
                 sleepQuietly();   // 자격 증명 · 네트워크 오류가 계속될 때 로그 폭주 방지
             }
+        }
+    }
+
+    /**
+     * 수신 실패 — 사람이 봐야 하므로 error. 5초마다 반복되므로 연속 실패의 첫 회만 스택트레이스(컨벤션 2-8),
+     * 이후는 1분(12회)마다 요약 한 줄 — 같은 스택이 수백 줄 쌓여 Loki 를 덮지 않게.
+     */
+    static boolean shouldLogFailure(int consecutiveFailures) {
+        return consecutiveFailures == 1 || consecutiveFailures % FAILURE_SUMMARY_EVERY == 0;
+    }
+
+    private void logReceiveFailure(String queueUrl, int consecutiveFailures, RuntimeException e) {
+        if (consecutiveFailures == 1) {
+            log.error("SQS 수신 실패 - queue={}", queueUrl, e);
+        } else if (shouldLogFailure(consecutiveFailures)) {
+            log.error("SQS 수신 연속 실패 {}회 - queue={}, cause={}", consecutiveFailures, queueUrl, e.toString());
         }
     }
 

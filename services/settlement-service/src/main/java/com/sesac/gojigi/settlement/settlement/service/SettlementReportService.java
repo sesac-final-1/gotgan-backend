@@ -65,10 +65,10 @@ public class SettlementReportService {
             if (e.statusCode() == 404) {   // HeadObject 는 본문이 없어 NoSuchKey 대신 404 S3Exception 으로 올 때가 많다
                 throw notYet(key, settlementId);
             }
-            log.error("명세서 확인 실패 - settlementId={}, key={}, status={}", settlementId, key, e.statusCode());
+            log.error("명세서 확인 실패 - settlementId={}, key={}, status={}", settlementId, key, e.statusCode(), e);
             throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "명세서 저장소에 접근하지 못했습니다.");
         } catch (SdkException e) {
-            log.error("명세서 확인 실패 - settlementId={}, key={}, cause={}", settlementId, key, e.toString());
+            log.error("명세서 확인 실패 - settlementId={}, key={}", settlementId, key, e);
             throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "명세서 저장소에 접근하지 못했습니다.");
         }
     }
