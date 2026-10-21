@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "00000000-0000-0000-0000-000000000004",
+      "body": "{\"eventId\":\"9b1d2c3e-0000-4000-8000-000000000004\",\"eventType\":\"StoreApproved\",\"occurredAt\":\"2026-10-21T12:00:00+09:00\",\"aggregateId\":\"3\",\"version\":1,\"payload\":{\"storeId\":3,\"userId\":5,\"storeName\":\"곳간상회\",\"sellerEmail\":\"wlsgksvheh+seller1@gmail.com\",\"settlementAccount\":{\"bank\":\"기업은행\",\"number\":\"010-0000-8812\",\"holder\":\"예금주\"}}}"
+    }
+  ]
+}

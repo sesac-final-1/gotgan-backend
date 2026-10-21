@@ -2,7 +2,7 @@
   "Records": [
     {
       "messageId": "00000000-0000-0000-0000-000000000001",
-      "body": "{\"eventId\":\"6c1f0a6e-0b0e-4c5b-9a8b-2f3c8e7d1a10\",\"eventType\":\"OrderPaid\",\"occurredAt\":\"2026-10-21T09:12:33+09:00\",\"aggregateId\":\"20261021-000123\",\"version\":1,\"payload\":{\"orderNo\":\"20261021-000123\",\"buyerId\":1,\"ordererEmail\":\"buyer@example.com\",\"payAmt\":91700,\"earnedPoint\":4585}}"
+      "body": "{\"eventId\":\"9b1d2c3e-0000-4000-8000-000000000001\",\"eventType\":\"OrderPaid\",\"occurredAt\":\"2026-10-21T12:00:00+09:00\",\"aggregateId\":\"20261021-000123\",\"version\":1,\"payload\":{\"orderNo\":\"20261021-000123\",\"buyerId\":4,\"ordererEmail\":\"wlsgksvheh+buyer1@gmail.com\",\"ordererName\":\"김구매\",\"payAmt\":64400,\"usedPoint\":2000,\"items\":[{\"orderItemId\":1,\"earnedPoint\":1500,\"productName\":\"제철 사과 3kg\",\"optionName\":\"특\",\"quantity\":1,\"itemAmt\":32000},{\"orderItemId\":2,\"earnedPoint\":1620,\"productName\":\"햇배 5kg\",\"quantity\":2,\"itemAmt\":32400}]}}"
     }
   ]
 }

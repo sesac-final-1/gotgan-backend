@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "00000000-0000-0000-0000-000000000005",
+      "body": "{\"eventId\":\"9b1d2c3e-0000-4000-8000-000000000005\",\"eventType\":\"StoreApplicationRejected\",\"occurredAt\":\"2026-10-21T12:00:00+09:00\",\"aggregateId\":\"11\",\"version\":1,\"payload\":{\"applicationId\":11,\"userId\":5,\"storeName\":\"곳간상회\",\"sellerEmail\":\"wlsgksvheh+seller1@gmail.com\",\"reason\":\"사업자등록증 정보가 신청서와 다릅니다\",\"decidedAt\":\"2026-10-21T10:00:00+09:00\"}}"
+    }
+  ]
+}

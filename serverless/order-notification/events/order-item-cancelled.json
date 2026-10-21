@@ -1,0 +1,8 @@
+{
+  "Records": [
+    {
+      "messageId": "00000000-0000-0000-0000-000000000003",
+      "body": "{\"eventId\":\"9b1d2c3e-0000-4000-8000-000000000003\",\"eventType\":\"OrderItemCancelled\",\"occurredAt\":\"2026-10-21T12:00:00+09:00\",\"aggregateId\":\"20261021-000123\",\"version\":1,\"payload\":{\"orderItemId\":1,\"orderNo\":\"20261021-000123\",\"buyerId\":4,\"ordererEmail\":\"wlsgksvheh+buyer1@gmail.com\",\"ordererName\":\"김구매\",\"productName\":\"제철 사과 3kg\",\"refundAmt\":30000,\"restoredPoint\":2000,\"revokedPoint\":1500}}"
+    }
+  ]
+}
