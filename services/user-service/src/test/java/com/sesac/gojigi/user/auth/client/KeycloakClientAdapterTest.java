@@ -9,11 +9,11 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
-import com.sesac.gojigi.user.common.exception.BusinessException;
-import com.sesac.gojigi.user.common.exception.CommonErrorCode;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;

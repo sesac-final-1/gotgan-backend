@@ -11,9 +11,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 
+import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.user.auth.service.AuthService;
-import com.sesac.gojigi.user.common.exception.BusinessException;
-import com.sesac.gojigi.user.common.exception.CommonErrorCode;
 import com.sesac.gojigi.user.user.client.StoreClient;
 import com.sesac.gojigi.user.user.client.StoreStatus;
 import com.sesac.gojigi.user.user.entity.User;

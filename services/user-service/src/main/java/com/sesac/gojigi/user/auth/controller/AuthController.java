@@ -1,5 +1,6 @@
 package com.sesac.gojigi.user.auth.controller;
 
+import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.user.auth.component.SocialLoginUrls;
 import com.sesac.gojigi.user.auth.dto.request.EmailAvailabilityRequest;
 import com.sesac.gojigi.user.auth.dto.request.LoginRequest;
@@ -12,7 +13,6 @@ import com.sesac.gojigi.user.auth.dto.result.SignupResult;
 import com.sesac.gojigi.user.auth.dto.result.SocialLoginResult;
 import com.sesac.gojigi.user.auth.dto.result.SocialLoginStart;
 import com.sesac.gojigi.user.auth.service.AuthService;
-import com.sesac.gojigi.user.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;

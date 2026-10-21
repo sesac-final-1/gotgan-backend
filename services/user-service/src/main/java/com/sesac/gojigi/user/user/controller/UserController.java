@@ -1,8 +1,8 @@
 package com.sesac.gojigi.user.user.controller;
 
-import com.sesac.gojigi.user.common.auth.AuthUser;
-import com.sesac.gojigi.user.common.auth.CurrentUser;
-import com.sesac.gojigi.user.common.dto.ApiResponse;
+import com.sesac.gojigi.common.web.auth.AuthUser;
+import com.sesac.gojigi.common.web.auth.CurrentUser;
+import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.user.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

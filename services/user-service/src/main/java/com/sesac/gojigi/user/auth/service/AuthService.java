@@ -1,5 +1,6 @@
 package com.sesac.gojigi.user.auth.service;
 
+import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.user.auth.client.KeycloakClientAdapter;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import com.sesac.gojigi.user.auth.component.AccessTokenClaims;
@@ -15,7 +16,6 @@ import com.sesac.gojigi.user.auth.dto.result.SocialLoginResult;
 import com.sesac.gojigi.user.auth.dto.result.SocialLoginStart;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
-import com.sesac.gojigi.user.common.exception.BusinessException;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.repository.UserRepository;
 import java.time.Clock;
