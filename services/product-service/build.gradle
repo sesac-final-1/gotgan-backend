@@ -24,6 +24,9 @@ dependencyManagement {
 }
 
 dependencies {
+    // 공통 응답 봉투 · 예외 처리 · @CurrentUser (libs/common-web)
+    implementation 'com.sesac.gojigi:common-web:0.0.1'
+
     // 웹 · 검증 · API 문서
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
