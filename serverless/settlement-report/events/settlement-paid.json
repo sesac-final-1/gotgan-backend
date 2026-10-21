@@ -2,7 +2,7 @@
   "Records": [
     {
       "messageId": "00000000-0000-0000-0000-000000000001",
-      "body": "{\"eventId\":\"0b3f2a71-8c1e-4d6b-9f1a-5e2c7d8a9b10\",\"eventType\":\"SettlementPaid\",\"occurredAt\":\"2026-11-02T03:00:00+09:00\",\"aggregateId\":\"42\",\"version\":1,\"payload\":{\"settlementId\":42,\"storeId\":3,\"week\":\"2026-W44\",\"payoutAmt\":1234500,\"sellerEmail\":\"seller@example.com\"}}"
+      "body": "{\"eventId\":\"0b3f2a71-8c1e-4d6b-9f1a-5e2c7d8a9b10\",\"eventType\":\"SettlementPaid\",\"occurredAt\":\"2026-11-05T10:00:00+09:00\",\"aggregateId\":\"42\",\"version\":1,\"payload\":{\"settlementId\":42,\"storeId\":3,\"week\":\"2026-W44\",\"payoutAmt\":51212,\"sellerEmail\":\"seller@example.com\",\"storeName\":\"곳간상회\",\"weekStart\":\"2026-10-26\",\"weekEnd\":\"2026-11-01\",\"paidAt\":\"2026-11-05T10:00:00+09:00\",\"salesAmt\":59000,\"commissionAmt\":6490,\"paymentFeeAmt\":1298,\"items\":[{\"orderNo\":\"20261027-000001\",\"productName\":\"제철 사과 5kg\",\"confirmedAt\":\"2026-10-28T12:00:00+09:00\",\"itemAmt\":59000,\"commissionRate\":11,\"commissionAmt\":6490,\"paymentFeeAmt\":1298,\"payoutAmt\":51212}]}}"
     }
   ]
 }

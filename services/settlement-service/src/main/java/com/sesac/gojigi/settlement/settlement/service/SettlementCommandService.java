@@ -182,9 +182,9 @@ public class SettlementCommandService {
         payoutRepository.save(Payout.of(settlement, store, now));
         history(settlement, SettlementStatus.SCHEDULED, Actor.ADMIN, null);
         // 지급과 같은 트랜잭션에 이벤트를 남긴다 — 커밋 후 발행, 실패하면 아웃박스 발행기가 다시 (V7)
-        eventOutboxService.enqueue("SettlementPaid", String.valueOf(settlement.getId()), new SettlementPaidPayload(settlement.getId(),
-                settlement.getStoreId(), new SettlementWeek(settlement.getWeekStart()).isoWeek(), settlement.getPayoutAmt(),
-                store.getSellerEmail()));
+        // 명세서 Lambda 가 다른 곳을 조회하지 않도록 항목까지 담는다 (10/21 방식 B)
+        eventOutboxService.enqueue("SettlementPaid", String.valueOf(settlement.getId()), SettlementPaidPayload.of(settlement, store,
+                settlementItemRepository.findBySettlementIdOrderByConfirmedAtAsc(settlement.getId())));
         return settlement;
     }
 
