@@ -74,6 +74,9 @@
 
 **폐점 · 탈퇴 조건** (결정 3번 A안) — 판매자 탈퇴는 스토어 폐점 후. 폐점 조건 중 정산 쪽은 `/internal/settlements/outstanding` 의 `clear=true` (진행 중 주문 0건은 order, 폐점 · 탈퇴 판단은 store · user)
 
+- **store 폐점 409 (10/21 박지연)**: `clear=false` 면 `STORE_SETTLEMENT_OUTSTANDING` — `unsettledPayoutAmt + scheduledPayoutAmt + heldPayoutAmt` 를 합쳐 "미정산 n원 — 지급 완료(매주 목요일) 후 폐점할 수 있습니다". 다음 지급 예정일은 고정 문구라 응답에 추가하지 않음. 코드 정의는 store.md · error-codes.md(박지연)
+- **폐점 직후 늦게 적재된 구매확정 (10/21 A안 — 지금대로)**: 구매확정 이벤트가 SQS 처리 전이거나 DLQ 에 있으면 `clear=true` 로 보여 폐점될 수 있습니다. 이후 적재된 정산서는 스토어가 CLOSED 라 **자동 보류("스토어 폐점 — 자동 보류") · 지급 불가**로 남고 관리자가 처리합니다. 금액 손실은 없고, DLQ 알람(config #30)과 admin 정산 화면의 "폐점 스토어 보류" 구분으로 찾습니다. `lastConfirmedAt` 조건(B안)은 DLQ 경우를 막지 못하고 서비스 간 계약만 늘려 채택하지 않음
+
 **지급 규칙** — `SCHEDULED` · 스토어 운영중 · 계좌 있음일 때만. 지급 시 `payout`(계좌 스냅샷) 기록 + `SettlementPaid` 를 **같은 트랜잭션의 `event_outbox` 에 남김** → 커밋 직후 SNS 발행, 실패하면 아웃박스 발행기(30초 · ShedLock)가 같은 `eventId` 로 다시 보냄(최소 1회 전달 — 소비자는 `eventId` 로 중복 제거, 10/20). SNS 가 죽어도 지급은 성공
 - 실패 코드: `SETTLE_INVALID_STATUS`(보류 · 이미 지급) · `SETTLE_STORE_PAYOUT_HELD` · `SETTLE_PAYOUT_ACCOUNT_MISSING` · `SETTLE_NOT_FOUND`
 
