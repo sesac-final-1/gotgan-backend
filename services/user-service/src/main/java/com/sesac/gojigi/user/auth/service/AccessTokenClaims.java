@@ -11,11 +11,11 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Access Token 의 필요한 클레임만 꺼낸다 — sub(Keycloak 사용자 ID) · user_id · store_id · roles.
+ * Access Token 의 필요한 클레임만 꺼낸다 — sub(Keycloak 사용자 ID) · user_id · store_id · roles · email · name(소셜 첫 로그인 회원 생성용).
  * 서명 검증은 하지 않는다: user-service 가 방금 Keycloak 에서 클러스터 내부로 직접 받은 토큰이라서다.
  * 브라우저가 보낸 토큰은 게이트웨이가 JWKS 로 검증한다 (이 클래스를 그 용도로 쓰면 안 된다).
  */
-public record AccessTokenClaims(String keycloakId, Long userId, Long storeId, List<String> roles) {
+public record AccessTokenClaims(String keycloakId, Long userId, Long storeId, List<String> roles, String email, String name) {
 
     /** 서비스가 쓰는 역할만 — default-roles-gotgan · offline_access · uma_authorization 같은 Keycloak 내부 역할 제외 */
     private static final Set<String> SERVICE_ROLES = Set.of("BUYER", "SELLER", "ADMIN");
@@ -38,7 +38,20 @@ public record AccessTokenClaims(String keycloakId, Long userId, Long storeId, Li
                 payload.path("sub").asString(null),
                 longOrNull(payload.path("user_id")),
                 longOrNull(payload.path("store_id")),
-                List.copyOf(roles));
+                List.copyOf(roles),
+                payload.path("email").asString(null),
+                displayName(payload));
+    }
+
+    /** 이름 — name(이름 전체) → given_name(이름만, 카카오 닉네임 매퍼) → preferred_username 순 */
+    private static String displayName(JsonNode payload) {
+        for (String claim : List.of("name", "given_name", "preferred_username")) {
+            String value = payload.path(claim).asString(null);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private static Long longOrNull(JsonNode node) {

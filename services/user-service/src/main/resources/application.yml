@@ -30,7 +30,8 @@ app:
     connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
     read-timeout: 3s
   keycloak:
-    base-url: ${KEYCLOAK_URI:http://localhost:8180}          # 클러스터: http://keycloak:8080
+    base-url: ${KEYCLOAK_URI:http://localhost:8180}          # 클러스터: http://keycloak:8080 — 서버 간 호출(토큰 · Admin API)
+    public-url: ${KEYCLOAK_PUBLIC_URL:${app.keycloak.base-url}}  # 브라우저가 가는 Keycloak 주소 — 클러스터: https://api.gotgan.click (gateway 가 /realms/gotgan/** 를 Keycloak 으로)
     realm: gotgan
     token-uri: ${app.keycloak.base-url}/realms/gotgan/protocol/openid-connect/token
     logout-uri: ${app.keycloak.base-url}/realms/gotgan/protocol/openid-connect/logout
@@ -41,6 +42,10 @@ app:
     refresh-cookie-name: refresh_token
     refresh-cookie-path: /api/auth                            # /api/auth/** 요청에만 실림 (refresh · logout)
     refresh-cookie-secure: true                               # HTTPS 만 — 브라우저는 localhost 는 예외로 허용
+    social:
+      callback-url: ${SOCIAL_CALLBACK_URL:http://localhost:8081/api/auth/social/callback}   # Keycloak 이 code 를 붙여 돌려보내는 주소 — realm redirectUris 에 등록
+      result-url: ${SOCIAL_RESULT_URL:http://localhost:5173/auth/callback}                 # 로그인 후 프론트 페이지 (실패면 ?error=코드)
+      cookie-name: social_login                                                            # state · PKCE 를 담는 10분짜리 쿠키 (Path=/api/auth/social, SameSite=Lax)
     blocked-user-ttl: 30m                                     # 차단 목록 TTL = Keycloak realm Access Token 수명(accessTokenLifespan 1800초) — realm 을 바꾸면 같이
   store:
     mock-closed-store-ids:                                    # TODO(store 개발 완료 시 삭제) MockStoreClient — 폐점으로 볼 store_id (기본: 없음 = 전부 ACTIVE)
