@@ -1,1 +1,4 @@
 rootProject.name = 'order-service'
+
+// 공통 모듈 (libs/common-web) — composite build 로 연결, 따로 배포하지 않는다
+includeBuild('../../libs/common-web')
