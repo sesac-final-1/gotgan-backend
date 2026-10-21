@@ -315,6 +315,17 @@ class SettlementApiIntegrationTest {
             assertThat(payload.path("week").asString()).isEqualTo(W43);
             assertThat(payload.path("sellerEmail").asString()).isEqualTo("s" + storeId + "@example.com");
             assertThat(payload.path("payoutAmt").asLong()).isEqualTo(59_000L - 6_490L - 1_298L);
+            // 명세서 Lambda 용 — 스토어명 · 기간 · 지급 시각 · 합계 · 항목(10/21 방식 B)
+            assertThat(payload.path("storeName").asString()).isEqualTo("스토어" + storeId);
+            assertThat(payload.path("weekStart").asString()).isEqualTo("2026-10-19");
+            assertThat(payload.path("paidAt").asString()).endsWith("+09:00");
+            assertThat(payload.path("salesAmt").asLong()).isEqualTo(59_000L);
+            assertThat(payload.path("items")).hasSize(1);
+            JsonNode line = payload.path("items").get(0);
+            assertThat(line.path("itemAmt").asLong()).isEqualTo(59_000L);
+            assertThat(line.path("commissionAmt").asLong()).isEqualTo(6_490L);
+            assertThat(line.path("payoutAmt").asLong()).isEqualTo(59_000L - 6_490L - 1_298L);
+            assertThat(line.path("confirmedAt").asString()).endsWith("+09:00");
             assertThat(outboxOf(settlementId)).singleElement().satisfies(o -> assertThat(o.isSent()).isTrue());
         }
 
