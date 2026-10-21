@@ -15,6 +15,8 @@ import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelResponse;
 import com.sesac.gojigi.payment.payment.client.dto.PortOnePayment;
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +24,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 /** 포트원 V2 응답 매핑 · 요청 모양 · 오류 변환 (서킷 브레이커 동작은 통합 테스트에서) */
@@ -123,5 +126,19 @@ class PortOneClientAdapterTest {
                 .isEqualTo("PAYMENT_ALREADY_CANCELLED");
         assertThat(PortOneClientAdapter.errorType("<html>bad gateway</html>")).isNull();
         assertThat(PortOneClientAdapter.errorType(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("장애 폴백 — 서킷 OPEN · 연결 실패 모두 EXTERNAL_API_ERROR, 이미 변환된 4xx 거절은 그대로")
+    void unavailable_mapsToExternalApiError() {
+        CircuitBreaker open = CircuitBreaker.ofDefaults("portone");
+        open.transitionToOpenState();
+
+        assertThat(adapter.unavailable("조회", "pay-1", CallNotPermittedException.createCallNotPermittedException(open)).getErrorCode())
+                .isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        assertThat(adapter.unavailable("취소", "pay-1", new ResourceAccessException("Read timed out")).getErrorCode())
+                .isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        PortOneRejectedException rejected = new PortOneRejectedException("거절", "INVALID_REQUEST");
+        assertThat(adapter.unavailable("취소", "pay-1", rejected)).isSameAs(rejected);
     }
 }

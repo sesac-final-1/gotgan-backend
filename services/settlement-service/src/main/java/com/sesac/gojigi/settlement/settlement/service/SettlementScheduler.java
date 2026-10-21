@@ -53,8 +53,8 @@ public class SettlementScheduler {
             SettlementCommandService.AggregateResult result = settlementCommandService.aggregate(lastWeek, Actor.SYSTEM);
             log.info("기동 시 주간 집계 따라잡기 week={} created={} updated={}", result.week(), result.created(), result.updated());
         } catch (RuntimeException e) {
-            log.error("기동 시 주간 집계 실패 — 다음 기동 · 정시 집계 · 관리자 \"지금 집계\"로 다시 week={} cause={}",
-                    lastWeek.isoWeek(), e.toString());
+            log.error("기동 시 주간 집계 실패 — 다음 기동 · 정시 집계 · 관리자 \"지금 집계\"로 다시 week={}",
+                    lastWeek.isoWeek(), e);
         }
     }
 }

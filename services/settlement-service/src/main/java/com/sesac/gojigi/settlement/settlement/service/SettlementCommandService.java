@@ -41,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SettlementCommandService {
 
     static final String AUTO_HOLD_REASON = "스토어 휴면 · 정지 — 자동 보류";
+    static final String CLOSED_HOLD_REASON = "스토어 폐점 — 자동 보류";
     static final String AUTO_RELEASE_REASON = "스토어 운영 재개 — 자동 해제";
 
     private final SettlementRepository settlementRepository;
@@ -102,8 +103,9 @@ public class SettlementCommandService {
             }
             created++;
             history(settlement, null, actor, "주간 집계");
-            if (settlementStoreRepository.findByStoreId(storeId).map(SettlementStore::isPayoutHeld).orElse(false)) {
-                changeToHeld(settlement, AUTO_HOLD_REASON, Actor.SYSTEM);
+            Optional<SettlementStore> snapshot = settlementStoreRepository.findByStoreId(storeId);
+            if (snapshot.map(SettlementStore::isPayoutHeld).orElse(false)) {
+                changeToHeld(settlement, autoHoldReason(snapshot.get().getStoreStatus()), Actor.SYSTEM);
                 autoHeld++;
             }
         }
@@ -135,14 +137,15 @@ public class SettlementCommandService {
     }
 
     /**
-     * StoreStatusChanged 반영 직후 — 휴면 · 정지면 지급예정 정산서를 자동 보류, 운영 재개면 "자동 보류"만 자동 해제.
-     * 관리자가 직접 건 보류는 관리자가 푼다 (마지막 이력이 SYSTEM 인 것만 해제).
+     * StoreStatusChanged 반영 직후 — 운영 중(ACTIVE)이 아니면(휴면 · 정지 · 폐점) 지급예정 정산서를 자동 보류, 운영 재개면 "자동 보류"만 자동 해제.
+     * 관리자가 직접 건 보류는 관리자가 푼다 (마지막 이력이 SYSTEM 인 것만 해제). 폐점은 다시 ACTIVE 가 되지 않으므로 자동 해제도 없다.
      */
     @Transactional
-    public void applyStoreStatus(Long storeId, boolean payoutHeld) {
-        if (payoutHeld) {
+    public void applyStoreStatus(Long storeId, String storeStatus) {
+        if (!SettlementStore.ACTIVE.equals(storeStatus)) {
+            String reason = autoHoldReason(storeStatus);
             settlementRepository.findByStoreIdAndStatus(storeId, SettlementStatus.SCHEDULED)
-                    .forEach(s -> changeToHeld(s, AUTO_HOLD_REASON, Actor.SYSTEM));
+                    .forEach(s -> changeToHeld(s, reason, Actor.SYSTEM));
             return;
         }
         settlementRepository.findByStoreIdAndStatus(storeId, SettlementStatus.HELD).stream()
@@ -152,6 +155,11 @@ public class SettlementCommandService {
                     s.release();
                     history(s, SettlementStatus.HELD, Actor.SYSTEM, AUTO_RELEASE_REASON);
                 });
+    }
+
+    /** 자동 보류 사유 — 이력 · 관리자 화면에 그대로 보이므로 상태에 맞게 (폐점은 따로) */
+    static String autoHoldReason(String storeStatus) {
+        return SettlementStore.CLOSED.equals(storeStatus) ? CLOSED_HOLD_REASON : AUTO_HOLD_REASON;
     }
 
     /** 정산서 1건 지급 — 지급예정 · 스토어 운영중 · 계좌 있음일 때만. SettlementPaid 는 아웃박스에 남기고 커밋 후 발행 */

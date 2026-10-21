@@ -103,8 +103,9 @@ public class EventOutboxService {
         } catch (RuntimeException e) {
             int attempts = record(outboxId, e.toString());
             if (attempts >= maxAttempts) {
-                log.error("이벤트 발행이 {}회 실패 — 수동 확인 필요 eventType={} aggregateId={} eventId={} cause={}",
-                        attempts, row.getEventType(), row.getAggregateId(), row.getEventId(), e.toString());
+                // 사람이 봐야 하는 실패 — error + 스택트레이스 (컨벤션 2-8)
+                log.error("이벤트 발행이 {}회 실패 — 수동 확인 필요 eventType={} aggregateId={} eventId={}",
+                        attempts, row.getEventType(), row.getAggregateId(), row.getEventId(), e);
             } else {
                 log.warn("이벤트 발행 실패 — 발행기가 다시 보냄 eventType={} aggregateId={} attempt={} cause={}",
                         row.getEventType(), row.getAggregateId(), attempts, e.toString());

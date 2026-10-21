@@ -192,6 +192,31 @@ class SqsEventPollerTest {
     }
 
     @Test
+    @DisplayName("수신 실패 로그 — 연속 실패 첫 회(스택) · 이후 12회(1분)마다 요약만, 반복 실패로 로그가 넘치지 않게")
+    void receiveFailureLogInterval() {
+        assertThat(SqsEventPoller.shouldLogFailure(1)).isTrue();
+        assertThat(SqsEventPoller.shouldLogFailure(2)).isFalse();
+        assertThat(SqsEventPoller.shouldLogFailure(11)).isFalse();
+        assertThat(SqsEventPoller.shouldLogFailure(12)).isTrue();
+        assertThat(SqsEventPoller.shouldLogFailure(24)).isTrue();
+    }
+
+    @Test
+    @DisplayName("수신이 실패해도 폴러는 멈추지 않고 다시 받는다 — 복구되면 정상 수신")
+    void poll_receiveFailure_retriesAndRecovers() {
+        when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class)))
+                .thenThrow(SdkClientException.create("자격 증명 만료"))
+                .thenReturn(ReceiveMessageResponse.builder().build());
+
+        poller.start();
+        try {
+            verify(sqsClient, timeout(8_000).atLeast(2)).receiveMessage(any(ReceiveMessageRequest.class));
+        } finally {
+            poller.stop();
+        }
+    }
+
+    @Test
     @DisplayName("큐 URL 이 비어 있으면 폴러 스레드를 띄우지 않음 (로컬 · 테스트)")
     void start_noQueueUrl_noWorkers() {
         SqsEventPoller idle = new SqsEventPoller(sqsClient, JsonMapper.builder().build(), List.of(), "", "", 20, 10);
