@@ -42,11 +42,17 @@ spring:
               uri: ${ADMIN_SERVICE_URI:http://localhost:8088}
               predicates:
                 - Path=/api/admin/**
+            - id: keycloak                  # 소셜 로그인 — 브라우저가 Keycloak 로그인 · 제공자 복귀(broker) 화면으로 온다. gotgan realm 과 화면 리소스만 (관리 콘솔 · master realm 은 열지 않음)
+              uri: ${KEYCLOAK_URI:http://localhost:8180}
+              predicates:
+                - Path=/realms/gotgan/**,/resources/**
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan   # 토큰의 iss 와 정확히 같아야 함 (가이드라인 08장)
+          # iss 는 Keycloak 공개 주소(KC_HOSTNAME, 클러스터 https://api.gotgan.click), 공개키는 내부 주소에서 받는다 — jwk-set-uri 가 있으면 issuer 조회 없이 검증만
+          issuer-uri: ${KEYCLOAK_ISSUER:${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan}   # 토큰의 iss 와 정확히 같아야 함 (가이드라인 08장)
+          jwk-set-uri: ${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan/protocol/openid-connect/certs
 
   data:
     redis:
