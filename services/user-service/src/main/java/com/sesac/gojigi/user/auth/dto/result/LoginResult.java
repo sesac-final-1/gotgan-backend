@@ -1,4 +1,4 @@
-package com.sesac.gojigi.user.auth.service;
+package com.sesac.gojigi.user.auth.dto.result;
 
 import com.sesac.gojigi.user.auth.dto.response.LoginResponse;
 

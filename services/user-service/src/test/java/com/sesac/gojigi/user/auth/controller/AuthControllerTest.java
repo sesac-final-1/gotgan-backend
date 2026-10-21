@@ -14,15 +14,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.sesac.gojigi.user.auth.component.SocialLoginUrls;
 import com.sesac.gojigi.user.auth.dto.response.LoginResponse;
+import com.sesac.gojigi.user.auth.dto.result.LoginResult;
+import com.sesac.gojigi.user.auth.dto.result.SignupResult;
+import com.sesac.gojigi.user.auth.dto.result.SocialLoginResult;
+import com.sesac.gojigi.user.auth.dto.result.SocialLoginStart;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.auth.service.AuthService;
-import com.sesac.gojigi.user.auth.service.LoginResult;
-import com.sesac.gojigi.user.auth.service.SignupResult;
-import com.sesac.gojigi.user.auth.service.SocialLoginResult;
-import com.sesac.gojigi.user.auth.service.SocialLoginStart;
-import com.sesac.gojigi.user.auth.service.SocialLoginUrls;
 import com.sesac.gojigi.user.common.exception.GlobalExceptionHandler;
 import jakarta.servlet.http.Cookie;
 import java.util.List;

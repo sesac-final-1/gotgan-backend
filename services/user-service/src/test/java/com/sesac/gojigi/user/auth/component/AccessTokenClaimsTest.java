@@ -1,4 +1,4 @@
-package com.sesac.gojigi.user.auth.service;
+package com.sesac.gojigi.user.auth.component;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,11 +11,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
-class AccessTokenClaimsTest {
+public class AccessTokenClaimsTest {
 
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
-    static String token(String payloadJson) {
+    // AuthServiceTest 도 쓰는 가짜 JWT (서명 검증 없음 — 게이트웨이가 검증)
+    public static String token(String payloadJson) {
         Base64.Encoder enc = Base64.getUrlEncoder().withoutPadding();
         return enc.encodeToString("{\"alg\":\"RS256\"}".getBytes(StandardCharsets.UTF_8)) + "."
                 + enc.encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8)) + ".signature";

@@ -1,4 +1,4 @@
-package com.sesac.gojigi.user.auth.service;
+package com.sesac.gojigi.user.auth.dto.result;
 
 /** 소셜 로그인 시작 — 브라우저를 보낼 Keycloak 로그인 주소 · state 쿠키 값 */
 public record SocialLoginStart(String authorizationUrl, String cookieValue) {
