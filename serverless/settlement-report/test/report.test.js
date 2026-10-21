@@ -1,14 +1,14 @@
 // 핸들러 단위 테스트 — node --test (담당 jihoon-devstu). AWS 클라이언트는 가짜로 넣는다
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCsv, buildEmail, createHandler, csvCell, reportKey } from '../src/report.js';
+import { buildCsv, buildEmail, createHandler, csvCell, displayDateTime, reportKey } from '../src/report.js';
 
 const ENV = { TABLE: 'sesac-gojigi-settlement-reports', BUCKET: 'sesac-gojigi-reports-test', FROM_EMAIL: 'from@example.com',
   FRONT_URL: 'https://gotgan-ashy.vercel.app' };
 
 const payload = {
   settlementId: 42, storeId: 3, week: '2026-W44', payoutAmt: 51212, sellerEmail: 'seller@example.com',
-  storeName: '곳간상회', weekStart: '2026-10-26', weekEnd: '2026-11-01', paidAt: '2026-11-05T10:00:00+09:00',
+  storeName: '곳간상회', weekStart: '2026-10-26', weekEnd: '2026-11-01', paidAt: '2026-11-05T10:00:26.739816283+09:00',
   salesAmt: 59000, commissionAmt: 6490, paymentFeeAmt: 1298,
   items: [{ orderNo: '20261027-000001', productName: '제철 사과, 5kg "특"', confirmedAt: '2026-10-28T12:00:00+09:00',
     itemAmt: 59000, commissionRate: 11.0, commissionAmt: 6490, paymentFeeAmt: 1298, payoutAmt: 51212 }],
@@ -93,10 +93,18 @@ test('CSV — BOM · 머리 정보 · 항목 · 합계, 쉼표 · 따옴표 있�
   assert.match(csv, /스토어,곳간상회/);
   assert.match(csv, /정산 주차,2026-W44 \(2026-10-26 ~ 2026-11-01\)/);
   assert.match(csv, /주문번호,상품명,구매확정일시,판매금액,수수료율\(%\),판매수수료,결제수수료,지급액/);
-  assert.match(csv, /20261027-000001,"제철 사과, 5kg ""특""",2026-10-28T12:00:00\+09:00,59000,11,6490,1298,51212/);
+  assert.match(csv, /20261027-000001,"제철 사과, 5kg ""특""",2026-10-28 12:00,59000,11,6490,1298,51212/);
+  assert.match(csv, /지급일시,2026-11-05 10:00/);
   assert.match(csv, /합계,1건,,59000,,6490,1298,51212/);
   assert.equal(csvCell(null), '');
   assert.equal(csvCell('줄\n바꿈'), '"줄\n바꿈"');
+});
+
+test('엑셀용 일시 — KST ISO(나노초 포함)를 날짜 · 시:분으로, 형식이 다르면 그대로', () => {
+  assert.equal(displayDateTime('2026-10-21T12:03:26.739816283+09:00'), '2026-10-21 12:03');
+  assert.equal(displayDateTime('2026-10-13T10:00:00+09:00'), '2026-10-13 10:00');
+  assert.equal(displayDateTime('2026-10-13'), '2026-10-13');
+  assert.equal(displayDateTime(null), '');
 });
 
 test('메일 — 제목에 주차 · 지급액, 본문에 판매자 정산 화면 링크(다운로드는 화면에서 10분 링크)', () => {

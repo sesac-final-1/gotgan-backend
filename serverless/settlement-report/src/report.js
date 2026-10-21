@@ -20,13 +20,22 @@ export function csvCell(value) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/**
+ * 엑셀에서 읽기 쉬운 일시 — 이벤트 일시는 KST(+09:00) ISO 라 날짜와 시:분만 쓴다.
+ * 2026-10-21T12:03:26.739816283+09:00 → 2026-10-21 12:03. 형식이 다르면 받은 값 그대로
+ */
+export function displayDateTime(iso) {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(iso ?? '');
+  return m ? `${m[1]} ${m[2]}` : (iso ?? '');
+}
+
 /** 엑셀에서 한글이 깨지지 않게 UTF-8 BOM 을 붙인다 */
 export function buildCsv(p) {
   const header = ['주문번호', '상품명', '구매확정일시', '판매금액', '수수료율(%)', '판매수수료', '결제수수료', '지급액'];
-  const rows = (p.items ?? []).map((i) => [i.orderNo, i.productName, i.confirmedAt, i.itemAmt, i.commissionRate,
+  const rows = (p.items ?? []).map((i) => [i.orderNo, i.productName, displayDateTime(i.confirmedAt), i.itemAmt, i.commissionRate,
     i.commissionAmt, i.paymentFeeAmt, i.payoutAmt]);
   const total = ['합계', `${(p.items ?? []).length}건`, '', p.salesAmt, '', p.commissionAmt, p.paymentFeeAmt, p.payoutAmt];
-  const meta = [['스토어', p.storeName], ['정산 주차', `${p.week} (${p.weekStart} ~ ${p.weekEnd})`], ['지급일시', p.paidAt], []];
+  const meta = [['스토어', p.storeName], ['정산 주차', `${p.week} (${p.weekStart} ~ ${p.weekEnd})`], ['지급일시', displayDateTime(p.paidAt)], []];
   return '﻿' + [...meta, header, ...rows, total].map((r) => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
 }
 
