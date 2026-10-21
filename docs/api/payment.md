@@ -135,7 +135,16 @@ order는 409 · 404를 자기 도메인 코드로 바꾸고 **서킷 실패로 �
 - 서킷 브레이커 인스턴스 이름은 가이드라인 06장 규칙대로 **`payment`**(대상 서비스 이름). 지금 order `application.yml`의 `paymentClient`는 템플릿 값이라 맞춰 주세요. payment 쪽도 `portoneClient` → `portone`으로 바꿉니다
 - 0원 주문: 결제 준비 · 검증 단계 생략 → 바로 주문 PAID (위 1번)
 - `PAYMENT_NOT_COMPLETED` · `EXTERNAL_API_ERROR` 때는 결제 대기를 유지하고 만료 스케줄러에서 4번 조회로 확정하는 것을 권장 (2번 표)
-- **취소 `PAYMENT_CANCEL_PENDING`(409)은 실패가 아니라 "아직 모름"** — 보상 · 클레임을 실패 처리하지 말고 같은 `sagaId` 로 재시도 (권장: 30초 · 1분 · 5분 …). payment 복구 스케줄러가 먼저 확정할 수 있으므로 재시도하면 결국 200 (10/20 추가)
+- **취소 `PAYMENT_CANCEL_PENDING`(409)은 실패가 아니라 "아직 모름"** — 보상 · 클레임을 실패 처리하지 말고 같은 `sagaId` 로 재시도. payment 복구 스케줄러가 먼저 확정할 수 있으므로 재시도하면 결국 200 (10/20 추가)
+- **order 취소 재시도 정책 (10/21 이경석 확정)**
+
+  | payment 응답 | order 처리 |
+  |---|---|
+  | 409 `PAYMENT_CANCEL_PENDING` · order 쪽 타임아웃 · 5xx | "모름" — 스케줄러가 같은 `sagaId` 로 **1분 · 1분 · 2분 뒤, 이후 5분 간격 (최대 8회)**. 첫 요청 후 **30분**이 지나도 확정되지 않으면 수동 확인 |
+  | 502 `EXTERNAL_API_ERROR`(포트원 확정 거절) | order 서킷 실패로 세므로 **2~3회만** 재시도 후 수동 확인 |
+  | 409 `PAYMENT_CANCEL_AMOUNT_EXCEEDED` · `PAYMENT_INVALID_STATUS` | 재시도하지 않음 (`code` 로 구분) |
+
+  - order 가 수동 확인으로 넘긴 뒤에도 payment 쪽 PENDING 은 복구 스케줄러가 계속 마무리합니다(8절). 수동 확인 때는 4번 `GET /internal/payments?orderNo=` 의 상태 · `payment_cancel.status` 를 봅니다
 
 ## 10/16 설계 정리 — 문서끼리 어긋났던 부분
 
