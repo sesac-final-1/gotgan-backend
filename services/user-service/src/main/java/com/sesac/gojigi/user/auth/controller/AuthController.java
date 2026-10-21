@@ -1,6 +1,7 @@
 package com.sesac.gojigi.user.auth.controller;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.user.auth.component.AuthCookies;
 import com.sesac.gojigi.user.auth.component.SocialLoginUrls;
 import com.sesac.gojigi.user.auth.dto.request.EmailAvailabilityRequest;
 import com.sesac.gojigi.user.auth.dto.request.LoginRequest;
@@ -16,15 +17,12 @@ import com.sesac.gojigi.user.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.time.Duration;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -34,39 +32,20 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.util.WebUtils;
 
 /**
  * 인증 API — 게이트웨이에서 공개 경로(/api/auth/**). Access Token 은 body, Refresh Token 은 HttpOnly 쿠키 (컨벤션 4-4).
- * 쿠키: HttpOnly · Secure · SameSite=Strict · Path=/api/auth — 프론트 JS 가 읽지 못하고 /api/auth/** 요청에만 실린다.
+ * 쿠키 읽기 · 만들기(이름 · 경로 · 속성)는 AuthCookies.
  */
 @Tag(name = "인증", description = "회원가입 · 로그인 · 토큰 재발급 · 로그아웃 — 인가: 공개 (Keycloak 대리 호출)")
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
-
-    private static final String SOCIAL_COOKIE_PATH = "/api/auth/social";
-    private static final Duration SOCIAL_COOKIE_MAX_AGE = Duration.ofMinutes(10);   // 제공자 로그인을 마치고 돌아올 시간
 
     private final AuthService authService;
     private final SocialLoginUrls socialLoginUrls;
-    private final String socialCookieName;
-    private final String refreshCookieName;
-    private final String refreshCookiePath;
-    private final boolean refreshCookieSecure;
-
-    public AuthController(AuthService authService, SocialLoginUrls socialLoginUrls,
-            @Value("${app.auth.social.cookie-name:social_login}") String socialCookieName,
-            @Value("${app.auth.refresh-cookie-name:refresh_token}") String refreshCookieName,
-            @Value("${app.auth.refresh-cookie-path}") String refreshCookiePath,
-            @Value("${app.auth.refresh-cookie-secure:true}") boolean refreshCookieSecure) {
-        this.authService = authService;
-        this.socialLoginUrls = socialLoginUrls;
-        this.socialCookieName = socialCookieName;
-        this.refreshCookieName = refreshCookieName;
-        this.refreshCookiePath = refreshCookiePath;
-        this.refreshCookieSecure = refreshCookieSecure;
-    }
+    private final AuthCookies authCookies;
 
     @Operation(summary = "로그인", description = """
             인가: 공개. Access Token 은 body(data.accessToken), Refresh Token 은 Set-Cookie refresh_token
@@ -84,7 +63,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         LoginResult result = authService.login(request);
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie(result.refreshToken(), result.refreshExpiresIn()).toString())
+                .header(HttpHeaders.SET_COOKIE, authCookies.refresh(result.refreshToken(), result.refreshExpiresIn()))
                 .body(ApiResponse.success("로그인되었습니다.", result.response()));
     }
 
@@ -119,7 +98,7 @@ public class AuthController {
         }
         LoginResult login = result.login();
         return ResponseEntity.status(HttpStatus.CREATED)
-                .header(HttpHeaders.SET_COOKIE, refreshCookie(login.refreshToken(), login.refreshExpiresIn()).toString())
+                .header(HttpHeaders.SET_COOKIE, authCookies.refresh(login.refreshToken(), login.refreshExpiresIn()))
                 .body(ApiResponse.success("회원가입이 완료되었습니다.", new SignupResponse(result.userId(), login.response())));
     }
 
@@ -128,10 +107,9 @@ public class AuthController {
             쿠키가 없거나 이미 끝난 세션이어도 200 — 여러 번 눌러도 같다. 프론트는 메모리의 Access Token 을 버린다.""")
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request) {
-        Cookie cookie = WebUtils.getCookie(request, refreshCookieName);
-        authService.logout(cookie == null ? null : cookie.getValue());
+        authService.logout(authCookies.refreshToken(request));
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie("", 0).toString())   // 같은 이름 · 경로로 덮어써야 브라우저가 지운다
+                .header(HttpHeaders.SET_COOKIE, authCookies.clearRefresh())
                 .body(ApiResponse.success("로그아웃되었습니다."));
     }
 
@@ -147,10 +125,9 @@ public class AuthController {
     })
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(HttpServletRequest request) {
-        Cookie cookie = WebUtils.getCookie(request, refreshCookieName);
-        LoginResult result = authService.refresh(cookie == null ? null : cookie.getValue());
+        LoginResult result = authService.refresh(authCookies.refreshToken(request));
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, refreshCookie(result.refreshToken(), result.refreshExpiresIn()).toString())
+                .header(HttpHeaders.SET_COOKIE, authCookies.refresh(result.refreshToken(), result.refreshExpiresIn()))
                 .body(ApiResponse.success("토큰을 재발급했습니다.", result.response()));
     }
 
@@ -164,7 +141,7 @@ public class AuthController {
         SocialLoginStart start = authService.startSocialLogin(provider);
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(start.authorizationUrl()))
-                .header(HttpHeaders.SET_COOKIE, socialCookie(start.cookieValue(), SOCIAL_COOKIE_MAX_AGE).toString())
+                .header(HttpHeaders.SET_COOKIE, authCookies.social(start.cookieValue()))
                 .build();
     }
 
@@ -177,38 +154,16 @@ public class AuthController {
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String error) {
-        Cookie cookie = WebUtils.getCookie(request, socialCookieName);
-        SocialLoginResult result = authService.completeSocialLogin(cookie == null ? null : cookie.getValue(), code, state, error);
+        SocialLoginResult result = authService.completeSocialLogin(authCookies.socialState(request), code, state, error);
         ResponseEntity.BodyBuilder redirect = ResponseEntity.status(HttpStatus.FOUND)
-                .header(HttpHeaders.SET_COOKIE, socialCookie("", Duration.ZERO).toString());   // state 는 한 번만 쓴다
+                .header(HttpHeaders.SET_COOKIE, authCookies.clearSocial());
         if (!result.succeeded()) {
             return redirect.location(URI.create(socialLoginUrls.failureUrl(result.errorCode()))).build();
         }
         LoginResult login = result.login();
         return redirect
-                .header(HttpHeaders.SET_COOKIE, refreshCookie(login.refreshToken(), login.refreshExpiresIn()).toString())
+                .header(HttpHeaders.SET_COOKIE, authCookies.refresh(login.refreshToken(), login.refreshExpiresIn()))
                 .location(URI.create(socialLoginUrls.successUrl()))
-                .build();
-    }
-
-    /** state · PKCE 쿠키 — Keycloak(다른 사이트)에서 돌아오는 최상위 이동에도 실려야 해서 SameSite=Lax */
-    private ResponseCookie socialCookie(String value, Duration maxAge) {
-        return ResponseCookie.from(socialCookieName, value)
-                .httpOnly(true)
-                .secure(refreshCookieSecure)
-                .sameSite("Lax")
-                .path(SOCIAL_COOKIE_PATH)
-                .maxAge(maxAge)
-                .build();
-    }
-
-    private ResponseCookie refreshCookie(String refreshToken, long maxAgeSeconds) {
-        return ResponseCookie.from(refreshCookieName, refreshToken)
-                .httpOnly(true)
-                .secure(refreshCookieSecure)
-                .sameSite("Strict")
-                .path(refreshCookiePath)
-                .maxAge(Duration.ofSeconds(maxAgeSeconds))   // Keycloak refresh_expires_in (세션 14일) · 로그아웃은 0 (삭제)
                 .build();
     }
 }
