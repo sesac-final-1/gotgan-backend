@@ -60,4 +60,14 @@ class AccessTokenClaimsTest {
         assertThatThrownBy(() -> AccessTokenClaims.parse(null, jsonMapper))
                 .isInstanceOf(AuthException.class);
     }
+
+    @Test
+    @DisplayName("email · 이름(name → given_name → preferred_username 순)을 꺼낸다")
+    void parse_emailAndDisplayName() {
+        assertThat(AccessTokenClaims.parse(token("{\"sub\":\"a\",\"email\":\"a@b.com\",\"name\":\"홍길동\",\"given_name\":\"길동\"}"), jsonMapper))
+                .extracting(AccessTokenClaims::email, AccessTokenClaims::name).containsExactly("a@b.com", "홍길동");
+        assertThat(AccessTokenClaims.parse(token("{\"sub\":\"a\",\"given_name\":\"카카오닉\"}"), jsonMapper).name()).isEqualTo("카카오닉");
+        assertThat(AccessTokenClaims.parse(token("{\"sub\":\"a\",\"preferred_username\":\"u@b.com\"}"), jsonMapper).name()).isEqualTo("u@b.com");
+        assertThat(AccessTokenClaims.parse(token("{\"sub\":\"a\"}"), jsonMapper).name()).isNull();
+    }
 }

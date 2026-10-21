@@ -390,4 +390,89 @@ class KeycloakClientAdapterTest {
     private static String basic(String credentials) {
         return "Basic " + Base64.getEncoder().encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
     }
+
+    @Test
+    @DisplayName("재발급 — grant_type=refresh_token 폼, invalid_grant(만료 · 로그아웃)는 AUTH_SESSION_EXPIRED")
+    void refreshGrant_sendsRefreshTokenAndMapsInvalidGrant() {
+        server.expect(requestTo(TOKEN_URL))
+                .andExpect(content().formData(new LinkedMultiValueMap<>(Map.of(
+                        "grant_type", List.of("refresh_token"), "refresh_token", List.of("rt-1")))))
+                .andRespond(withSuccess("""
+                        {"access_token":"at","expires_in":1800,"refresh_token":"rt-2","refresh_expires_in":1209600}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"error\":\"invalid_grant\",\"error_description\":\"Session not active\"}"));
+
+        assertThat(adapter.refreshGrant("rt-1").refreshToken()).isEqualTo("rt-2");
+        assertThatThrownBy(() -> adapter.refreshGrant("rt-1"))
+                .isInstanceOf(AuthException.class)
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_SESSION_EXPIRED);
+    }
+
+    @Test
+    @DisplayName("소셜 code 교환 — authorization_code · PKCE verifier · redirect_uri, invalid_grant 는 AUTH_SOCIAL_LOGIN_FAILED")
+    void authorizationCodeGrant_sendsPkceAndMapsInvalidGrant() {
+        server.expect(requestTo(TOKEN_URL))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, basic("gotgan-backend:test-secret")))
+                .andExpect(content().formData(new LinkedMultiValueMap<>(Map.of(
+                        "grant_type", List.of("authorization_code"), "code", List.of("c-1"),
+                        "code_verifier", List.of("v-1"), "redirect_uri", List.of("https://front/cb")))))
+                .andRespond(withSuccess("""
+                        {"access_token":"at","expires_in":1800,"refresh_token":"rt","refresh_expires_in":1209600}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"error\":\"invalid_grant\",\"error_description\":\"Code not valid\"}"));
+        server.expect(requestTo(TOKEN_URL)).andRespond(withStatus(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"error\":\"unauthorized_client\"}"));
+
+        assertThat(adapter.authorizationCodeGrant("c-1", "v-1", "https://front/cb").accessToken()).isEqualTo("at");
+        assertThatThrownBy(() -> adapter.authorizationCodeGrant("c-1", "v-1", "https://front/cb"))
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_SOCIAL_LOGIN_FAILED);
+        assertThatThrownBy(() -> adapter.authorizationCodeGrant("c-1", "v-1", "https://front/cb"))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
+    @Test
+    @DisplayName("user_id 속성 저장 — 현재 사용자 표현을 받아 attributes 에 user_id 만 더해 PUT (다른 값은 그대로)")
+    void setUserIdAttribute_mergesAttributesAndPuts() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-7"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {"id":"kc-7","username":"k@e.com","email":"k@e.com","firstName":"카카오","enabled":true,
+                         "attributes":{"locale":["ko"]}}
+                        """, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-7"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sa-token"))
+                .andExpect(content().json("""
+                        {"id":"kc-7","username":"k@e.com","email":"k@e.com","firstName":"카카오","enabled":true,
+                         "attributes":{"locale":["ko"],"user_id":["7"]}}
+                        """, true))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        adapter.setUserIdAttribute("kc-7", 7L);
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("user_id 속성 저장 — 4xx 는 EXTERNAL_API_ERROR, 연결 실패 폴백도 EXTERNAL_API_ERROR")
+    void setUserIdAttribute_failures() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-7")).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThatThrownBy(() -> adapter.setUserIdAttribute("kc-7", 7L))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        for (String fallback : List.of("refreshGrantFallback", "setUserIdAttributeFallback")) {
+            Object[] args = fallback.equals("refreshGrantFallback")
+                    ? new Object[] { "rt", new ResourceAccessException("down") }
+                    : new Object[] { "kc-7", 7L, new ResourceAccessException("down") };
+            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, fallback, args))
+                    .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        }
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "authorizationCodeGrantFallback",
+                "c", "v", "r", new ResourceAccessException("down")))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
 }

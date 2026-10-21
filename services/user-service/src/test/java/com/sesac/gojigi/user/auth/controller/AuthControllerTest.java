@@ -2,6 +2,8 @@ package com.sesac.gojigi.user.auth.controller;
 
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -18,6 +20,9 @@ import com.sesac.gojigi.user.auth.exception.AuthException;
 import com.sesac.gojigi.user.auth.service.AuthService;
 import com.sesac.gojigi.user.auth.service.LoginResult;
 import com.sesac.gojigi.user.auth.service.SignupResult;
+import com.sesac.gojigi.user.auth.service.SocialLoginResult;
+import com.sesac.gojigi.user.auth.service.SocialLoginStart;
+import com.sesac.gojigi.user.auth.service.SocialLoginUrls;
 import com.sesac.gojigi.user.common.exception.GlobalExceptionHandler;
 import jakarta.servlet.http.Cookie;
 import java.util.List;
@@ -38,12 +43,15 @@ class AuthControllerTest {
     @Mock
     private AuthService authService;
 
+    private static final SocialLoginUrls URLS = new SocialLoginUrls("https://api.example", "gotgan", "gotgan-backend",
+            "https://front.example/api/auth/social/callback", "https://front.example/auth/callback");
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new AuthController(authService, "refresh_token", "/api/auth", true))
+                .standaloneSetup(new AuthController(authService, URLS, "social_login", "refresh_token", "/api/auth", true))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -200,5 +208,71 @@ class AuthControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
         verify(authService).logout(null);
+    }
+
+    @Test
+    @DisplayName("재발급 — Refresh 쿠키로 새 Access Token(body) · 새 Refresh 쿠키")
+    void refresh_withCookie_returnsTokenAndRotatesCookie() throws Exception {
+        // given
+        LoginResponse response = new LoginResponse("access-2", 1800, new LoginResponse.LoginUser(7L, "카카오회원", List.of("BUYER"), null));
+        given(authService.refresh("rt-1")).willReturn(new LoginResult(response, "rt-2", 1209600));
+
+        // when · then
+        mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refresh_token", "rt-1")))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(containsString("refresh_token=rt-2"), containsString("HttpOnly"))))
+                .andExpect(jsonPath("$.data.accessToken").value("access-2"))
+                .andExpect(jsonPath("$.data.user.userId").value(7));
+    }
+
+    @Test
+    @DisplayName("재발급 — 쿠키 없음 · 만료는 401 AUTH_SESSION_EXPIRED")
+    void refresh_expired_returns401() throws Exception {
+        given(authService.refresh(null)).willThrow(new AuthException(AuthErrorCode.AUTH_SESSION_EXPIRED));
+
+        mockMvc.perform(post("/api/auth/refresh"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH_SESSION_EXPIRED"));
+    }
+
+    @Test
+    @DisplayName("소셜 시작 — Keycloak 로 302, state 쿠키는 HttpOnly · SameSite=Lax · Path=/api/auth/social · 10분")
+    void startSocialLogin_redirectsWithStateCookie() throws Exception {
+        given(authService.startSocialLogin("kakao")).willReturn(new SocialLoginStart("https://api.example/realms/gotgan/auth?x", "kakao.s.v"));
+
+        mockMvc.perform(get("/api/auth/social/kakao"))
+                .andExpect(status().isFound())
+                .andExpect(header().string(HttpHeaders.LOCATION, "https://api.example/realms/gotgan/auth?x"))
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(containsString("social_login=kakao.s.v"),
+                        containsString("Path=/api/auth/social"), containsString("Max-Age=600"), containsString("HttpOnly"),
+                        containsString("SameSite=Lax"))));
+    }
+
+    @Test
+    @DisplayName("소셜 콜백 성공 — state 쿠키 삭제 · Refresh 쿠키 발급 · 결과 페이지로 302")
+    void completeSocialLogin_success_setsRefreshCookieAndRedirects() throws Exception {
+        LoginResponse response = new LoginResponse("access", 1800, new LoginResponse.LoginUser(7L, "카카오회원", List.of("BUYER"), null));
+        given(authService.completeSocialLogin("kakao.s.v", "c-1", "s", null))
+                .willReturn(SocialLoginResult.success(new LoginResult(response, "rt-1", 1209600)));
+
+        mockMvc.perform(get("/api/auth/social/callback").param("code", "c-1").param("state", "s")
+                        .cookie(new Cookie("social_login", "kakao.s.v")))
+                .andExpect(status().isFound())
+                .andExpect(header().string(HttpHeaders.LOCATION, "https://front.example/auth/callback"))
+                .andExpect(header().stringValues(HttpHeaders.SET_COOKIE, hasItem(allOf(startsWith("social_login=;"), containsString("Max-Age=0")))))
+                .andExpect(header().stringValues(HttpHeaders.SET_COOKIE, hasItem(allOf(startsWith("refresh_token=rt-1"),
+                        containsString("Path=/api/auth"), containsString("SameSite=Strict")))));
+    }
+
+    @Test
+    @DisplayName("소셜 콜백 실패 — Refresh 쿠키 없이 결과 페이지?error=코드 로 302")
+    void completeSocialLogin_failure_redirectsWithError() throws Exception {
+        given(authService.completeSocialLogin(null, null, null, "access_denied"))
+                .willReturn(SocialLoginResult.failure("AUTH_SOCIAL_LOGIN_FAILED"));
+
+        mockMvc.perform(get("/api/auth/social/callback").param("error", "access_denied"))
+                .andExpect(status().isFound())
+                .andExpect(header().string(HttpHeaders.LOCATION, "https://front.example/auth/callback?error=AUTH_SOCIAL_LOGIN_FAILED"))
+                .andExpect(header().stringValues(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.everyItem(startsWith("social_login=;"))));
     }
 }
