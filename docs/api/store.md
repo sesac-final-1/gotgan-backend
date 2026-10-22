@@ -101,8 +101,8 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 | `storeName` | 필수, 50자 이하 |
 | `slug` | 3~30자, 영소문자 · 숫자 · `-`, `-` 로 시작 · 끝 금지, 예약어(`admin` · `seller` · `new` · `api` · `me`) 금지. 승인 후 변경 불가 |
 | `categoryId` | 필수, 양수. 상위 카테고리 존재 · 사용 여부는 **store 가 확인하지 않음**(심사 참고용 — 설계 정리 4) |
-| `intro` | 선택. HTML 은 sanitizer 로 정화해 저장 |
-| `representativeProducts` | **2~10개**. `name` 필수 · `subCategory`(세부 분류 이름) 필수 · `price` 1 이상. 심사 화면 표시용이라 받은 모양 그대로 JSON 컬럼에 저장 |
+| `intro` | 선택, 5000자 이하. HTML 은 sanitizer 로 정화해 저장(서식 · 문단 · 링크만) |
+| `representativeProducts` | **2~10개**. `name`(100자 이하) · `subCategory`(세부 분류 이름, 50자 이하) 필수 · `price` 1 이상. 심사 화면 표시용이라 받은 모양 그대로 JSON 컬럼에 저장 |
 | `expectedMonthlySales` | 선택. `UNDER_5M` · `FROM_5M_TO_20M` · `FROM_20M_TO_100M` · `OVER_100M` |
 | `salesChannel` | 선택, 255자 이하 |
 | `settlementAccount` | `bank` 30자 · `number` 30자 · `holder` 50자, 모두 필수. 승인 때 `StoreApproved.settlementAccount` 로 그대로 |
