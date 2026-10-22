@@ -10,6 +10,8 @@ import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
 import com.sesac.gojigi.user.user.repository.UserRepository;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,7 @@ public class AddressService {
 
     private final AddressRepository addressRepository;
     private final UserRepository userRepository;
+    private final Clock clock;
 
     /** 등록 — main=true 거나 첫 배송지면 기본 배송지. 이미 최대 개수면 ADDRESS_LIMIT_EXCEEDED (회원 행 잠금 안에서 세어 동시 등록에도 초과 없음) */
     @Transactional
@@ -94,6 +97,21 @@ public class AddressService {
             log.info("기본 배송지 지정 userId={} addressId={}", userId, addressId);
         }
         return AddressResponse.from(address);
+    }
+
+    /**
+     * 삭제 — 소프트 삭제(deleted_at). 기본 배송지는 삭제 불가(ADDRESS_DEFAULT_DELETE_NOT_ALLOWED) — 다른 배송지를 기본으로 지정한 뒤 삭제.
+     * 회원 행 잠금 안에서 확인해 기본 지정과 겹쳐도 기본 배송지가 지워지지 않는다. 삭제한 배송지는 최대 개수에서 빠진다.
+     */
+    @Transactional
+    public void delete(Long userId, Long addressId) {
+        lockMember(userId);
+        Address address = findOwned(userId, addressId);
+        if (address.isDefault()) {
+            throw new AddressException(AddressErrorCode.ADDRESS_DEFAULT_DELETE_NOT_ALLOWED);
+        }
+        address.softDelete(LocalDateTime.now(clock));
+        log.info("배송지 삭제 userId={} addressId={}", userId, addressId);
     }
 
     /** 회원 행 잠금 — 같은 회원의 등록 · 수정이 겹쳐 기본이 2개 되지 않게 (없는 회원 · 탈퇴면 USER_NOT_FOUND) */
