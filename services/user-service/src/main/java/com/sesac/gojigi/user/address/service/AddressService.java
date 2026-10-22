@@ -1,6 +1,6 @@
 package com.sesac.gojigi.user.address.service;
 
-import com.sesac.gojigi.user.address.dto.request.CreateAddressRequest;
+import com.sesac.gojigi.user.address.dto.request.AddressRequest;
 import com.sesac.gojigi.user.address.dto.response.AddressResponse;
 import com.sesac.gojigi.user.address.entity.Address;
 import com.sesac.gojigi.user.address.exception.AddressErrorCode;
@@ -32,9 +32,8 @@ public class AddressService {
 
     /** 등록 — main=true 거나 첫 배송지면 기본 배송지. 이미 최대 개수면 ADDRESS_LIMIT_EXCEEDED (회원 행 잠금 안에서 세어 동시 등록에도 초과 없음) */
     @Transactional
-    public AddressResponse create(Long userId, CreateAddressRequest request) {
-        User user = userRepository.findByIdForUpdate(userId)
-                .orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));   // 없는 회원 · 탈퇴
+    public AddressResponse create(Long userId, AddressRequest request) {
+        User user = lockMember(userId);
         long count = addressRepository.countActiveByUserId(userId);
         if (count >= MAX_ADDRESSES) {
             throw new AddressException(AddressErrorCode.ADDRESS_LIMIT_EXCEEDED);
@@ -55,5 +54,34 @@ public class AddressService {
                 .build());
         log.info("배송지 등록 userId={} addressId={} default={}", userId, address.getId(), makeDefault);
         return AddressResponse.from(address);
+    }
+
+    /** 배송지 수정 */
+    @Transactional
+    public AddressResponse update(Long userId, Long addressId, AddressRequest request) {
+        lockMember(userId);
+        Address address = findOwned(userId, addressId);
+        boolean makeDefault = request.main() && !address.isDefault();
+        if (makeDefault) {
+            addressRepository.clearDefault(userId);
+            address = findOwned(userId, addressId);   // 조건부 UPDATE 가 영속성 컨텍스트를 비워 다시 읽는다
+            address.markDefault();
+        }
+        address.update(request.label().trim(), request.name().trim(), request.normalizedPhone(), request.zip(),
+                request.addr().trim(), request.trimmedDetail());
+        log.info("배송지 수정 userId={} addressId={} default={}", userId, addressId, address.isDefault());
+        return AddressResponse.from(address);   // 트랜잭션 커밋 때 변경 감지로 UPDATE
+    }
+
+    /** 회원 행 잠금 — 같은 회원의 등록 · 수정이 겹쳐 기본이 2개 되지 않게 (없는 회원 · 탈퇴면 USER_NOT_FOUND) */
+    private User lockMember(Long userId) {
+        return userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));
+    }
+
+    /** 내 배송지 — 없는 · 삭제된 · 다른 회원의 배송지는 모두 ADDRESS_NOT_FOUND */
+    private Address findOwned(Long userId, Long addressId) {
+        return addressRepository.findActiveByIdAndUserId(addressId, userId)
+                .orElseThrow(() -> new AddressException(AddressErrorCode.ADDRESS_NOT_FOUND));
     }
 }

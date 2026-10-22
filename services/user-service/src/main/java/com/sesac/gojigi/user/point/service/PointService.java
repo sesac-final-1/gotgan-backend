@@ -59,10 +59,7 @@ public class PointService {
         }
     }
 
-    /**
-     * 사용 취소 (Saga 보상) — 그 sagaId 로 쓴 포인트를 돌려준다. 사용 기록이 없으면(사용 단계 실패 · 미호출) 할 일 없음.
-     * 탈퇴 회원이면 돌려줄 곳이 없어 경고만 남긴다.
-     */
+    /** 사용 취소 (Saga 보상) — 그 sagaId 로 쓴 포인트를 돌려준다. 사용 기록이 없으면(사용 단계 실패 · 미호출) 할 일 없음. */
     public PointRestoreResponse cancelUse(String sagaId) {
         try {
             return transactionTemplate.execute(status -> doCancelUse(sagaId));
