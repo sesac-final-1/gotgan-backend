@@ -7,12 +7,15 @@ import com.sesac.gojigi.user.TestcontainersConfiguration;
 import com.sesac.gojigi.user.point.dto.request.UsePointRequest;
 import com.sesac.gojigi.user.point.dto.response.MyPointsResponse;
 import com.sesac.gojigi.user.point.dto.response.PointRestoreResponse;
+import com.sesac.gojigi.user.point.dto.response.UserPointsResponse;
 import com.sesac.gojigi.user.point.entity.PointHistory;
 import com.sesac.gojigi.user.point.entity.PointType;
 import com.sesac.gojigi.user.point.exception.PointErrorCode;
 import com.sesac.gojigi.user.point.repository.PointHistoryRepository;
 import com.sesac.gojigi.user.user.entity.User;
+import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.repository.UserRepository;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -193,5 +196,47 @@ class PointServiceIntegrationTest {
                 .containsExactly("20261022-0006", "20261022-0007", "20261022-0006");
         assertThat(mine.history().getFirst().createdAt()).isNotNull();
         assertThat(pointHistoryRepository.findAll()).extracting(PointHistory::getRefKey).contains("saga-8");
+    }
+
+    @Test
+    @DisplayName("관리자 회원 포인트 — 잔액 + 이력 최신순 서버 페이징, 다른 회원 이력 제외")
+    void getUserPoints_pagesLatestFirst() {
+        Long member = memberWith1000();
+        Long other = memberWith1000();
+        pointService.use(new UsePointRequest("saga-9", member, "20261022-0009", 100L));
+        pointService.use(new UsePointRequest("saga-10", member, "20261022-0010", 200L));
+        pointService.use(new UsePointRequest("saga-11", other, "20261022-0011", 50L));
+        pointService.cancelUse("saga-9");
+
+        UserPointsResponse first = pointService.getUserPoints(member, 0, 2);
+        UserPointsResponse second = pointService.getUserPoints(member, 1, 2);
+
+        assertThat(first.balance()).isEqualTo(800L);
+        assertThat(first.history().content()).extracting(MyPointsResponse.Item::type)
+                .containsExactly(PointType.RESTORE, PointType.USE);
+        assertThat(first.history().totalElements()).isEqualTo(3);
+        assertThat(first.history().totalPages()).isEqualTo(2);
+        assertThat(first.history().hasNext()).isTrue();
+        assertThat(second.history().content()).extracting(MyPointsResponse.Item::orderNo).containsExactly("20261022-0009");
+        assertThat(second.history().hasNext()).isFalse();
+    }
+
+    @Test
+    @DisplayName("관리자 회원 포인트 — 이력이 없으면 잔액 + 빈 페이지, 탈퇴 · 없는 회원은 USER_NOT_FOUND")
+    void getUserPoints_emptyAndNotFound() {
+        Long member = memberWith1000();
+
+        UserPointsResponse empty = pointService.getUserPoints(member, 0, 20);
+
+        assertThat(empty.balance()).isEqualTo(1_000L);
+        assertThat(empty.history().content()).isEmpty();
+        assertThat(empty.history().totalElements()).isZero();
+
+        transactionTemplate.executeWithoutResult(status ->
+                userRepository.findById(member).orElseThrow().softDelete(LocalDateTime.now()));
+        for (Long id : new Long[] { member, Long.MAX_VALUE }) {
+            assertThatThrownBy(() -> pointService.getUserPoints(id, 0, 20))
+                    .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
+        }
     }
 }
