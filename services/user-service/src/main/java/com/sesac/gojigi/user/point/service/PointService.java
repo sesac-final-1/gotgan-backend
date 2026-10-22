@@ -4,6 +4,7 @@ import com.sesac.gojigi.user.point.dto.request.UsePointRequest;
 import com.sesac.gojigi.user.point.dto.response.MyPointsResponse;
 import com.sesac.gojigi.user.point.dto.response.PointRestoreResponse;
 import com.sesac.gojigi.user.point.dto.response.PointUseResponse;
+import com.sesac.gojigi.user.point.dto.response.UserPointsResponse;
 import com.sesac.gojigi.user.point.entity.PointHistory;
 import com.sesac.gojigi.user.point.entity.PointType;
 import com.sesac.gojigi.user.point.exception.PointErrorCode;
@@ -17,11 +18,12 @@ import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 포인트 — 내 포인트 조회 · 주문 사용(Saga) · 사용 취소(Saga 보상). 적립(OrderPaid) · 클레임 환원 · 회수는 후속.
+ * 포인트 — 내 포인트 조회 · 관리자 회원 포인트 조회 · 주문 사용(Saga) · 사용 취소(Saga 보상). 적립(OrderPaid) · 클레임 환원 · 회수는 후속.
  * 잔액은 users.point_balance 조건부 UPDATE 로만 바꾸고(음수 · 동시 차감 방지), 같은 트랜잭션에서 이력을 남긴다.
  * 멱등: ref_key = sagaId — 같은 sagaId 재요청은 처음 결과를 그대로 돌려준다. 동시에 두 번 오면
  * uk_point_history_type_ref_key 에 걸린 쪽이 롤백되고 먼저 커밋된 결과를 돌려준다.
@@ -44,6 +46,15 @@ public class PointService {
         return transactionTemplate.execute(status -> {
             User user = findActive(userId);
             return MyPointsResponse.of(user.getPointBalance(), pointHistoryRepository.findAllByUserIdLatestFirst(userId));
+        });
+    }
+
+    /** 관리자 회원 포인트 — 잔액 + 이력 한 페이지(최신순)를 한 트랜잭션에서 읽는다. 탈퇴 회원은 USER_NOT_FOUND */
+    public UserPointsResponse getUserPoints(Long userId, int page, int size) {
+        return transactionTemplate.execute(status -> {
+            User user = findActive(userId);
+            return UserPointsResponse.of(user.getPointBalance(),
+                    pointHistoryRepository.findByUserId(userId, PageRequest.of(page, size)));
         });
     }
 
