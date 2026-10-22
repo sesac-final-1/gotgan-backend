@@ -1,6 +1,8 @@
 package com.sesac.gojigi.order.order.entity;
 
 import com.sesac.gojigi.order.common.entity.BaseTimeEntity;
+import com.sesac.gojigi.order.order.exception.OrderErrorCode;
+import com.sesac.gojigi.order.order.exception.OrderException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -110,5 +112,24 @@ public class Order extends BaseTimeEntity {
         this.usedPoint = usedPoint;
         this.payAmt = payAmt;
         this.status = OrderStatus.PENDING;
+    }
+
+    /** 결제 완료 — 결제 검증 성공 또는 전액 포인트(0원) 주문 */
+    public void markPaid(LocalDateTime paidAt) {
+        requirePending();
+        this.status = OrderStatus.PAID;
+        this.paidAt = paidAt;
+    }
+
+    /** Saga 보상을 마친 주문 — 재고 부족 · 포인트 부족 · 결제 준비 실패 · 결제 실패 · 결제 대기 만료 */
+    public void markFailed() {
+        requirePending();
+        this.status = OrderStatus.FAILED;
+    }
+
+    private void requirePending() {
+        if (status != OrderStatus.PENDING) {
+            throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);
+        }
     }
 }
