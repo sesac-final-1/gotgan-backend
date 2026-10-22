@@ -5,12 +5,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.user.address.dto.response.AddressResponse;
+import com.sesac.gojigi.user.address.exception.AddressErrorCode;
+import com.sesac.gojigi.user.address.exception.AddressException;
 import com.sesac.gojigi.user.address.service.AddressService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -75,6 +78,35 @@ class AddressControllerTest {
     void create_withoutUser() throws Exception {
         mockMvc.perform(post("/api/users/me/addresses").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isUnauthorized());
+        verifyNoInteractions(addressService);
+    }
+
+    @Test
+    @DisplayName("수정 — 200 수정된 배송지, 내 배송지가 아니면 404 ADDRESS_NOT_FOUND")
+    void update() throws Exception {
+        given(addressService.update(eq(4L), eq(10L), any())).willReturn(
+                new AddressResponse(10L, "집", "김곳간", "010-1234-5678", "06236", "서울특별시 강남구 테헤란로 152", "21층", true));
+        given(addressService.update(eq(4L), eq(99L), any()))
+                .willThrow(new AddressException(AddressErrorCode.ADDRESS_NOT_FOUND));
+
+        mockMvc.perform(put("/api/users/me/addresses/10").header("X-User-Id", "4")
+                        .contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(10))
+                .andExpect(jsonPath("$.message").value("배송지를 수정했습니다."));
+        mockMvc.perform(put("/api/users/me/addresses/99").header("X-User-Id", "4")
+                        .contentType(MediaType.APPLICATION_JSON).content(BODY))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ADDRESS_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("수정 — 형식 오류는 등록과 같이 400, 서비스 호출 없음")
+    void update_validation() throws Exception {
+        mockMvc.perform(put("/api/users/me/addresses/10").header("X-User-Id", "4")
+                        .contentType(MediaType.APPLICATION_JSON).content(BODY.replace("\"06236\"", "\"1234\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         verifyNoInteractions(addressService);
     }
 }

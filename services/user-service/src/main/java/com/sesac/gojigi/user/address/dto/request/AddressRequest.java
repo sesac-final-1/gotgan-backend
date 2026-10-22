@@ -5,8 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-/** 배송지 등록 — 필드 이름은 API 명세 · 화면과 같게 (Address {label, name, phone, zip, addr, detail, main}) */
-public record CreateAddressRequest(
+/** 배송지 등록 · 수정 — 필드 이름은 API 명세 · 화면과 같게 (Address {label, name, phone, zip, addr, detail, main}) */
+public record AddressRequest(
         @Schema(description = "배송지 이름", example = "집")
         @NotBlank(message = "배송지 이름을 입력해 주세요.")
         @Size(max = 30, message = "배송지 이름은 30자 이하로 입력해 주세요.")
