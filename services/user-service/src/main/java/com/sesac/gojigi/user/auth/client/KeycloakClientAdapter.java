@@ -200,6 +200,59 @@ public class KeycloakClientAdapter {
     }
 
     /**
+     * 이용정지 — 계정 비활성(enabled=false → 새 로그인 · 소셜 로그인 · Refresh 불가) 후 모든 세션 종료(발급된 Refresh Token 전부 무효).
+     * keycloakId 가 없으면 username 으로 찾는다. 계정이 없으면(검색 결과 없음 · 404) 막을 것이 없어 성공으로 본다.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "disableUserFallback")
+    public void disableUser(String keycloakId, String email) {
+        String bearer = "Bearer " + serviceAccountToken();
+        try {
+            String targetId = keycloakId != null ? keycloakId : findIdByUsername(bearer, email);
+            if (targetId == null) {
+                return;
+            }
+            setEnabled(bearer, targetId, false);
+            keycloakAdminClient.logoutUser(bearer, targetId);
+        } catch (HttpClientErrorException.NotFound e) {
+            // 계정 없음 — 로그인할 수단도 없다
+        } catch (HttpClientErrorException e) {
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    private void disableUserFallback(String keycloakId, String email, Throwable t) {
+        throw unavailable(t);
+    }
+
+    /** 정지 해제 — 계정 다시 활성(enabled=true). 계정이 없으면 성공으로 본다 */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "enableUserFallback")
+    public void enableUser(String keycloakId, String email) {
+        String bearer = "Bearer " + serviceAccountToken();
+        try {
+            String targetId = keycloakId != null ? keycloakId : findIdByUsername(bearer, email);
+            if (targetId == null) {
+                return;
+            }
+            setEnabled(bearer, targetId, true);
+        } catch (HttpClientErrorException.NotFound e) {
+            // 계정 없음
+        } catch (HttpClientErrorException e) {
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    private void enableUserFallback(String keycloakId, String email, Throwable t) {
+        throw unavailable(t);
+    }
+
+    /** PUT 은 보낸 표현으로 덮어써서, 현재 표현을 받아 enabled 만 바꿔 보낸다 */
+    private void setEnabled(String bearer, String keycloakId, boolean enabled) {
+        Map<String, Object> user = new HashMap<>(keycloakAdminClient.getUser(bearer, keycloakId));
+        user.put("enabled", enabled);
+        keycloakAdminClient.updateUser(bearer, keycloakId, user);
+    }
+
+    /**
      * 비밀번호 변경 — Admin API 로 새 비밀번호 설정 (임시 비밀번호 아님). 기존 세션 · 토큰은 그대로 둔다.
      * keycloakId 가 없으면(첫 로그인 전 시드 회원) username 으로 찾는다. 정책 위반은 AUTH_PASSWORD_POLICY_VIOLATION.
      */

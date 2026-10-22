@@ -40,6 +40,9 @@ dependencies {
     // 차단 목록(blocked:user:{id}) 저장 — 탈퇴 시 남은 Access Token 을 gateway 가 막도록
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-aspectj'
+    // 스케줄러 중복 실행 방지 — 레플리카가 여러 개여도 이용정지 기간 만료 해제는 한 파드만 (가이드라인 10장)
+    implementation "net.javacrumbs.shedlock:shedlock-spring:${shedlockVersion}"
+    implementation "net.javacrumbs.shedlock:shedlock-provider-jdbc-template:${shedlockVersion}"
     // AWS SDK v2 — sqs (버전은 BOM)
     implementation 'software.amazon.awssdk:sqs'
     // 관측성 (가이드라인 13장)

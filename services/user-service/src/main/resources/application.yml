@@ -51,6 +51,8 @@ app:
     mock-closed-store-ids:                                    # TODO(store 개발 완료 시 삭제) MockStoreClient — 폐점으로 볼 store_id (기본: 없음 = 전부 ACTIVE)
   point:
     earn-rate: 0.05                                           # 실결제금액의 5% 적립 (정리 문서 8-5)
+  user:
+    suspension-expiry-interval: 1m                            # 이용정지 기간 만료 자동 해제 주기 (SuspensionExpiryScheduler, 기동 직후 1회 포함)
   sqs:
     queue-url: ${USER_EVENTS_QUEUE_URL:}   # 구독 큐 (sesac-gojigi-user-{도메인}-events)
 

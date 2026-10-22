@@ -74,6 +74,10 @@ public class User extends BaseTimeEntity {
     @Column(name = "suspended_at", columnDefinition = "DATETIME(6)")
     private LocalDateTime suspendedAt;
 
+    /** 정지 종료 시각 — null 이면 영구 정지 (관리자가 해제). 지나면 SuspensionExpiryScheduler 가 해제 */
+    @Column(name = "suspended_until", columnDefinition = "DATETIME(6)")
+    private LocalDateTime suspendedUntil;
+
     @Column(name = "last_login_at", columnDefinition = "DATETIME(6)")
     private LocalDateTime lastLoginAt;
 
@@ -129,8 +133,11 @@ public class User extends BaseTimeEntity {
         this.lastLoginAt = loginAt;
     }
 
-    /** 관리자 이용정지 — 사유 필수. Keycloak enabled=false 동기화는 서비스 계층 */
-    public void suspend(String reason, LocalDateTime suspendedAt) {
+    /**
+     * 관리자 이용정지 — 사유 필수. Keycloak enabled=false · 세션 종료 동기화는 서비스 계층(UserStatusService)
+     * @param suspendedUntil 정지 종료 시각, null 이면 영구 정지
+     */
+    public void suspend(String reason, LocalDateTime suspendedAt, LocalDateTime suspendedUntil) {
         requireReason(reason);
         if (status != UserStatus.ACTIVE) {
             throw new UserException(UserErrorCode.USER_INVALID_STATUS_TRANSITION);
@@ -138,9 +145,10 @@ public class User extends BaseTimeEntity {
         this.status = UserStatus.SUSPENDED;
         this.statusReason = reason;
         this.suspendedAt = suspendedAt;
+        this.suspendedUntil = suspendedUntil;
     }
 
-    /** 관리자 정지 해제 — 사유 필수 */
+    /** 정지 해제 (관리자 · 기간 만료) — 사유 필수 */
     public void activate(String reason) {
         requireReason(reason);
         if (status != UserStatus.SUSPENDED) {
@@ -149,6 +157,12 @@ public class User extends BaseTimeEntity {
         this.status = UserStatus.ACTIVE;
         this.statusReason = reason;
         this.suspendedAt = null;
+        this.suspendedUntil = null;
+    }
+
+    /** 기간 정지가 끝났는지 — 영구 정지 · 정지 아님은 false */
+    public boolean isSuspensionExpired(LocalDateTime now) {
+        return status == UserStatus.SUSPENDED && suspendedUntil != null && !suspendedUntil.isAfter(now);
     }
 
     /** 회원 물리 DELETE 금지 — deleted_at 기록 (컨벤션 3-5) */
