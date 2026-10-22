@@ -33,7 +33,8 @@ import tools.jackson.databind.json.JsonMapper;
  * logback-spring.xml 검증 — 9개 서비스 같은 테스트 (관측성 담당 박지연). XML 을 바꾸면 함께 고칠 것.
  * Spring 컨텍스트 없이 Boot 의 LogbackLoggingSystem 으로 실제 파일을 올리고(springProfile · springProperty 포함),
  * 가짜 Loki 가 받은 push 본문을 확인한다.
- * loki4j 는 별도 스레드로 보내고 stop() 이 전송 끝을 보장하지 않아(2.1.0 borrowBuffer ~ isSendRunning 사이 틈) 받을 때까지 기다린다.
+ * loki4j 2.1.0 은 stop() 중 종료 경합(borrowBuffer ~ isSendRunning 사이 틈에 HTTP 클라이언트를 닫음)으로 마지막 배치를 버릴 수 있다.
+ * 그래서 배치 간격을 100ms 로 줄여 평소 전송으로 받은 뒤에 stop() 한다.
  */
 @ExtendWith(OutputCaptureExtension.class)
 class LogbackConfigTest {
@@ -44,6 +45,7 @@ class LogbackConfigTest {
     private static final String TRACE_ID = "6f3a9c1d2e4b5a70";
     private static final String SPAN_ID = "a1b2c3d4e5f60718";
     private static final String USER_ID = "4";
+    private static final String LOKI_BATCH_TIMEOUT_MS = "100";
 
     private final JsonMapper json = JsonMapper.builder().build();
     private final List<String> pushes = new CopyOnWriteArrayList<>();
@@ -61,6 +63,7 @@ class LogbackConfigTest {
         });
         fakeLoki.start();
         System.setProperty("LOKI_URL", "http://127.0.0.1:" + fakeLoki.getAddress().getPort() + "/loki/api/v1/push");
+        System.setProperty("LOKI_BATCH_TIMEOUT_MS", LOKI_BATCH_TIMEOUT_MS);
     }
 
     @AfterEach
@@ -68,6 +71,7 @@ class LogbackConfigTest {
         MDC.clear();
         initLogging();                  // 같은 JVM 의 다른 테스트를 위해 기본 프로필(콘솔만)로 되돌린다
         System.clearProperty("LOKI_URL");
+        System.clearProperty("LOKI_BATCH_TIMEOUT_MS");
         fakeLoki.stop(0);
     }
 
@@ -80,7 +84,7 @@ class LogbackConfigTest {
         MDC.put("userId", USER_ID);
         log.info("주문 생성");
 
-        String line = singleLine(flushAndReceive());
+        String line = singleLine(receive());
 
         assertThat(GRAFANA_TRACE_ID.matcher(line).results().map(m -> m.group(1))).containsExactly(TRACE_ID);
         JsonNode body = json.readTree(line);
@@ -97,7 +101,7 @@ class LogbackConfigTest {
         MDC.put("traceId", TRACE_ID);
         log.warn("재고 부족");
 
-        List<JsonNode> streams = flushAndReceive();
+        List<JsonNode> streams = receive();
 
         assertThat(streams).hasSize(1);
         JsonNode labels = streams.getFirst().path("stream");
@@ -113,7 +117,7 @@ class LogbackConfigTest {
         initLogging("k8s");
         log.error("결제 실패", new IllegalStateException("재고 부족"));
 
-        JsonNode body = json.readTree(singleLine(flushAndReceive()));
+        JsonNode body = json.readTree(singleLine(receive()));
 
         assertThat(body.path("level").asString()).isEqualTo("ERROR");
         assertThat(body.path("stack_trace").asString()).startsWith("java.lang.IllegalStateException: 재고 부족");
@@ -152,10 +156,10 @@ class LogbackConfigTest {
         loggingSystem.initialize(new LoggingInitializationContext(environment), "classpath:logback-spring.xml", null);
     }
 
-    /** 앱 종료처럼 로거를 멈춰 남은 배치를 보내게 한 뒤, 가짜 Loki 가 받을 때까지 기다려 받은 스트림 전부 */
-    private List<JsonNode> flushAndReceive() {
-        stopLogging();
+    /** 평소 전송(100ms 간격)으로 가짜 Loki 가 받을 때까지 기다린 뒤 로거를 멈추고, 받은 스트림 전부 — stop() 을 먼저 하면 배치가 버려질 수 있다 */
+    private List<JsonNode> receive() {
         await().atMost(Duration.ofSeconds(3)).until(() -> !pushes.isEmpty());
+        stopLogging();
         List<JsonNode> streams = new ArrayList<>();
         pushes.forEach(push -> json.readTree(push).path("streams").forEach(streams::add));
         return streams;
