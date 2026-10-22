@@ -30,8 +30,10 @@ app:
     connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
     read-timeout: 3s
     user-url: ${USER_SERVICE_URI:http://localhost:8081}
+    store-url: ${STORE_SERVICE_URI:http://localhost:8082}
     product-url: ${PRODUCT_SERVICE_URI:http://localhost:8083}
     payment-url: ${PAYMENT_SERVICE_URI:http://localhost:8086}
+    product-mock: ${PRODUCT_CLIENT_MOCK:true}   # TODO(product 내부 API 구현 시 false): 그 전에는 MockProductClient
   order:
     auto-confirm-after: ${AUTO_CONFIRM_AFTER:7d}   # 데모에서는 ConfigMap 으로 2m
     payment-timeout: ${PAYMENT_TIMEOUT:15m}
@@ -49,16 +51,33 @@ resilience4j:
         failure-rate-threshold: 50          # 최근 10건 중 50% 실패면 OPEN → 바로 폴백
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
+      remote:                               # 다른 서비스 호출 (order/client/*ClientAdapter)
+        base-config: default
+        record-exceptions:                  # 장애로 세는 것: 연결 실패 · 타임아웃 · 5xx
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:                  # 재고 부족 · 포인트 부족 등 4xx(비즈니스 오류로 변환)는 세지 않음
+          - com.sesac.gojigi.common.web.exception.BusinessException
     instances:
-      user: { base-config: default }
-      product: { base-config: default }
-      payment: { base-config: default }
+      user: { base-config: remote }
+      store: { base-config: remote }
+      product: { base-config: remote }
+      payment: { base-config: remote }
       redisCart: { base-config: default }     # 장바구니 Redis 캐시 — OPEN 이면 MySQL cart_item 폴백 (결정 4, cart/package-info)
   retry:
     configs:
       default:
         max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST 는 재시도 금지)
         wait-duration: 200ms
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:
+          - com.sesac.gojigi.common.web.exception.BusinessException
+    instances:
+      user: { base-config: default }        # UserClientAdapter#getUser 에만 적용
+      store: { base-config: default }       # StoreClientAdapter#getStore
+      product: { base-config: default }     # ProductClientAdapter#getOptions 에만 적용
 
 management:
   endpoints:
