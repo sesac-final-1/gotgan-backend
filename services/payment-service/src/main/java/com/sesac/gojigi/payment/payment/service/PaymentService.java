@@ -2,6 +2,7 @@ package com.sesac.gojigi.payment.payment.service;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
+import com.sesac.gojigi.payment.common.logging.PaymentLogContext;
 import com.sesac.gojigi.payment.payment.client.PortOneClientAdapter;
 import com.sesac.gojigi.payment.payment.client.dto.PortOnePayment;
 import com.sesac.gojigi.payment.payment.dto.request.CancelPaymentRequest;
@@ -55,6 +56,7 @@ public class PaymentService {
 
     /** 1. 결제 준비 — orderNo 멱등 */
     public PaymentTxService.Prepared prepare(PreparePaymentRequest request) {
+        PaymentLogContext.put(request.orderNo(), request.sagaId());
         try {
             return paymentTx.prepare(request);
         } catch (DataIntegrityViolationException e) {
@@ -64,6 +66,7 @@ public class PaymentService {
 
     /** 2. 결제 검증 — order 가 계산한 기대 금액과 포트원 결제를 비교 */
     public PaymentResponse verify(VerifyPaymentRequest request) {
+        PaymentLogContext.put(request.orderNo(), request.sagaId());
         Payment payment = paymentTx.getByOrderNo(request.orderNo());
         if (payment.getStatus().isCancellable()) {
             return PaymentResponse.from(payment);   // 이미 반영됨 (웹훅이 먼저 왔거나 재시도)
@@ -86,6 +89,7 @@ public class PaymentService {
      * 결과 미확정이면 409 PAYMENT_CANCEL_PENDING — order 는 같은 sagaId 로 다시 요청한다 (그사이 복구 스케줄러가 확정할 수 있음).
      */
     public PaymentCancelResponse cancel(String orderNo, CancelPaymentRequest request) {
+        PaymentLogContext.put(orderNo, request.sagaId());
         Optional<CancelRef> existing = paymentTx.findCancelBySagaId(request.sagaId());
         if (existing.isPresent()) {
             return continueCancel(existing.get());
@@ -100,6 +104,7 @@ public class PaymentService {
 
     /** 4. 결제 상태 조회 (결제 대기 만료 스케줄러) — 포트원을 부르지 않는다 */
     public PaymentResponse get(String orderNo) {
+        PaymentLogContext.put(orderNo, null);
         return PaymentResponse.from(paymentTx.getByOrderNo(orderNo));
     }
 
@@ -115,6 +120,7 @@ public class PaymentService {
             return;
         }
         Payment payment = found.get();
+        PaymentLogContext.put(payment.getOrderNo(), null);
         paymentTx.pendingCancelsOf(payment.getId()).forEach(cancelExecutor::reconcileOnly);
         if (payment.getStatus() != PaymentStatus.READY && payment.getStatus() != PaymentStatus.FAILED) {
             return;   // 이미 반영됨 · 우리가 요청한 취소의 알림 (위에서 미확정 취소는 정리)
