@@ -29,6 +29,8 @@ app:
     settlement-url: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}
   events:
     topic-arn: ${STORE_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-store-events
+  seller-docs:
+    bucket: ${SELLER_DOCS_BUCKET:}          # 입점 서류 (비공개) — 신청 때 HeadObject 로 확인
   scheduler:
     zone: Asia/Seoul
 
