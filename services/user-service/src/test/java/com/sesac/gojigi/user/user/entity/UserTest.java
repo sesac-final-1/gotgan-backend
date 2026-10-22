@@ -123,7 +123,7 @@ class UserTest {
             User user = activeUser();
 
             // when
-            user.suspend("부정 거래", NOW);
+            user.suspend("부정 거래", NOW, null);
 
             // then
             assertThat(user.getStatus()).isEqualTo(UserStatus.SUSPENDED);
@@ -137,10 +137,10 @@ class UserTest {
         void suspend_whenAlreadySuspended_throws() {
             // given
             User user = activeUser();
-            user.suspend("부정 거래", NOW);
+            user.suspend("부정 거래", NOW, null);
 
             // when · then
-            assertThatThrownBy(() -> user.suspend("재정지", NOW))
+            assertThatThrownBy(() -> user.suspend("재정지", NOW, null))
                     .isInstanceOf(UserException.class)
                     .extracting(e -> ((UserException) e).getErrorCode())
                     .isEqualTo(UserErrorCode.USER_INVALID_STATUS_TRANSITION);
@@ -153,21 +153,21 @@ class UserTest {
             User user = activeUser();
 
             // when · then
-            assertThatThrownBy(() -> user.suspend("  ", NOW))
+            assertThatThrownBy(() -> user.suspend("  ", NOW, null))
                     .isInstanceOf(UserException.class)
                     .extracting(e -> ((UserException) e).getErrorCode())
                     .isEqualTo(UserErrorCode.USER_STATUS_REASON_REQUIRED);
-            assertThatThrownBy(() -> user.suspend(null, NOW))
+            assertThatThrownBy(() -> user.suspend(null, NOW, null))
                     .isInstanceOf(UserException.class);
             assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
         }
 
         @Test
-        @DisplayName("정지된 회원을 사유와 함께 해제하면 정지 시각이 지워진다")
+        @DisplayName("정지된 회원을 사유와 함께 해제하면 정지 시각 · 종료 시각이 지워진다")
         void activate_whenSuspended_activates() {
             // given
             User user = activeUser();
-            user.suspend("부정 거래", NOW);
+            user.suspend("부정 거래", NOW, NOW.plusDays(7));
 
             // when
             user.activate("소명 완료");
@@ -176,7 +176,25 @@ class UserTest {
             assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
             assertThat(user.getStatusReason()).isEqualTo("소명 완료");
             assertThat(user.getSuspendedAt()).isNull();
+            assertThat(user.getSuspendedUntil()).isNull();
             assertThat(user.isActive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("기간 정지는 종료 시각부터 만료, 영구 정지(종료 시각 없음) · 정상 회원은 만료되지 않는다")
+        void isSuspensionExpired() {
+            // given
+            User sevenDays = activeUser();
+            sevenDays.suspend("부정 거래", NOW, NOW.plusDays(7));
+            User permanent = activeUser();
+            permanent.suspend("부정 거래", NOW, null);
+
+            // when · then
+            assertThat(sevenDays.getSuspendedUntil()).isEqualTo(NOW.plusDays(7));
+            assertThat(sevenDays.isSuspensionExpired(NOW.plusDays(7).minusNanos(1000))).isFalse();
+            assertThat(sevenDays.isSuspensionExpired(NOW.plusDays(7))).isTrue();
+            assertThat(permanent.isSuspensionExpired(NOW.plusYears(10))).isFalse();
+            assertThat(activeUser().isSuspensionExpired(NOW)).isFalse();
         }
 
         @Test
@@ -197,7 +215,7 @@ class UserTest {
         void activate_whenReasonBlank_throws() {
             // given
             User user = activeUser();
-            user.suspend("부정 거래", NOW);
+            user.suspend("부정 거래", NOW, null);
 
             // when · then
             assertThatThrownBy(() -> user.activate(""))

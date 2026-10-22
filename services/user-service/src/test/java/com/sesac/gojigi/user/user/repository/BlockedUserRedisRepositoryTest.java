@@ -36,4 +36,17 @@ class BlockedUserRedisRepositoryTest {
         verify(values).set("blocked:user:7", "withdrawn", Duration.ofMinutes(30));
         assertThat(repository.ttl()).isEqualTo(Duration.ofMinutes(30));
     }
+
+    @Test
+    @DisplayName("정지 해제 — 같은 키를 지운다 (남기면 해제 후 새 토큰도 TTL 동안 401)")
+    void unblock_deletesKey() {
+        // given
+        BlockedUserRedisRepository repository = new BlockedUserRedisRepository(redis, Duration.ofMinutes(30));
+
+        // when
+        repository.unblock(7L);
+
+        // then
+        verify(redis).delete("blocked:user:7");
+    }
 }

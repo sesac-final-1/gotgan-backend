@@ -518,4 +518,67 @@ class KeycloakClientAdapterTest {
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
         server.verify();
     }
+
+    @Test
+    @DisplayName("이용정지 — 현재 표현을 받아 enabled=false 로 덮어쓴 뒤 모든 세션 종료(Refresh Token 전부 무효)")
+    void disableUser_disablesThenLogsOutAllSessions() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-7"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"id\":\"kc-7\",\"username\":\"b@gotgan.com\",\"enabled\":true,\"attributes\":{\"user_id\":[\"7\"]}}",
+                        MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-7"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(content().json(
+                        "{\"id\":\"kc-7\",\"username\":\"b@gotgan.com\",\"enabled\":false,\"attributes\":{\"user_id\":[\"7\"]}}", true))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+        server.expect(requestTo(USERS_URL + "/kc-7/logout"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sa-token"))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        adapter.disableUser("kc-7", "b@gotgan.com");
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("정지 해제 — keycloak_id 가 없으면 username 으로 찾아 enabled=true (세션 종료 없음)")
+    void enableUser_withoutKeycloakId_findsAndEnables() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=b%40gotgan.com&exact=true"))
+                .andRespond(withSuccess("[{\"id\":\"kc-5\",\"username\":\"b@gotgan.com\"}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-5"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"id\":\"kc-5\",\"enabled\":false}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-5"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(content().json("{\"id\":\"kc-5\",\"enabled\":true}", true))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        adapter.enableUser(null, "b@gotgan.com");
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("이용정지 · 해제 — 계정이 없으면(검색 결과 없음 · 404) 성공, 그 외 4xx · 연결 실패는 EXTERNAL_API_ERROR")
+    void disableAndEnableUser_failures() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=gone%40gotgan.com&exact=true")).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-gone")).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-5")).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        adapter.disableUser(null, "gone@gotgan.com");
+        adapter.enableUser("kc-gone", "gone@gotgan.com");
+        assertThatThrownBy(() -> adapter.disableUser("kc-5", "b@gotgan.com"))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "disableUserFallback",
+                "kc-5", "b@gotgan.com", new ResourceAccessException("down")))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        server.verify();
+    }
 }

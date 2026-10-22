@@ -160,7 +160,7 @@ class AuthServiceTest {
     void login_whenSuspendedInUserDb_throwsDisabled() {
         // given
         User user = user(2L);
-        user.suspend("부정 거래", LocalDateTime.now(CLOCK));
+        user.suspend("부정 거래", LocalDateTime.now(CLOCK), null);
         givenKeycloakToken("{\"sub\":\"kc-2\",\"user_id\":2,\"roles\":[\"BUYER\"]}");
         given(userRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(user));
 
@@ -425,7 +425,7 @@ class AuthServiceTest {
     void refresh_suspendedUser_throwsDisabled() {
         // given
         User user = user(2L);
-        user.suspend("부정 거래", LocalDateTime.now(CLOCK));
+        user.suspend("부정 거래", LocalDateTime.now(CLOCK), null);
         given(keycloakClientAdapter.refreshGrant("old-rt"))
                 .willReturn(tokenOf("{\"sub\":\"kc-2\",\"user_id\":2,\"roles\":[\"BUYER\"]}", "new-rt"));
         given(userRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(user));

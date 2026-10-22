@@ -67,7 +67,7 @@ class AdminUserServiceIntegrationTest {
         String tag = tag();
         save(tag + "-active@gotgan.com", "정상");
         User suspended = save(tag + "-suspended@gotgan.com", "정지");
-        suspended.suspend("허위 리뷰", LocalDateTime.now());
+        suspended.suspend("허위 리뷰", LocalDateTime.now(), null);
         User deleted = save(tag + "-deleted@gotgan.com", "탈퇴");
         deleted.softDelete(LocalDateTime.now());
         userRepository.flush();
@@ -124,7 +124,7 @@ class AdminUserServiceIntegrationTest {
     void getDetail() {
         String tag = tag();
         User user = save(tag + "@gotgan.com", "정지회원");
-        user.suspend("결제 도용 의심", LocalDateTime.of(2026, 10, 22, 14, 0));
+        user.suspend("결제 도용 의심", LocalDateTime.of(2026, 10, 22, 14, 0), LocalDateTime.of(2026, 10, 29, 14, 0));
         userRepository.flush();
 
         AdminUserDetailResponse detail = adminUserService.getDetail(user.getId());
@@ -133,6 +133,7 @@ class AdminUserServiceIntegrationTest {
         assertThat(detail.status()).isEqualTo(UserStatus.SUSPENDED);
         assertThat(detail.statusReason()).isEqualTo("결제 도용 의심");
         assertThat(detail.suspendedAt()).hasToString("2026-10-22T14:00+09:00");
+        assertThat(detail.suspendedUntil()).hasToString("2026-10-29T14:00+09:00");
         assertThat(detail.joinedAt()).isNotNull();
 
         user.softDelete(LocalDateTime.now());
