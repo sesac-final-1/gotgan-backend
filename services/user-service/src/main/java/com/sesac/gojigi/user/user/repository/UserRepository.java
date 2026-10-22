@@ -5,6 +5,8 @@ import com.sesac.gojigi.user.user.entity.status.UserStatus;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
@@ -47,6 +49,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update User u set u.totalConfirmedAmt = u.totalConfirmedAmt + :amount where u.id = :userId")
     int addConfirmedAmount(@Param("userId") Long userId, @Param("amount") long amount);
+
+    /**
+     * 관리자 회원 목록 — 탈퇴 제외, 최신 가입순. status · pattern 이 null 이면 조건 없음.
+     * pattern 은 이름 또는 이메일 부분 일치 LIKE 패턴 (escape 문자 '!' — 서비스에서 % · _ · ! 를 이스케이프해 넘긴다).
+     * 대소문자 구분 없음 (utf8mb4_unicode_ci). 앞 % 라 이름 · 이메일 인덱스는 못 탄다 — 회원 수가 늘면 검색 방식 재검토.
+     */
+    @Query(value = "select u from User u where u.deletedAt is null"
+            + " and (:status is null or u.status = :status)"
+            + " and (:pattern is null or u.name like :pattern escape '!' or u.email like :pattern escape '!')"
+            + " order by u.createdAt desc, u.id desc",
+            countQuery = "select count(u) from User u where u.deletedAt is null"
+            + " and (:status is null or u.status = :status)"
+            + " and (:pattern is null or u.name like :pattern escape '!' or u.email like :pattern escape '!')")
+    Page<User> searchForAdmin(@Param("status") UserStatus status, @Param("pattern") String pattern, Pageable pageable);
 
     /** 관리자 대시보드 — 상태별 회원 수 (GET /internal/stats/users) */
     long countByStatusAndDeletedAtIsNull(UserStatus status);
