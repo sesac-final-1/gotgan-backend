@@ -4,6 +4,7 @@
   - 로그 한 줄: timestamp level app traceId spanId userId message (업무 키 orderNo · sagaId 는 MDC 또는 메시지)
   - userId 는 common-web UserIdMdcFilter 가 요청마다 MDC 에 넣는다(로그인 안 한 요청 · 비동기 스레드 · 리액티브 gateway 는 빈 값)
   - k8s 프로필: Loki 로 직접 전송 (loki4j 2.x). 라벨은 app · namespace · level 만 (카디널리티 폭발 방지)
+  - 배치 전송 간격 10초 (LOKI_BATCH_TIMEOUT_MS) — loki4j 기본 60초면 요청이 적을 때 로그가 최대 1분 늦게 보인다
   - Loki 본문은 JSON. traceId 는 "traceId":"..." 그대로 — Grafana 로그 → 트레이스 링크 정규식 (gotgan-config deploy/observability/grafana.yaml)
 -->
 <configuration>
@@ -37,6 +38,9 @@
                     <noPrefix>true</noPrefix>           <!-- 기본값이면 "mdc_traceId" 가 되어 Grafana 링크가 끊긴다 -->
                 </mdc>
             </message>
+            <batch>
+                <timeoutMs>${LOKI_BATCH_TIMEOUT_MS:-10000}</timeoutMs> <!-- 테스트는 100 — LogbackConfigTest -->
+            </batch>
         </appender>
 
         <root level="INFO">
