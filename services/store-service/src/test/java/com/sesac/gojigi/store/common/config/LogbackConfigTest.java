@@ -2,11 +2,13 @@ package com.sesac.gojigi.store.common.config;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import ch.qos.logback.classic.LoggerContext;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -15,11 +17,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.boot.logging.LoggingInitializationContext;
 import org.springframework.boot.logging.logback.LogbackLoggingSystem;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.env.MockEnvironment;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -28,7 +33,9 @@ import tools.jackson.databind.json.JsonMapper;
  * logback-spring.xml 검증 — 9개 서비스 같은 테스트 (관측성 담당 박지연). XML 을 바꾸면 함께 고칠 것.
  * Spring 컨텍스트 없이 Boot 의 LogbackLoggingSystem 으로 실제 파일을 올리고(springProfile · springProperty 포함),
  * 가짜 Loki 가 받은 push 본문을 확인한다.
+ * loki4j 는 별도 스레드로 보내고 stop() 이 전송 끝을 보장하지 않아(2.1.0 borrowBuffer ~ isSendRunning 사이 틈) 받을 때까지 기다린다.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class LogbackConfigTest {
 
     /** gotgan-config deploy/observability/grafana.yaml derivedFields matcherRegex 와 같은 값 — 바꾸면 함께 */
@@ -36,6 +43,7 @@ class LogbackConfigTest {
     private static final String APP = "store-service";
     private static final String TRACE_ID = "6f3a9c1d2e4b5a70";
     private static final String SPAN_ID = "a1b2c3d4e5f60718";
+    private static final String USER_ID = "4";
 
     private final JsonMapper json = JsonMapper.builder().build();
     private final List<String> pushes = new CopyOnWriteArrayList<>();
@@ -69,6 +77,7 @@ class LogbackConfigTest {
         initLogging("k8s");
         MDC.put("traceId", TRACE_ID);
         MDC.put("spanId", SPAN_ID);
+        MDC.put("userId", USER_ID);
         log.info("주문 생성");
 
         String line = singleLine(flushAndReceive());
@@ -76,6 +85,7 @@ class LogbackConfigTest {
         assertThat(GRAFANA_TRACE_ID.matcher(line).results().map(m -> m.group(1))).containsExactly(TRACE_ID);
         JsonNode body = json.readTree(line);
         assertThat(body.path("spanId").asString()).isEqualTo(SPAN_ID);
+        assertThat(body.path("userId").asString()).isEqualTo(USER_ID);
         assertThat(body.path("message").asString()).isEqualTo("주문 생성");
         assertThat(body.has("mdc_traceId")).isFalse();
     }
@@ -116,7 +126,21 @@ class LogbackConfigTest {
         MDC.put("traceId", TRACE_ID);
         log.info("로컬 로그");
 
-        assertThat(flushAndReceive()).isEmpty();
+        stopLogging();
+        await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(1)).until(pushes::isEmpty);
+    }
+
+    @Test
+    @DisplayName("기본 프로필(로컬): 콘솔 한 줄에 [traceId,spanId,userId] 가 찍힌다 — userId 는 common-web UserIdMdcFilter 가 넣는다")
+    void defaultProfile_userIdInMdc_printsTraceSpanUserOnConsole(CapturedOutput output) {
+        initLogging();
+        MDC.put("traceId", TRACE_ID);
+        MDC.put("spanId", SPAN_ID);
+        MDC.put("userId", USER_ID);
+        log.info("콘솔 로그");
+
+        assertThat(output.getOut()).contains("[" + APP + "] [" + TRACE_ID + "," + SPAN_ID + "," + USER_ID + "] ")
+                .contains("콘솔 로그");
     }
 
     /** 앱이 뜰 때처럼 logback-spring.xml 을 올린다. 이미 올라가 있으면 Boot 가 건너뛰므로 먼저 내린다 */
@@ -128,12 +152,17 @@ class LogbackConfigTest {
         loggingSystem.initialize(new LoggingInitializationContext(environment), "classpath:logback-spring.xml", null);
     }
 
-    /** 앱 종료처럼 로거를 멈춰 남은 배치를 보내게 한 뒤, 가짜 Loki 가 받은 스트림 전부 */
+    /** 앱 종료처럼 로거를 멈춰 남은 배치를 보내게 한 뒤, 가짜 Loki 가 받을 때까지 기다려 받은 스트림 전부 */
     private List<JsonNode> flushAndReceive() {
-        ((LoggerContext) LoggerFactory.getILoggerFactory()).stop();
+        stopLogging();
+        await().atMost(Duration.ofSeconds(3)).until(() -> !pushes.isEmpty());
         List<JsonNode> streams = new ArrayList<>();
         pushes.forEach(push -> json.readTree(push).path("streams").forEach(streams::add));
         return streams;
+    }
+
+    private static void stopLogging() {
+        ((LoggerContext) LoggerFactory.getILoggerFactory()).stop();
     }
 
     private static String singleLine(List<JsonNode> streams) {
