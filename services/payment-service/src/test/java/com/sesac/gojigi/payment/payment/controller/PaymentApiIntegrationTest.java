@@ -12,7 +12,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.payment.TestcontainersConfiguration;
+import com.sesac.gojigi.payment.common.logging.PaymentLogContext;
 import com.sesac.gojigi.payment.payment.client.PortOneClient;
 import com.sesac.gojigi.payment.payment.client.PortOneWebhookVerifierTestSupport;
 import com.sesac.gojigi.payment.payment.client.dto.PortOneCancelRequest;
@@ -33,6 +38,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -227,6 +234,27 @@ class PaymentApiIntegrationTest {
         void verify_unknownOrder_404() throws Exception {
             verifyPayment(newOrderNo(), AMOUNT).andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.code").value("PAYMENT_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("예외 처리기 로그에도 orderNo · sagaId 가 MDC 로 붙고, 요청이 끝나면 지워진다 (OBS-02)")
+        void verify_exceptionLog_hasBusinessKeys() throws Exception {
+            Logger handlerLogger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+            ListAppender<ILoggingEvent> logs = new ListAppender<>();
+            logs.start();
+            handlerLogger.addAppender(logs);
+            try {
+                String orderNo = newOrderNo();
+                verifyPayment(orderNo, AMOUNT).andExpect(status().isNotFound());
+
+                assertThat(logs.list).anySatisfy(event -> {
+                    assertThat(event.getMDCPropertyMap()).containsEntry(PaymentLogContext.ORDER_NO, orderNo);
+                    assertThat(event.getMDCPropertyMap()).containsKey(PaymentLogContext.SAGA_ID);
+                });
+                assertThat(MDC.get(PaymentLogContext.ORDER_NO)).isNull();   // 필터가 정리 — 다음 요청에 남지 않음
+            } finally {
+                handlerLogger.detachAppender(logs);
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.sesac.gojigi.payment.payment.service;
 
+import com.sesac.gojigi.payment.common.logging.PaymentLogContext;
 import com.sesac.gojigi.payment.payment.client.PortOneClientAdapter;
 import com.sesac.gojigi.payment.payment.client.dto.PortOnePayment;
 import com.sesac.gojigi.payment.payment.entity.CancelStatus;
@@ -59,16 +60,20 @@ public class PaymentCancelRecoveryScheduler {
     }
 
     private void resumePending(CancelRef cancel) {
+        PaymentLogContext.put(cancel.orderNo(), cancel.sagaId());   // 요청 밖(스케줄러)이라 필터가 없음 — 건마다 넣고 지운다
         try {
             Result result = cancelExecutor.resume(cancel);
             log.info("취소 복구 - cancelId={}, status={}, attempt={}", cancel.cancelId(), result.status(), cancel.attemptCount() + 1);
             alertIfStuck(cancel, result);
         } catch (RuntimeException e) {
             log.warn("취소 복구 실패 — 다음 주기에 다시 cancelId={}, cause={}", cancel.cancelId(), e.toString());
+        } finally {
+            PaymentLogContext.clear();
         }
     }
 
     private void retryRefund(CancelRef cancel) {
+        PaymentLogContext.put(cancel.orderNo(), cancel.sagaId());
         try {
             Optional<PortOnePayment> latest = portOne.getPayment(cancel.portonePaymentId());
             if (latest.isEmpty() || latest.get().cancellableAmount() <= 0) {
@@ -84,6 +89,8 @@ public class PaymentCancelRecoveryScheduler {
             alertIfStuck(cancel, result);
         } catch (RuntimeException e) {
             log.warn("자동 환불 재시도 실패 — 다음 주기에 다시 cancelId={}, cause={}", cancel.cancelId(), e.toString());
+        } finally {
+            PaymentLogContext.clear();
         }
     }
 

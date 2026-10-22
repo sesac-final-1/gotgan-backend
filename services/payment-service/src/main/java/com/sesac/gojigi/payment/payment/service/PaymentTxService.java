@@ -45,13 +45,13 @@ public class PaymentTxService {
     }
 
     /** 포트원 호출 · 대조에 필요한 취소 1건의 값 — 트랜잭션 밖으로 엔티티를 넘기지 않으려고 꺼내 둔다 */
-    public record CancelRef(Long cancelId, Long paymentId, String portonePaymentId, String sagaId, CancelStatus status,
-            long amount, long cancellableBefore, String reason, String portoneCancellationId, int attemptCount,
-            LocalDateTime createdAt) {
+    public record CancelRef(Long cancelId, Long paymentId, String portonePaymentId, String orderNo, String sagaId,
+            CancelStatus status, long amount, long cancellableBefore, String reason, String portoneCancellationId,
+            int attemptCount, LocalDateTime createdAt) {
 
         static CancelRef of(PaymentCancel c) {
             Payment p = c.getPayment();
-            return new CancelRef(c.getId(), p.getId(), p.getPortonePaymentId(), c.getSagaId(), c.getStatus(),
+            return new CancelRef(c.getId(), p.getId(), p.getPortonePaymentId(), p.getOrderNo(), c.getSagaId(), c.getStatus(),
                     c.getCancelAmount(), c.getCancellableBefore() == null ? 0 : c.getCancellableBefore(), c.getReason(),
                     c.getPortoneCancellationId(), c.getAttemptCount(), c.getCreatedAt());
         }
