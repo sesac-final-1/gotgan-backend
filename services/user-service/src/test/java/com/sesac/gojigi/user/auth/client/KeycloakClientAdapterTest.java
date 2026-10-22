@@ -475,4 +475,47 @@ class KeycloakClientAdapterTest {
                 "c", "v", "r", new ResourceAccessException("down")))
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
     }
+
+    @Test
+    @DisplayName("비밀번호 변경 — reset-password 에 임시 아닌 password 자격 증명을 보낸다 (시드 회원은 username 으로 찾음)")
+    void resetPassword_sendsCredential() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=wlsgksvheh%2Bbuyer2%40gmail.com&exact=true"))
+                .andRespond(withSuccess("[{\"id\":\"kc-5\",\"username\":\"wlsgksvheh+buyer2@gmail.com\"}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-5/reset-password"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sa-token"))
+                .andExpect(content().json("{\"type\":\"password\",\"value\":\"New!pass2\",\"temporary\":false}", true))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        adapter.resetPassword(null, "wlsgksvheh+buyer2@gmail.com", "New!pass2");
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 — 정책 위반 400 은 AUTH_PASSWORD_POLICY_VIOLATION, 그 외 4xx · 계정 없음 · 연결 실패는 EXTERNAL_API_ERROR")
+    void resetPassword_failures() {
+        // MockRestServiceServer 는 요청이 나간 뒤 기대를 추가할 수 없어 세 번 호출의 기대를 먼저 모두 등록
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-5/reset-password"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"invalidPasswordMinLengthMessage\",\"error_description\":\"Invalid password: minimum length 8.\"}"));
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-5/reset-password")).andRespond(withStatus(HttpStatus.FORBIDDEN));
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=gone%40gotgan.com&exact=true")).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> adapter.resetPassword("kc-5", "b@gotgan.com", "New!pass2"))
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
+        assertThatThrownBy(() -> adapter.resetPassword("kc-5", "b@gotgan.com", "New!pass2"))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        assertThatThrownBy(() -> adapter.resetPassword(null, "gone@gotgan.com", "New!pass2"))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "resetPasswordFallback",
+                "kc-5", "b@gotgan.com", "New!pass2", new ResourceAccessException("down")))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        server.verify();
+    }
 }

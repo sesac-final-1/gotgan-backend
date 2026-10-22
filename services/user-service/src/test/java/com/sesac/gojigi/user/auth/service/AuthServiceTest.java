@@ -581,4 +581,48 @@ class AuthServiceTest {
         verify(userRepository, never()).saveAndFlush(any());
         verify(keycloakClientAdapter, never()).setUserIdAttribute(anyString(), anyLong());
     }
+
+    @Test
+    @DisplayName("비밀번호 확인 — Direct Grant 성공이면 true, 확인용으로 생긴 세션은 바로 끝낸다")
+    void verifyPassword_success_endsTemporarySession() {
+        given(keycloakClientAdapter.passwordGrant("seller1@gotgan.com", "Dem0!pass"))
+                .willReturn(new KeycloakTokenResponse("at", 1800, "rt-verify", 1209600));
+
+        assertThat(authService.verifyPassword("seller1@gotgan.com", "Dem0!pass")).isTrue();
+        verify(keycloakClientAdapter).logout("rt-verify");
+    }
+
+    @Test
+    @DisplayName("비밀번호 확인 — 불일치 · 임시 잠금(AUTH_INVALID_CREDENTIALS)은 false, 정지는 예외 그대로")
+    void verifyPassword_mismatchOrDisabled() {
+        given(keycloakClientAdapter.passwordGrant("seller1@gotgan.com", "wrong"))
+                .willThrow(new AuthException(AuthErrorCode.AUTH_INVALID_CREDENTIALS));
+        given(keycloakClientAdapter.passwordGrant("seller1@gotgan.com", "Dem0!pass"))
+                .willThrow(new AuthException(AuthErrorCode.AUTH_ACCOUNT_DISABLED));
+
+        assertThat(authService.verifyPassword("seller1@gotgan.com", "wrong")).isFalse();
+        assertThatThrownBy(() -> authService.verifyPassword("seller1@gotgan.com", "Dem0!pass"))
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_ACCOUNT_DISABLED);
+        verify(keycloakClientAdapter, never()).logout(anyString());
+    }
+
+    @Test
+    @DisplayName("비밀번호 확인 — 확인용 세션 종료가 실패해도 확인 결과(true)는 그대로")
+    void verifyPassword_logoutFails_stillTrue() {
+        given(keycloakClientAdapter.passwordGrant("seller1@gotgan.com", "Dem0!pass"))
+                .willReturn(new KeycloakTokenResponse("at", 1800, "rt-verify", 1209600));
+        willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR)).given(keycloakClientAdapter).logout("rt-verify");
+
+        assertThat(authService.verifyPassword("seller1@gotgan.com", "Dem0!pass")).isTrue();
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 — Keycloak 에 새 비밀번호, 이메일과 같은 비밀번호는 정책 위반으로 먼저 막는다")
+    void changePassword() {
+        authService.changePassword("kc-2", "seller1@gotgan.com", "New!pass2");
+        verify(keycloakClientAdapter).resetPassword("kc-2", "seller1@gotgan.com", "New!pass2");
+
+        assertThatThrownBy(() -> authService.changePassword("kc-2", "seller1@gotgan.com", "SELLER1@gotgan.com"))
+                .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
+    }
 }
