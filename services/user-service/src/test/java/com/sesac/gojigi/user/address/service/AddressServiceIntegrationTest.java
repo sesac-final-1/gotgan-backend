@@ -10,6 +10,7 @@ import com.sesac.gojigi.user.address.entity.Address;
 import com.sesac.gojigi.user.address.exception.AddressErrorCode;
 import com.sesac.gojigi.user.address.exception.AddressException;
 import com.sesac.gojigi.user.address.repository.AddressRepository;
+import com.sesac.gojigi.user.common.config.ClockConfig;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.repository.UserRepository;
@@ -37,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, AddressService.class })
+@Import({ TestcontainersConfiguration.class, ClockConfig.class, AddressService.class })
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class AddressServiceIntegrationTest {
@@ -335,5 +336,94 @@ class AddressServiceIntegrationTest {
         pool.shutdown();
 
         assertThat(defaultLabels(userId)).hasSize(1);
+    }
+
+    // ── 삭제
+
+    @Test
+    @DisplayName("삭제 — 기본이 아닌 배송지는 소프트 삭제(deleted_at 기록), 목록에서 빠지고 최대 개수 자리가 생긴다")
+    void delete_softDeletes_freesSlot() {
+        Long userId = member();
+        addressService.create(userId, request("집", false));
+        List<Long> others = new ArrayList<>();
+        for (int i = 1; i < AddressService.MAX_ADDRESSES; i++) {
+            others.add(addressService.create(userId, request("주소" + i, false)).id());
+        }
+
+        addressService.delete(userId, others.getFirst());
+
+        assertThat(addressRepository.findById(others.getFirst()).orElseThrow().getDeletedAt()).isNotNull();
+        assertThat(addressService.list(userId)).extracting(AddressResponse::id).doesNotContain(others.getFirst());
+        assertThat(addressService.create(userId, request("새주소", false)).label()).isEqualTo("새주소");   // 5개 → 4개 → 다시 5개
+        assertThat(defaultLabels(userId)).containsExactly("집");
+    }
+
+    @Test
+    @DisplayName("삭제 — 기본 배송지는 409 ADDRESS_DEFAULT_DELETE_NOT_ALLOWED, 그대로 남음. 다른 배송지를 기본으로 지정하면 삭제 가능")
+    void delete_default_notAllowed() {
+        Long userId = member();
+        Long homeId = addressService.create(userId, request("집", false)).id();
+        Long officeId = addressService.create(userId, request("회사", false)).id();
+
+        assertThatThrownBy(() -> addressService.delete(userId, homeId))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_DEFAULT_DELETE_NOT_ALLOWED);
+        assertThat(addressRepository.findById(homeId).orElseThrow().getDeletedAt()).isNull();
+
+        addressService.markDefault(userId, officeId);
+        addressService.delete(userId, homeId);
+        assertThat(addressService.list(userId)).extracting(AddressResponse::label).containsExactly("회사");
+    }
+
+    @Test
+    @DisplayName("삭제 — 다른 회원 · 이미 삭제된 · 없는 배송지는 ADDRESS_NOT_FOUND")
+    void delete_notOwnedOrAlreadyDeleted() {
+        Long owner = member();
+        Long stranger = member();
+        addressService.create(owner, request("집", false));
+        Long officeId = addressService.create(owner, request("회사", false)).id();
+
+        assertThatThrownBy(() -> addressService.delete(stranger, officeId))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
+        addressService.delete(owner, officeId);
+        assertThatThrownBy(() -> addressService.delete(owner, officeId))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
+        assertThatThrownBy(() -> addressService.delete(owner, 999_999L))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("삭제와 기본 지정이 동시에 와도 기본 배송지가 지워지지 않는다 (회원 행 잠금)")
+    void delete_concurrentWithMarkDefault_neverDeletesDefault() throws Exception {
+        for (int round = 0; round < 5; round++) {
+            Long userId = member();
+            addressService.create(userId, request("집", false));
+            Long officeId = addressService.create(userId, request("회사", false)).id();
+            CountDownLatch start = new CountDownLatch(1);
+            ExecutorService pool = Executors.newFixedThreadPool(2);
+            Future<?> mark = pool.submit(() -> {
+                start.await();
+                return addressService.markDefault(userId, officeId);
+            });
+            Future<?> delete = pool.submit(() -> {
+                start.await();
+                try {
+                    addressService.delete(userId, officeId);
+                } catch (AddressException ignored) {
+                    // 기본 지정이 먼저 끝나면 기본이라 삭제 불가 · 삭제가 먼저면 기본 지정이 404 — 둘 다 정상
+                }
+                return null;
+            });
+            start.countDown();
+            try {
+                mark.get();
+            } catch (Exception ignored) {
+                // 삭제가 먼저 끝난 경우 ADDRESS_NOT_FOUND
+            }
+            delete.get();
+            pool.shutdown();
+
+            // 어느 순서든 남은 배송지 중 기본이 정확히 1개
+            assertThat(addressService.list(userId)).filteredOn(AddressResponse::main).hasSize(1);
+        }
     }
 }

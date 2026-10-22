@@ -3,7 +3,10 @@ package com.sesac.gojigi.user.address.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -140,6 +143,25 @@ class AddressControllerTest {
                 .andExpect(jsonPath("$.data.main").value(true))
                 .andExpect(jsonPath("$.message").value("기본 배송지로 지정했습니다."));
         mockMvc.perform(patch("/api/users/me/addresses/99/main").header("X-User-Id", "4"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ADDRESS_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("삭제 — 200, 기본 배송지는 409 ADDRESS_DEFAULT_DELETE_NOT_ALLOWED, 내 배송지가 아니면 404")
+    void deleteAddress() throws Exception {
+        mockMvc.perform(delete("/api/users/me/addresses/11").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("배송지를 삭제했습니다."));
+        verify(addressService).delete(4L, 11L);
+
+        // 엄격한 스텁 — 다른 인자 호출이 끝난 뒤에 예외 스텁을 건다
+        willThrow(new AddressException(AddressErrorCode.ADDRESS_DEFAULT_DELETE_NOT_ALLOWED)).given(addressService).delete(4L, 10L);
+        willThrow(new AddressException(AddressErrorCode.ADDRESS_NOT_FOUND)).given(addressService).delete(4L, 99L);
+        mockMvc.perform(delete("/api/users/me/addresses/10").header("X-User-Id", "4"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ADDRESS_DEFAULT_DELETE_NOT_ALLOWED"));
+        mockMvc.perform(delete("/api/users/me/addresses/99").header("X-User-Id", "4"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ADDRESS_NOT_FOUND"));
     }

@@ -11,7 +11,9 @@ public enum AddressErrorCode implements ErrorCode {
     /** 등록 — 회원당 최대 개수(AddressService.MAX_ADDRESSES) 초과 */
     ADDRESS_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "배송지는 최대 5개까지 등록할 수 있습니다."),
     /** 수정 · 삭제 · 기본 지정 — 없는 · 삭제된 · 다른 회원의 배송지 (다른 회원 배송지의 존재 여부는 알려 주지 않는다) */
-    ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "배송지를 찾을 수 없습니다.");
+    ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "배송지를 찾을 수 없습니다."),
+    /** 삭제 — 기본 배송지는 삭제 불가 (화면도 기본 카드에 삭제 버튼 없음). 다른 배송지를 기본으로 지정한 뒤 삭제 */
+    ADDRESS_DEFAULT_DELETE_NOT_ALLOWED(HttpStatus.CONFLICT, "기본 배송지는 삭제할 수 없습니다. 다른 배송지를 기본으로 지정한 뒤 삭제해 주세요.");
 
     private final HttpStatus status;
     private final String message;

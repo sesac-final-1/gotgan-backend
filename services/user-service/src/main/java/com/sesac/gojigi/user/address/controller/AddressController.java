@@ -14,6 +14,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -68,5 +69,16 @@ public class AddressController {
     public ApiResponse<AddressResponse> markDefault(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @PathVariable Long addressId) {
         return ApiResponse.success("기본 배송지로 지정했습니다.", addressService.markDefault(user.userId(), addressId));
+    }
+
+    @Operation(summary = "배송지 삭제", description = """
+            인가: 로그인 회원 본인. 소프트 삭제 — 목록에서 빠지고 최대 개수(5개)에서도 빠진다.
+            기본 배송지는 삭제할 수 없다 — 다른 배송지를 기본으로 지정한 뒤 삭제 (화면도 기본 카드에 삭제 버튼 없음).
+            에러: 401 UNAUTHORIZED · 404 ADDRESS_NOT_FOUND(없는 · 이미 삭제된 · 다른 회원의 배송지) · 404 USER_NOT_FOUND(탈퇴)
+            · 409 ADDRESS_DEFAULT_DELETE_NOT_ALLOWED(기본 배송지)""")
+    @DeleteMapping("/{addressId}")
+    public ApiResponse<Void> delete(@Parameter(hidden = true) @CurrentUser AuthUser user, @PathVariable Long addressId) {
+        addressService.delete(user.userId(), addressId);
+        return ApiResponse.success("배송지를 삭제했습니다.");
     }
 }
