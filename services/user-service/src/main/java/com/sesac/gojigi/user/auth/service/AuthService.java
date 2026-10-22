@@ -242,6 +242,37 @@ public class AuthService {
         keycloakClientAdapter.deleteUser(keycloakId, email);
     }
 
+    /**
+     * 비밀번호 확인 — 현재 비밀번호로 Direct Grant. 불일치 · 임시 잠금(AUTH_INVALID_CREDENTIALS)은 false, 정지 · 장애는 예외 그대로.
+     * 확인하느라 생긴 Keycloak 세션은 바로 끝낸다 — 회원이 쓰던 세션 · 토큰과는 별개 (실패해도 확인 결과는 그대로).
+     */
+    public boolean verifyPassword(String email, String password) {
+        KeycloakTokenResponse token;
+        try {
+            token = keycloakClientAdapter.passwordGrant(email, password);
+        } catch (AuthException e) {
+            if (e.getErrorCode() == AuthErrorCode.AUTH_INVALID_CREDENTIALS) {
+                return false;
+            }
+            throw e;
+        }
+        try {
+            keycloakClientAdapter.logout(token.refreshToken());
+        } catch (BusinessException e) {
+            log.warn("비밀번호 확인용 Keycloak 세션 종료 실패 — 확인 결과는 그대로, 세션은 만료까지 남음 code={}, cause={}",
+                    e.getErrorCode().getCode(), String.valueOf(e.getCause()));
+        }
+        return true;
+    }
+
+    /** 비밀번호 변경 — 이메일과 같은 비밀번호는 realm 정책(notUsername)이라 먼저 막는다. 기존 세션 · 토큰은 그대로 둔다 */
+    public void changePassword(String keycloakId, String email, String newPassword) {
+        if (newPassword.equalsIgnoreCase(email)) {
+            throw new AuthException(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
+        }
+        keycloakClientAdapter.resetPassword(keycloakId, email, newPassword);
+    }
+
     private Long createUserRow(String email, String name, String phone) {
         try {
             return transactionTemplate.execute(status ->
