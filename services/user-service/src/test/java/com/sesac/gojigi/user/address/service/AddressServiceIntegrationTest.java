@@ -247,4 +247,93 @@ class AddressServiceIntegrationTest {
                 .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
         assertThat(addressRepository.findById(id).orElseThrow().getLabel()).isEqualTo("집");
     }
+
+    // ── 목록 · 기본 지정
+
+    @Test
+    @DisplayName("목록 — 기본 먼저 · 그다음 최근 등록순, 삭제된 배송지 · 다른 회원 배송지는 빠짐")
+    void list_defaultFirstThenLatest() {
+        Long userId = member();
+        Long other = member();
+        addressService.create(userId, request("집", false));      // 첫 배송지 → 기본
+        addressService.create(userId, request("회사", false));
+        Long oldId = addressService.create(userId, request("옛집", false)).id();
+        addressService.create(userId, request("본가", false));
+        addressService.create(other, request("남의집", false));
+        Address old = addressRepository.findById(oldId).orElseThrow();
+        old.softDelete(LocalDateTime.now());
+        addressRepository.save(old);
+
+        assertThat(addressService.list(userId)).extracting(AddressResponse::label).containsExactly("집", "본가", "회사");
+        assertThat(addressService.list(userId).getFirst().main()).isTrue();
+    }
+
+    @Test
+    @DisplayName("목록 — 배송지가 없으면 빈 목록, 탈퇴 회원은 USER_NOT_FOUND")
+    void list_emptyOrWithdrawn() {
+        Long userId = member();
+        assertThat(addressService.list(userId)).isEmpty();
+
+        User user = userRepository.findById(userId).orElseThrow();
+        user.softDelete(LocalDateTime.now());
+        userRepository.save(user);
+        assertThatThrownBy(() -> addressService.list(userId))
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("기본 지정 — 기존 기본 해제 후 이 배송지가 기본(1개), 목록 맨 앞으로. 이미 기본이면 그대로")
+    void markDefault_movesDefault() {
+        Long userId = member();
+        addressService.create(userId, request("집", false));
+        Long officeId = addressService.create(userId, request("회사", false)).id();
+
+        assertThat(addressService.markDefault(userId, officeId).main()).isTrue();
+        assertThat(defaultLabels(userId)).containsExactly("회사");
+        assertThat(addressService.list(userId).getFirst().label()).isEqualTo("회사");
+
+        assertThat(addressService.markDefault(userId, officeId).main()).isTrue();   // 다시 불러도 그대로
+        assertThat(defaultLabels(userId)).containsExactly("회사");
+    }
+
+    @Test
+    @DisplayName("기본 지정 — 다른 회원 · 없는 배송지는 ADDRESS_NOT_FOUND, 기본은 그대로")
+    void markDefault_notOwned() {
+        Long owner = member();
+        Long stranger = member();
+        Long id = addressService.create(owner, request("집", false)).id();
+        addressService.create(stranger, request("남의집", false));
+
+        assertThatThrownBy(() -> addressService.markDefault(stranger, id))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
+        assertThatThrownBy(() -> addressService.markDefault(owner, 999_999L))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
+        assertThat(defaultLabels(stranger)).containsExactly("남의집");
+    }
+
+    @Test
+    @DisplayName("기본 지정 동시 — 같은 회원이 서로 다른 배송지를 동시에 기본으로 지정해도 기본은 1개")
+    void markDefault_concurrent_keepsOne() throws Exception {
+        Long userId = member();
+        List<Long> ids = new ArrayList<>();
+        for (int i = 0; i < AddressService.MAX_ADDRESSES; i++) {
+            ids.add(addressService.create(userId, request("주소" + i, false)).id());
+        }
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(ids.size());
+        List<Future<AddressResponse>> futures = new ArrayList<>();
+        for (Long id : ids) {
+            futures.add(pool.submit(() -> {
+                start.await();
+                return addressService.markDefault(userId, id);
+            }));
+        }
+        start.countDown();
+        for (Future<AddressResponse> f : futures) {
+            f.get();
+        }
+        pool.shutdown();
+
+        assertThat(defaultLabels(userId)).hasSize(1);
+    }
 }

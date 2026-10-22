@@ -4,6 +4,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -15,6 +17,7 @@ import com.sesac.gojigi.user.address.dto.response.AddressResponse;
 import com.sesac.gojigi.user.address.exception.AddressErrorCode;
 import com.sesac.gojigi.user.address.exception.AddressException;
 import com.sesac.gojigi.user.address.service.AddressService;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -108,5 +111,36 @@ class AddressControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         verifyNoInteractions(addressService);
+    }
+
+    @Test
+    @DisplayName("목록 — 200 배열(명세 필드), 헤더 없으면 401")
+    void list() throws Exception {
+        given(addressService.list(4L)).willReturn(List.of(
+                new AddressResponse(10L, "집", "김곳간", "010-1234-5678", "06236", "서울특별시 강남구 테헤란로 152", "21층", true),
+                new AddressResponse(11L, "회사", "김곳간", "010-1234-5678", "04524", "서울 중구 세종대로 110", null, false)));
+
+        mockMvc.perform(get("/api/users/me/addresses").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].main").value(true))
+                .andExpect(jsonPath("$.data[1].label").value("회사"));
+        mockMvc.perform(get("/api/users/me/addresses")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("기본 지정 — 200 기본이 된 배송지, 내 배송지가 아니면 404 ADDRESS_NOT_FOUND")
+    void markDefault() throws Exception {
+        given(addressService.markDefault(4L, 11L)).willReturn(
+                new AddressResponse(11L, "회사", "김곳간", "010-1234-5678", "04524", "서울 중구 세종대로 110", null, true));
+        given(addressService.markDefault(4L, 99L)).willThrow(new AddressException(AddressErrorCode.ADDRESS_NOT_FOUND));
+
+        mockMvc.perform(patch("/api/users/me/addresses/11/main").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.main").value(true))
+                .andExpect(jsonPath("$.message").value("기본 배송지로 지정했습니다."));
+        mockMvc.perform(patch("/api/users/me/addresses/99/main").header("X-User-Id", "4"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ADDRESS_NOT_FOUND"));
     }
 }
