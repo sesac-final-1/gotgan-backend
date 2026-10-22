@@ -50,6 +50,11 @@ public interface KeycloakAdminClient {
     void resetPassword(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable("keycloakId") String keycloakId, @RequestBody Map<String, Object> credential);
 
+    /** 모든 세션 종료 — 204. 그 계정에 발급된 Refresh Token 이 전부 무효가 된다. 없으면 404 */
+    @PostExchange("/{keycloakId}/logout")
+    void logoutUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @PathVariable("keycloakId") String keycloakId);
+
     /** 계정 삭제 — 204. 세션 · Refresh Token 도 함께 무효. 없으면 404 */
     @DeleteExchange("/{keycloakId}")
     void deleteUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,

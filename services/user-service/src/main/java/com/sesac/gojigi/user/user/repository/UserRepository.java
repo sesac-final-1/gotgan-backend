@@ -4,6 +4,7 @@ import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.entity.status.UserStatus;
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -63,6 +64,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
             + " and (:status is null or u.status = :status)"
             + " and (:pattern is null or u.name like :pattern escape '!' or u.email like :pattern escape '!')")
     Page<User> searchForAdmin(@Param("status") UserStatus status, @Param("pattern") String pattern, Pageable pageable);
+
+    /** 이용정지 기간이 끝난 회원 — 자동 해제 대상 (idx_users_status_suspended_until). 영구 정지(NULL)는 제외 */
+    @Query("select u.id from User u where u.deletedAt is null and u.status = :status"
+            + " and u.suspendedUntil is not null and u.suspendedUntil <= :now order by u.suspendedUntil")
+    List<Long> findSuspensionExpiredIds(@Param("status") UserStatus status, @Param("now") LocalDateTime now);
 
     /** 관리자 대시보드 — 상태별 회원 수 (GET /internal/stats/users) */
     long countByStatusAndDeletedAtIsNull(UserStatus status);

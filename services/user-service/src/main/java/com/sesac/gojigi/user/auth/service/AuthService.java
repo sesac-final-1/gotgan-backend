@@ -243,6 +243,19 @@ public class AuthService {
     }
 
     /**
+     * 이용정지 시 Keycloak 계정 비활성 + 모든 세션 종료 — 새 로그인 · Refresh 가 막히고 발급된 Refresh Token 이 전부 무효.
+     * 회원 행 처리 · 실패 시 정책은 호출하는 쪽(UserStatusService)이 정한다.
+     */
+    public void suspendAccount(String keycloakId, String email) {
+        keycloakClientAdapter.disableUser(keycloakId, email);
+    }
+
+    /** 정지 해제 시 Keycloak 계정 다시 활성 */
+    public void restoreAccount(String keycloakId, String email) {
+        keycloakClientAdapter.enableUser(keycloakId, email);
+    }
+
+    /**
      * 비밀번호 확인 — 현재 비밀번호로 Direct Grant. 불일치 · 임시 잠금(AUTH_INVALID_CREDENTIALS)은 false, 정지 · 장애는 예외 그대로.
      * 확인하느라 생긴 Keycloak 세션은 바로 끝낸다 — 회원이 쓰던 세션 · 토큰과는 별개 (실패해도 확인 결과는 그대로).
      */
