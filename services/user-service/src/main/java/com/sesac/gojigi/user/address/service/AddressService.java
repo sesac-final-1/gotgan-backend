@@ -10,6 +10,7 @@ import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
 import com.sesac.gojigi.user.user.repository.UserRepository;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -71,6 +72,28 @@ public class AddressService {
                 request.addr().trim(), request.trimmedDetail());
         log.info("배송지 수정 userId={} addressId={} default={}", userId, addressId, address.isDefault());
         return AddressResponse.from(address);   // 트랜잭션 커밋 때 변경 감지로 UPDATE
+    }
+
+    /** 목록 — 기본 배송지 먼저, 그다음 최근 등록순 (최대 5개라 페이징 없음). 주문서 배송지 선택도 이 목록 */
+    @Transactional(readOnly = true)
+    public List<AddressResponse> list(Long userId) {
+        userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));   // 탈퇴 회원
+        return addressRepository.findActiveByUserId(userId).stream().map(AddressResponse::from).toList();
+    }
+
+    /** 기본 지정 — 기존 기본을 해제하고 이 배송지를 기본으로. 이미 기본이면 바꾸지 않는다 */
+    @Transactional
+    public AddressResponse markDefault(Long userId, Long addressId) {
+        lockMember(userId);
+        Address address = findOwned(userId, addressId);
+        if (!address.isDefault()) {
+            addressRepository.clearDefault(userId);
+            address = findOwned(userId, addressId);   // 조건부 UPDATE 가 영속성 컨텍스트를 비워 다시 읽는다
+            address.markDefault();
+            log.info("기본 배송지 지정 userId={} addressId={}", userId, addressId);
+        }
+        return AddressResponse.from(address);
     }
 
     /** 회원 행 잠금 — 같은 회원의 등록 · 수정이 겹쳐 기본이 2개 되지 않게 (없는 회원 · 탈퇴면 USER_NOT_FOUND) */
