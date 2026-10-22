@@ -199,6 +199,38 @@ public class KeycloakClientAdapter {
         throw unavailable(t);
     }
 
+    /**
+     * 비밀번호 변경 — Admin API 로 새 비밀번호 설정 (임시 비밀번호 아님). 기존 세션 · 토큰은 그대로 둔다.
+     * keycloakId 가 없으면(첫 로그인 전 시드 회원) username 으로 찾는다. 정책 위반은 AUTH_PASSWORD_POLICY_VIOLATION.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "resetPasswordFallback")
+    public void resetPassword(String keycloakId, String email, String newPassword) {
+        String bearer = "Bearer " + serviceAccountToken();
+        try {
+            String targetId = keycloakId != null ? keycloakId : findIdByUsername(bearer, email);
+            if (targetId == null) {
+                throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버에 계정이 없습니다.");
+            }
+            keycloakAdminClient.resetPassword(bearer, targetId,
+                    Map.of("type", "password", "value", newPassword, "temporary", false));
+        } catch (HttpClientErrorException e) {
+            throw toPasswordPolicyException(e);
+        }
+    }
+
+    private void resetPasswordFallback(String keycloakId, String email, String newPassword, Throwable t) {
+        throw unavailable(t);
+    }
+
+    /** 비밀번호 정책 위반은 400 + errorMessage(invalidPassword...Message) — 그 외 400 · 401 · 403 · 404 는 설정 · 데이터 문제 */
+    private BusinessException toPasswordPolicyException(HttpClientErrorException e) {
+        String body = e.getResponseBodyAsString().toLowerCase();
+        if (e.getStatusCode().isSameCodeAs(HttpStatus.BAD_REQUEST) && body.contains("password")) {
+            return new AuthException(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
+        }
+        return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+    }
+
     private String serviceAccountToken() {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "client_credentials");
@@ -223,12 +255,7 @@ public class KeycloakClientAdapter {
         if (e.getStatusCode().isSameCodeAs(HttpStatus.CONFLICT)) {
             return new AuthException(AuthErrorCode.AUTH_EMAIL_DUPLICATE);   // "User exists with same username"
         }
-        // 정책 위반은 400 + errorMessage(invalidPassword...Message · 정책 설명) — 그 외 400 · 401 · 403 은 설정 문제
-        String body = e.getResponseBodyAsString().toLowerCase();
-        if (e.getStatusCode().isSameCodeAs(HttpStatus.BAD_REQUEST) && body.contains("password")) {
-            return new AuthException(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
-        }
-        return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        return toPasswordPolicyException(e);
     }
 
     private String createUserFallback(String email, String password, long userId, Throwable t) {

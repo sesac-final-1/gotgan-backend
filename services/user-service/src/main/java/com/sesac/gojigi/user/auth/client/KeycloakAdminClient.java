@@ -45,6 +45,11 @@ public interface KeycloakAdminClient {
     void updateUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable("keycloakId") String keycloakId, @RequestBody Map<String, Object> user);
 
+    /** 비밀번호 설정 — 204. body {type: password, value, temporary: false}. 정책 위반은 400 */
+    @PutExchange(url = "/{keycloakId}/reset-password", contentType = MediaType.APPLICATION_JSON_VALUE)
+    void resetPassword(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @PathVariable("keycloakId") String keycloakId, @RequestBody Map<String, Object> credential);
+
     /** 계정 삭제 — 204. 세션 · Refresh Token 도 함께 무효. 없으면 404 */
     @DeleteExchange("/{keycloakId}")
     void deleteUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
