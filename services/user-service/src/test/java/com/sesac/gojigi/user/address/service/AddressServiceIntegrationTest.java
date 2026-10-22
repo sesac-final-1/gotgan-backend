@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sesac.gojigi.user.TestcontainersConfiguration;
-import com.sesac.gojigi.user.address.dto.request.CreateAddressRequest;
+import com.sesac.gojigi.user.address.dto.request.AddressRequest;
 import com.sesac.gojigi.user.address.dto.response.AddressResponse;
 import com.sesac.gojigi.user.address.entity.Address;
 import com.sesac.gojigi.user.address.exception.AddressErrorCode;
@@ -59,8 +59,8 @@ class AddressServiceIntegrationTest {
         return userRepository.save(User.signUp("addr-" + System.nanoTime() + "@gotgan.com", "회원", null, null)).getId();
     }
 
-    private static CreateAddressRequest request(String label, boolean main) {
-        return new CreateAddressRequest(label, " 김곳간 ", "01012345678", "06236", " 서울특별시 강남구 테헤란로 152 ", " ", main);
+    private static AddressRequest request(String label, boolean main) {
+        return new AddressRequest(label, " 김곳간 ", "01012345678", "06236", " 서울특별시 강남구 테헤란로 152 ", " ", main);
     }
 
     private List<String> defaultLabels(Long userId) {
@@ -183,5 +183,68 @@ class AddressServiceIntegrationTest {
         assertThatThrownBy(() -> addressService.create(userId, request("집", true)))
                 .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
         assertThat(addressRepository.count()).isZero();
+    }
+
+    // ── 수정
+
+    @Test
+    @DisplayName("수정 — 내용 전체를 바꾸고 값은 등록과 같이 다듬어 저장, DB 에 반영")
+    void update_replacesFields() {
+        Long userId = member();
+        Long id = addressService.create(userId, request("집", false)).id();
+
+        AddressResponse updated = addressService.update(userId, id,
+                new AddressRequest(" 회사 ", "박곳간", "010-9876-5432", "04524", "서울 중구 세종대로 110", "5층", false));
+
+        assertThat(updated.label()).isEqualTo("회사");
+        assertThat(updated.phone()).isEqualTo("010-9876-5432");
+        Address saved = addressRepository.findById(id).orElseThrow();
+        assertThat(saved.getReceiverName()).isEqualTo("박곳간");
+        assertThat(saved.getZipcode()).isEqualTo("04524");
+        assertThat(saved.getAddress2()).isEqualTo("5층");
+    }
+
+    @Test
+    @DisplayName("수정 main=true — 기존 기본을 해제하고 이 배송지가 기본 (기본 1개)")
+    void update_mainTrue_movesDefault() {
+        Long userId = member();
+        addressService.create(userId, request("집", false));
+        Long officeId = addressService.create(userId, request("회사", false)).id();
+
+        AddressResponse office = addressService.update(userId, officeId, request("회사", true));
+
+        assertThat(office.main()).isTrue();
+        assertThat(defaultLabels(userId)).containsExactly("회사");
+    }
+
+    @Test
+    @DisplayName("수정 main=false — 지금 기본이면 그대로 기본 (기본이 없는 상태를 만들지 않음)")
+    void update_mainFalseOnDefault_keepsDefault() {
+        Long userId = member();
+        Long homeId = addressService.create(userId, request("집", false)).id();
+
+        AddressResponse home = addressService.update(userId, homeId, request("우리집", false));
+
+        assertThat(home.main()).isTrue();
+        assertThat(defaultLabels(userId)).containsExactly("우리집");
+    }
+
+    @Test
+    @DisplayName("수정 — 다른 회원 · 삭제된 · 없는 배송지는 ADDRESS_NOT_FOUND, 원래 값 그대로")
+    void update_notOwned_notFound() {
+        Long owner = member();
+        Long stranger = member();
+        Long id = addressService.create(owner, request("집", false)).id();
+        Address deleted = addressRepository.findById(addressService.create(owner, request("옛집", false)).id()).orElseThrow();
+        deleted.softDelete(LocalDateTime.now());
+        addressRepository.save(deleted);
+
+        assertThatThrownBy(() -> addressService.update(stranger, id, request("남의집", true)))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
+        assertThatThrownBy(() -> addressService.update(owner, deleted.getId(), request("옛집", false)))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
+        assertThatThrownBy(() -> addressService.update(owner, 999_999L, request("없음", false)))
+                .extracting("errorCode").isEqualTo(AddressErrorCode.ADDRESS_NOT_FOUND);
+        assertThat(addressRepository.findById(id).orElseThrow().getLabel()).isEqualTo("집");
     }
 }
