@@ -42,6 +42,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-aspectj'
     // AWS SDK v2 — sns (버전은 BOM)
     implementation 'software.amazon.awssdk:sns'
+    implementation 'software.amazon.awssdk:sts'    // IRSA(웹 아이덴티티 토큰) 자격 증명 — 없으면 클러스터에서 기본 자격 증명 체인이 실패 (settlement 와 같음)
     // 스케줄러 중복 실행 방지 — 레플리카 2개 대비 (가이드라인 10장)
     implementation "net.javacrumbs.shedlock:shedlock-spring:${shedlockVersion}"
     implementation "net.javacrumbs.shedlock:shedlock-provider-jdbc-template:${shedlockVersion}"
