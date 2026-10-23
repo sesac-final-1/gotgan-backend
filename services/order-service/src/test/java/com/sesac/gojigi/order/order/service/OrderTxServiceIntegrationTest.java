@@ -8,8 +8,10 @@ import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
 import com.sesac.gojigi.order.order.entity.OrderItem;
+import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
 import com.sesac.gojigi.order.order.entity.OrderStoreShipment;
+import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.repository.OrderRepository;
 import com.sesac.gojigi.order.order.repository.OrderStoreShipmentRepository;
 import com.sesac.gojigi.order.order.service.OrderTxService.PendingOrder;
@@ -58,6 +60,7 @@ class OrderTxServiceIntegrationTest {
     @Autowired private OrderTxService orderTx;
     @Autowired private OrderSagaTxService sagaTx;
     @Autowired private OrderRepository orderRepository;
+    @Autowired private OrderItemRepository orderItemRepository;
     @Autowired private OrderStoreShipmentRepository shipmentRepository;
     @Autowired private SagaInstanceRepository sagaInstanceRepository;
 
@@ -117,7 +120,11 @@ class OrderTxServiceIntegrationTest {
         Order paidFound = orderRepository.findById(paid.getId()).orElseThrow();
         assertThat(paidFound.getStatus()).isEqualTo(OrderStatus.PAID);
         assertThat(paidFound.getPaidAt()).isEqualTo(LocalDateTime.of(2026, 10, 22, 12, 0));
+        assertThat(orderItemRepository.findByOrderIdOrderByIdAsc(paid.getId())).extracting(OrderItem::getStatus)
+                .containsOnly(OrderItemStatus.PAYMENT_DONE);
         assertThat(orderRepository.findById(failed.getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.FAILED);
+        assertThat(orderItemRepository.findByOrderIdOrderByIdAsc(failed.getId())).extracting(OrderItem::getStatus)
+                .containsOnly(OrderItemStatus.ORDERED);
         SagaInstance found = sagaInstanceRepository.findById(saga.getId()).orElseThrow();
         assertThat(found.getSagaId()).hasSize(36);
         assertThat(found.getCurrentStep()).isEqualTo(SagaStep.STOCK_RESERVED);
