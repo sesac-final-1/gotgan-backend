@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sesac.gojigi.order.TestcontainersConfiguration;
 import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
+import com.sesac.gojigi.order.claim.entity.ClaimStatus;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
 import com.sesac.gojigi.order.claim.entity.OrderClaim;
 import com.sesac.gojigi.order.claim.repository.OrderClaimRepository;
@@ -38,7 +39,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 스토어 · 전체 주문 통계 — 상태별 건수 · 진행 중 클레임 · 오늘 매출 · 거래액 (MySQL 8.4 + Flyway) */
+/** 스토어 · 전체 주문 통계 — 상태별 건수 · 진행 중 상품주문 · 오늘 매출 · 거래액 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderStatsService.class,
@@ -102,30 +103,40 @@ class OrderStatsServiceIntegrationTest {
         jdbc.update("update order_item set status = ? where order_item_id = ?", status.name(), item.getId());
     }
 
-    private void claim(OrderItem item, boolean completed) {
-        OrderClaim claim = orderClaimRepository.save(OrderClaim.builder().orderItem(item).requesterId(4L)
+    /** 결제된 주문의 STORE 상품주문을 status 로 바꾼 주문 */
+    private Order paidWith(OrderItemStatus status) {
+        Order order = order(true);
+        setStatus(storeItem(order), status);
+        return order;
+    }
+
+    private void claim(Order order, ClaimStatus status) {
+        OrderClaim claim = orderClaimRepository.save(OrderClaim.builder().orderItem(storeItem(order)).requesterId(4L)
                 .claimType(ClaimType.CANCEL).reasonCode(ClaimReasonCode.CHANGE_OF_MIND)
                 .requestedAt(LocalDateTime.of(2026, 10, 22, 11, 0)).build());
-        if (completed) {
-            jdbc.update("update order_claim set status = 'COMPLETED' where order_claim_id = ?", claim.getId());
-        }
+        jdbc.update("update order_claim set status = ? where order_claim_id = ?", status.name(), claim.getId());
     }
 
     @Test
-    @DisplayName("스토어 통계 — 발주확인 · 송장 대기 · 진행 중 클레임 건수와 합, 오늘 결제된 매출(결제 전 · 취소 · 어제 제외)")
+    @DisplayName("스토어 통계 — 진행 중은 결제 완료 ~ 배송 완료 + 클레임 진행 중(환불 미완료 취소 포함), 끝난 주문 · 결제 전은 빠진다")
     void getStoreStats() {
-        // given
-        order(true);                                   // PAYMENT_DONE · 오늘 매출 20,000
-        Order toShip = order(true);                    // PREPARING · 오늘 매출 20,000 · 진행 중 클레임 1
-        setStatus(storeItem(toShip), OrderItemStatus.PREPARING);
-        claim(storeItem(toShip), false);
-        Order cancelled = order(true);                 // CANCELLED · 매출 제외 · 끝난 클레임은 세지 않음
-        setStatus(storeItem(cancelled), OrderItemStatus.CANCELLED);
-        claim(storeItem(cancelled), true);
-        Order yesterday = order(true);                 // PAYMENT_DONE 이지만 어제 결제 → 건수만
+        // given — 진행 중 6건
+        order(true);                                               // PAYMENT_DONE
+        Order toShip = paidWith(OrderItemStatus.PREPARING);        // + 진행 중 클레임 (한 번만 센다)
+        claim(toShip, ClaimStatus.REQUESTED);
+        paidWith(OrderItemStatus.SHIPPING);
+        paidWith(OrderItemStatus.DELIVERED);
+        Order refunding = paidWith(OrderItemStatus.CANCELLED);    // 취소 완료지만 환불 진행 중(클레임 APPROVED)
+        claim(refunding, ClaimStatus.APPROVED);
+        Order yesterday = order(true);                             // PAYMENT_DONE · 어제 결제라 매출에서만 빠짐
         jdbc.update("update orders set paid_at = ? where order_id = ?", LocalDateTime.of(2026, 10, 21, 23, 59),
                 yesterday.getId());
-        order(false);                                  // 결제 전(ORDERED) — 어디에도 안 셈
+        // 끝났거나 결제 전 — 진행 중 아님
+        paidWith(OrderItemStatus.CONFIRMED);                       // 매출에는 들어감
+        Order cancelled = paidWith(OrderItemStatus.CANCELLED);
+        claim(cancelled, ClaimStatus.COMPLETED);
+        paidWith(OrderItemStatus.RETURNED);
+        order(false);                                              // ORDERED
 
         // when
         StoreOrderStatsResponse result = stats.getStoreStats(STORE);
@@ -134,9 +145,10 @@ class OrderStatsServiceIntegrationTest {
         assertThat(result.storeId()).isEqualTo(STORE);
         assertThat(result.toConfirmCount()).isEqualTo(2L);
         assertThat(result.toShipCount()).isEqualTo(1L);
-        assertThat(result.claimCount()).isEqualTo(1L);
-        assertThat(result.inProgressCount()).isEqualTo(4L);
-        assertThat(result.todaySalesAmt()).isEqualTo(40_000L);
+        assertThat(result.claimCount()).isEqualTo(2L);
+        assertThat(result.inProgressCount()).isEqualTo(6L);
+        // 오늘 결제 · 취소 · 반품 완료 아님: PAYMENT_DONE · PREPARING · SHIPPING · DELIVERED · CONFIRMED
+        assertThat(result.todaySalesAmt()).isEqualTo(5 * 20_000L);
     }
 
     @Test

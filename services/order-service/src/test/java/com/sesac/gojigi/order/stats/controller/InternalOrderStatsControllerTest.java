@@ -36,9 +36,9 @@ class InternalOrderStatsControllerTest {
     }
 
     @Test
-    @DisplayName("storeId 가 있으면 스토어 통계 — 미처리 합계 inProgressCount 포함")
+    @DisplayName("storeId 가 있으면 스토어 통계 — 진행 중 상품주문 수 inProgressCount 포함")
     void storeStats() throws Exception {
-        given(orderStatsService.getStoreStats(1L)).willReturn(StoreOrderStatsResponse.of(1L, 2L, 1L, 3L, 40_000L));
+        given(orderStatsService.getStoreStats(1L)).willReturn(new StoreOrderStatsResponse(1L, 2L, 1L, 3L, 6L, 40_000L));
 
         mockMvc.perform(get("/internal/stats/orders").param("storeId", "1"))
                 .andExpect(status().isOk())

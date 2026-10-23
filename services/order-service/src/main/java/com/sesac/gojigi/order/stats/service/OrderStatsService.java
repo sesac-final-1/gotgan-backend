@@ -8,6 +8,7 @@ import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.repository.OrderRepository;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
+import com.sesac.gojigi.order.stats.repository.OrderStatsRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,19 +30,29 @@ public class OrderStatsService {
             OrderItemStatus.RETURNED);
     /** 진행 중 클레임 — 요청됐거나 승인 후 환불 · 재배송 진행 중 */
     private static final Set<ClaimStatus> OPEN_CLAIMS = Set.of(ClaimStatus.REQUESTED, ClaimStatus.APPROVED);
+    /**
+     * 진행 중 상품주문 — 결제 완료 ~ 배송 완료(구매확정 전) + 취소 · 반품 · 교환 요청 (store 폐점 조건, 10/20 협업요청).
+     * 구매확정 · 취소 완료 · 반품 완료는 끝난 주문. 배송 완료를 넣는 이유: 폐점 뒤 구매확정되면 정산 건이 새로 생긴다.
+     */
+    private static final Set<OrderItemStatus> IN_PROGRESS = Set.of(OrderItemStatus.PAYMENT_DONE,
+            OrderItemStatus.PREPARING, OrderItemStatus.SHIPPING, OrderItemStatus.DELIVERED,
+            OrderItemStatus.CANCEL_REQUESTED, OrderItemStatus.RETURN_REQUESTED, OrderItemStatus.EXCHANGE_REQUESTED);
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderClaimRepository orderClaimRepository;
+    private final OrderStatsRepository orderStatsRepository;
     private final Clock clock;
 
     @Transactional(readOnly = true)
     public StoreOrderStatsResponse getStoreStats(Long storeId) {
         LocalDateTime today = LocalDate.now(clock).atStartOfDay();
-        return StoreOrderStatsResponse.of(storeId,
+        return new StoreOrderStatsResponse(storeId,
                 orderItemRepository.countByStoreIdAndStatus(storeId, OrderItemStatus.PAYMENT_DONE),
                 orderItemRepository.countByStoreIdAndStatus(storeId, OrderItemStatus.PREPARING),
                 orderClaimRepository.countByOrderItemStoreIdAndStatusIn(storeId, OPEN_CLAIMS),
+                // 취소 완료(CANCELLED)여도 환불이 끝나지 않았으면(클레임 APPROVED) 진행 중으로 센다
+                orderStatsRepository.countInProgress(storeId, IN_PROGRESS, OPEN_CLAIMS),
                 orderItemRepository.sumStoreSales(storeId, NOT_SALES, today, today.plusDays(1)));
     }
 
