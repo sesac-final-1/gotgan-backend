@@ -11,7 +11,9 @@ import com.sesac.gojigi.user.point.dto.response.UserPointsResponse;
 import com.sesac.gojigi.user.point.entity.PointHistory;
 import com.sesac.gojigi.user.point.entity.PointType;
 import com.sesac.gojigi.user.point.exception.PointErrorCode;
+import com.sesac.gojigi.user.point.exception.PointException;
 import com.sesac.gojigi.user.point.repository.PointHistoryRepository;
+import com.sesac.gojigi.user.point.repository.PointUseSagaRepository;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.repository.UserRepository;
@@ -52,10 +54,13 @@ class PointServiceIntegrationTest {
     private UserRepository userRepository;
     @Autowired
     private PointHistoryRepository pointHistoryRepository;
+    @Autowired
+    private PointUseSagaRepository pointUseSagaRepository;
 
     @AfterEach
     void cleanUp() {
         pointHistoryRepository.deleteAllInBatch();
+        pointUseSagaRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
     }
 
@@ -238,5 +243,77 @@ class PointServiceIntegrationTest {
             assertThatThrownBy(() -> pointService.getUserPoints(id, 0, 20))
                     .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
         }
+    }
+
+    @Test
+    @DisplayName("늦게 도착한 사용 — 취소(보상)가 먼저 오면 해제 표식, 뒤늦은 같은 sagaId 사용은 409 POINT_USE_RELEASED · 차감 없음")
+    void use_afterCancel_isRejected() {
+        Long userId = memberWith1000();
+
+        PointRestoreResponse cancelled = pointService.cancelUse("saga-late");
+        PointRestoreResponse again = pointService.cancelUse("saga-late");
+
+        assertThat(cancelled.restoredAmount()).isZero();
+        assertThat(again.restoredAmount()).isZero();   // 취소 재전송도 그대로 0원
+        assertThatThrownBy(() -> pointService.use(new UsePointRequest("saga-late", userId, "20261023-0001", 300L)))
+                .extracting("errorCode").isEqualTo(PointErrorCode.POINT_USE_RELEASED);
+        assertThat(balanceOf(userId)).isEqualTo(1_000L);
+        assertThat(pointHistoryRepository.findAllByUserIdLatestFirst(userId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("사용 뒤 취소는 그대로 환원 — 표식이 사용을 막지 않음, 사용 재전송도 처음 결과")
+    void cancelAfterUse_restores() {
+        Long userId = memberWith1000();
+        UsePointRequest request = new UsePointRequest("saga-normal", userId, "20261023-0002", 400L);
+
+        pointService.use(request);
+        PointRestoreResponse restored = pointService.cancelUse("saga-normal");
+
+        assertThat(restored.restoredAmount()).isEqualTo(400L);
+        assertThat(pointService.use(request).created()).isFalse();
+        assertThat(balanceOf(userId)).isEqualTo(1_000L);
+    }
+
+    @Test
+    @DisplayName("같은 sagaId 의 사용 · 취소가 동시에 — 어느 순서든 잔액은 원래대로 (사용 성공 + 환원 또는 사용 거절)")
+    void concurrentUseAndCancel_neverLosesPoints() throws Exception {
+        Long userId = memberWith1000();
+        int rounds = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        int usedThenRestored = 0;
+        int rejected = 0;
+        for (int i = 0; i < rounds; i++) {
+            String sagaId = "saga-race-" + i;
+            String orderNo = "20261023-1" + i;
+            CountDownLatch start = new CountDownLatch(1);
+            Future<Boolean> use = pool.submit(() -> {
+                start.await();
+                try {
+                    pointService.use(new UsePointRequest(sagaId, userId, orderNo, 100L));
+                    return true;
+                } catch (PointException e) {
+                    assertThat(e.getErrorCode()).isEqualTo(PointErrorCode.POINT_USE_RELEASED);
+                    return false;
+                }
+            });
+            Future<PointRestoreResponse> cancel = pool.submit(() -> {
+                start.await();
+                return pointService.cancelUse(sagaId);
+            });
+            start.countDown();
+            boolean used = use.get();
+            PointRestoreResponse restored = cancel.get();
+            // 사용이 성공했다면 그 취소가 반드시 돌려줘야 한다 (사용이 커밋되기 전 취소는 표식 PK 에서 기다렸다 다시 처리)
+            if (used) {
+                assertThat(restored.restoredAmount()).isEqualTo(100L);
+                usedThenRestored++;
+            } else {
+                rejected++;
+            }
+            assertThat(balanceOf(userId)).isEqualTo(1_000L);
+        }
+        pool.shutdown();
+        assertThat(usedThenRestored + rejected).isEqualTo(rounds);
     }
 }

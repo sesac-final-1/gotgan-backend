@@ -14,6 +14,7 @@ import com.sesac.gojigi.user.point.entity.PointHistory;
 import com.sesac.gojigi.user.point.entity.PointType;
 import com.sesac.gojigi.user.point.exception.PointErrorCode;
 import com.sesac.gojigi.user.point.repository.PointHistoryRepository;
+import com.sesac.gojigi.user.point.repository.PointUseSagaRepository;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.repository.UserRepository;
@@ -38,13 +39,15 @@ class PointServiceTest {
     @Mock
     private PointHistoryRepository pointHistoryRepository;
     @Mock
+    private PointUseSagaRepository pointUseSagaRepository;
+    @Mock
     private TransactionTemplate transactionTemplate;
 
     private PointService pointService;
 
     @BeforeEach
     void setUp() {
-        pointService = new PointService(userRepository, pointHistoryRepository, transactionTemplate);
+        pointService = new PointService(userRepository, pointHistoryRepository, pointUseSagaRepository, transactionTemplate);
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(new SimpleTransactionStatus()));
     }

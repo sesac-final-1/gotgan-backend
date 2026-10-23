@@ -7,9 +7,11 @@ import com.sesac.gojigi.user.point.dto.response.PointUseResponse;
 import com.sesac.gojigi.user.point.dto.response.UserPointsResponse;
 import com.sesac.gojigi.user.point.entity.PointHistory;
 import com.sesac.gojigi.user.point.entity.PointType;
+import com.sesac.gojigi.user.point.entity.PointUseSaga;
 import com.sesac.gojigi.user.point.exception.PointErrorCode;
 import com.sesac.gojigi.user.point.exception.PointException;
 import com.sesac.gojigi.user.point.repository.PointHistoryRepository;
+import com.sesac.gojigi.user.point.repository.PointUseSagaRepository;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
@@ -27,6 +29,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 잔액은 users.point_balance 조건부 UPDATE 로만 바꾸고(음수 · 동시 차감 방지), 같은 트랜잭션에서 이력을 남긴다.
  * 멱등: ref_key = sagaId — 같은 sagaId 재요청은 처음 결과를 그대로 돌려준다. 동시에 두 번 오면
  * uk_point_history_type_ref_key 에 걸린 쪽이 롤백되고 먼저 커밋된 결과를 돌려준다.
+ * 늦게 도착한 사용 차단: order 가 사용 응답을 못 받고(타임아웃) 보상으로 취소를 먼저 보내면, 사용 기록이 없으니 취소는 0원으로 끝난다.
+ * 그때 point_use_saga 에 RELEASED 를 남겨, 뒤늦게 도착한 같은 sagaId 의 사용을 409 POINT_USE_RELEASED 로 거절한다(포인트가 사라지지 않게).
+ * 사용도 같은 트랜잭션에서 USED 를 넣어, 사용 · 취소가 겹치면 uk 충돌로 한쪽만 표식을 갖는다 — 어느 순서든 잔액은 원래대로.
  */
 @Slf4j
 @Service
@@ -35,6 +40,7 @@ public class PointService {
 
     private final UserRepository userRepository;
     private final PointHistoryRepository pointHistoryRepository;
+    private final PointUseSagaRepository pointUseSagaRepository;
     private final TransactionTemplate transactionTemplate;
 
     /** 사용 결과 — created=false 면 같은 sagaId 재요청 (컨트롤러가 201 / 200 을 나눈다) */
@@ -58,26 +64,34 @@ public class PointService {
         });
     }
 
-    /** 주문 결제에 포인트 사용 — 잔액이 모자라면 POINT_INSUFFICIENT(409) */
+    /** 주문 결제에 포인트 사용 — 잔액이 모자라면 POINT_INSUFFICIENT(409), 이미 취소된 sagaId 면 POINT_USE_RELEASED(409) */
     public UseResult use(UsePointRequest request) {
         try {
             return transactionTemplate.execute(status -> doUse(request));
         } catch (DataIntegrityViolationException e) {
-            // 같은 sagaId 가 동시에 두 번 — 이쪽 차감은 롤백됨, 먼저 커밋된 결과를 돌려준다
+            // 표식 · 이력 uk 충돌 — 이쪽 차감은 롤백됨
+            // ① 같은 sagaId 의 취소가 먼저 커밋됨 → 거절 ② 같은 sagaId 사용이 동시에 두 번 → 먼저 커밋된 결과
+            if (isReleased(request.sagaId())) {
+                throw releasedUse(request);
+            }
             return pointHistoryRepository.findByTypeAndRefKey(PointType.USE, request.sagaId())
                     .map(existing -> new UseResult(sameRequestOrThrow(existing, request), false))
                     .orElseThrow(() -> e);
         }
     }
 
-    /** 사용 취소 (Saga 보상) — 그 sagaId 로 쓴 포인트를 돌려준다. 사용 기록이 없으면(사용 단계 실패 · 미호출) 할 일 없음. */
+    /** 사용 취소 (Saga 보상) — 그 sagaId 로 쓴 포인트를 돌려준다. 사용 기록이 없으면(사용 단계 실패 · 미호출 · 아직 도착 전) 해제 표식만 남긴다. */
     public PointRestoreResponse cancelUse(String sagaId) {
         try {
             return transactionTemplate.execute(status -> doCancelUse(sagaId));
         } catch (DataIntegrityViolationException e) {
-            return pointHistoryRepository.findByTypeAndRefKey(PointType.RESTORE, sagaId)
-                    .map(PointRestoreResponse::from)
-                    .orElseThrow(() -> e);
+            // ① 같은 sagaId 취소가 동시에 두 번 → 먼저 커밋된 RESTORE
+            // ② 해제 표식을 넣으려는데 그 사이 사용이 커밋됨(표식 uk 충돌) → 다시 처리하면 그 사용을 찾아 돌려준다
+            Optional<PointHistory> restored = pointHistoryRepository.findByTypeAndRefKey(PointType.RESTORE, sagaId);
+            if (restored.isPresent()) {
+                return PointRestoreResponse.from(restored.get());
+            }
+            return transactionTemplate.execute(status -> doCancelUse(sagaId));
         }
     }
 
@@ -86,6 +100,11 @@ public class PointService {
         if (existing.isPresent()) {
             return new UseResult(sameRequestOrThrow(existing.get(), request), false);
         }
+        if (isReleased(request.sagaId())) {
+            throw releasedUse(request);
+        }
+        // 사용 표식 — 같은 sagaId 의 취소가 지금 해제 표식을 넣는 중이면 여기서 uk 충돌(커밋 순서대로 한쪽만)
+        pointUseSagaRepository.saveAndFlush(PointUseSaga.used(request.sagaId()));
         if (userRepository.deductPoint(request.userId(), request.amount()) == 0) {
             findActive(request.userId());   // 없는 회원 · 탈퇴면 USER_NOT_FOUND, 있으면 잔액 부족
             throw new PointException(PointErrorCode.POINT_INSUFFICIENT);
@@ -105,7 +124,11 @@ public class PointService {
         }
         Optional<PointHistory> used = pointHistoryRepository.findByTypeAndRefKey(PointType.USE, sagaId);
         if (used.isEmpty()) {
-            log.info("포인트 사용 취소 — 사용 기록 없음, 할 일 없음 sagaId={}", sagaId);
+            if (!pointUseSagaRepository.existsBySagaId(sagaId)) {
+                // 해제 표식 — 사용이 아직 오지 않았을 수 있다(order 타임아웃). 늦게 오면 409 로 막는다
+                pointUseSagaRepository.saveAndFlush(PointUseSaga.released(sagaId));
+            }
+            log.info("포인트 사용 취소 — 사용 기록 없음, 해제 표식만 sagaId={}", sagaId);
             return PointRestoreResponse.nothingToRestore(sagaId);
         }
         PointHistory use = used.get();
@@ -120,6 +143,16 @@ public class PointService {
         log.info("포인트 사용 취소 userId={} orderNo={} amount={} balanceAfter={} sagaId={}",
                 userId, use.getOrderNo(), use.getAmount(), user.getPointBalance(), sagaId);
         return PointRestoreResponse.from(restore);
+    }
+
+    private boolean isReleased(String sagaId) {
+        return pointUseSagaRepository.findBySagaId(sagaId).map(PointUseSaga::isReleased).orElse(false);
+    }
+
+    private PointException releasedUse(UsePointRequest request) {
+        log.warn("포인트 사용 거절 — 이미 취소(보상)된 sagaId 의 늦은 요청, 차감 안 함 userId={} orderNo={} amount={} sagaId={}",
+                request.userId(), request.orderNo(), request.amount(), request.sagaId());
+        return new PointException(PointErrorCode.POINT_USE_RELEASED);
     }
 
     /** 같은 sagaId 인데 회원 · 금액이 다르면 order 쪽 멱등 키 재사용 버그 */

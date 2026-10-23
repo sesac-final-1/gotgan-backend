@@ -1,10 +1,10 @@
 -- 곳간(GOTGAN) 전체 ERD — ERD Cloud 가져오기용 (자동 생성: node docs/erd/build-erd.mjs, 직접 수정 금지)
--- 생성: 2026-10-16 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
+-- 생성: 2026-10-23 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
 -- 서비스마다 DB 가 따로라 서비스 사이 참조(user_id · order_item_id 등 "논리 참조")는 FK 로 그리지 않는다 — 컬럼 COMMENT 참고
 -- 제외: shedlock (스케줄러 잠금). 여러 DB 에 있는 같은 이름 테이블은 {db}_ 접두어
 
 -- ============================================================ userdb (user-service · 담당 이경석)
--- 원본: V1__init.sql · V2__init_userdb.sql
+-- 원본: V1__init.sql · V2__init_userdb.sql · V3__user_suspension.sql · V4__point_use_saga.sql
 
 -- 회원 프로필 · 포인트 잔액 · 등급 (계정은 Keycloak)
 CREATE TABLE `users` (
@@ -24,7 +24,8 @@ CREATE TABLE `users` (
 	`last_login_at`	DATETIME(6)	NULL	COMMENT '마지막 로그인 시각 (애플리케이션이 기록) — 관리자 회원 상세',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '가입 시각 (= joinedAt)',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (회원 물리 DELETE 금지)'
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (회원 물리 DELETE 금지)',
+	`suspended_until`	DATETIME(6)	NULL	COMMENT '이용정지 종료 시각 — NULL 이면 영구 정지(관리자가 해제). 지나면 스케줄러가 자동 해제'
 );
 
 -- 회원 배송지
@@ -65,8 +66,16 @@ CREATE TABLE `userdb_processed_event` (
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '처리 시각'
 );
 
+-- 포인트 사용 sagaId 표식 (늦게 도착한 사용 차단)
+CREATE TABLE `point_use_saga` (
+	`point_use_saga_id`	BIGINT	NOT NULL,
+	`saga_id`	VARCHAR(64)	NOT NULL	COMMENT 'order 주문 Saga ID — point_history.ref_key(USE · 보상 RESTORE)와 같은 값',
+	`status`	VARCHAR(20)	NOT NULL	COMMENT 'USED(사용 처리됨) / RELEASED(사용 전에 취소됨 — 이후 사용 거절)',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
+);
+
 -- ============================================================ storedb (store-service · 담당 박지연)
--- 원본: V1__init_store_ddl.sql
+-- 원본: V1__init_store_ddl.sql · V2__store_display_columns.sql
 
 -- 입점 신청서 (진행 중 신청 1건은 서비스 검증)
 CREATE TABLE `store_application` (
@@ -94,7 +103,8 @@ CREATE TABLE `store_application` (
 	`status_changed_at`	DATETIME(6)	NOT NULL	COMMENT '마지막 상태 변경 시각 — 7일 자동 반려(SUPPLEMENT) · 30일 재신청 제한(REJECTED) 기준',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '제출 시각',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '낙관적 락(@Version) — 재제출과 자동 반려가 동시에 저장되는 것 방지'
+	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '낙관적 락(@Version) — 재제출과 자동 반려가 동시에 저장되는 것 방지',
+	`slug`	VARCHAR(50)	NOT NULL	COMMENT '신청한 스토어 주소 gotgan.kr/store/{slug} — 승인 시 store.slug 로 복사. 형식(영소문자 · 숫자 · -)과 중복은 서비스 검증'
 );
 
 -- 입점 신청 서류
@@ -137,7 +147,8 @@ CREATE TABLE `store` (
 	`status_reason`	VARCHAR(255)	NULL	COMMENT '가장 최근 정지 · 해제 사유 (전체는 store_status_history)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (물리 DELETE 금지)'
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (물리 DELETE 금지)',
+	`slug`	VARCHAR(50)	NOT NULL	DEFAULT '#5b6b4a'	COMMENT '스토어 주소 gotgan.kr/store/{slug} — 승인 시 신청서에서 복사, 판매자는 수정 불가'
 );
 
 -- 스토어 상태 이력 (STR-14)
@@ -152,13 +163,14 @@ CREATE TABLE `store_status_history` (
 );
 
 -- ============================================================ productdb (product-service · 담당 박지연)
--- 원본: V1__init_product_ddl.sql
+-- 원본: V1__init_product_ddl.sql · V2__product_info_columns.sql
 
 -- 상품 카테고리 (상위/하위 2단계)
 CREATE TABLE `category` (
 	`category_id`	BIGINT	NOT NULL,
 	`parent_id`	BIGINT	NULL	COMMENT '상위 카테고리 — 상위는 NULL',
 	`name`	VARCHAR(50)	NOT NULL	COMMENT '카테고리 이름',
+	`name_en`	VARCHAR(50)	NULL	COMMENT '카테고리 영문명 예: Apparel — 선택 입력, 없으면 화면에서 표시하지 않음',
 	`sort_order`	INT	NOT NULL	DEFAULT 0	COMMENT '같은 부모 안의 정렬 순서 (작을수록 먼저)',
 	`is_active`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '사용 여부 — 삭제 없음, FALSE 면 공개 트리에서 숨김 (store · settlement 가 category_id 를 논리 참조)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
@@ -183,7 +195,8 @@ CREATE TABLE `product` (
 	`store_status_changed_at`	DATETIME(6)	NULL	COMMENT '마지막으로 반영한 StoreStatusChanged 의 occurredAt — 이보다 오래된 이벤트는 무시 (SQS 순서 미보장)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '등록 시각 (신상품 정렬)',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (주문 스냅샷 보존, 물리 DELETE 금지)'
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (주문 스냅샷 보존, 물리 DELETE 금지)',
+	`material`	VARCHAR(100)	NOT NULL	COMMENT '소재 · 원재료 (상품정보 제공고시) 예: 리넨 100%'
 );
 
 -- 상품 옵션 조합 · 재고 (조합 중복은 서비스 검증)
@@ -228,7 +241,7 @@ CREATE TABLE `productdb_processed_event` (
 );
 
 -- ============================================================ orderdb (order-service · 담당 이경석)
--- 원본: V1__init.sql
+-- 원본: V1__init.sql · V2__order_saga_outbox.sql · V3__saga_retry.sql
 
 -- 장바구니 항목 (원본, Redis 캐시의 출처)
 CREATE TABLE `cart_item` (
@@ -242,8 +255,129 @@ CREATE TABLE `cart_item` (
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각'
 );
 
+-- 주문 (결제 단위)
+CREATE TABLE `orders` (
+	`order_id`	BIGINT	NOT NULL	COMMENT '주문 PK',
+	`buyer_id`	BIGINT	NOT NULL	COMMENT 'user-service users.user_id (논리 참조)',
+	`order_no`	VARCHAR(20)	NOT NULL	COMMENT '외부 노출 주문번호 예: 20261021-000123',
+	`orderer_name`	VARCHAR(50)	NOT NULL	COMMENT '주문 시점 스냅샷 (실명 users.name) — 주문 확인 메일 등 알림용, 화면 공개 금지',
+	`orderer_display_name`	VARCHAR(50)	NOT NULL	COMMENT '주문 시점 스냅샷 (공개 표시용 이름) — users.nick 이 있으면 nick, NULL · 공백이면 users.name 을 마스킹한 값(예: 홍*동). 주문 생성 시 애플리케이션이 결정. OrderItemConfirmed.buyerDisplayName 으로 review 에 전달',
+	`orderer_email`	VARCHAR(100)	NOT NULL	COMMENT '주문 시점 스냅샷 — 알림 Lambda가 user-service를 부르지 않게',
+	`receiver_name`	VARCHAR(50)	NOT NULL	COMMENT '수령인',
+	`receiver_phone`	VARCHAR(20)	NOT NULL	COMMENT '수령인 연락처',
+	`zipcode`	VARCHAR(10)	NOT NULL	COMMENT '우편번호',
+	`address1`	VARCHAR(200)	NOT NULL	COMMENT '기본 주소',
+	`address2`	VARCHAR(200)	NULL	COMMENT '상세 주소',
+	`delivery_memo`	VARCHAR(200)	NULL	COMMENT '배송 요청사항',
+	`total_product_amt`	BIGINT	NOT NULL	COMMENT '상품 금액 합계 (원)',
+	`total_shipping_fee`	BIGINT	NOT NULL	COMMENT '배송비 합계 (원)',
+	`used_point`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '사용 포인트 합계 (원) — user-service 차감은 Saga 2단계',
+	`pay_amt`	BIGINT	NOT NULL	COMMENT '실결제금액 (원) = 상품 + 배송비 - 사용 포인트, 포트원 결제창 금액',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT 'PENDING / PAID / FAILED / CANCELLED',
+	`paid_at`	DATETIME(6)	NULL	COMMENT '결제 완료 시각 (애플리케이션이 기록)',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
+	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각',
+	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT 'JPA @Version 낙관적 락'
+);
+
+-- 주문의 스토어별 배송비
+CREATE TABLE `order_store_shipment` (
+	`order_store_shipment_id`	BIGINT	NOT NULL	COMMENT '스토어별 배송비 PK',
+	`order_id`	BIGINT	NOT NULL	COMMENT 'orders.order_id',
+	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service store.store_id (논리 참조)',
+	`shipping_fee`	BIGINT	NOT NULL	COMMENT '스토어 묶음 배송비 (원)',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
+	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각'
+);
+
+-- 상품주문 (상태 관리 단위)
+CREATE TABLE `order_item` (
+	`order_item_id`	BIGINT	NOT NULL	COMMENT '상품주문 PK',
+	`order_id`	BIGINT	NOT NULL	COMMENT 'orders.order_id',
+	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service store.store_id (논리 참조) — 판매자 주문 조회 핵심 키',
+	`product_id`	BIGINT	NOT NULL	COMMENT 'product-service product.product_id (논리 참조)',
+	`product_option_id`	BIGINT	NOT NULL	COMMENT 'product-service product_option.product_option_id (논리 참조)',
+	`category_id`	BIGINT	NOT NULL	COMMENT 'product-service category.category_id (논리 참조) — 하위 카테고리 스냅샷 (OrderItemConfirmed.categoryId)',
+	`top_category_id`	BIGINT	NOT NULL	COMMENT 'product-service category.category_id (논리 참조) — 상위 카테고리 스냅샷, 판매수수료 기준 (OrderItemConfirmed.topCategoryId, events.md 10/16)',
+	`item_no`	VARCHAR(24)	NOT NULL	COMMENT '외부 노출 상품주문번호 예: 20261021-000123-01',
+	`store_name`	VARCHAR(100)	NOT NULL	COMMENT '주문 시점 스냅샷',
+	`product_name`	VARCHAR(200)	NOT NULL	COMMENT '주문 시점 스냅샷 (OrderItemConfirmed.productName)',
+	`option_name`	VARCHAR(200)	NULL	COMMENT '주문 시점 스냅샷 예: 오트밀 / M',
+	`thumbnail_url`	VARCHAR(500)	NULL	COMMENT '주문 시점 스냅샷 — 주문 목록 썸네일',
+	`unit_price`	BIGINT	NOT NULL	COMMENT '단가 (원)',
+	`quantity`	INT UNSIGNED	NOT NULL	COMMENT '수량',
+	`item_amt`	BIGINT	NOT NULL	COMMENT '상품주문 금액 (원)',
+	`used_point`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '금액 비율로 배분한 사용 포인트 (원) — 취소 · 반품 시 환원액',
+	`earned_point`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '적립 포인트 (원) = (item_amt - used_point)의 5% — 취소 · 반품 시 회수액',
+	`courier`	VARCHAR(30)	NULL	COMMENT '택배사',
+	`tracking_no`	VARCHAR(40)	NULL	COMMENT '송장번호',
+	`status`	VARCHAR(30)	NOT NULL	DEFAULT 'PAYMENT_DONE'	COMMENT 'PAYMENT_DONE / PREPARING / SHIPPING / DELIVERED / CONFIRMED / CANCEL_REQUESTED / CANCELLED / RETURN_REQUESTED / RETURNED / EXCHANGE_REQUESTED',
+	`shipped_at`	DATETIME(6)	NULL	COMMENT '발송 시각',
+	`delivered_at`	DATETIME(6)	NULL	COMMENT '배송 완료 시각',
+	`confirmed_at`	DATETIME(6)	NULL	COMMENT '구매확정 시각 — 정산 기준일',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
+	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각',
+	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT 'JPA @Version 낙관적 락'
+);
+
+-- 상품주문 상태 변경 이력
+CREATE TABLE `order_item_history` (
+	`order_item_history_id`	BIGINT	NOT NULL	COMMENT '상태 이력 PK',
+	`order_item_id`	BIGINT	NOT NULL	COMMENT 'order_item.order_item_id',
+	`actor_id`	BIGINT	NULL	COMMENT 'user-service users.user_id (논리 참조), SYSTEM이면 NULL',
+	`from_status`	VARCHAR(30)	NULL	COMMENT '변경 전 상태',
+	`to_status`	VARCHAR(30)	NOT NULL	COMMENT '변경 후 상태',
+	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'BUYER / SELLER / ADMIN / SYSTEM',
+	`reason`	VARCHAR(300)	NULL	COMMENT '사유',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각'
+);
+
+-- 취소 · 반품 · 교환 요청
+CREATE TABLE `order_claim` (
+	`order_claim_id`	BIGINT	NOT NULL	COMMENT '클레임 PK',
+	`order_item_id`	BIGINT	NOT NULL	COMMENT 'order_item.order_item_id',
+	`requester_id`	BIGINT	NOT NULL	COMMENT 'user-service users.user_id (논리 참조) — 요청한 구매자',
+	`claim_type`	VARCHAR(20)	NOT NULL	COMMENT 'CANCEL / RETURN / EXCHANGE',
+	`reason_code`	VARCHAR(30)	NOT NULL	COMMENT 'CHANGE_OF_MIND / DEFECTIVE / WRONG_DELIVERY / DELAYED ...',
+	`reason_detail`	VARCHAR(500)	NULL	COMMENT '상세 사유 (구매자 입력)',
+	`reject_reason`	VARCHAR(500)	NULL	COMMENT '판매자 거부 사유',
+	`refund_amt`	BIGINT	NULL	COMMENT '환불 금액 (원) — 교환이면 NULL (OrderItemCancelled · Returned.refundAmt)',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'REQUESTED'	COMMENT 'REQUESTED / APPROVED / REJECTED / COMPLETED',
+	`requested_at`	DATETIME(6)	NOT NULL	COMMENT '요청 시각 (애플리케이션이 기록)',
+	`processed_at`	DATETIME(6)	NULL	COMMENT '승인 · 거부 · 완료 처리 시각',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
+	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각'
+);
+
+-- Saga 진행 상태
+CREATE TABLE `saga_instance` (
+	`saga_instance_id`	BIGINT	NOT NULL	COMMENT 'Saga PK',
+	`order_id`	BIGINT	NOT NULL	COMMENT 'orders.order_id',
+	`order_claim_id`	BIGINT	NULL	COMMENT 'order_claim.order_claim_id — 취소 · 반품 Saga일 때만',
+	`saga_id`	CHAR(36)	NOT NULL	COMMENT 'UUID — Saga 참여자 API(user · product · payment) 멱등 키',
+	`saga_type`	VARCHAR(30)	NOT NULL	COMMENT 'PLACE_ORDER / CANCEL_ITEM / RETURN_ITEM',
+	`current_step`	VARCHAR(30)	NOT NULL	COMMENT 'ORDER_CREATED / POINT_USED / STOCK_RESERVED / PAYMENT_READY / PAYMENT_VERIFIED / DONE',
+	`last_error`	VARCHAR(500)	NULL	COMMENT '마지막 실패 사유',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'STARTED'	COMMENT 'STARTED / COMPENSATING / COMPLETED / COMPENSATED / FAILED',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
+	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각'
+);
+
+-- Transactional Outbox
+CREATE TABLE `outbox_event` (
+	`outbox_event_id`	BIGINT	NOT NULL	COMMENT 'Outbox PK',
+	`event_id`	VARCHAR(36)	NOT NULL	COMMENT '이벤트 봉투 eventId (UUID) — 소비자 processed_event 멱등 키',
+	`aggregate_type`	VARCHAR(30)	NOT NULL	COMMENT 'ORDER / ORDER_ITEM',
+	`aggregate_id`	VARCHAR(40)	NOT NULL	COMMENT '주문번호 또는 상품주문번호',
+	`event_type`	VARCHAR(50)	NOT NULL	COMMENT 'OrderPaid / OrderItemShipped / OrderItemConfirmed / OrderItemCancelled / OrderItemReturned',
+	`payload`	JSON	NOT NULL	COMMENT '이벤트 payload (docs/events.md)',
+	`status`	VARCHAR(10)	NOT NULL	DEFAULT 'NEW'	COMMENT 'NEW / SENT',
+	`sent_at`	DATETIME(6)	NULL	COMMENT 'SNS 발행 시각',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각'
+);
+
 -- ============================================================ paymentdb (payment-service · 담당 구지훈)
--- 원본: V1__init.sql
+-- 원본: V1__init.sql · V2__payment_cancel_write_ahead.sql
 
 -- 결제 (포트원 V2)
 CREATE TABLE `payment` (
@@ -273,17 +407,19 @@ CREATE TABLE `payment_cancel` (
 	`reason`	VARCHAR(200)	NOT NULL	COMMENT '취소 사유 예: 구매자 취소 / 반품 / 결제 금액 불일치 자동 취소 / 주문 처리 실패',
 	`portone_cancellation_id`	VARCHAR(64)	NULL	COMMENT '포트원 취소 응답의 cancellation id',
 	`cancelled_at`	DATETIME(6)	NOT NULL	COMMENT '포트원 취소 완료 시각 (애플리케이션이 기록)',
-	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
+	`cancellable_before`	BIGINT	NOT NULL	DEFAULT 'SUCCEEDED'	COMMENT '취소 요청 직전 취소 가능 잔액 — 포트원 currentCancellableAmount 로 보내 같은 취소가 두 번 나가지 않게 함'
 );
 
 -- ============================================================ settlementdb (settlement-service · 담당 구지훈)
--- 원본: V1__init.sql · V2__settlement_store_processed_event.sql · V3__settlement_commission_payout.sql · V4__settlement_history_product_name.sql
+-- 원본: V1__init.sql · V2__settlement_store_processed_event.sql · V3__settlement_commission_payout.sql · V4__settlement_history_product_name.sql · V5__settlement_store_seller_email.sql · V6__settlement_carried_over_count.sql · V7__event_outbox.sql
 
 -- 정산용 스토어 스냅샷 (StoreApproved · StoreStatusChanged)
 CREATE TABLE `settlement_store` (
 	`settlement_store_id`	BIGINT	NOT NULL,
 	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service 스토어 ID (다른 서비스 ID — FK 없음)',
 	`store_name`	VARCHAR(100)	NOT NULL	COMMENT 'StoreApproved 스냅샷 — 스토어명',
+	`seller_email`	VARCHAR(100)	NULL	COMMENT 'StoreApproved 스냅샷 — 판매자 이메일 (SettlementPaid 명세서 메일 수신자)',
 	`bank_name`	VARCHAR(50)	NULL	COMMENT 'StoreApproved 스냅샷 — 정산 계좌 은행',
 	`account_number`	VARCHAR(50)	NULL	COMMENT 'StoreApproved 스냅샷 — 정산 계좌번호',
 	`account_holder`	VARCHAR(50)	NULL	COMMENT 'StoreApproved 스냅샷 — 예금주',
@@ -318,6 +454,7 @@ CREATE TABLE `settlement` (
 	`week_start`	DATE	NOT NULL	COMMENT '정산 주차 시작일 (월요일, KST)',
 	`week_end`	DATE	NOT NULL	COMMENT '정산 주차 종료일 (일요일, KST)',
 	`item_count`	INT UNSIGNED	NOT NULL	COMMENT '정산 대상 상품주문 수',
+	`carried_over_count`	INT UNSIGNED	NOT NULL	DEFAULT 0	COMMENT '이월 상품주문 수 — 구매확정일이 이 주차 밖(지난 주차가 이미 지급돼 넘어온 건). item_count 에 포함',
 	`sales_amt`	BIGINT	NOT NULL	COMMENT '구매확정 매출 (원) = Σ item_amt',
 	`commission_amt`	BIGINT	NOT NULL	COMMENT '판매수수료 (원) = Σ commission_amt',
 	`payment_fee_amt`	BIGINT	NOT NULL	COMMENT '결제수수료 (원) = Σ payment_fee_amt',
@@ -373,11 +510,27 @@ CREATE TABLE `settlement_history` (
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '상태가 바뀐 시각'
 );
 
+-- 이벤트 아웃박스 (트랜잭션과 함께 남기고 커밋 후 발행)
+CREATE TABLE `event_outbox` (
+	`event_outbox_id`	BIGINT	NOT NULL,
+	`event_id`	CHAR(36)	NOT NULL	COMMENT '이벤트 봉투 eventId (UUID) — 다시 보내도 같은 값이라 소비자가 중복을 거름',
+	`event_type`	VARCHAR(50)	NOT NULL	COMMENT 'SettlementPaid',
+	`aggregate_id`	VARCHAR(64)	NOT NULL	COMMENT '봉투 aggregateId (정산서 ID 등)',
+	`payload`	TEXT	NOT NULL	COMMENT '보낼 봉투 JSON 그대로 (docs/events.md 형식)',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT 'PENDING(보내기 전 · 실패) / SENT',
+	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '발행 시도 횟수 (경보 기준)',
+	`last_error`	VARCHAR(200)	NULL	COMMENT '마지막 발행 실패 사유',
+	`sent_at`	DATETIME(6)	NULL	COMMENT 'SNS 발행 성공 시각',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
+	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
+);
+
 -- ============================================================ PK
 ALTER TABLE `users` ADD CONSTRAINT `PK_USERS` PRIMARY KEY (`user_id`);
 ALTER TABLE `address` ADD CONSTRAINT `PK_ADDRESS` PRIMARY KEY (`address_id`);
 ALTER TABLE `point_history` ADD CONSTRAINT `PK_POINT_HISTORY` PRIMARY KEY (`point_history_id`);
 ALTER TABLE `userdb_processed_event` ADD CONSTRAINT `PK_USERDB_PROCESSED_EVENT` PRIMARY KEY (`processed_event_id`);
+ALTER TABLE `point_use_saga` ADD CONSTRAINT `PK_POINT_USE_SAGA` PRIMARY KEY (`point_use_saga_id`);
 ALTER TABLE `store_application` ADD CONSTRAINT `PK_STORE_APPLICATION` PRIMARY KEY (`store_application_id`);
 ALTER TABLE `application_document` ADD CONSTRAINT `PK_APPLICATION_DOCUMENT` PRIMARY KEY (`application_document_id`);
 ALTER TABLE `application_history` ADD CONSTRAINT `PK_APPLICATION_HISTORY` PRIMARY KEY (`application_history_id`);
@@ -390,6 +543,13 @@ ALTER TABLE `product_image` ADD CONSTRAINT `PK_PRODUCT_IMAGE` PRIMARY KEY (`prod
 ALTER TABLE `stock_history` ADD CONSTRAINT `PK_STOCK_HISTORY` PRIMARY KEY (`stock_history_id`);
 ALTER TABLE `productdb_processed_event` ADD CONSTRAINT `PK_PRODUCTDB_PROCESSED_EVENT` PRIMARY KEY (`processed_event_id`);
 ALTER TABLE `cart_item` ADD CONSTRAINT `PK_CART_ITEM` PRIMARY KEY (`cart_item_id`);
+ALTER TABLE `orders` ADD CONSTRAINT `PK_ORDERS` PRIMARY KEY (`order_id`);
+ALTER TABLE `order_store_shipment` ADD CONSTRAINT `PK_ORDER_STORE_SHIPMENT` PRIMARY KEY (`order_store_shipment_id`);
+ALTER TABLE `order_item` ADD CONSTRAINT `PK_ORDER_ITEM` PRIMARY KEY (`order_item_id`);
+ALTER TABLE `order_item_history` ADD CONSTRAINT `PK_ORDER_ITEM_HISTORY` PRIMARY KEY (`order_item_history_id`);
+ALTER TABLE `order_claim` ADD CONSTRAINT `PK_ORDER_CLAIM` PRIMARY KEY (`order_claim_id`);
+ALTER TABLE `saga_instance` ADD CONSTRAINT `PK_SAGA_INSTANCE` PRIMARY KEY (`saga_instance_id`);
+ALTER TABLE `outbox_event` ADD CONSTRAINT `PK_OUTBOX_EVENT` PRIMARY KEY (`outbox_event_id`);
 ALTER TABLE `payment` ADD CONSTRAINT `PK_PAYMENT` PRIMARY KEY (`payment_id`);
 ALTER TABLE `payment_cancel` ADD CONSTRAINT `PK_PAYMENT_CANCEL` PRIMARY KEY (`payment_cancel_id`);
 ALTER TABLE `settlement_store` ADD CONSTRAINT `PK_SETTLEMENT_STORE` PRIMARY KEY (`settlement_store_id`);
@@ -399,6 +559,7 @@ ALTER TABLE `settlement` ADD CONSTRAINT `PK_SETTLEMENT` PRIMARY KEY (`settlement
 ALTER TABLE `settlement_item` ADD CONSTRAINT `PK_SETTLEMENT_ITEM` PRIMARY KEY (`settlement_item_id`);
 ALTER TABLE `payout` ADD CONSTRAINT `PK_PAYOUT` PRIMARY KEY (`payout_id`);
 ALTER TABLE `settlement_history` ADD CONSTRAINT `PK_SETTLEMENT_HISTORY` PRIMARY KEY (`settlement_history_id`);
+ALTER TABLE `event_outbox` ADD CONSTRAINT `PK_EVENT_OUTBOX` PRIMARY KEY (`event_outbox_id`);
 
 -- ============================================================ FK (같은 DB 안의 관계만)
 ALTER TABLE `address` ADD CONSTRAINT `fk_address_users` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`);
@@ -412,6 +573,12 @@ ALTER TABLE `product` ADD CONSTRAINT `fk_product_category` FOREIGN KEY (`categor
 ALTER TABLE `product_option` ADD CONSTRAINT `fk_product_option_product` FOREIGN KEY (`product_id`) REFERENCES `product` (`product_id`);
 ALTER TABLE `product_image` ADD CONSTRAINT `fk_product_image_product` FOREIGN KEY (`product_id`) REFERENCES `product` (`product_id`);
 ALTER TABLE `stock_history` ADD CONSTRAINT `fk_stock_history_product_option` FOREIGN KEY (`product_option_id`) REFERENCES `product_option` (`product_option_id`);
+ALTER TABLE `order_store_shipment` ADD CONSTRAINT `fk_order_store_shipment_orders` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`);
+ALTER TABLE `order_item` ADD CONSTRAINT `fk_order_item_orders` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`);
+ALTER TABLE `order_item_history` ADD CONSTRAINT `fk_order_item_history_order_item` FOREIGN KEY (`order_item_id`) REFERENCES `order_item` (`order_item_id`);
+ALTER TABLE `order_claim` ADD CONSTRAINT `fk_order_claim_order_item` FOREIGN KEY (`order_item_id`) REFERENCES `order_item` (`order_item_id`);
+ALTER TABLE `saga_instance` ADD CONSTRAINT `fk_saga_instance_orders` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`);
+ALTER TABLE `saga_instance` ADD CONSTRAINT `fk_saga_instance_order_claim` FOREIGN KEY (`order_claim_id`) REFERENCES `order_claim` (`order_claim_id`);
 ALTER TABLE `payment_cancel` ADD CONSTRAINT `fk_payment_cancel_payment` FOREIGN KEY (`payment_id`) REFERENCES `payment` (`payment_id`);
 ALTER TABLE `settlement_item` ADD CONSTRAINT `fk_settlement_item_settlement` FOREIGN KEY (`settlement_id`) REFERENCES `settlement` (`settlement_id`);
 ALTER TABLE `payout` ADD CONSTRAINT `fk_payout_settlement` FOREIGN KEY (`settlement_id`) REFERENCES `settlement` (`settlement_id`);
