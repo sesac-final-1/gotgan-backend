@@ -32,7 +32,8 @@ public interface SagaInstanceRepository extends JpaRepository<SagaInstance, Long
                                    Pageable page);
 
     /**
-     * 보상을 다시 할 Saga — 재시도 시각이 지났거나(보상 호출 실패), 재시도 시각 없이 cutoff 이전부터 멈춘(보상 도중 파드 종료) COMPENSATING.
+     * 다시 시도할 Saga — 재시도 시각이 지났거나(호출 실패), 재시도 시각 없이 cutoff 이전부터 멈춘(도중 파드 종료) Saga.
+     * 주문 Saga 는 COMPENSATING(보상 재시도), 취소 Saga 는 STARTED(앞으로 진행 재시도).
      * idx_saga_instance_status_next_retry (status, next_retry_at)
      */
     @Query("""
@@ -41,7 +42,7 @@ public interface SagaInstanceRepository extends JpaRepository<SagaInstance, Long
               and (s.nextRetryAt <= :now or (s.nextRetryAt is null and s.updatedAt < :cutoff))
             order by s.id
             """)
-    List<SagaInstance> findCompensationDue(@Param("type") SagaType type, @Param("status") SagaStatus status,
+    List<SagaInstance> findRetryDue(@Param("type") SagaType type, @Param("status") SagaStatus status,
                                            @Param("now") LocalDateTime now, @Param("cutoff") LocalDateTime cutoff,
                                            Pageable page);
 }

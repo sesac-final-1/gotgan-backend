@@ -37,6 +37,7 @@ class SagaSchedulersTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 22, 12, 0);
 
     @Mock private PlaceOrderSaga placeOrderSaga;
+    @Mock private CancelOrderItemSaga cancelOrderItemSaga;
     @Mock private OrderSagaTxService sagaTx;
 
     private final List<String> orderNosSeen = new ArrayList<>();
@@ -79,18 +80,22 @@ class SagaSchedulersTest {
         // given
         SagaInstance first = saga("20261022-000001", "saga-1");
         SagaInstance second = saga("20261022-000002", "saga-2");
+        SagaInstance cancel = saga("20261022-000003", "saga-c1");
         given(sagaTx.findRecoverable(NOW.minusMinutes(5), 50)).willReturn(List.of(first, second));
+        given(sagaTx.findCancelRetryable(NOW.minusMinutes(5), 50)).willReturn(List.of(cancel));
         willThrow(new IllegalStateException("boom")).given(placeOrderSaga).recover(first);
         willAnswer(inv -> orderNosSeen.add(MDC.get(OrderLogContext.SAGA_ID))).given(placeOrderSaga).recover(second);
-        SagaRecoveryScheduler scheduler = new SagaRecoveryScheduler(placeOrderSaga, sagaTx, CLOCK,
+        willAnswer(inv -> orderNosSeen.add(MDC.get(OrderLogContext.SAGA_ID))).given(cancelOrderItemSaga).resume(cancel);
+        SagaRecoveryScheduler scheduler = new SagaRecoveryScheduler(placeOrderSaga, cancelOrderItemSaga, sagaTx, CLOCK,
                 Duration.ofMinutes(5), 50);
 
         // when
         scheduler.recoverStalledSagas();
 
-        // then
+        // then — 주문 Saga 는 보상, 취소 Saga 는 멈춘 단계부터 이어서
         verify(placeOrderSaga).recover(second);
-        assertThat(orderNosSeen).containsExactly("saga-2");
+        verify(cancelOrderItemSaga).resume(cancel);
+        assertThat(orderNosSeen).containsExactly("saga-2", "saga-c1");
         assertThat(MDC.get(OrderLogContext.SAGA_ID)).isNull();
     }
 }

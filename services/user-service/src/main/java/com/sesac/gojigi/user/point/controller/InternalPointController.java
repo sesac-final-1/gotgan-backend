@@ -1,8 +1,10 @@
 package com.sesac.gojigi.user.point.controller;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.user.point.dto.request.ReversePointRequest;
 import com.sesac.gojigi.user.point.dto.request.UsePointRequest;
 import com.sesac.gojigi.user.point.dto.response.PointRestoreResponse;
+import com.sesac.gojigi.user.point.dto.response.PointReversalResponse;
 import com.sesac.gojigi.user.point.dto.response.PointUseResponse;
 import com.sesac.gojigi.user.point.dto.response.UserPointsResponse;
 import com.sesac.gojigi.user.point.service.PointService;
@@ -47,6 +49,16 @@ public class InternalPointController {
     @DeleteMapping("/internal/points/use/{sagaId}")
     public ApiResponse<PointRestoreResponse> cancelUse(@PathVariable String sagaId) {
         return ApiResponse.success("포인트 사용을 취소했습니다.", pointService.cancelUse(sagaId));
+    }
+
+    @Operation(summary = "취소 · 반품 포인트 환원 · 회수", description = """
+            order 취소 · 반품 Saga 단계. restoreAmount 만큼 돌려주고(RESTORE), 이 상품주문으로 실제 적립된 만큼까지 reclaimAmount 를 회수(RECLAIM).
+            회수는 잔액 0 까지만 — 못 뺀 차액은 shortfallAmount. 멱등 키 claim-{claimId}-{orderItemId} — 같은 요청 재전송은 처음 결과 그대로.
+            탈퇴 회원이면 아무것도 하지 않고 0 으로 200.
+            에러: 400 INVALID_INPUT(음수 금액 · 필수값 누락)""")
+    @PostMapping("/internal/points/reversals")
+    public ApiResponse<PointReversalResponse> reverse(@Valid @RequestBody ReversePointRequest request) {
+        return ApiResponse.success("포인트를 환원 · 회수했습니다.", pointService.reverse(request));
     }
 
     @Operation(summary = "회원 포인트 잔액 · 이력 (관리자 회원 상세)", description = """

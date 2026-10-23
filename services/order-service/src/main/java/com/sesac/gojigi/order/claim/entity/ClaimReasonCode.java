@@ -9,5 +9,7 @@ public enum ClaimReasonCode {
     /** 오배송 */
     WRONG_DELIVERY,
     /** 배송 지연 */
-    DELAYED
+    DELAYED,
+    /** 기타 — 상세 사유에 적는다 (스펙 05장 사유 목록) */
+    ETC
 }

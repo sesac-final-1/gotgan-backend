@@ -1,5 +1,6 @@
 package com.sesac.gojigi.order.order.client;
 
+import com.sesac.gojigi.order.order.client.dto.PointReversalRequest;
 import com.sesac.gojigi.order.order.client.dto.PointUseRequest;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
@@ -60,6 +61,20 @@ public class UserClientAdapter {
         } catch (HttpClientErrorException e) {
             throw RemoteCalls.rejected(TARGET, "포인트 사용 취소", e);
         }
+    }
+
+    /** 포인트 환원 · 회수 (취소 · 반품 Saga POINT_RESTORED) — 멱등, 실패하면 Saga 가 같은 클레임으로 다시 부른다 */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "reversePointsFallback")
+    public void reversePoints(PointReversalRequest request) {
+        try {
+            userClient.reversePoints(request);
+        } catch (HttpClientErrorException e) {
+            throw RemoteCalls.rejected(TARGET, "포인트 환원 · 회수", e);
+        }
+    }
+
+    void reversePointsFallback(PointReversalRequest request, Throwable t) {
+        throw RemoteCalls.unavailable(TARGET, "포인트 환원 · 회수", t);
     }
 
     UserSummaryResponse getUserFallback(Long userId, Throwable t) {

@@ -14,6 +14,7 @@ import com.sesac.gojigi.common.web.dto.PageResponse;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.user.point.dto.response.MyPointsResponse;
 import com.sesac.gojigi.user.point.dto.response.PointRestoreResponse;
+import com.sesac.gojigi.user.point.dto.response.PointReversalResponse;
 import com.sesac.gojigi.user.point.dto.response.PointUseResponse;
 import com.sesac.gojigi.user.point.dto.response.UserPointsResponse;
 import com.sesac.gojigi.user.point.entity.PointType;
@@ -65,6 +66,23 @@ class PointControllerTest {
                 .andExpect(jsonPath("$.data.history[0].type").value("USE"))
                 .andExpect(jsonPath("$.data.history[0].amount").value(300))
                 .andExpect(jsonPath("$.data.history[0].createdAt").value("2026-10-22T11:00:00+09:00"));
+    }
+
+    @Test
+    @DisplayName("포인트 환원 · 회수 — 200 결과, 음수 금액은 400 INVALID_INPUT")
+    void reverse() throws Exception {
+        String body = "{\"claimId\":789,\"orderItemId\":456,\"userId\":4,\"orderNo\":\"20261023-000001\","
+                + "\"restoreAmount\":2000,\"reclaimAmount\":300}";
+        given(pointService.reverse(any())).willReturn(new PointReversalResponse(789L, 456L, 2_000L, 300L, 0L, 2_700L));
+
+        mockMvc.perform(post("/internal/points/reversals").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.restoredAmount").value(2000))
+                .andExpect(jsonPath("$.data.balanceAfter").value(2700));
+        mockMvc.perform(post("/internal/points/reversals").contentType(MediaType.APPLICATION_JSON)
+                        .content(body.replace("\"restoreAmount\":2000", "\"restoreAmount\":-1")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
     }
 
     @Test
