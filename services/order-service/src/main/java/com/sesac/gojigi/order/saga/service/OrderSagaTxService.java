@@ -2,12 +2,18 @@ package com.sesac.gojigi.order.saga.service;
 
 import com.sesac.gojigi.order.order.entity.Order;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
+import com.sesac.gojigi.order.saga.entity.SagaStatus;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
+import com.sesac.gojigi.order.saga.entity.SagaType;
 import com.sesac.gojigi.order.saga.repository.SagaInstanceRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +24,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class OrderSagaTxService {
+
+    /** 결제창을 띄운 뒤 — 결제 대기(PAYMENT_READY) · 검증 성공 뒤 PAID 마무리 전(PAYMENT_VERIFIED) */
+    private static final Set<SagaStep> PAYMENT_WAITING = Set.of(SagaStep.PAYMENT_READY, SagaStep.PAYMENT_VERIFIED);
+    /** 결제창을 띄우기 전 — [요청 1] 처리 중에 멈춘 단계 */
+    private static final Set<SagaStep> BEFORE_PAYMENT = Set.of(SagaStep.ORDER_CREATED, SagaStep.POINT_USED,
+            SagaStep.STOCK_RESERVED);
 
     private final SagaInstanceRepository sagaInstanceRepository;
     private final Clock clock;
@@ -51,6 +63,33 @@ public class OrderSagaTxService {
     @Transactional
     public void scheduleRetry(Long sagaInstanceId, String reason) {
         get(sagaInstanceId).scheduleRetry(reason, LocalDateTime.now(clock));
+    }
+
+    /** 주문의 주문 생성 Saga */
+    @Transactional(readOnly = true)
+    public SagaInstance getPlaceOrder(Long orderId) {
+        return sagaInstanceRepository.findByOrderIdAndSagaType(orderId, SagaType.PLACE_ORDER)
+                .orElseThrow(() -> new IllegalStateException("주문 Saga 없음 - orderId=" + orderId));
+    }
+
+    /** 결제 대기가 cutoff 전부터 이어지는 Saga — 결제 대기 만료 스케줄러 대상 (검증 뒤 멈춘 PAYMENT_VERIFIED 포함) */
+    @Transactional(readOnly = true)
+    public List<SagaInstance> findPaymentWaiting(LocalDateTime cutoff, int limit) {
+        return sagaInstanceRepository.findStalled(SagaType.PLACE_ORDER, SagaStatus.STARTED, PAYMENT_WAITING, cutoff,
+                PageRequest.of(0, limit));
+    }
+
+    /**
+     * 복구 스케줄러 대상 — 결제 준비 전 단계에서 cutoff 전부터 멈춘 STARTED(파드가 Saga 도중 종료),
+     * 재시도 시각이 지났거나 cutoff 전부터 멈춘 COMPENSATING.
+     */
+    @Transactional(readOnly = true)
+    public List<SagaInstance> findRecoverable(LocalDateTime cutoff, int limit) {
+        List<SagaInstance> sagas = new ArrayList<>(sagaInstanceRepository.findStalled(SagaType.PLACE_ORDER,
+                SagaStatus.STARTED, BEFORE_PAYMENT, cutoff, PageRequest.of(0, limit)));
+        sagas.addAll(sagaInstanceRepository.findCompensationDue(SagaType.PLACE_ORDER, SagaStatus.COMPENSATING,
+                LocalDateTime.now(clock), cutoff, PageRequest.of(0, limit)));
+        return sagas;
     }
 
     private SagaInstance get(Long sagaInstanceId) {

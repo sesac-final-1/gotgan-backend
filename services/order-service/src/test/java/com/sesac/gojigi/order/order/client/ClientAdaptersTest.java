@@ -14,6 +14,7 @@ import com.sesac.gojigi.common.web.exception.ErrorCode;
 import com.sesac.gojigi.order.order.client.dto.PaymentCancelRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentPrepareRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentResponse;
+import com.sesac.gojigi.order.order.client.dto.PaymentVerifyRequest;
 import com.sesac.gojigi.order.order.client.dto.PointRestoreResponse;
 import com.sesac.gojigi.order.order.client.dto.PointUseRequest;
 import com.sesac.gojigi.order.order.client.dto.StockItem;
@@ -196,6 +197,29 @@ class ClientAdaptersTest {
             assertCode(() -> adapter.prepareFallback(prepare, new ResourceAccessException("down")),
                     CommonErrorCode.EXTERNAL_API_ERROR);
             assertCode(() -> adapter.cancelFallback("20261022-000123", cancel, new ResourceAccessException("down")),
+                    CommonErrorCode.EXTERNAL_API_ERROR);
+        }
+
+        @Test
+        @DisplayName("결제 검증 — 미결제는 결제 대기, 금액 불일치 · 끝난 결제 · 결제 없음은 결제 실패, 그 밖 거절 · 장애는 502")
+        void payment_verify() {
+            PaymentClientAdapter adapter = new PaymentClientAdapter(paymentClient);
+            PaymentVerifyRequest verify = new PaymentVerifyRequest(SAGA_ID, "20261022-000123", 62_000L);
+            given(paymentClient.verify(verify)).willReturn(ApiResponse.success("ok",
+                    new PaymentResponse("20261022-000123", "pay-1", "PAID", 62_000L, 0L, "CARD", null)))
+                    .willThrow(rejected(HttpStatus.CONFLICT, "PAYMENT_NOT_COMPLETED"))
+                    .willThrow(rejected(HttpStatus.CONFLICT, "PAYMENT_AMOUNT_MISMATCH"))
+                    .willThrow(rejected(HttpStatus.CONFLICT, "PAYMENT_INVALID_STATUS"))
+                    .willThrow(rejected(HttpStatus.NOT_FOUND, "PAYMENT_NOT_FOUND"))
+                    .willThrow(rejected(HttpStatus.BAD_REQUEST, "INVALID_INPUT"));
+
+            assertThat(adapter.verify(verify).status()).isEqualTo("PAID");
+            assertCode(() -> adapter.verify(verify), OrderErrorCode.ORDER_PAYMENT_NOT_COMPLETED);
+            assertCode(() -> adapter.verify(verify), OrderErrorCode.ORDER_PAYMENT_FAILED);
+            assertCode(() -> adapter.verify(verify), OrderErrorCode.ORDER_PAYMENT_FAILED);
+            assertCode(() -> adapter.verify(verify), OrderErrorCode.ORDER_PAYMENT_FAILED);
+            assertCode(() -> adapter.verify(verify), CommonErrorCode.EXTERNAL_API_ERROR);
+            assertCode(() -> adapter.verifyFallback(verify, new ResourceAccessException("down")),
                     CommonErrorCode.EXTERNAL_API_ERROR);
         }
 

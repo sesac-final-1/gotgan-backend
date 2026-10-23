@@ -21,6 +21,10 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_BUYER_NOT_FOUND(HttpStatus.NOT_FOUND, "회원 정보를 찾을 수 없습니다."),
     /** 없는 주문번호 또는 다른 회원의 주문 — 남의 주문이 있다는 것도 알리지 않도록 같은 404 */
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
+    /** 결제 확인 — 포트원에서 아직 결제 전(결제창 진행 중 · 닫음, payment 409 PAYMENT_NOT_COMPLETED). 주문은 결제 대기 그대로 */
+    ORDER_PAYMENT_NOT_COMPLETED(HttpStatus.CONFLICT, "결제가 아직 완료되지 않았어요."),
+    /** 결제 확인 — 금액 불일치 · 끝난 결제 · 결제 없음. 재고 · 포인트를 되돌리고 주문 FAILED */
+    ORDER_PAYMENT_FAILED(HttpStatus.CONFLICT, "결제를 확인하지 못해 주문이 취소되었어요."),
     /** 지금 주문 상태에서 할 수 없는 변경 — 서버 버그 또는 동시 처리 */
     ORDER_INVALID_STATUS(HttpStatus.CONFLICT, "지금 주문 상태에서는 처리할 수 없습니다.");
 

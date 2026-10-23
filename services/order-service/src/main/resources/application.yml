@@ -36,11 +36,19 @@ app:
     product-mock: ${PRODUCT_CLIENT_MOCK:true}   # TODO(product 내부 API 구현 시 false): 그 전에는 MockProductClient
   order:
     auto-confirm-after: ${AUTO_CONFIRM_AFTER:7d}   # 데모에서는 ConfigMap 으로 2m
-    payment-timeout: ${PAYMENT_TIMEOUT:15m}
+    payment-timeout: ${PAYMENT_TIMEOUT:15m}         # 결제 대기 만료 기준 — 데모에서는 ConfigMap 으로 1m
   events:
     topic-arn: ${ORDER_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-order-events
   scheduler:
     zone: Asia/Seoul
+    batch-size: 100                         # 한 주기에 처리할 Saga 최대 건수
+    payment-expiry:                         # PaymentExpiryScheduler — 결제 대기 만료 (ORD-07)
+      interval: ${PAYMENT_EXPIRY_INTERVAL:60s}
+      initial-delay: 30s
+    saga-recovery:                          # SagaRecoveryScheduler — 멈춘 Saga · 보상 재시도 (ORD-07)
+      interval: ${SAGA_RECOVERY_INTERVAL:60s}
+      initial-delay: 30s
+      stalled-after: 5m                     # 결제 준비 전 단계에서 이만큼 진행이 없으면 멈춘 것으로 본다
 
 resilience4j:
   circuitbreaker:
