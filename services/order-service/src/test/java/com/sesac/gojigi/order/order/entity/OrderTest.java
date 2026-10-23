@@ -42,6 +42,21 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("PAID → CANCELLED (모든 상품주문 취소), PAID 가 아니면 409")
+    void markCancelled_fromPaid() {
+        // given
+        Order order = OrderFixtures.order();
+        order.markPaid(NOW);
+
+        // when
+        order.markCancelled();
+
+        // then
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThatThrownBy(order::markCancelled).isInstanceOf(OrderException.class);
+    }
+
+    @Test
     @DisplayName("PENDING 이 아니면 409 ORDER_INVALID_STATUS")
     void transition_notPending_throws() {
         // given

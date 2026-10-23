@@ -7,6 +7,7 @@ import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.StockItem;
 import com.sesac.gojigi.order.order.client.dto.StockReleaseRequest;
 import com.sesac.gojigi.order.order.client.dto.StockReserveRequest;
+import com.sesac.gojigi.order.order.client.dto.StockRestoreRequest;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ class MockClientsTest {
         assertThat(options).allSatisfy(o -> assertThat(o.purchasable()).isTrue());
         assertThat(client.reserve(new StockReserveRequest("saga-1", items)).data().items()).isEqualTo(items);
         assertThat(client.release("saga-1", new StockReleaseRequest(items)).data().sagaId()).isEqualTo("saga-1");
+        assertThat(client.restore(new StockRestoreRequest(789L, 11L, 2)).message()).isEqualTo("목업 재고 복원");
     }
 
     @Test

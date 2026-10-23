@@ -147,4 +147,21 @@ public class OrderItem extends BaseTimeEntity {
         }
         this.status = OrderItemStatus.PAYMENT_DONE;
     }
+
+    /** 결제완료 단계 즉시 취소 접수 (CLM-01) — 환불 Saga 가 끝나면 cancelled() */
+    public void requestCancel() {
+        transition(OrderItemStatus.PAYMENT_DONE, OrderItemStatus.CANCEL_REQUESTED);
+    }
+
+    /** 취소 완료 — 결제 부분 취소 · 재고 복원 · 포인트 환원 · 회수가 모두 끝남 */
+    public void cancelled() {
+        transition(OrderItemStatus.CANCEL_REQUESTED, OrderItemStatus.CANCELLED);
+    }
+
+    private void transition(OrderItemStatus from, OrderItemStatus to) {
+        if (status != from) {
+            throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);
+        }
+        this.status = to;
+    }
 }

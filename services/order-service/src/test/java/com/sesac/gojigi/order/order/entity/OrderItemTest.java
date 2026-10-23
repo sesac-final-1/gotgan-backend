@@ -26,6 +26,23 @@ class OrderItemTest {
     }
 
     @Test
+    @DisplayName("취소 — 결제완료에서만 접수(CANCEL_REQUESTED), 접수된 것만 취소 완료(CANCELLED)")
+    void cancel_transitions() {
+        // given
+        OrderItem item = OrderFixtures.item(OrderFixtures.order());
+        item.markPaymentDone();
+
+        // when
+        item.requestCancel();
+        item.cancelled();
+
+        // then
+        assertThat(item.getStatus()).isEqualTo(OrderItemStatus.CANCELLED);
+        assertThatThrownBy(item::requestCancel).isInstanceOf(OrderException.class);
+        assertThatThrownBy(OrderFixtures.item(OrderFixtures.order())::cancelled).isInstanceOf(OrderException.class);
+    }
+
+    @Test
     @DisplayName("ORDERED 가 아니면 409 ORDER_INVALID_STATUS")
     void markPaymentDone_twice_throws() {
         // given

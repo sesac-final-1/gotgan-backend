@@ -16,6 +16,9 @@ import com.sesac.gojigi.order.order.client.dto.PaymentPrepareRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentResponse;
 import com.sesac.gojigi.order.order.client.dto.PaymentVerifyRequest;
 import com.sesac.gojigi.order.order.client.dto.PointRestoreResponse;
+import com.sesac.gojigi.order.order.client.dto.PointReversalRequest;
+import com.sesac.gojigi.order.order.client.dto.PointReversalResponse;
+import com.sesac.gojigi.order.order.client.dto.StockRestoreRequest;
 import com.sesac.gojigi.order.order.client.dto.PointUseRequest;
 import com.sesac.gojigi.order.order.client.dto.StockItem;
 import com.sesac.gojigi.order.order.client.dto.StockReleaseRequest;
@@ -177,6 +180,8 @@ class ClientAdaptersTest {
 
         @Mock private PaymentClient paymentClient;
         @Mock private StoreClient storeClient;
+        @Mock private ProductClient productClient;
+        @Mock private UserClient userClient;
 
         @Test
         @DisplayName("결제 준비 · 취소 — 성공 · 거절(PAYMENT_CANCEL_PENDING 포함)은 502, 폴백은 502")
@@ -197,6 +202,29 @@ class ClientAdaptersTest {
             assertCode(() -> adapter.prepareFallback(prepare, new ResourceAccessException("down")),
                     CommonErrorCode.EXTERNAL_API_ERROR);
             assertCode(() -> adapter.cancelFallback("20261022-000123", cancel, new ResourceAccessException("down")),
+                    CommonErrorCode.EXTERNAL_API_ERROR);
+        }
+
+        @Test
+        @DisplayName("재고 복원 · 포인트 환원 회수 (취소 Saga) — 성공, 거절 · 폴백은 502")
+        void restoreAndReverse() {
+            ProductClientAdapter productAdapter = new ProductClientAdapter(productClient);
+            UserClientAdapter userAdapter = new UserClientAdapter(userClient);
+            StockRestoreRequest restore = new StockRestoreRequest(789L, 11L, 2);
+            PointReversalRequest reverse = new PointReversalRequest(789L, 456L, 4L, "20261023-000001", 2_000L, 300L);
+            given(productClient.restore(restore)).willReturn(ApiResponse.success("ok", null))
+                    .willThrow(rejected(HttpStatus.NOT_FOUND, "PRODUCT_OPTION_NOT_FOUND"));
+            given(userClient.reversePoints(reverse)).willReturn(ApiResponse.success("ok",
+                    new PointReversalResponse(789L, 456L, 2_000L, 300L, 0L, 2_700L)))
+                    .willThrow(rejected(HttpStatus.BAD_REQUEST, "INVALID_INPUT"));
+
+            productAdapter.restore(restore);
+            assertCode(() -> productAdapter.restore(restore), CommonErrorCode.EXTERNAL_API_ERROR);
+            assertCode(() -> productAdapter.restoreFallback(restore, new ResourceAccessException("down")),
+                    CommonErrorCode.EXTERNAL_API_ERROR);
+            userAdapter.reversePoints(reverse);
+            assertCode(() -> userAdapter.reversePoints(reverse), CommonErrorCode.EXTERNAL_API_ERROR);
+            assertCode(() -> userAdapter.reversePointsFallback(reverse, new ResourceAccessException("down")),
                     CommonErrorCode.EXTERNAL_API_ERROR);
         }
 

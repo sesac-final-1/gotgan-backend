@@ -3,6 +3,7 @@ package com.sesac.gojigi.order.order.client;
 import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
 import com.sesac.gojigi.order.order.client.dto.StockReleaseRequest;
 import com.sesac.gojigi.order.order.client.dto.StockReserveRequest;
+import com.sesac.gojigi.order.order.client.dto.StockRestoreRequest;
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
 import com.sesac.gojigi.order.order.exception.OrderException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -61,6 +62,20 @@ public class ProductClientAdapter {
         } catch (HttpClientErrorException e) {
             throw RemoteCalls.rejected(TARGET, "재고 해제", e);
         }
+    }
+
+    /** 재고 복원 (취소 · 반품 Saga STOCK_RESTORED) — claimId 멱등, 실패하면 Saga 가 같은 claimId 로 다시 부른다 */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "restoreFallback")
+    public void restore(StockRestoreRequest request) {
+        try {
+            productClient.restore(request);
+        } catch (HttpClientErrorException e) {
+            throw RemoteCalls.rejected(TARGET, "재고 복원", e);
+        }
+    }
+
+    void restoreFallback(StockRestoreRequest request, Throwable t) {
+        throw RemoteCalls.unavailable(TARGET, "재고 복원", t);
     }
 
     List<ProductOptionResponse> getOptionsFallback(List<Long> optionIds, Throwable t) {
