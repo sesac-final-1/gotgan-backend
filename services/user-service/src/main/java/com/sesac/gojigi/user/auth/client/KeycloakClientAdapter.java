@@ -5,6 +5,7 @@ import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserCreateRequest;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserSummary;
+import com.sesac.gojigi.user.auth.client.dto.SellerGrantResult;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -39,6 +40,8 @@ public class KeycloakClientAdapter {
     private static final String CIRCUIT = "keycloak";
     private static final String INVALID_GRANT = "invalid_grant";
     private static final String ACCOUNT_DISABLED = "Account disabled";   // Keycloak 이 enabled=false 계정에 주는 설명
+    private static final String SELLER = "SELLER";
+    private static final String STORE_ID = "store_id";                   // User Profile 선언 속성 → store_id 클레임
 
     private final KeycloakClient keycloakClient;
     private final KeycloakAdminClient keycloakAdminClient;
@@ -242,6 +245,65 @@ public class KeycloakClientAdapter {
     }
 
     private void enableUserFallback(String keycloakId, String email, Throwable t) {
+        throw unavailable(t);
+    }
+
+    /**
+     * 판매자 전환 (StoreApproved) — store_id 속성 저장 후 realm 역할 SELLER 부여. 다음 토큰부터 roles 에 SELLER · store_id 클레임.
+     * 속성을 먼저 넣어 store_id 없는 SELLER 가 생기지 않게 한다. 이미 있는 것은 건너뛰어 재전달에도 같은 결과.
+     * 이미 다른 store_id 가 있으면(1인 1스토어 위반) 아무것도 바꾸지 않는다. keycloakId 가 없으면 username 으로 찾는다.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "grantSellerFallback")
+    @SuppressWarnings("unchecked")
+    public SellerGrantResult grantSeller(String keycloakId, String email, long storeId) {
+        String bearer = "Bearer " + serviceAccountToken();
+        try {
+            String targetId = keycloakId != null ? keycloakId : findIdByUsername(bearer, email);
+            if (targetId == null) {
+                return SellerGrantResult.ACCOUNT_NOT_FOUND;
+            }
+            Map<String, Object> user = new HashMap<>(keycloakAdminClient.getUser(bearer, targetId));
+            Map<String, Object> attributes = new HashMap<>(
+                    (Map<String, Object>) user.getOrDefault("attributes", Map.of()));
+            List<String> current = (List<String>) attributes.getOrDefault(STORE_ID, List.of());
+            String wanted = String.valueOf(storeId);
+            if (!current.isEmpty() && !current.contains(wanted)) {
+                return SellerGrantResult.STORE_MISMATCH;
+            }
+            boolean changed = false;
+            if (current.isEmpty()) {
+                attributes.put(STORE_ID, List.of(wanted));
+                user.put("attributes", attributes);
+                keycloakAdminClient.updateUser(bearer, targetId, user);
+                changed = true;
+            }
+            if (!hasRole(keycloakAdminClient.getRealmRoles(bearer, targetId))) {
+                Map<String, Object> seller = keycloakAdminClient.getAvailableRealmRoles(bearer, targetId).stream()
+                        .filter(KeycloakClientAdapter::isSellerRole)
+                        .findFirst()
+                        .orElseThrow(() -> new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR,
+                                "인증 서버에 SELLER 역할이 없습니다."));   // realm 설정 문제
+                keycloakAdminClient.addRealmRoles(bearer, targetId,
+                        List.of(Map.of("id", seller.get("id"), "name", SELLER)));
+                changed = true;
+            }
+            return changed ? SellerGrantResult.GRANTED : SellerGrantResult.ALREADY_GRANTED;
+        } catch (HttpClientErrorException.NotFound e) {
+            return SellerGrantResult.ACCOUNT_NOT_FOUND;
+        } catch (HttpClientErrorException e) {
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    private static boolean hasRole(List<Map<String, Object>> roles) {
+        return roles != null && roles.stream().anyMatch(KeycloakClientAdapter::isSellerRole);
+    }
+
+    private static boolean isSellerRole(Map<String, Object> role) {
+        return SELLER.equals(role.get("name"));
+    }
+
+    private SellerGrantResult grantSellerFallback(String keycloakId, String email, long storeId, Throwable t) {
         throw unavailable(t);
     }
 

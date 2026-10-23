@@ -55,6 +55,21 @@ public interface KeycloakAdminClient {
     void logoutUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable("keycloakId") String keycloakId);
 
+    /** 직접 부여된 realm 역할 목록 — [{id, name, ...}] */
+    @GetExchange("/{keycloakId}/role-mappings/realm")
+    List<Map<String, Object>> getRealmRoles(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @PathVariable("keycloakId") String keycloakId);
+
+    /** 부여할 수 있는 realm 역할 목록 — 부여 요청에 역할 id 가 필요해 여기서 찾는다 (view-realm) */
+    @GetExchange("/{keycloakId}/role-mappings/realm/available")
+    List<Map<String, Object>> getAvailableRealmRoles(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @PathVariable("keycloakId") String keycloakId);
+
+    /** realm 역할 부여 — 204. body 는 역할 표현 목록 (id · name) */
+    @PostExchange(url = "/{keycloakId}/role-mappings/realm", contentType = MediaType.APPLICATION_JSON_VALUE)
+    void addRealmRoles(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
+            @PathVariable("keycloakId") String keycloakId, @RequestBody List<Map<String, Object>> roles);
+
     /** 계정 삭제 — 204. 세션 · Refresh Token 도 함께 무효. 없으면 404 */
     @DeleteExchange("/{keycloakId}")
     void deleteUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
