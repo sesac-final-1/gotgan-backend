@@ -200,6 +200,24 @@ class ClientAdaptersTest {
         }
 
         @Test
+        @DisplayName("결제 조회 — 성공은 data, 결제 없음(404) · 그 밖 거절 · 장애는 예외 없이 null")
+        void payment_find() {
+            PaymentClientAdapter adapter = new PaymentClientAdapter(paymentClient);
+            given(paymentClient.find("20261022-000123")).willReturn(ApiResponse.success("ok",
+                    new PaymentResponse("20261022-000123", "pay-1", "PAID", 62_000L, 0L, "CARD", null)))
+                    .willThrow(rejected(HttpStatus.NOT_FOUND, "PAYMENT_NOT_FOUND"))
+                    .willThrow(rejected(HttpStatus.BAD_REQUEST, "INVALID_INPUT"));
+
+            assertThat(adapter.find("20261022-000123").method()).isEqualTo("CARD");
+            assertThat(adapter.find("20261022-000123")).isNull();
+            assertCode(() -> adapter.find("20261022-000123"), CommonErrorCode.EXTERNAL_API_ERROR);   // 폴백이 null 로 바꾼다
+            assertThat(adapter.findFallback("20261022-000123", new ResourceAccessException("down"))).isNull();
+            assertThat(adapter.findFallback("20261022-000123",
+                    CallNotPermittedException.createCallNotPermittedException(CircuitBreaker.ofDefaults("payment"))))
+                    .isNull();
+        }
+
+        @Test
         @DisplayName("스토어 조회 — 성공 · 없는 스토어는 구매 불가 · 그 밖 거절과 폴백은 502")
         void store() {
             StoreClientAdapter adapter = new StoreClientAdapter(storeClient);

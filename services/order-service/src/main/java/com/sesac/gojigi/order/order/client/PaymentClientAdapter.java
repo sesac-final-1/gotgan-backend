@@ -5,6 +5,7 @@ import com.sesac.gojigi.order.order.client.dto.PaymentPrepareRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentResponse;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 
@@ -40,6 +41,27 @@ public class PaymentClientAdapter {
         } catch (HttpClientErrorException e) {
             throw RemoteCalls.rejected(TARGET, "결제 취소", e);
         }
+    }
+
+    /**
+     * 결제 상태 조회 (주문 상세의 결제수단) — 결제가 없으면(결제 준비 전에 끝난 주문) null.
+     * 조회는 보조 정보라 장애여도 예외 대신 null — 주문 상세는 결제수단만 비우고 그대로 보여 준다.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "findFallback")
+    public PaymentResponse find(String orderNo) {
+        try {
+            return paymentClient.find(orderNo).data();
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                return null;
+            }
+            throw RemoteCalls.rejected(TARGET, "결제 조회", e);
+        }
+    }
+
+    PaymentResponse findFallback(String orderNo, Throwable t) {
+        RemoteCalls.unavailable(TARGET, "결제 조회", t);   // 로그만 남기고 결제수단 없이
+        return null;
     }
 
     PaymentResponse prepareFallback(PaymentPrepareRequest request, Throwable t) {

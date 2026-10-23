@@ -4,17 +4,28 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.order.order.client.dto.PaymentResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderCreateResponse;
+import com.sesac.gojigi.order.order.dto.response.OrderDetailResponse;
+import com.sesac.gojigi.order.order.dto.response.OrderListResponse;
+import com.sesac.gojigi.order.order.dto.response.OrderSummaryResponse;
+import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
+import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
 import com.sesac.gojigi.order.order.exception.OrderException;
+import com.sesac.gojigi.order.order.service.OrderQueryService;
 import com.sesac.gojigi.order.saga.service.PlaceOrderSaga;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,11 +46,14 @@ class OrderControllerTest {
     @Mock
     private PlaceOrderSaga placeOrderSaga;
 
+    @Mock
+    private OrderQueryService orderQueryService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(placeOrderSaga))
+        mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(placeOrderSaga, orderQueryService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -98,5 +112,41 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ORDER_OUT_OF_STOCK"));
+    }
+
+    @Test
+    @DisplayName("내 주문 목록 — 200, 본인 userId 로 조회한 주문 · 상태별 개수")
+    void list() throws Exception {
+        Order order = OrderFixtures.order();
+        given(orderQueryService.getMyOrders(4L)).willReturn(new OrderListResponse(
+                Map.of(OrderItemStatus.PAYMENT_DONE, 1L),
+                List.of(OrderSummaryResponse.of(order, List.of(OrderFixtures.item(order))))));
+
+        mockMvc.perform(get("/api/orders").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("주문 목록을 조회했습니다."))
+                .andExpect(jsonPath("$.data.statusCounts.PAYMENT_DONE").value(1))
+                .andExpect(jsonPath("$.data.orders[0].orderNo").value("20261022-000123"))
+                .andExpect(jsonPath("$.data.orders[0].items[0].productName").value("제철 사과 3kg"));
+    }
+
+    @Test
+    @DisplayName("내 주문 상세 — 200 결제수단 포함, 남의 주문 · 없는 주문은 404 ORDER_NOT_FOUND")
+    void detail() throws Exception {
+        Order order = OrderFixtures.order();
+        given(orderQueryService.getMyOrder(4L, "20261022-000123")).willReturn(OrderDetailResponse.of(order,
+                List.of(OrderFixtures.item(order)),
+                new PaymentResponse("20261022-000123", "pay-1", "PAID", 65_000L, 0L, "CARD", null)));
+        given(orderQueryService.getMyOrder(4L, "20261022-000999"))
+                .willThrow(new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
+
+        mockMvc.perform(get("/api/orders/20261022-000123").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.receiverName").value("김구매"))
+                .andExpect(jsonPath("$.data.earnedPoint").value(3100))
+                .andExpect(jsonPath("$.data.payment.method").value("CARD"));
+        mockMvc.perform(get("/api/orders/20261022-000999").header("X-User-Id", "4"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
     }
 }
