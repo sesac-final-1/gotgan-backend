@@ -45,7 +45,7 @@ import org.springframework.stereotype.Component;
  * 어느 단계든 실패하면 시도했을 수 있는 단계를 역순으로 보상하고 주문 FAILED — 결제창은 띄우지 않는다.
  *
  * ⚠ 이 클래스에는 @Transactional 을 붙이지 않는다 — 원격 호출을 DB 트랜잭션 안에 넣으면 커넥션을 오래 잡고,
- *    롤백해도 원격 쪽은 되돌아가지 않는다. DB 변경은 OrderTxService · SagaStore 의 짧은 트랜잭션으로.
+ *    롤백해도 원격 쪽은 되돌아가지 않는다. DB 변경은 OrderTxService · OrderSagaTxService 의 짧은 트랜잭션으로.
  */
 @Slf4j
 @Component
@@ -57,7 +57,7 @@ public class PlaceOrderSaga {
     private static final String CANCEL_REASON = "주문 처리 실패";
 
     private final OrderTxService orderTx;
-    private final SagaStore sagaStore;
+    private final OrderSagaTxService sagaTx;
     private final UserClientAdapter user;
     private final StoreClientAdapter store;
     private final ShippingPolicyClient shippingPolicy;
@@ -66,41 +66,44 @@ public class PlaceOrderSaga {
 
     public OrderCreateResponse place(Long buyerId, OrderCreateRequest request) {
         // ① 주문 PENDING — 가격 · 배송비 · 포인트 배분은 서버가 다시 계산 (여기서 실패하면 주문도 Saga 도 없음)
+        // Mapping Product
         List<OrderPricing.Line> lines = lines(request);
-        UserSummaryResponse buyer = user.getUser(buyerId);
-        Map<Long, String> storeNames = storeNames(lines);
+        UserSummaryResponse buyer = user.getUser(buyerId);  // 회원 정보 가져오기
+        Map<Long, String> storeNames = storeNames(lines);   // 스토어 정보 가져오기(중복 제거)
         OrderPricing.Result priced = OrderPricing.calculate(lines, shippingPolicy::getShippingPolicy, request.usePoint());
-        PendingOrder pending = createPending(buyer, request, priced, storeNames);
+        PendingOrder pending = createPending(buyer, request, priced, storeNames);   // order tx
+        // Ready to Saga
         Order order = pending.order();
-        SagaInstance saga = sagaStore.startPlaceOrder(order);
-        OrderLogContext.put(order.getOrderNo(), saga.getSagaId());
+        SagaInstance saga = sagaTx.startPlaceOrder(order);
+        OrderLogContext.put(order.getOrderNo(), saga.getSagaId());  // Saga Log
 
-        List<StockItem> stockItems = request.items().stream()
+        List<StockItem> stockItems = request.items().stream()   // Parse request to Product Object
                 .map(item -> new StockItem(item.productOptionId(), item.quantity())).toList();
         String orderName = orderName(pending.items());
-        SagaStep attempted = SagaStep.ORDER_CREATED;
+        SagaStep attempted = SagaStep.ORDER_CREATED;    //Saga status
+        // Start Saga
         try {
             if (order.getUsedPoint() > 0) {                                                         // ② 포인트 사용
                 attempted = SagaStep.POINT_USED;
                 user.usePoints(new PointUseRequest(saga.getSagaId(), buyerId, order.getOrderNo(), order.getUsedPoint()));
-                sagaStore.advance(saga.getId(), SagaStep.POINT_USED);
+                sagaTx.advance(saga.getId(), SagaStep.POINT_USED);
             }
             attempted = SagaStep.STOCK_RESERVED;                                                    // ③ 재고 예약
             product.reserve(new StockReserveRequest(saga.getSagaId(), stockItems));
-            sagaStore.advance(saga.getId(), SagaStep.STOCK_RESERVED);
+            sagaTx.advance(saga.getId(), SagaStep.STOCK_RESERVED);
 
             if (order.getPayAmt() == 0) {
                 // 전액 포인트 — 포트원은 0원 결제창이 없어 결제 준비 · 검증을 건너뛰고 바로 PAID (docs/api/payment.md 1절)
                 // TODO(결제 확인 PR · ORD-09): OrderPaid 이벤트를 결제 확인과 같은 경로로 발행
                 orderTx.markPaid(order.getId());
-                sagaStore.complete(saga.getId());
+                sagaTx.complete(saga.getId());
                 log.info("주문 완료(전액 포인트) - usedPoint={}", order.getUsedPoint());
                 return new OrderCreateResponse(order.getOrderNo(), OrderStatus.PAID, 0L, null, orderName);
             }
             attempted = SagaStep.PAYMENT_READY;                                                     // ④ 결제 준비
             PaymentResponse ready = payment.prepare(new PaymentPrepareRequest(order.getId(), order.getOrderNo(),
                     order.getPayAmt(), saga.getSagaId()));
-            sagaStore.advance(saga.getId(), SagaStep.PAYMENT_READY);                               // 이제 결제 대기 (최대 15분)
+            sagaTx.advance(saga.getId(), SagaStep.PAYMENT_READY);                                  // 이제 결제 대기 (최대 15분)
             log.info("주문 생성 · 결제 대기 - payAmt={}, usedPoint={}", order.getPayAmt(), order.getUsedPoint());
             return new OrderCreateResponse(order.getOrderNo(), OrderStatus.PENDING, order.getPayAmt(),
                     ready.portonePaymentId(), orderName);
@@ -119,7 +122,7 @@ public class PlaceOrderSaga {
     private void compensate(SagaInstance saga, Order order, List<StockItem> stockItems, SagaStep attempted,
                             RuntimeException cause) {
         String sagaId = saga.getSagaId();
-        sagaStore.startCompensating(saga.getId(), reason(cause));
+        sagaTx.startCompensating(saga.getId(), reason(cause));
         try {
             if (reached(attempted, SagaStep.PAYMENT_READY)) {
                 payment.cancel(order.getOrderNo(), PaymentCancelRequest.full(sagaId, CANCEL_REASON));
@@ -131,11 +134,11 @@ public class PlaceOrderSaga {
                 user.restorePoints(sagaId);
             }
             orderTx.markFailed(order.getId());
-            sagaStore.compensated(saga.getId());
+            sagaTx.compensated(saga.getId());
             log.info("주문 Saga 보상 완료 - 원인={}", reason(cause));
         } catch (RuntimeException again) {
             log.error("주문 Saga 보상 미완료 - 복구 스케줄러가 같은 sagaId 로 다시 시도, 원인={}", reason(cause), again);
-            sagaStore.scheduleRetry(saga.getId(), reason(again));
+            sagaTx.scheduleRetry(saga.getId(), reason(again));
         }
     }
 
@@ -160,6 +163,7 @@ public class PlaceOrderSaga {
     private Map<Long, String> storeNames(List<OrderPricing.Line> lines) {
         Map<Long, String> names = new LinkedHashMap<>();
         lines.forEach(line -> names.computeIfAbsent(line.option().storeId(), id -> store.getStore(id).storeName()));
+
         return names;
     }
 

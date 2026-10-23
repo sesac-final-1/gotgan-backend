@@ -17,7 +17,7 @@ import com.sesac.gojigi.order.saga.entity.SagaInstance;
 import com.sesac.gojigi.order.saga.entity.SagaStatus;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
 import com.sesac.gojigi.order.saga.repository.SagaInstanceRepository;
-import com.sesac.gojigi.order.saga.service.SagaStore;
+import com.sesac.gojigi.order.saga.service.OrderSagaTxService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** 주문 PENDING 저장(주문번호 · 스냅샷 · 배송비) · 상태 변경 · Saga 기록 — MySQL 8.4 + Flyway */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, OrderTxService.class, SagaStore.class,
+@Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderSagaTxService.class,
         OrderTxServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 서비스 메서드마다 실제로 커밋 (Saga 와 같은 조건)
@@ -56,7 +56,7 @@ class OrderTxServiceIntegrationTest {
     }
 
     @Autowired private OrderTxService orderTx;
-    @Autowired private SagaStore sagaStore;
+    @Autowired private OrderSagaTxService sagaTx;
     @Autowired private OrderRepository orderRepository;
     @Autowired private OrderStoreShipmentRepository shipmentRepository;
     @Autowired private SagaInstanceRepository sagaInstanceRepository;
@@ -104,14 +104,14 @@ class OrderTxServiceIntegrationTest {
         // given
         Order paid = create(null).order();
         Order failed = create(null).order();
-        SagaInstance saga = sagaStore.startPlaceOrder(failed);
+        SagaInstance saga = sagaTx.startPlaceOrder(failed);
 
         // when
         orderTx.markPaid(paid.getId());
         orderTx.markFailed(failed.getId());
-        sagaStore.advance(saga.getId(), SagaStep.STOCK_RESERVED);
-        sagaStore.startCompensating(saga.getId(), "ORDER_OUT_OF_STOCK");
-        sagaStore.scheduleRetry(saga.getId(), "EXTERNAL_API_ERROR");
+        sagaTx.advance(saga.getId(), SagaStep.STOCK_RESERVED);
+        sagaTx.startCompensating(saga.getId(), "ORDER_OUT_OF_STOCK");
+        sagaTx.scheduleRetry(saga.getId(), "EXTERNAL_API_ERROR");
 
         // then
         Order paidFound = orderRepository.findById(paid.getId()).orElseThrow();
@@ -124,9 +124,9 @@ class OrderTxServiceIntegrationTest {
         assertThat(found.getStatus()).isEqualTo(SagaStatus.COMPENSATING);
         assertThat(found.getNextRetryAt()).isEqualTo(LocalDateTime.of(2026, 10, 22, 12, 1));
 
-        sagaStore.compensated(saga.getId());
-        SagaInstance done = sagaStore.startPlaceOrder(paid);
-        sagaStore.complete(done.getId());
+        sagaTx.compensated(saga.getId());
+        SagaInstance done = sagaTx.startPlaceOrder(paid);
+        sagaTx.complete(done.getId());
         assertThat(sagaInstanceRepository.findById(saga.getId()).orElseThrow().getStatus()).isEqualTo(SagaStatus.COMPENSATED);
         assertThat(sagaInstanceRepository.findById(done.getId()).orElseThrow().getStatus()).isEqualTo(SagaStatus.COMPLETED);
     }

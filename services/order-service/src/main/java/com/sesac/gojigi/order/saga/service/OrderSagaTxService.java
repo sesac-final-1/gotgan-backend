@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class SagaStore {
+public class OrderSagaTxService {
 
     private final SagaInstanceRepository sagaInstanceRepository;
     private final Clock clock;

@@ -63,7 +63,7 @@ class PlaceOrderSagaTest {
     private static final List<StockItem> STOCK = List.of(new StockItem(11L, 2));
 
     @Mock private OrderTxService orderTx;
-    @Mock private SagaStore sagaStore;
+    @Mock private OrderSagaTxService sagaTx;
     @Mock private UserClientAdapter user;
     @Mock private StoreClientAdapter store;
     @Mock private ShippingPolicyClient shippingPolicy;
@@ -104,7 +104,7 @@ class PlaceOrderSagaTest {
         given(store.getStore(1L)).willReturn(new StoreResponse(1L, 2L, "곳간상회", "ACTIVE"));
         given(shippingPolicy.getShippingPolicy(1L)).willReturn(new ShippingPolicy(3_000L, 50_000L));
         given(orderTx.createPending(any(), any(), any(), any())).willReturn(new PendingOrder(order, List.of(item)));
-        given(sagaStore.startPlaceOrder(order)).willReturn(instance);
+        given(sagaTx.startPlaceOrder(order)).willReturn(instance);
     }
 
     @Nested
@@ -125,13 +125,13 @@ class PlaceOrderSagaTest {
             // then
             assertThat(response).isEqualTo(new OrderCreateResponse("20261022-000123", OrderStatus.PENDING, 62_000L,
                     "pay-20261022-000123", "제철 사과 3kg"));
-            InOrder steps = inOrder(user, product, payment, sagaStore);
+            InOrder steps = inOrder(user, product, payment, sagaTx);
             steps.verify(user).usePoints(new PointUseRequest(SAGA_ID, BUYER_ID, "20261022-000123", 2_000L));
-            steps.verify(sagaStore).advance(7L, SagaStep.POINT_USED);
+            steps.verify(sagaTx).advance(7L, SagaStep.POINT_USED);
             steps.verify(product).reserve(new StockReserveRequest(SAGA_ID, STOCK));
-            steps.verify(sagaStore).advance(7L, SagaStep.STOCK_RESERVED);
+            steps.verify(sagaTx).advance(7L, SagaStep.STOCK_RESERVED);
             steps.verify(payment).prepare(any());
-            steps.verify(sagaStore).advance(7L, SagaStep.PAYMENT_READY);
+            steps.verify(sagaTx).advance(7L, SagaStep.PAYMENT_READY);
         }
 
         @Test
@@ -147,7 +147,7 @@ class PlaceOrderSagaTest {
 
             // then
             verify(user, never()).usePoints(any());
-            verify(sagaStore, never()).advance(7L, SagaStep.POINT_USED);
+            verify(sagaTx, never()).advance(7L, SagaStep.POINT_USED);
         }
 
         @Test
@@ -163,7 +163,7 @@ class PlaceOrderSagaTest {
             assertThat(response.status()).isEqualTo(OrderStatus.PAID);
             assertThat(response.portonePaymentId()).isNull();
             verify(orderTx).markPaid(1L);
-            verify(sagaStore).complete(7L);
+            verify(sagaTx).complete(7L);
             verifyNoInteractions(payment);
         }
 
@@ -197,7 +197,7 @@ class PlaceOrderSagaTest {
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 1), item(11L, 2))))
                     .isInstanceOf(BusinessException.class)
                     .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
-            verifyNoInteractions(product, orderTx, sagaStore);
+            verifyNoInteractions(product, orderTx, sagaTx);
         }
 
         @Test
@@ -213,7 +213,7 @@ class PlaceOrderSagaTest {
                     .isEqualTo(OrderErrorCode.ORDER_PRODUCT_NOT_PURCHASABLE);
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(12L, 1))))
                     .isInstanceOf(OrderException.class);
-            verifyNoInteractions(orderTx, sagaStore);
+            verifyNoInteractions(orderTx, sagaTx);
         }
     }
 
@@ -231,12 +231,12 @@ class PlaceOrderSagaTest {
             // when · then
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(2_000L, item(11L, 2))))
                     .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_OUT_OF_STOCK);
-            InOrder back = inOrder(sagaStore, product, user, orderTx);
-            back.verify(sagaStore).startCompensating(eq(7L), anyString());
+            InOrder back = inOrder(sagaTx, product, user, orderTx);
+            back.verify(sagaTx).startCompensating(eq(7L), anyString());
             back.verify(product).release(SAGA_ID, new StockReleaseRequest(STOCK));
             back.verify(user).restorePoints(SAGA_ID);
             back.verify(orderTx).markFailed(1L);
-            back.verify(sagaStore).compensated(7L);
+            back.verify(sagaTx).compensated(7L);
             verify(payment, never()).prepare(any());
             verify(payment, never()).cancel(anyString(), any());
         }
@@ -286,9 +286,9 @@ class PlaceOrderSagaTest {
             // when · then
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 2))))
                     .isInstanceOf(BusinessException.class);
-            verify(sagaStore).scheduleRetry(eq(7L), anyString());
+            verify(sagaTx).scheduleRetry(eq(7L), anyString());
             verify(orderTx, never()).markFailed(any());
-            verify(sagaStore, never()).compensated(any());
+            verify(sagaTx, never()).compensated(any());
         }
 
         @Test
@@ -301,7 +301,7 @@ class PlaceOrderSagaTest {
             // when · then
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 2))))
                     .isInstanceOf(IllegalStateException.class);
-            verify(sagaStore).startCompensating(7L, "IllegalStateException: boom");
+            verify(sagaTx).startCompensating(7L, "IllegalStateException: boom");
             verify(orderTx).markFailed(1L);
         }
     }
