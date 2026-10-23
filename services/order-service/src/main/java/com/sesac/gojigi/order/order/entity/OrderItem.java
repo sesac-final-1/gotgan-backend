@@ -1,6 +1,8 @@
 package com.sesac.gojigi.order.order.entity;
 
 import com.sesac.gojigi.order.common.entity.BaseTimeEntity;
+import com.sesac.gojigi.order.order.exception.OrderErrorCode;
+import com.sesac.gojigi.order.order.exception.OrderException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -135,6 +137,14 @@ public class OrderItem extends BaseTimeEntity {
         this.itemAmt = itemAmt;
         this.usedPoint = usedPoint;
         this.earnedPoint = earnedPoint;
+        this.status = OrderItemStatus.ORDERED;
+    }
+
+    /** 결제 완료 — 주문 PAID 와 같은 트랜잭션 (결제 검증 성공 · 0원 주문). 주문완료 상태에서만 */
+    public void markPaymentDone() {
+        if (status != OrderItemStatus.ORDERED) {
+            throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);
+        }
         this.status = OrderItemStatus.PAYMENT_DONE;
     }
 }

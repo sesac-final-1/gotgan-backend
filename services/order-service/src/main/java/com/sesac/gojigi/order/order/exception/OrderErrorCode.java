@@ -19,6 +19,8 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_POINT_EXCEEDS_AMOUNT(HttpStatus.BAD_REQUEST, "사용 포인트가 주문 금액보다 많습니다."),
     /** 주문자 회원 없음 · 탈퇴 (user 404) */
     ORDER_BUYER_NOT_FOUND(HttpStatus.NOT_FOUND, "회원 정보를 찾을 수 없습니다."),
+    /** 없는 주문번호 또는 다른 회원의 주문 — 남의 주문이 있다는 것도 알리지 않도록 같은 404 */
+    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "주문을 찾을 수 없습니다."),
     /** 지금 주문 상태에서 할 수 없는 변경 — 서버 버그 또는 동시 처리 */
     ORDER_INVALID_STATUS(HttpStatus.CONFLICT, "지금 주문 상태에서는 처리할 수 없습니다.");
 

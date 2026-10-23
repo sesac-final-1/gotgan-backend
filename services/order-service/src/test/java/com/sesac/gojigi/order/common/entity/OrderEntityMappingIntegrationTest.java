@@ -85,7 +85,7 @@ class OrderEntityMappingIntegrationTest {
         assertThat(foundOrder.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(foundOrder.getVersion()).isZero();
         assertThat(foundOrder.getCreatedAt()).isNotNull();
-        assertThat(foundItem.getStatus()).isEqualTo(OrderItemStatus.PAYMENT_DONE);
+        assertThat(foundItem.getStatus()).isEqualTo(OrderItemStatus.ORDERED);
         assertThat(foundItem.getOrder().getId()).isEqualTo(order.getId());
         assertThat(claimSaga.getCurrentStep()).isEqualTo(SagaStep.PAYMENT_CANCEL_REQUESTED);
         assertThat(claimSaga.getStatus()).isEqualTo(SagaStatus.STARTED);

@@ -66,13 +66,14 @@ public class OrderTxService {
         return new PendingOrder(order, orderItemRepository.saveAll(items));
     }
 
-    /** 전액 포인트(0원) 주문 — 결제창 없이 바로 PAID */
+    /** 전액 포인트(0원) 주문 — 결제창 없이 바로 PAID, 상품주문은 주문완료 → 결제완료 */
     @Transactional
     public void markPaid(Long orderId) {
         getOrder(orderId).markPaid(LocalDateTime.now(clock));
+        orderItemRepository.findByOrderIdOrderByIdAsc(orderId).forEach(OrderItem::markPaymentDone);
     }
 
-    /** Saga 보상을 마친 주문 */
+    /** Saga 보상을 마친 주문 — 상품주문은 주문완료(ORDERED) 그대로 */
     @Transactional
     public void markFailed(Long orderId) {
         getOrder(orderId).markFailed();
