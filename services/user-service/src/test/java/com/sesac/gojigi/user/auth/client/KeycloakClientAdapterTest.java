@@ -12,6 +12,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
+import com.sesac.gojigi.user.auth.client.dto.SellerGrantResult;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
 import java.net.URI;
@@ -578,6 +579,117 @@ class KeycloakClientAdapterTest {
 
         assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "disableUserFallback",
                 "kc-5", "b@gotgan.com", new ResourceAccessException("down")))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        server.verify();
+    }
+
+    private void expectGetUser(String keycloakId, String attributesJson) {
+        server.expect(requestTo(USERS_URL + "/" + keycloakId))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {"id":"%s","username":"b3@gotgan.com","enabled":true,"attributes":%s}
+                        """.formatted(keycloakId, attributesJson), MediaType.APPLICATION_JSON));
+    }
+
+    @Test
+    @DisplayName("판매자 전환 — store_id 속성을 더해 PUT(다른 속성 그대로) 후 available 에서 찾은 SELLER(id · name)를 부여")
+    void grantSeller_setsStoreIdThenAddsRole() {
+        expectServiceAccountToken();
+        expectGetUser("kc-6", "{\"user_id\":[\"6\"]}");
+        server.expect(requestTo(USERS_URL + "/kc-6"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sa-token"))
+                .andExpect(content().json("""
+                        {"id":"kc-6","username":"b3@gotgan.com","enabled":true,"attributes":{"user_id":["6"],"store_id":["3"]}}
+                        """, true))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"id\":\"r-def\",\"name\":\"default-roles-gotgan\"}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm/available"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"id\":\"r-admin\",\"name\":\"ADMIN\"},{\"id\":\"r-seller\",\"name\":\"SELLER\"}]",
+                        MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer sa-token"))
+                .andExpect(content().json("[{\"id\":\"r-seller\",\"name\":\"SELLER\"}]", true))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        assertThat(adapter.grantSeller("kc-6", "b3@gotgan.com", 3L)).isEqualTo(SellerGrantResult.GRANTED);
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("판매자 전환 재전달 — 같은 store_id · SELLER 가 이미 있으면 PUT · POST 없이 ALREADY_GRANTED")
+    void grantSeller_alreadyGranted_noWrites() {
+        expectServiceAccountToken();
+        expectGetUser("kc-6", "{\"store_id\":[\"3\"]}");
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"id\":\"r-seller\",\"name\":\"SELLER\"}]", MediaType.APPLICATION_JSON));
+
+        assertThat(adapter.grantSeller("kc-6", "b3@gotgan.com", 3L)).isEqualTo(SellerGrantResult.ALREADY_GRANTED);
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("판매자 전환 — 속성만 있고 역할이 빠졌으면(이전 시도 중단) 역할만 부여, keycloak_id 가 없으면 username 으로 찾는다")
+    void grantSeller_resumesRoleOnly_findsByUsername() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=b3%40gotgan.com&exact=true"))
+                .andRespond(withSuccess("[{\"id\":\"kc-6\"}]", MediaType.APPLICATION_JSON));
+        expectGetUser("kc-6", "{\"store_id\":[\"3\"]}");
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm/available"))
+                .andRespond(withSuccess("[{\"id\":\"r-seller\",\"name\":\"SELLER\"}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        assertThat(adapter.grantSeller(null, "b3@gotgan.com", 3L)).isEqualTo(SellerGrantResult.GRANTED);
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("판매자 전환 — 다른 store_id 가 이미 있으면 STORE_MISMATCH, 속성 · 역할 모두 그대로")
+    void grantSeller_otherStore_mismatchNoWrites() {
+        expectServiceAccountToken();
+        expectGetUser("kc-6", "{\"store_id\":[\"9\"]}");
+
+        assertThat(adapter.grantSeller("kc-6", "b3@gotgan.com", 3L)).isEqualTo(SellerGrantResult.STORE_MISMATCH);
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("판매자 전환 — 계정 없음(검색 결과 없음 · 404)은 ACCOUNT_NOT_FOUND, SELLER 역할이 realm 에 없거나 4xx · 연결 실패는 EXTERNAL_API_ERROR")
+    void grantSeller_failures() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=gone%40gotgan.com&exact=true")).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-gone")).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        expectServiceAccountToken();
+        expectGetUser("kc-6", "{}");
+        server.expect(requestTo(USERS_URL + "/kc-6")).andExpect(method(HttpMethod.PUT)).andRespond(withStatus(HttpStatus.NO_CONTENT));
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm")).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-6/role-mappings/realm/available")).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "/kc-5")).andRespond(withStatus(HttpStatus.FORBIDDEN));
+
+        assertThat(adapter.grantSeller(null, "gone@gotgan.com", 3L)).isEqualTo(SellerGrantResult.ACCOUNT_NOT_FOUND);
+        assertThat(adapter.grantSeller("kc-gone", "gone@gotgan.com", 3L)).isEqualTo(SellerGrantResult.ACCOUNT_NOT_FOUND);
+        assertThatThrownBy(() -> adapter.grantSeller("kc-6", "b3@gotgan.com", 3L))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        assertThatThrownBy(() -> adapter.grantSeller("kc-5", "b@gotgan.com", 3L))
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(adapter, "grantSellerFallback",
+                "kc-6", "b3@gotgan.com", 3L, new ResourceAccessException("down")))
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
         server.verify();
     }

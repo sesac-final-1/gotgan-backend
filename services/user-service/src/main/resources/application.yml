@@ -53,8 +53,12 @@ app:
     earn-rate: 0.05                                           # 실결제금액의 5% 적립 (정리 문서 8-5)
   user:
     suspension-expiry-interval: 1m                            # 이용정지 기간 만료 자동 해제 주기 (SuspensionExpiryScheduler, 기동 직후 1회 포함)
-  sqs:
-    queue-url: ${USER_EVENTS_QUEUE_URL:}   # 구독 큐 (sesac-gojigi-user-{도메인}-events)
+  sqs:                                                        # 구독 큐 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
+    store-events-queue-url: ${USER_STORE_EVENTS_QUEUE_URL:}   # StoreApproved (SELLER 역할 · store_id)
+    # order-events-queue-url: OrderPaid · OrderItemConfirmed 리스너를 만들 때 ${USER_ORDER_EVENTS_QUEUE_URL:} 로 켠다
+    #   — 리스너 없이 켜면 폴러가 "처리할 리스너 없음"으로 메시지를 지운다
+    wait-seconds: 20                                          # 롱폴링 (비어 있어도 20초 기다렸다 돌아옴 — 빈 요청 비용 절감)
+    max-messages: 10
 
 resilience4j:
   circuitbreaker:
