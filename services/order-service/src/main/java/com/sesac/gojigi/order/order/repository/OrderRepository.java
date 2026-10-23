@@ -1,6 +1,7 @@
 package com.sesac.gojigi.order.order.repository;
 
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderStatus;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,4 +16,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     /** 본인 주문 한 건 — 다른 회원의 주문번호면 비어 있음 */
     Optional<Order> findByOrderNoAndBuyerId(String orderNo, Long buyerId);
+
+    long countByStatus(OrderStatus status);
 }
