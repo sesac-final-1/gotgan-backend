@@ -15,6 +15,7 @@ import com.sesac.gojigi.order.order.client.dto.PaymentResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderCreateResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderDetailResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderListResponse;
+import com.sesac.gojigi.order.order.dto.response.OrderPaymentConfirmResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderSummaryResponse;
 import com.sesac.gojigi.order.order.entity.Order;
 import com.sesac.gojigi.order.order.entity.OrderFixtures;
@@ -112,6 +113,23 @@ class OrderControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ORDER_OUT_OF_STOCK"));
+    }
+
+    @Test
+    @DisplayName("결제 확인 — 200 PAID, 미결제는 409 ORDER_PAYMENT_NOT_COMPLETED")
+    void confirmPayment() throws Exception {
+        given(placeOrderSaga.confirm(4L, "20261022-000123"))
+                .willReturn(new OrderPaymentConfirmResponse("20261022-000123", OrderStatus.PAID, 62_000L));
+        given(placeOrderSaga.confirm(4L, "20261022-000124"))
+                .willThrow(new OrderException(OrderErrorCode.ORDER_PAYMENT_NOT_COMPLETED));
+
+        mockMvc.perform(post("/api/orders/20261022-000123/payment/confirm").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("결제를 완료했습니다."))
+                .andExpect(jsonPath("$.data.status").value("PAID"));
+        mockMvc.perform(post("/api/orders/20261022-000124/payment/confirm").header("X-User-Id", "4"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_PAYMENT_NOT_COMPLETED"));
     }
 
     @Test

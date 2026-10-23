@@ -7,6 +7,7 @@ import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.dto.response.OrderCreateResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderDetailResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderListResponse;
+import com.sesac.gojigi.order.order.dto.response.OrderPaymentConfirmResponse;
 import com.sesac.gojigi.order.order.service.OrderQueryService;
 import com.sesac.gojigi.order.saga.service.PlaceOrderSaga;
 import io.swagger.v3.oas.annotations.Operation;
@@ -46,6 +47,18 @@ public class OrderController {
         OrderCreateResponse created = placeOrderSaga.place(user.userId(), request);
         String message = created.payAmt() == 0 ? "주문을 완료했습니다." : "주문을 생성했습니다. 결제를 진행해 주세요.";
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(message, created));
+    }
+
+    @Operation(summary = "결제 확인 (결제창 종료 후)", description = """
+            주문 Saga 6 · 7단계: payment 가 포트원에 직접 조회해 결제 상태 · 금액(주문의 실결제금액)을 확인하면 주문 PAID · 상품주문 PAYMENT_DONE.
+            브라우저가 보내는 값은 주문번호뿐. 이미 PAID 면 같은 응답(새로고침 · 재전송 안전). 모바일 리다이렉트는 완료 페이지에서 호출.
+            409 ORDER_PAYMENT_NOT_COMPLETED(아직 미결제) · 502 EXTERNAL_API_ERROR(결과 모름)는 주문을 결제 대기로 둔다 — 15분 뒤 만료 스케줄러가 확정 · 보상.
+            에러: 404 ORDER_NOT_FOUND(없는 주문 · 다른 회원) / 409 ORDER_PAYMENT_NOT_COMPLETED · ORDER_PAYMENT_FAILED(금액 불일치 · 끝난 결제 —
+            재고 · 포인트 되돌리고 주문 FAILED) · ORDER_INVALID_STATUS(이미 실패 · 처리 중인 주문) / 502 EXTERNAL_API_ERROR""")
+    @PostMapping("/{orderNo}/payment/confirm")
+    public ApiResponse<OrderPaymentConfirmResponse> confirmPayment(@Parameter(hidden = true) @CurrentUser AuthUser user,
+                                                                   @PathVariable String orderNo) {
+        return ApiResponse.success("결제를 완료했습니다.", placeOrderSaga.confirm(user.userId(), orderNo));
     }
 
     @Operation(summary = "내 주문 목록", description = """

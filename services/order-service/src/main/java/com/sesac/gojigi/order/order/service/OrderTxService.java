@@ -79,6 +79,19 @@ public class OrderTxService {
         getOrder(orderId).markFailed();
     }
 
+    /** 본인 주문 — 없는 주문번호 · 다른 회원의 주문은 같은 404 */
+    @Transactional(readOnly = true)
+    public Order getMine(Long buyerId, String orderNo) {
+        return orderRepository.findByOrderNoAndBuyerId(orderNo, buyerId)
+                .orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
+    }
+
+    /** 상품주문 — Saga 보상의 재고 해제 목록을 주문 생성 요청 없이 다시 만들 때 */
+    @Transactional(readOnly = true)
+    public List<OrderItem> getItems(Long orderId) {
+        return orderItemRepository.findByOrderIdOrderByIdAsc(orderId);
+    }
+
     private Order getOrder(Long orderId) {
         return orderRepository.findById(orderId).orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_INVALID_STATUS));
     }

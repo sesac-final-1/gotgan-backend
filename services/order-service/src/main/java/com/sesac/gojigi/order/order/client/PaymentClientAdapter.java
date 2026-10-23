@@ -3,6 +3,9 @@ package com.sesac.gojigi.order.order.client;
 import com.sesac.gojigi.order.order.client.dto.PaymentCancelRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentPrepareRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentResponse;
+import com.sesac.gojigi.order.order.client.dto.PaymentVerifyRequest;
+import com.sesac.gojigi.order.order.exception.OrderErrorCode;
+import com.sesac.gojigi.order.order.exception.OrderException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -30,6 +33,28 @@ public class PaymentClientAdapter {
             return paymentClient.prepare(request).data();
         } catch (HttpClientErrorException e) {
             throw RemoteCalls.rejected(TARGET, "결제 준비", e);
+        }
+    }
+
+    /**
+     * 결제 검증 (Saga PAYMENT_VERIFIED) — payment 가 포트원에 직접 조회해 상태 · 금액(= order 의 payAmt)을 비교 (payment.md 2절).
+     * 미결제(결제창 진행 중 · 닫음)는 ORDER_PAYMENT_NOT_COMPLETED — 결제 대기 유지.
+     * 금액 불일치(payment 가 이미 자동 환불) · 끝난 결제 · 결제 없음은 ORDER_PAYMENT_FAILED — 보상 대상.
+     */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "verifyFallback")
+    public PaymentResponse verify(PaymentVerifyRequest request) {
+        try {
+            return paymentClient.verify(request).data();
+        } catch (HttpClientErrorException e) {
+            String code = RemoteCalls.errorCode(e);
+            if ("PAYMENT_NOT_COMPLETED".equals(code)) {
+                throw new OrderException(OrderErrorCode.ORDER_PAYMENT_NOT_COMPLETED);
+            }
+            if ("PAYMENT_AMOUNT_MISMATCH".equals(code) || "PAYMENT_INVALID_STATUS".equals(code)
+                    || e instanceof HttpClientErrorException.NotFound) {
+                throw new OrderException(OrderErrorCode.ORDER_PAYMENT_FAILED);
+            }
+            throw RemoteCalls.rejected(TARGET, "결제 검증", e);
         }
     }
 
@@ -66,6 +91,10 @@ public class PaymentClientAdapter {
 
     PaymentResponse prepareFallback(PaymentPrepareRequest request, Throwable t) {
         throw RemoteCalls.unavailable(TARGET, "결제 준비", t);
+    }
+
+    PaymentResponse verifyFallback(PaymentVerifyRequest request, Throwable t) {
+        throw RemoteCalls.unavailable(TARGET, "결제 검증", t);   // 결과 모름 — 결제 대기 유지
     }
 
     void cancelFallback(String orderNo, PaymentCancelRequest request, Throwable t) {

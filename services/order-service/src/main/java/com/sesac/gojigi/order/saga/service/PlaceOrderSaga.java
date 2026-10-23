@@ -11,6 +11,7 @@ import com.sesac.gojigi.order.order.client.UserClientAdapter;
 import com.sesac.gojigi.order.order.client.dto.PaymentCancelRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentPrepareRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentResponse;
+import com.sesac.gojigi.order.order.client.dto.PaymentVerifyRequest;
 import com.sesac.gojigi.order.order.client.dto.PointUseRequest;
 import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
 import com.sesac.gojigi.order.order.client.dto.StockItem;
@@ -19,6 +20,7 @@ import com.sesac.gojigi.order.order.client.dto.StockReserveRequest;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.dto.response.OrderCreateResponse;
+import com.sesac.gojigi.order.order.dto.response.OrderPaymentConfirmResponse;
 import com.sesac.gojigi.order.order.entity.Order;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
@@ -28,6 +30,7 @@ import com.sesac.gojigi.order.order.service.OrderPricing;
 import com.sesac.gojigi.order.order.service.OrderTxService;
 import com.sesac.gojigi.order.order.service.OrderTxService.PendingOrder;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
+import com.sesac.gojigi.order.saga.entity.SagaStatus;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,8 +43,9 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 /**
- * 주문 생성 Saga 오케스트레이터 [요청 1] POST /api/orders (가이드라인 06장 · 스펙 ORD-04).
- * ① 주문 PENDING + 상품주문 스냅샷 → ② 포인트 사용(user, 쓸 때만) → ③ 재고 예약(product) → ④ 결제 준비(payment) → 결제창 정보 응답.
+ * 주문 생성 Saga 오케스트레이터 (가이드라인 06장 · 스펙 ORD-04 · 06 · 07).
+ * [요청 1] POST /api/orders: ① 주문 PENDING + 상품주문 스냅샷 → ② 포인트 사용(user, 쓸 때만) → ③ 재고 예약(product) → ④ 결제 준비(payment) → 결제창 정보 응답.
+ * [요청 2] POST /api/orders/{orderNo}/payment/confirm: ⑥ 결제 검증(payment) → ⑦ 주문 PAID. 오지 않으면 결제 대기 만료 스케줄러가 대신.
  * 어느 단계든 실패하면 시도했을 수 있는 단계를 역순으로 보상하고 주문 FAILED — 결제창은 띄우지 않는다.
  *
  * ⚠ 이 클래스에는 @Transactional 을 붙이지 않는다 — 원격 호출을 DB 트랜잭션 안에 넣으면 커넥션을 오래 잡고,
@@ -114,10 +118,105 @@ public class PlaceOrderSaga {
     }
 
     /**
+     * [요청 2] POST /api/orders/{orderNo}/payment/confirm — 결제창이 끝난 뒤 브라우저가 호출 (가이드라인 06장 · 스펙 ORD-06).
+     * 브라우저의 "결제 성공"은 신호일 뿐 — payment 가 포트원에 직접 조회해 금액(order 의 payAmt)까지 맞으면 PAID.
+     * 이미 PAID 면 그대로 같은 응답(새로고침 · 재전송). 미결제 · 결과 모름은 오류 응답이지만 주문은 결제 대기 그대로 — 만료 스케줄러가 정리.
+     */
+    public OrderPaymentConfirmResponse confirm(Long buyerId, String orderNo) {
+        Order order = orderTx.getMine(buyerId, orderNo);
+        if (order.getStatus() == OrderStatus.PAID) {
+            return new OrderPaymentConfirmResponse(orderNo, OrderStatus.PAID, order.getPayAmt());
+        }
+        SagaInstance saga = sagaTx.getPlaceOrder(order.getId());
+        if (order.getStatus() != OrderStatus.PENDING || saga.getStatus() != SagaStatus.STARTED) {
+            throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);   // 실패 · 보상 중인 주문
+        }
+        OrderLogContext.put(orderNo, saga.getSagaId());
+        settlePayment(saga, order);
+        log.info("결제 확인 · 주문 PAID - payAmt={}", order.getPayAmt());
+        return new OrderPaymentConfirmResponse(orderNo, OrderStatus.PAID, order.getPayAmt());
+    }
+
+    /**
+     * 결제 대기 만료 (ORD-07 PaymentExpiryScheduler) — 결제창을 닫았거나, 결제 후 브라우저가 꺼져 [요청 2]가 오지 않은 주문.
+     * payment 에 다시 물어 PAID(웹훅으로 이미 반영됐을 수 있음)면 마무리, 끝내 미결제면 보상. 결과를 모르면 다음 주기에 다시.
+     */
+    public void expire(SagaInstance saga) {
+        Order order = saga.getOrder();
+        if (finishedAlready(saga, order)) {
+            return;
+        }
+        try {
+            settlePayment(saga, order);
+            log.info("결제 대기 만료 — 결제 완료로 마무리");
+        } catch (OrderException e) {
+            if (e.getErrorCode() == OrderErrorCode.ORDER_PAYMENT_NOT_COMPLETED) {
+                compensateAll(saga, order, e);   // 결제 포기 — 묶인 재고 · 포인트를 돌려준다
+            } else if (e.getErrorCode() != OrderErrorCode.ORDER_PAYMENT_FAILED) {   // FAILED 는 settlePayment 가 이미 보상
+                log.warn("결제 대기 만료 — 처리 못 함, 다음 주기에 다시 cause={}", reason(e));
+            }
+        } catch (BusinessException e) {
+            log.warn("결제 대기 만료 — payment 결과 모름, 다음 주기에 다시 cause={}", reason(e));
+        }
+    }
+
+    /**
+     * Saga 복구 (ORD-07 SagaRecoveryScheduler) — [요청 1] 처리 중 파드가 죽어 멈춘 Saga, 보상 호출이 실패해 재시도 시각이 된 Saga.
+     * 보상은 처음부터 다시 — 참여자가 sagaId 멱등 · "되돌릴 게 없으면 아무 일도 안 함"이라 이미 된 단계를 또 불러도 안전하다.
+     * 재시도 한도(8회)를 넘으면 Saga FAILED(사람이 확인), 주문은 결제 대기로 남는다.
+     */
+    public void recover(SagaInstance saga) {
+        Order order = saga.getOrder();
+        if (finishedAlready(saga, order)) {
+            return;
+        }
+        compensateAll(saga, order, new IllegalStateException("Saga 복구 — " + saga.getStatus() + " " + saga.getCurrentStep()));
+    }
+
+    /** 결제 검증 → PAID 확정. 금액 불일치 · 끝난 결제 · 결제 없음(ORDER_PAYMENT_FAILED)은 보상한 뒤 예외 그대로 */
+    private void settlePayment(SagaInstance saga, Order order) {
+        try {
+            payment.verify(new PaymentVerifyRequest(saga.getSagaId(), order.getOrderNo(), order.getPayAmt()));
+        } catch (OrderException e) {
+            if (e.getErrorCode() == OrderErrorCode.ORDER_PAYMENT_FAILED) {
+                compensateAll(saga, order, e);
+            }
+            throw e;   // ORDER_PAYMENT_NOT_COMPLETED · ORDER_PAYMENT_FAILED
+        }
+        sagaTx.advance(saga.getId(), SagaStep.PAYMENT_VERIFIED);
+        orderTx.markPaid(order.getId());   // 주문 PAID + 상품주문 PAYMENT_DONE
+        // TODO(ORD-09): OrderPaid 이벤트를 커밋 후 발행 (0원 주문도 같은 경로)
+        sagaTx.complete(saga.getId());
+    }
+
+    /**
+     * 스케줄러가 고른 사이 주문이 이미 끝났으면(결제 확인 · 보상이 Saga 기록 직전에 멈춤) Saga 만 맞춘다.
+     * 이걸 빼면 PAID 주문을 보상해 결제 · 재고 · 포인트를 되돌리게 된다.
+     */
+    private boolean finishedAlready(SagaInstance saga, Order order) {
+        if (order.getStatus() == OrderStatus.PAID) {
+            sagaTx.complete(saga.getId());
+            return true;
+        }
+        if (order.getStatus() == OrderStatus.FAILED) {
+            sagaTx.compensated(saga.getId());
+            return true;
+        }
+        return false;
+    }
+
+    /** 결제 준비까지 시도했다고 보고 전부 되돌린다 — 재고 해제 목록은 저장된 상품주문으로 다시 만든다 */
+    private void compensateAll(SagaInstance saga, Order order, RuntimeException cause) {
+        List<StockItem> stockItems = orderTx.getItems(order.getId()).stream()
+                .map(item -> new StockItem(item.getProductOptionId(), item.getQuantity())).toList();
+        compensate(saga, order, stockItems, SagaStep.PAYMENT_READY, cause);
+    }
+
+    /**
      * 역순 보상 — 결과를 모르는 호출(타임아웃 등)도 있으므로 "시도했을 수 있는" 단계는 전부 되돌린다.
      * 참여자는 모두 "되돌릴 게 없으면 아무 일도 안 함" + sagaId 멱등이라 여러 번 불러도 안전하다.
-     * 보상 호출이 실패하면(409 PAYMENT_CANCEL_PENDING · 장애) 주문은 PENDING 으로 두고 Saga 를 재시도 대상으로 남긴다.
-     * TODO(ORD-07 SagaRecoveryScheduler): COMPENSATING · next_retry_at 지난 Saga 를 같은 순서로 다시 보상하고 주문 FAILED.
+     * 보상 호출이 실패하면(409 PAYMENT_CANCEL_PENDING · 장애) 주문은 PENDING 으로 두고 Saga 를 재시도 대상으로 남긴다
+     * — SagaRecoveryScheduler 가 nextRetryAt 에 recover() 로 다시 보상한다.
      */
     private void compensate(SagaInstance saga, Order order, List<StockItem> stockItems, SagaStep attempted,
                             RuntimeException cause) {
