@@ -28,7 +28,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 실제 @HttpExchange 클라이언트(AdminClientConfig) → 가짜 user · settlement · product · order 서버(JDK HttpServer) 까지 — 경로 · 쿼리 · 헤더 · 본문이
+ * 실제 @HttpExchange 클라이언트(AdminClientConfig) → 가짜 user · settlement · product · order · store 서버(JDK HttpServer) 까지 — 경로 · 쿼리 · 헤더 · 본문이
  * 내부 API 계약과 맞는지 확인한다. 가짜 서버는 받은 요청을 기록하고 받은 경로를 data 로 돌려준다.
  * 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
  */
@@ -70,6 +70,7 @@ class AdminClientWiringTest {
         registry.add("app.client.settlement-url", () -> url);
         registry.add("app.client.product-url", () -> url);
         registry.add("app.client.order-url", () -> url);
+        registry.add("app.client.store-url", () -> url);
     }
 
     @AfterAll
@@ -153,5 +154,27 @@ class AdminClientWiringTest {
 
         mockMvc.perform(get("/api/admin/dashboard")).andExpect(status().isOk()).andExpect(jsonPath("$.data.order.path").value("/internal/stats/orders"));
         assertThat(RECEIVED).extracting(Received::uri).contains("/internal/stats/settlements", "/internal/stats/orders");
+    }
+    @Test
+    @DisplayName("입점 심사 · 스토어 — store.md 3~9절 경로 · 메서드 · 본문 그대로 (#97 계약)")
+    void store_paths() throws Exception {
+        mockMvc.perform(get("/api/admin/applications").param("status", "PENDING"))
+                .andExpect(jsonPath("$.data.path").value("/internal/applications?status=PENDING"));
+        mockMvc.perform(get("/api/admin/applications/27")).andExpect(jsonPath("$.data.path").value("/internal/applications/27"));
+        mockMvc.perform(patch("/api/admin/applications/27/approve")).andExpect(status().isOk());
+        assertThat(last()).extracting(Received::method, Received::uri).containsExactly("PATCH", "/internal/applications/27/approve");
+        mockMvc.perform(patch("/api/admin/applications/27/reject").contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"불일치\"}"))
+                .andExpect(status().isOk());
+        assertThat(last()).extracting(Received::uri, Received::body).containsExactly("/internal/applications/27/reject", "{\"reason\":\"불일치\"}");
+        mockMvc.perform(patch("/api/admin/applications/27/supplement").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"message\":\"흐림\",\"requestedDocs\":[]}"))
+                .andExpect(status().isOk());
+        assertThat(last().uri()).isEqualTo("/internal/applications/27/supplement");
+        mockMvc.perform(get("/api/admin/stores")).andExpect(jsonPath("$.data.path").value("/internal/stores"));
+        mockMvc.perform(get("/api/admin/stores/3")).andExpect(jsonPath("$.data.path").value("/internal/stores/3"));
+        mockMvc.perform(patch("/api/admin/stores/3/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SUSPENDED\",\"reason\":\"신고\"}"))
+                .andExpect(status().isOk());
+        assertThat(last()).extracting(Received::method, Received::uri).containsExactly("PATCH", "/internal/stores/3/status");
     }
 }
