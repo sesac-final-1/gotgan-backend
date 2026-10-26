@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
  * AWS SDK v2 클라이언트 — 자격 증명은 기본 체인(클러스터: IRSA 웹 아이덴티티 토큰, 로컬: ~/.aws 프로필).
@@ -20,5 +21,11 @@ public class AwsConfig {
         return S3Client.builder().region(Region.of(region))
                 .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(3)).apiCallAttemptTimeout(Duration.ofSeconds(1)))
                 .build();
+    }
+
+    /** 입점 서류 업로드 presigned PUT (seller-docs, IRSA s3:PutObject). 서명은 로컬 계산이라 S3 호출 없음 */
+    @Bean
+    public S3Presigner s3Presigner(@Value("${AWS_REGION:ap-northeast-2}") String region) {
+        return S3Presigner.builder().region(Region.of(region)).build();
     }
 }

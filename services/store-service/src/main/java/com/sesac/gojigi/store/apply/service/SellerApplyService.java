@@ -47,10 +47,7 @@ public class SellerApplyService {
     static final int REAPPLY_RESTRICTION_DAYS = 30;
     static final int MIN_PRODUCT_PHOTOS = 3;
     static final int MAX_PRODUCT_PHOTOS = 10;
-    static final long MAX_FILE_SIZE = 10L * 1024 * 1024;
 
-    private static final Set<String> DOCUMENT_TYPES = Set.of("application/pdf", "image/jpeg", "image/png");
-    private static final Set<String> PHOTO_TYPES = Set.of("image/jpeg", "image/png");
     private static final PolicyFactory INTRO_POLICY = Sanitizers.FORMATTING.and(Sanitizers.BLOCKS).and(Sanitizers.LINKS);
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -134,13 +131,12 @@ public class SellerApplyService {
     private VerifiedDocument verify(DocumentItem item) {
         FileMeta meta = sellerDocumentClient.head(item.key())
                 .orElseThrow(() -> invalidDocument(label(item.docType()) + " 파일이 업로드되지 않았습니다. 다시 올려 주세요."));
-        Set<String> allowed = item.docType() == DocType.PRODUCT_PHOTO ? PHOTO_TYPES : DOCUMENT_TYPES;
-        if (meta.contentType() == null || !allowed.contains(meta.contentType())) {
+        if (!DocumentRules.allows(item.docType(), meta.contentType())) {
             throw invalidDocument(item.docType() == DocType.PRODUCT_PHOTO
                     ? "대표 상품 사진은 JPG · PNG 만 올릴 수 있습니다: " + item.originalName()
                     : label(item.docType()) + "은 PDF · JPG · PNG 만 올릴 수 있습니다.");
         }
-        if (meta.size() <= 0 || meta.size() > MAX_FILE_SIZE) {
+        if (!DocumentRules.withinSize(meta.size())) {
             throw invalidDocument("파일은 10MB 이하만 올릴 수 있습니다: " + item.originalName());
         }
         return new VerifiedDocument(item, meta);
@@ -200,12 +196,7 @@ public class SellerApplyService {
     }
 
     private static String label(DocType docType) {
-        return switch (docType) {
-            case BUSINESS_REG -> "사업자등록증";
-            case ECOMMERCE_REG -> "통신판매업 신고증";
-            case BANK_COPY -> "통장 사본";
-            case PRODUCT_PHOTO -> "대표 상품 사진";
-        };
+        return DocumentRules.label(docType);
     }
 
     private record VerifiedDocument(DocumentItem item, FileMeta meta) {
