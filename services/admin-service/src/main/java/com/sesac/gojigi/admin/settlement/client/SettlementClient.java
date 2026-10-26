@@ -37,6 +37,10 @@ public interface SettlementClient {
     @GetExchange("/commissions")
     ApiResponse<JsonNode> commissions();
 
+    /** storeId 없이 부르면 platform 통계 (관리자 대시보드) */
+    @GetExchange("/stats/settlements")
+    ApiResponse<JsonNode> platformStats();
+
     @PutExchange("/commissions")
     ApiResponse<JsonNode> updateCommissions(@RequestBody JsonNode body);
 }

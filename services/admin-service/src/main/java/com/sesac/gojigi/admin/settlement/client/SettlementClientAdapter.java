@@ -50,7 +50,7 @@ public class SettlementClientAdapter {
     }
 
     @Retry(name = TARGET)
-    @CircuitBreaker(name = TARGET, fallbackMethod = "commissionsFallback")
+    @CircuitBreaker(name = TARGET, fallbackMethod = "noArgFallback")
     public JsonNode commissions() {
         return call(settlementClient::commissions);
     }
@@ -58,6 +58,13 @@ public class SettlementClientAdapter {
     @CircuitBreaker(name = TARGET, fallbackMethod = "bodyFallback")
     public JsonNode updateCommissions(JsonNode body) {
         return call(() -> settlementClient.updateCommissions(body));
+    }
+
+    /** 관리자 대시보드 — 응답의 platform 영역만 */
+    @Retry(name = TARGET)
+    @CircuitBreaker(name = TARGET, fallbackMethod = "noArgFallback")
+    public JsonNode platformStats() {
+        return call(settlementClient::platformStats).path("platform");
     }
 
     private static JsonNode call(Supplier<ApiResponse<JsonNode>> request) {
@@ -85,7 +92,7 @@ public class SettlementClientAdapter {
         throw RemoteCalls.unavailable(TARGET, t);
     }
 
-    JsonNode commissionsFallback(Throwable t) {
+    JsonNode noArgFallback(Throwable t) {
         throw RemoteCalls.unavailable(TARGET, t);
     }
 }

@@ -1,5 +1,7 @@
 package com.sesac.gojigi.admin.common.client;
 
+import com.sesac.gojigi.admin.category.client.ProductClient;
+import com.sesac.gojigi.admin.dashboard.client.OrderClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.admin.user.client.UserClient;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +23,16 @@ public class AdminClientConfig {
     @Bean
     public SettlementClient settlementClient(RestClient.Builder restClientBuilder, @Value("${app.client.settlement-url}") String baseUrl) {
         return create(restClientBuilder, baseUrl, SettlementClient.class);
+    }
+
+    @Bean
+    public ProductClient productClient(RestClient.Builder restClientBuilder, @Value("${app.client.product-url}") String baseUrl) {
+        return create(restClientBuilder, baseUrl, ProductClient.class);
+    }
+
+    @Bean
+    public OrderClient orderClient(RestClient.Builder restClientBuilder, @Value("${app.client.order-url}") String baseUrl) {
+        return create(restClientBuilder, baseUrl, OrderClient.class);
     }
 
     private static <T> T create(RestClient.Builder builder, String baseUrl, Class<T> type) {

@@ -13,3 +13,4 @@
 | `REVIEW` · `INQUIRY` | review | | | |
 | `SETTLE` · `COMMISSION` | settlement | `SETTLE_NOT_FOUND` · `SETTLE_STORE_NOT_FOUND` · `SETTLE_INVALID_STATUS` · `SETTLE_STORE_PAYOUT_HELD` · `SETTLE_PAYOUT_ACCOUNT_MISSING` · `SETTLE_HOLD_REASON_REQUIRED` · `SETTLE_REPORT_NOT_READY` · `COMMISSION_NOT_FOUND` · `COMMISSION_PAST_EFFECTIVE_DATE` | 404 · 404 · 409 · 409 · 409 · 400 · 409 · 404 · 400 | 상황별 설명: `docs/api/settlement.md` |
 | — | admin | 하위 서비스의 code · message · HTTP 상태를 그대로 전달. 연결 실패 · 타임아웃만 `EXTERNAL_API_ERROR` | | |
+| `CATEGORY` | admin | `CATEGORY_COMMISSION_RATE_REQUIRED` · `CATEGORY_COMMISSION_REQUIRED` · `CATEGORY_ACTIVATION_PENDING` | 400 · 409 · 502 | 상위 카테고리 생성에 수수료율 없음 · 현재 수수료율 없이 상위 켜기 · 만들었지만 수수료 · 사용 처리 실패(꺼진 채 남음) — 10/20 A안 |
