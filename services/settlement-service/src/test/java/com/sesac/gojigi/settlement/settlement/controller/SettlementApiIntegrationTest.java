@@ -2,6 +2,7 @@ package com.sesac.gojigi.settlement.settlement.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -132,6 +133,14 @@ class SettlementApiIntegrationTest {
         settlementItemRepository.save(SettlementItem.builder()
                 .orderItemId(SEQ.incrementAndGet()).orderNo("20261020-000001").storeId(storeId).productId(77L)
                 .productName("린넨 셔츠").categoryId(1L).itemAmt(itemAmt).commissionRate(new BigDecimal("11.00"))
+                .commissionAmt(itemAmt * 11 / 100).paymentFeeAmt(itemAmt * 22 / 1000).confirmedAt(confirmedAt).build());
+    }
+
+    /** item 과 같되 카테고리를 지정 — 다른 테스트와 겹치지 않는 카테고리로 합계 확인 */
+    private void categoryItem(long storeId, long categoryId, long itemAmt, LocalDateTime confirmedAt) {
+        settlementItemRepository.save(SettlementItem.builder()
+                .orderItemId(SEQ.incrementAndGet()).orderNo("20261026-000001").storeId(storeId).productId(77L)
+                .productName("린넨 셔츠").categoryId(categoryId).itemAmt(itemAmt).commissionRate(new BigDecimal("11.00"))
                 .commissionAmt(itemAmt * 11 / 100).paymentFeeAmt(itemAmt * 22 / 1000).confirmedAt(confirmedAt).build());
     }
 
@@ -545,6 +554,25 @@ class SettlementApiIntegrationTest {
             mockMvc.perform(get("/internal/stats/settlements"))
                     .andExpect(jsonPath("$.data.platform.scheduledCount").isNumber())
                     .andExpect(jsonPath("$.data.store").doesNotExist());
+        }
+
+        @Test
+        @DisplayName("관리자 대시보드 — 이번 주 포함 8주(09/07 ~) 구매확정분의 카테고리별 매출 · 매출 상위 스토어, 8주 밖은 제외")
+        void stats_platformRecentSales() throws Exception {
+            long storeId = store(true);
+            long category = SEQ.incrementAndGet();
+            categoryItem(storeId, category, 50_000_000L, LocalDateTime.of(2026, 10, 26, 9, 0));   // 이번 주
+            categoryItem(storeId, category, 30_000_000L, LocalDateTime.of(2026, 9, 7, 0, 0));    // 8주 전 월요일 — 포함
+            categoryItem(storeId, category, 99_000_000L, LocalDateTime.of(2026, 9, 6, 23, 59));  // 그 전날 — 제외
+
+            mockMvc.perform(get("/internal/stats/settlements"))
+                    .andExpect(jsonPath("$.data.platform.salesFrom").value("2026-09-07"))
+                    .andExpect(jsonPath("$.data.platform.categorySales[?(@.categoryId == %d)].salesAmt".formatted(category)).value(80_000_000))
+                    .andExpect(jsonPath("$.data.platform.categorySales[?(@.categoryId == %d)].itemCount".formatted(category)).value(2))
+                    .andExpect(jsonPath("$.data.platform.topStores[0].storeId").value(storeId))   // 다른 테스트 스토어보다 큰 금액
+                    .andExpect(jsonPath("$.data.platform.topStores[0].storeName").value("스토어" + storeId))
+                    .andExpect(jsonPath("$.data.platform.topStores[0].commissionAmt").value(8_800_000))
+                    .andExpect(jsonPath("$.data.platform.topStores.length()").value(lessThanOrEqualTo(10)));
         }
     }
 
