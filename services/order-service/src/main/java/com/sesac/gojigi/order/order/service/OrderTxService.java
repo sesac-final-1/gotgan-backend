@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,10 +35,15 @@ public class OrderTxService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderStoreShipmentRepository orderStoreShipmentRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     /** 주문 PENDING + 상품주문 · 스토어별 배송비 스냅샷 (Saga 1단계 ORDER_CREATED) */
     public record PendingOrder(Order order, List<OrderItem> items) {
+    }
+
+    /** 결제 확정 — 같은 트랜잭션에서 장바구니의 주문한 옵션을 지운다 (CartService#onOrderPaid) */
+    public record Paid(Long buyerId, List<Long> productOptionIds) {
     }
 
     /**
@@ -69,8 +75,11 @@ public class OrderTxService {
     /** 전액 포인트(0원) 주문 — 결제창 없이 바로 PAID, 상품주문은 주문완료 → 결제완료 */
     @Transactional
     public void markPaid(Long orderId) {
-        getOrder(orderId).markPaid(LocalDateTime.now(clock));
-        orderItemRepository.findByOrderIdOrderByIdAsc(orderId).forEach(OrderItem::markPaymentDone);
+        Order order = getOrder(orderId);
+        order.markPaid(LocalDateTime.now(clock));
+        List<OrderItem> items = orderItemRepository.findByOrderIdOrderByIdAsc(orderId);
+        items.forEach(OrderItem::markPaymentDone);
+        eventPublisher.publishEvent(new Paid(order.getBuyerId(), items.stream().map(OrderItem::getProductOptionId).toList()));
     }
 
     /** Saga 보상을 마친 주문 — 상품주문은 주문완료(ORDERED) 그대로 */
