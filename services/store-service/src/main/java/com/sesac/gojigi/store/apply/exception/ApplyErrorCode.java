@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
-/** apply 도메인 오류 코드 (접두어 APPLY — docs/api/error-codes.md · store.md 3절) */
+/** apply 도메인 오류 코드 (접두어 APPLY — docs/api/error-codes.md · store.md 10절) */
 @Getter
 @RequiredArgsConstructor
 public enum ApplyErrorCode implements ErrorCode {
