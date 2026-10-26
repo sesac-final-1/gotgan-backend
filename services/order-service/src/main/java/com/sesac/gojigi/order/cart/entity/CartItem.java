@@ -54,4 +54,9 @@ public class CartItem extends BaseTimeEntity {
         this.quantity = quantity;
         this.checked = true;
     }
+
+    /** 이미 담긴 옵션을 다시 담으면 수량을 더한다 */
+    public void addQuantity(int quantity) {
+        this.quantity += quantity;
+    }
 }
