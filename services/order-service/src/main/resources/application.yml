@@ -38,13 +38,22 @@ app:
     auto-confirm-after: ${AUTO_CONFIRM_AFTER:7d}   # 데모에서는 ConfigMap 으로 2m
     payment-timeout: ${PAYMENT_TIMEOUT:15m}         # 결제 대기 만료 기준 — 데모에서는 ConfigMap 으로 1m
     return-window: ${RETURN_WINDOW:7d}              # 배송완료 후 반품 · 교환 신청 기간 (CLM-03 · 04)
+    auto-deliver-after: ${AUTO_DELIVER_AFTER:1h}    # 발송 후 자동 배송완료 (DLV-04) — 데모에서는 ConfigMap 으로 1m
   events:
-    topic-arn: ${ORDER_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-order-events
+    topic-arn: ${ORDER_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-order-events — 비면(로컬 · 테스트) 발행하지 않고 로그만
+    outbox:                                  # 이벤트 아웃박스 (EventOutboxService · V6) — 커밋 후 바로 발행, 실패분은 발행기가 다시
+      publish-interval: 30s
+      initial-delay: 20s
+      retry-after: 10s                       # 커밋 직후 발행과 겹치지 않게 이만큼 지난 NEW 만
+      max-attempts: 10                       # 넘으면 ERROR 로그 (수동 확인)
   scheduler:
     zone: Asia/Seoul
     batch-size: 100                         # 한 주기에 처리할 Saga 최대 건수
     payment-expiry:                         # PaymentExpiryScheduler — 결제 대기 만료 (ORD-07)
       interval: ${PAYMENT_EXPIRY_INTERVAL:60s}
+      initial-delay: 30s
+    auto-deliver:                           # AutoDeliverScheduler — 배송중 → 자동 배송완료 (DLV-04)
+      interval: ${AUTO_DELIVER_INTERVAL:60s}
       initial-delay: 30s
     saga-recovery:                          # SagaRecoveryScheduler — 멈춘 Saga · 보상 재시도 (ORD-07)
       interval: ${SAGA_RECOVERY_INTERVAL:60s}

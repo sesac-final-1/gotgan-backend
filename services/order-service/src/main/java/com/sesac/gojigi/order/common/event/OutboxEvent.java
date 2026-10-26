@@ -29,6 +29,9 @@ public class OutboxEvent {
 
     public enum Status { NEW, SENT }
 
+    /** last_error VARCHAR(200) */
+    private static final int ERROR_MAX = 200;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "outbox_event_id")
@@ -55,6 +58,13 @@ public class OutboxEvent {
     @Column(name = "status", nullable = false, length = 10)
     private Status status;
 
+    /** 발행 시도 횟수 — 한도를 넘으면 ERROR 로그 (V6) */
+    @Column(name = "attempt_count", nullable = false)
+    private int attemptCount;
+
+    @Column(name = "last_error", length = ERROR_MAX)
+    private String lastError;
+
     @Column(name = "sent_at", columnDefinition = "DATETIME(6)")
     private LocalDateTime sentAt;
 
@@ -75,5 +85,21 @@ public class OutboxEvent {
     public static OutboxEvent of(String eventId, AggregateType aggregateType, String aggregateId, String eventType,
                                  String payload) {
         return new OutboxEvent(eventId, aggregateType, aggregateId, eventType, payload);
+    }
+
+    public boolean isSent() {
+        return status == Status.SENT;
+    }
+
+    public void markSent(LocalDateTime at) {
+        this.status = Status.SENT;
+        this.sentAt = at;
+        this.attemptCount++;
+        this.lastError = null;
+    }
+
+    public void markFailed(String error) {
+        this.attemptCount++;
+        this.lastError = error == null || error.length() <= ERROR_MAX ? error : error.substring(0, ERROR_MAX);
     }
 }

@@ -153,6 +153,25 @@ public class OrderItem extends BaseTimeEntity {
         transition(OrderItemStatus.PAYMENT_DONE, OrderItemStatus.CANCEL_REQUESTED);
     }
 
+    /** 발주확인 — 판매자가 주문을 확인하고 배송 준비 시작 */
+    public void prepare() {
+        transition(OrderItemStatus.PAYMENT_DONE, OrderItemStatus.PREPARING);
+    }
+
+    /** 송장 등록 (DLV-02) — 택배사 · 송장번호 · 발송 일시를 남기고 배송중 */
+    public void ship(String courier, String trackingNo, LocalDateTime shippedAt) {
+        transition(OrderItemStatus.PREPARING, OrderItemStatus.SHIPPING);
+        this.courier = courier;
+        this.trackingNo = trackingNo;
+        this.shippedAt = shippedAt;
+    }
+
+    /** 배송완료 (DLV-03 판매자 버튼 · DLV-04 자동) — deliveredAt 이 자동 구매확정 · 반품 기간의 기준 */
+    public void deliver(LocalDateTime deliveredAt) {
+        transition(OrderItemStatus.SHIPPING, OrderItemStatus.DELIVERED);
+        this.deliveredAt = deliveredAt;
+    }
+
     /** 반품 신청 (CLM-03) — 배송완료에서만, 판매자 승인 · 수거 · 환불 Saga 는 판매자 클레임 처리(CLM-05)에서 */
     public void requestReturn() {
         transition(OrderItemStatus.DELIVERED, OrderItemStatus.RETURN_REQUESTED);

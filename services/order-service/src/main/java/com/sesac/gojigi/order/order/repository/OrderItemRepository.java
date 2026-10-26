@@ -5,6 +5,7 @@ import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +16,11 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     List<OrderItem> findByOrderIdInOrderByIdAsc(Collection<Long> orderIds);
 
     List<OrderItem> findByOrderIdOrderByIdAsc(Long orderId);
+
+    /** 자동 배송완료 대상 — 그 상태로 shipped_at 이 before 보다 이른 상품주문 ID (오래된 것부터) */
+    @Query("select i.id from OrderItem i where i.status = :status and i.shippedAt < :before order by i.id")
+    List<Long> findIdsByStatusAndShippedAtBefore(@Param("status") OrderItemStatus status,
+                                                 @Param("before") LocalDateTime before, Limit limit);
 
     /** 스토어의 그 상태 상품주문 수 — idx_order_item_store_status (store_id, status, created_at) */
     long countByStoreIdAndStatus(Long storeId, OrderItemStatus status);
