@@ -50,3 +50,63 @@ export const REPRESENTATIVE = {
   beauty: [{ name: '진정 토너 200ml', subCategory: '스킨케어', price: 24000 }, { name: '수분크림 50ml', subCategory: '스킨케어', price: 32000 }],
   digital: [{ name: '무접점 키보드', subCategory: '키보드', price: 219000 }, { name: '원목 모니터 받침대', subCategory: '데스크', price: 89000 }],
 };
+
+// 회원 — 1 관리자 · 2 · 3 판매자 · 4~6 구매자는 Keycloak 시드 계정(로그인 가능, 이메일 고정). 4~6 은 목업 u1~u3 프로필로
+//   목업 u4~u14 → user 100 + N (조회용, 로그인 불가 — 답변 K1). 휴면 없음(K2), u11 은 이용정지(관리자 회원 화면 시연)
+//   로그인 계정의 포인트 · 누적 구매확정 금액은 아래 주문에서 계산, 조회용 회원은 목업 값(포인트는 이력 1건으로 잔액과 맞춤)
+export const LOGIN_BUYERS = [
+  { userId: 4, mock: 'u1', email: 'wlsgksvheh+buyer1@gmail.com', name: '김서연', nick: '서연이네', phone: '010-0000-0010', grade: 'GOLD', joined: 820, login: 0 },
+  { userId: 5, mock: 'u2', email: 'wlsgksvheh+buyer2@gmail.com', name: '이도현', nick: '도현', phone: '010-0000-0011', grade: 'GOLD', joined: 1400, login: 0 },
+  { userId: 6, mock: 'u3', email: 'wlsgksvheh+buyer3@gmail.com', name: '박지민', nick: '지민찡', phone: '010-0000-0012', grade: 'SILVER', joined: 400, login: 2 },
+];
+export const VIEW_BUYERS = [
+  { userId: 104, name: '최유나', nick: '유나', email: 'yuna.choi@example.com', phone: '010-0000-0013', grade: 'NORMAL', joined: 60, spent: 98000, point: 1200, login: 5 },
+  { userId: 105, name: '정하준', nick: '하준아빠', email: 'hajun.dad@example.com', phone: '010-0000-0014', grade: 'GOLD', joined: 980, spent: 1210000, point: 8800, login: 1 },
+  { userId: 106, name: '윤채원', nick: '채원', email: 'chaewon.y@example.com', phone: '010-0000-0015', grade: 'SILVER', joined: 300, spent: 402000, point: 2050, login: 3 },
+  { userId: 107, name: '강민호', nick: '민호', email: 'minho.kang@example.com', phone: '010-0000-0016', grade: 'NORMAL', joined: 30, spent: 32000, point: 500, login: 12 },
+  { userId: 108, name: '조은비', nick: '은비', email: 'eunbi.cho@example.com', phone: '010-0000-0017', grade: 'GOLD', joined: 1650, spent: 7710000, point: 61000, login: 0 },
+  { userId: 109, name: '임재현', nick: 'jh_lim', email: 'jaehyun.lim@example.com', phone: '010-0000-0018', grade: 'NORMAL', joined: 720, spent: 140000, point: 0, login: 390 },
+  { userId: 110, name: '한소희', nick: '소소', email: 'sohee.han@example.com', phone: '010-0000-0019', grade: 'SILVER', joined: 250, spent: 388000, point: 4100, login: 1 },
+  { userId: 111, name: '오준서', nick: '블랙컨슈머아님', email: 'junseo.oh@example.com', phone: '010-0000-0020', grade: 'NORMAL', joined: 90, spent: 210000, point: 0, login: 4,
+    suspended: { reason: '허위 리뷰 반복 작성', daysAgo: 4, days: 14 } },
+  { userId: 112, name: '서다인', nick: '다인', email: 'dain.seo@example.com', phone: '010-0000-0021', grade: 'GOLD', joined: 1100, spent: 1530000, point: 9900, login: 0 },
+  { userId: 113, name: '문태양', nick: '태양', email: 'taeyang.m@example.com', phone: '010-0000-0022', grade: 'NORMAL', joined: 8, spent: 0, point: 3000, login: 0 },
+  { userId: 114, name: '배수빈', nick: '수빈', email: 'subin.bae@example.com', phone: '010-0000-0023', grade: 'SILVER', joined: 510, spent: 610000, point: 5200, login: 6 },
+];
+
+// 주문에 쓰는 상품 — product_id = 스토어 id × 100 + 순번, 옵션 = 상품 × 100 + 1 (상품 시드는 product 엔티티 이후 같은 번호로).
+//   category = 하위 카테고리(product 시드), 판매수수료는 상위(스토어 카테고리) 기준
+export const PRODUCTS = {
+  101: { storeId: 1, name: '제주 노지 감귤 5kg', price: 29000, category: 101 },
+  102: { storeId: 1, name: '한라봉 3kg', price: 39000, category: 101 },
+  201: { storeId: 2, name: '손빚음 머그', price: 28000, category: 201 },
+  202: { storeId: 2, name: '백자 달항아리 화병', price: 45000, category: 202 },
+  1101: { storeId: 11, name: '리넨 오버핏 셔츠', price: 69000, category: 301 },
+  1501: { storeId: 15, name: '리넨 패브릭 스탠드 조명', price: 54000, category: 203 },
+  1701: { storeId: 17, name: '에티오피아 예가체프 원두 200g', price: 18000, category: 104 },
+  1801: { storeId: 18, name: '시카 9 진정 토너 200ml', price: 24000, category: 501 },
+};
+
+// 주문 시나리오 — 주문 1건 = 스토어 1곳 · 상품 1개(정합성 확인을 단순하게). 포인트 사용 없음
+//   week: 구매확정된 주(1 = 지난주 → 정산 지급예정, 2 = 지지난주 → 지급 완료), day: 그 주 월요일 + day 에 구매확정
+//   recent: 진행 중 상태 — 판매자 주문 화면 시연(발주확인 · 송장 · 배송완료 버튼)
+export const ORDERS = [
+  { buyer: 4, product: 101, qty: 2, week: 2, day: 1 },
+  { buyer: 5, product: 201, qty: 2, week: 2, day: 2 },
+  { buyer: 6, product: 1101, qty: 1, week: 2, day: 3 },
+  { buyer: 5, product: 102, qty: 1, week: 1, day: 0 },
+  { buyer: 6, product: 101, qty: 1, week: 1, day: 2 },
+  { buyer: 4, product: 202, qty: 1, week: 1, day: 3 },
+  { buyer: 4, product: 1701, qty: 2, week: 1, day: 4 },
+  { buyer: 6, product: 1501, qty: 1, week: 1, day: 1 },   // 정지 스토어 — 정산서 자동 보류
+  { buyer: 4, product: 101, qty: 1, recent: 'DELIVERED' },
+  { buyer: 5, product: 201, qty: 1, recent: 'SHIPPING' },
+  { buyer: 6, product: 102, qty: 1, recent: 'PREPARING' },
+  { buyer: 4, product: 202, qty: 1, recent: 'PAYMENT_DONE' },
+  { buyer: 5, product: 101, qty: 3, recent: 'PAYMENT_DONE' },
+  { buyer: 6, product: 1801, qty: 2, recent: 'PAYMENT_DONE' },
+];
+
+export const COMMISSION = { 1: 7, 2: 9, 3: 11, 4: 11, 5: 10, 6: 6 }; // settlement category_commission 시드와 같은 율(%)
+export const PAYMENT_FEE_RATE = 2.2;
+export const EARN_RATE = 5;
