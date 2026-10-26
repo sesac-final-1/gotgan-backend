@@ -39,6 +39,7 @@ app:
 
 resilience4j:
   circuitbreaker:
+    circuit-breaker-aspect-order: 1         # 서킷이 바깥 · 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 예외를 바꿔 재시도가 안 걸린다
     configs:
       default:
         sliding-window-size: 10
@@ -54,6 +55,7 @@ resilience4j:
     instances:
       portone: { base-config: default }     # 이름 = 대상 서비스 (가이드라인 06장)
   retry:
+    retry-aspect-order: 2
     configs:
       default:
         max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST 는 재시도 금지)
