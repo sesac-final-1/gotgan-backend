@@ -12,7 +12,7 @@
 | 금액 | `long`, 원 단위 |
 | 시각 | ISO-8601 오프셋 포함 (Asia/Seoul) |
 | 멱등 키 | 준비 · 검증 · 조회 = `orderNo`, 취소 = `sagaId` (`payment_cancel.saga_id` UNIQUE) |
-| 포트원 | V2 · 테스트 채널 · 카드만. 포트원 호출은 트랜잭션 밖 · 서킷 브레이커 `portone` · 재시도는 GET만 |
+| 포트원 | V2 · 테스트 채널 · 카드 + 간편결제(카카오페이 · 네이버페이 · 토스페이, 10/26). 포트원 호출은 트랜잭션 밖 · 서킷 브레이커 `portone` · 재시도는 GET만 |
 | 취소 일관성 | 포트원 취소 전에 `payment_cancel` 을 **PENDING 으로 선기록** → 결과 확정 시 SUCCEEDED / FAILED. 결과를 모르면 포트원 조회로 대조, 그래도 모르면 복구 스케줄러 (8절, 10/20) |
 
 ### 응답 객체 `PaymentResponse`
@@ -160,7 +160,7 @@ order는 409 · 404를 자기 도메인 코드로 바꾸고 **서킷 실패로 �
 | 8 | 서킷 브레이커 이름 (`payment`/`portone` vs `paymentClient`/`portoneClient`) | 가이드라인 규칙(대상 서비스 이름) — 코드를 맞춤 |
 | 9 | 0원 결제 | order가 결제 단계 생략, payment는 1원 이상 |
 | 10 | 취소 금액 배송비 배분 | order 계산, payment는 받은 금액만 |
-| 11 | 결제수단 | 카드만 (프론트 목업 6종은 결제창 연결 때 정리) |
+| 11 | 결제수단 | 카드 + 간편결제 3종(`EASY_PAY` — 카카오페이 · 네이버페이 · 토스페이). 흐름 · 서버는 카드와 같고 `payment.method` 만 `EASY_PAY` (10/26 frontend #26). 무통장입금(가상계좌)은 제외 — 입금 대기 동안 주문 유지 · 환불 계좌 수집이 필요해 범위 밖. 곳간페이 없음 |
 | 12 | 웹훅 주소 · 시크릿 이름 | `gotgan-ashy.vercel.app` · `payment-service-secret` |
 
 ## 8. 취소 일관성 — 모든 단계가 실패할 수 있다고 보고 (10/20)
