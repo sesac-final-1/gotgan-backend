@@ -153,6 +153,16 @@ public class OrderItem extends BaseTimeEntity {
         transition(OrderItemStatus.PAYMENT_DONE, OrderItemStatus.CANCEL_REQUESTED);
     }
 
+    /** 반품 신청 (CLM-03) — 배송완료에서만, 판매자 승인 · 수거 · 환불 Saga 는 판매자 클레임 처리(CLM-05)에서 */
+    public void requestReturn() {
+        transition(OrderItemStatus.DELIVERED, OrderItemStatus.RETURN_REQUESTED);
+    }
+
+    /** 교환 신청 (CLM-04) — 배송완료에서만, 교환이 끝나면 다시 배송완료 */
+    public void requestExchange() {
+        transition(OrderItemStatus.DELIVERED, OrderItemStatus.EXCHANGE_REQUESTED);
+    }
+
     /** 취소 완료 — 결제 부분 취소 · 재고 복원 · 포인트 환원 · 회수가 모두 끝남 */
     public void cancelled() {
         transition(OrderItemStatus.CANCEL_REQUESTED, OrderItemStatus.CANCELLED);

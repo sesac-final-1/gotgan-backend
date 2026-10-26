@@ -10,6 +10,7 @@ import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
 import com.sesac.gojigi.order.claim.entity.ClaimStatus;
 import com.sesac.gojigi.order.claim.exception.ClaimErrorCode;
 import com.sesac.gojigi.order.claim.repository.OrderClaimRepository;
+import com.sesac.gojigi.order.claim.service.ClaimTxService;
 import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
 import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
@@ -55,6 +56,7 @@ import org.springframework.transaction.annotation.Transactional;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, CancelItemTxService.class, OrderSagaTxService.class,
+        ClaimTxService.class,
         CancelItemTxServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 서비스 메서드마다 실제로 커밋

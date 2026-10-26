@@ -37,6 +37,7 @@ app:
   order:
     auto-confirm-after: ${AUTO_CONFIRM_AFTER:7d}   # 데모에서는 ConfigMap 으로 2m
     payment-timeout: ${PAYMENT_TIMEOUT:15m}         # 결제 대기 만료 기준 — 데모에서는 ConfigMap 으로 1m
+    return-window: ${RETURN_WINDOW:7d}              # 배송완료 후 반품 · 교환 신청 기간 (CLM-03 · 04)
   events:
     topic-arn: ${ORDER_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-order-events
   scheduler:
