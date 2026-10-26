@@ -1,53 +1,112 @@
--- 시연용 시드 (local · k8s 프로필에서만 실행, 내용이 바뀌면 재실행 — R__ 반복 마이그레이션)
--- 목업(gotgan_expage/src/data/*.js) 데이터를 INSERT 로 옮긴다. 담당 VoC-100
+-- 시연용 시드 (local · k8s 프로필에서만 실행, 내용이 바뀌면 재실행 — R__ 반복 마이그레이션). 담당 VoC-100
+-- ⚠️ 생성 파일 — 직접 고치지 말고 gotgan-backend scripts/seed-gen/scenario.mjs 를 고친 뒤 `node scripts/seed-gen/gen-store.mjs` (구지훈)
 --
--- 시연 판매자 스토어 2개 — Keycloak 시드(gotgan-config scripts/keycloak-seed.sh) · userdb 시드와 **user_id · store_id 가 같아야 한다**
---   wlsgksvheh+seller1@gmail.com  user_id 2 → store_id 1 (Keycloak 속성 store_id=1 → 게이트웨이 X-Store-Id)
---   wlsgksvheh+seller2@gmail.com  user_id 3 → store_id 2
--- store 는 승인된 입점 신청서(store_application, FK)에서 생기므로 신청서 · 이력도 함께 넣는다 (승인 흐름을 거친 것과 같은 상태)
--- category_id 1 · 2 는 productdb category 논리 참조 — product 시드에서 같은 번호의 카테고리를 만들어야 한다
--- 사업자 · 계좌 정보는 시연용 가짜 값. 서류(application_document)는 S3 객체가 없어 넣지 않는다
--- 이벤트(StoreApproved)는 발행되지 않는다 — settlement 의 스토어 스냅샷 등 이벤트로 만들어지는 데이터는 각 서비스 시드에서 맞춘다
--- 재실행 안전: PK 가 이미 있으면 건너뜀(INSERT IGNORE — Flyway 로그에 Duplicate 경고만 남음) — 시연 중 바뀐 스토어 정보 · 상태는 유지
+-- 목업 스토어 9개(프론트 mocks/fixtures/catalog.js) — 모두 승인된 입점 신청서(store_application, FK)에서 생긴 상태로 신청서 · 이력도 함께
+--   store_id = 10 + 목업 번호. 단 시연 판매자 로그인 스토어 1 · 2 는 Keycloak 시드 · settlement 시드와 번호가 같아야 해서
+--   wlsgksvheh+seller1@gmail.com  user_id 2 → store_id 1 (산골농부 박씨네, 식품)
+--   wlsgksvheh+seller2@gmail.com  user_id 3 → store_id 2 (토담공방, 리빙)
+--   나머지 대표자는 user_id 200 + 목업 번호(user 시드 — 조회용, 로그인 불가)
+-- category_id 는 productdb 카테고리 시드(1~6)와 같은 번호. 신청서 id = 스토어 id, 이력 id = 스토어 id × 10 + 순번
+-- 볕드는집(15)은 정지 상태 — 관리자 스토어 화면 · settlement 자동 보류 시연용
+-- 사업자 · 계좌 정보는 시연용 가짜 값. 서류(application_document)는 S3 객체가 없어 넣지 않는다. 이벤트는 발행되지 않는다
+-- 재실행 안전: PK 가 이미 있으면 건너뜀(INSERT IGNORE) — 시연 중 바뀐 스토어 정보 · 상태는 유지
+
+SET @today := DATE(UTC_TIMESTAMP() + INTERVAL 9 HOUR);   -- KST 오늘 (DB 시간대와 무관)
 
 INSERT IGNORE INTO store_application
   (store_application_id, user_id, category_id, biz_type, company_name, owner_name, biz_reg_no, ecommerce_reg_no,
-   manager_phone, manager_email, business_address, store_name, slug, intro, representative_products,
-   bank_name, account_no, account_holder, status, marketing_agreed, terms_agreed_at, status_changed_at)
+   manager_phone, manager_email, business_address, store_name, slug, intro,
+   representative_products, expected_monthly_sales, sales_channel, bank_name, account_no, account_holder,
+   status, marketing_agreed, terms_agreed_at, status_changed_at, created_at)
 VALUES
-  (1, 2, 1, 'INDIVIDUAL', '곳간상회', '판매자1', '123-45-67890', '2026-서울강남-0001',
-   '010-0000-0002', 'wlsgksvheh+seller1@gmail.com', '서울 강남구 테헤란로 1', '곳간상회', 'gotgan-sanghoe', '<p>매일 고르는 제철 먹거리</p>',
-   JSON_ARRAY(JSON_OBJECT('name', '제철 사과 3kg', 'subCategory', '과일', 'price', 25000),
-              JSON_OBJECT('name', '햇배 5kg', 'subCategory', '과일', 'price', 32000),
-              JSON_OBJECT('name', '감귤 5kg', 'subCategory', '과일', 'price', 18000)),
-   '곳간은행', '100-0000-000001', '판매자1', 'APPROVED', FALSE, NOW(6), NOW(6)),
-  (2, 3, 2, 'CORPORATE', '(주)곳간리빙', '판매자2', '234-56-78901', '2026-서울마포-0002',
-   '010-0000-0003', 'wlsgksvheh+seller2@gmail.com', '서울 마포구 월드컵북로 1', '곳간리빙', 'gotgan-living', '<p>집을 채우는 생활용품</p>',
-   JSON_ARRAY(JSON_OBJECT('name', '세라믹 머그컵', 'subCategory', '주방', 'price', 12000),
-              JSON_OBJECT('name', '린넨 앞치마', 'subCategory', '주방', 'price', 19000),
-              JSON_OBJECT('name', '원목 도마', 'subCategory', '주방', 'price', 27000)),
-   '곳간은행', '100-0000-000002', '(주)곳간리빙', 'APPROVED', TRUE, NOW(6), NOW(6));
+  (1, 2, 1, 'INDIVIDUAL', '산골농부 박씨네', '박영철', '000-00-00006', '2026-시연-0001',
+   '064-0000-0006', 'wlsgksvheh+seller1@gmail.com', '서울 성동구 성수이로 1', '산골농부 박씨네', 'park-farm', '<p>제주 서귀포에서 3대째 귤 농사를 짓습니다. 따는 날 바로 보내드려요.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '제철 과일 선물 세트', 'subCategory', '과일', 'price', 32000), JSON_OBJECT('name', '수제 과일청 2병', 'subCategory', '꿀·잼', 'price', 18000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000001', '박영철',
+   'APPROVED', FALSE, @today - INTERVAL 983 DAY + INTERVAL 10 HOUR, @today - INTERVAL 980 DAY + INTERVAL 10 HOUR, @today - INTERVAL 983 DAY + INTERVAL 10 HOUR),
+  (2, 3, 2, 'INDIVIDUAL', '토담공방', '이수아', '000-00-00004', '2026-시연-0002',
+   '063-0000-0004', 'wlsgksvheh+seller2@gmail.com', '서울 성동구 성수이로 2', '토담공방', 'todam', '<p>전주 한옥마을 옆 작은 도자기 공방. 손으로 빚어 하나하나 모양이 다릅니다.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '손빚음 머그', 'subCategory', '식기', 'price', 28000), JSON_OBJECT('name', '리넨 패브릭 조명', 'subCategory', '조명', 'price', 54000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000002', '이수아',
+   'APPROVED', FALSE, @today - INTERVAL 458 DAY + INTERVAL 10 HOUR, @today - INTERVAL 455 DAY + INTERVAL 10 HOUR, @today - INTERVAL 458 DAY + INTERVAL 10 HOUR),
+  (11, 201, 3, 'INDIVIDUAL', '오롯이 리넨', '한지우', '000-00-00001', '2026-시연-0011',
+   '02-0000-0001', 'hello@orotlinen.example.com', '서울 성동구 성수이로 11', '오롯이 리넨', 'orot-linen', '<p>여름이 아니어도 입고 싶은 리넨. 성수동 작업실에서 직접 패턴을 뜨고 봉제합니다.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '리넨 셔츠', 'subCategory', '셔츠', 'price', 69000), JSON_OBJECT('name', '와이드 팬츠', 'subCategory', '팬츠', 'price', 59000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000011', '한지우',
+   'APPROVED', FALSE, @today - INTERVAL 615 DAY + INTERVAL 10 HOUR, @today - INTERVAL 612 DAY + INTERVAL 10 HOUR, @today - INTERVAL 615 DAY + INTERVAL 10 HOUR),
+  (12, 202, 3, 'INDIVIDUAL', '무드앤로우', '오세훈', '000-00-00002', '2026-시연-0012',
+   '070-0000-0002', 'cs@moodrow.example.com', '서울 성동구 성수이로 12', '무드앤로우', 'mood-and-row', '<p>매일 입는 옷을 더 오래. 두꺼운 원단, 단정한 핏의 베이직 웨어.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '리넨 셔츠', 'subCategory', '셔츠', 'price', 69000), JSON_OBJECT('name', '와이드 팬츠', 'subCategory', '팬츠', 'price', 59000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000012', '오세훈',
+   'APPROVED', FALSE, @today - INTERVAL 893 DAY + INTERVAL 10 HOUR, @today - INTERVAL 890 DAY + INTERVAL 10 HOUR, @today - INTERVAL 893 DAY + INTERVAL 10 HOUR),
+  (13, 203, 4, 'INDIVIDUAL', '걸음상회', '최민재', '000-00-00003', '2026-시연-0013',
+   '051-0000-0003', 'georum@georum.example.com', '서울 성동구 성수이로 13', '걸음상회', 'georum', '<p>부산 신발 공장 3대째. 오래 걸어도 편한 가죽 신발과 가방.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '가죽 로퍼', 'subCategory', '로퍼', 'price', 129000), JSON_OBJECT('name', '데일리 토트백', 'subCategory', '토트백', 'price', 89000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000013', '최민재',
+   'APPROVED', FALSE, @today - INTERVAL 1323 DAY + INTERVAL 10 HOUR, @today - INTERVAL 1320 DAY + INTERVAL 10 HOUR, @today - INTERVAL 1323 DAY + INTERVAL 10 HOUR),
+  (15, 205, 2, 'INDIVIDUAL', '볕드는집', '정다은', '000-00-00005', '2026-시연-0015',
+   '031-0000-0005', 'house@byeot.example.com', '서울 성동구 성수이로 15', '볕드는집', 'byeot-house', '<p>햇볕 잘 드는 방을 위한 조명과 패브릭.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '손빚음 머그', 'subCategory', '식기', 'price', 28000), JSON_OBJECT('name', '리넨 패브릭 조명', 'subCategory', '조명', 'price', 54000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000015', '정다은',
+   'APPROVED', FALSE, @today - INTERVAL 304 DAY + INTERVAL 10 HOUR, @today - INTERVAL 301 DAY + INTERVAL 10 HOUR, @today - INTERVAL 304 DAY + INTERVAL 10 HOUR),
+  (17, 207, 1, 'INDIVIDUAL', '로스터리 하루', '윤하루', '000-00-00007', '2026-시연-0017',
+   '02-0000-0007', 'roast@haru.example.com', '서울 성동구 성수이로 17', '로스터리 하루', 'haru-roastery', '<p>월·목 로스팅, 화·금 발송. 볶은 지 3일 이내 원두만 보냅니다.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '제철 과일 선물 세트', 'subCategory', '과일', 'price', 32000), JSON_OBJECT('name', '수제 과일청 2병', 'subCategory', '꿀·잼', 'price', 18000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000017', '윤하루',
+   'APPROVED', FALSE, @today - INTERVAL 543 DAY + INTERVAL 10 HOUR, @today - INTERVAL 540 DAY + INTERVAL 10 HOUR, @today - INTERVAL 543 DAY + INTERVAL 10 HOUR),
+  (18, 208, 5, 'INDIVIDUAL', '피부정원', '강예린', '000-00-00008', '2026-시연-0018',
+   '02-0000-0008', 'garden@skingarden.example.com', '서울 성동구 성수이로 18', '피부정원', 'skin-garden', '<p>성분은 줄이고 효과는 그대로. 민감 피부를 위한 저자극 스킨케어.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '진정 토너 200ml', 'subCategory', '스킨케어', 'price', 24000), JSON_OBJECT('name', '수분크림 50ml', 'subCategory', '스킨케어', 'price', 32000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000018', '강예린',
+   'APPROVED', FALSE, @today - INTERVAL 723 DAY + INTERVAL 10 HOUR, @today - INTERVAL 720 DAY + INTERVAL 10 HOUR, @today - INTERVAL 723 DAY + INTERVAL 10 HOUR),
+  (19, 209, 6, 'INDIVIDUAL', '데스크테리어랩', '서준호', '000-00-00009', '2026-시연-0019',
+   '070-0000-0009', 'lab@deskterior.example.com', '서울 성동구 성수이로 19', '데스크테리어랩', 'deskterior-lab', '<p>하루 8시간 앉는 책상을 위한 도구들.</p>',
+   JSON_ARRAY(JSON_OBJECT('name', '무접점 키보드', 'subCategory', '키보드', 'price', 219000), JSON_OBJECT('name', '원목 모니터 받침대', 'subCategory', '데스크', 'price', 89000)), 'FROM_5M_TO_20M', NULL, '곳간은행', '100-0000-000019', '서준호',
+   'APPROVED', FALSE, @today - INTERVAL 213 DAY + INTERVAL 10 HOUR, @today - INTERVAL 210 DAY + INTERVAL 10 HOUR, @today - INTERVAL 213 DAY + INTERVAL 10 HOUR);
 
--- 신청 이력 — 제출(PENDING) → 승인(APPROVED)
-INSERT IGNORE INTO application_history (application_history_id, store_application_id, from_status, to_status, actor_type, reason)
-VALUES
-  (1, 1, NULL,      'PENDING',  'APPLICANT', NULL),
-  (2, 1, 'PENDING', 'APPROVED', 'ADMIN',     NULL),
-  (3, 2, NULL,      'PENDING',  'APPLICANT', NULL),
-  (4, 2, 'PENDING', 'APPROVED', 'ADMIN',     NULL);
+INSERT IGNORE INTO application_history (application_history_id, store_application_id, from_status, to_status, actor_type, reason, created_at) VALUES
+  (11, 1, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 983 DAY + INTERVAL 10 HOUR),
+  (12, 1, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 980 DAY + INTERVAL 10 HOUR),
+  (21, 2, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 458 DAY + INTERVAL 10 HOUR),
+  (22, 2, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 455 DAY + INTERVAL 10 HOUR),
+  (111, 11, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 615 DAY + INTERVAL 10 HOUR),
+  (112, 11, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 612 DAY + INTERVAL 10 HOUR),
+  (121, 12, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 893 DAY + INTERVAL 10 HOUR),
+  (122, 12, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 890 DAY + INTERVAL 10 HOUR),
+  (131, 13, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 1323 DAY + INTERVAL 10 HOUR),
+  (132, 13, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 1320 DAY + INTERVAL 10 HOUR),
+  (151, 15, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 304 DAY + INTERVAL 10 HOUR),
+  (152, 15, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 301 DAY + INTERVAL 10 HOUR),
+  (171, 17, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 543 DAY + INTERVAL 10 HOUR),
+  (172, 17, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 540 DAY + INTERVAL 10 HOUR),
+  (181, 18, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 723 DAY + INTERVAL 10 HOUR),
+  (182, 18, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 720 DAY + INTERVAL 10 HOUR),
+  (191, 19, NULL, 'PENDING', 'APPLICANT', NULL, @today - INTERVAL 213 DAY + INTERVAL 10 HOUR),
+  (192, 19, 'PENDING', 'APPROVED', 'ADMIN', NULL, @today - INTERVAL 210 DAY + INTERVAL 10 HOUR);
 
--- 스토어 — 승인 시 신청서에서 복사되는 값(스토어명 · 스토어 주소 · 소개 · 담당자 휴대폰)과 같게. 표시 색 · 등급은 기본값(V2)
 INSERT IGNORE INTO store
-  (store_id, store_application_id, user_id, store_name, slug, intro, cs_phone, shipping_fee, free_shipping_threshold,
-   courier, dispatch_note, status)
+  (store_id, store_application_id, user_id, store_name, slug, intro, color, cs_phone,
+   shipping_fee, free_shipping_threshold, courier, dispatch_note, grade, status, status_reason, created_at)
 VALUES
-  (1, 1, 2, '곳간상회', 'gotgan-sanghoe', '<p>매일 고르는 제철 먹거리</p>', '010-0000-0002', 3000, 30000,
-   'CJ대한통운', '평일 14시 이전 결제 시 당일 출고', 'ACTIVE'),
-  (2, 2, 3, '곳간리빙', 'gotgan-living',  '<p>집을 채우는 생활용품</p>',   '010-0000-0003', 3000, NULL,
-   '한진택배',   '결제 후 1~2영업일 출고', 'ACTIVE');
+  (1, 1, 2, '산골농부 박씨네', 'park-farm', '<p>제주 서귀포에서 3대째 귤 농사를 짓습니다. 따는 날 바로 보내드려요.</p>', '#d0701f', '064-0000-0006',
+   3000, 30000, '우체국택배', '수확일 기준 당일 발송', 'BIG_POWER', 'ACTIVE', NULL, @today - INTERVAL 980 DAY + INTERVAL 10 HOUR),
+  (2, 2, 3, '토담공방', 'todam', '<p>전주 한옥마을 옆 작은 도자기 공방. 손으로 빚어 하나하나 모양이 다릅니다.</p>', '#8c6d4f', '063-0000-0004',
+   3500, 50000, 'CJ대한통운', '주문 제작 3~5영업일', 'POWER', 'ACTIVE', NULL, @today - INTERVAL 455 DAY + INTERVAL 10 HOUR),
+  (11, 11, 201, '오롯이 리넨', 'orot-linen', '<p>여름이 아니어도 입고 싶은 리넨. 성수동 작업실에서 직접 패턴을 뜨고 봉제합니다.</p>', '#5b6b4a', '02-0000-0001',
+   3000, 50000, 'CJ대한통운', '평일 14시 이전 결제 시 당일 출고', 'POWER', 'ACTIVE', NULL, @today - INTERVAL 612 DAY + INTERVAL 10 HOUR),
+  (12, 12, 202, '무드앤로우', 'mood-and-row', '<p>매일 입는 옷을 더 오래. 두꺼운 원단, 단정한 핏의 베이직 웨어.</p>', '#2b2b2b', '070-0000-0002',
+   0, NULL, '롯데택배', '결제 후 1~2영업일 출고', 'BIG_POWER', 'ACTIVE', NULL, @today - INTERVAL 890 DAY + INTERVAL 10 HOUR),
+  (13, 13, 203, '걸음상회', 'georum', '<p>부산 신발 공장 3대째. 오래 걸어도 편한 가죽 신발과 가방.</p>', '#7a4b2a', '051-0000-0003',
+   3000, 70000, '우체국택배', '평일 13시 이전 결제 시 당일 출고', 'BIG_POWER', 'ACTIVE', NULL, @today - INTERVAL 1320 DAY + INTERVAL 10 HOUR),
+  (15, 15, 205, '볕드는집', 'byeot-house', '<p>햇볕 잘 드는 방을 위한 조명과 패브릭.</p>', '#c08a2e', '031-0000-0005',
+   3000, 40000, '한진택배', '평일 13시 이전 결제 시 당일 출고', 'SPROUT', 'SUSPENDED', '반품 미처리 3건 — 처리 완료 후 해제', @today - INTERVAL 301 DAY + INTERVAL 10 HOUR),
+  (17, 17, 207, '로스터리 하루', 'haru-roastery', '<p>월·목 로스팅, 화·금 발송. 볶은 지 3일 이내 원두만 보냅니다.</p>', '#3d2b22', '02-0000-0007',
+   3000, 30000, 'CJ대한통운', '화 · 금 발송', 'POWER', 'ACTIVE', NULL, @today - INTERVAL 540 DAY + INTERVAL 10 HOUR),
+  (18, 18, 208, '피부정원', 'skin-garden', '<p>성분은 줄이고 효과는 그대로. 민감 피부를 위한 저자극 스킨케어.</p>', '#6f8f7a', '02-0000-0008',
+   3000, 30000, '롯데택배', '평일 15시 이전 결제 시 당일 출고', 'POWER', 'ACTIVE', NULL, @today - INTERVAL 720 DAY + INTERVAL 10 HOUR),
+  (19, 19, 209, '데스크테리어랩', 'deskterior-lab', '<p>하루 8시간 앉는 책상을 위한 도구들.</p>', '#34495e', '070-0000-0009',
+   3000, 50000, 'CJ대한통운', '평일 14시 이전 결제 시 당일 출고', 'SPROUT', 'ACTIVE', NULL, @today - INTERVAL 210 DAY + INTERVAL 10 HOUR);
 
--- 스토어 상태 이력 — 승인으로 생성 (from_status NULL)
-INSERT IGNORE INTO store_status_history (store_status_history_id, store_id, from_status, to_status, actor_type, reason)
-VALUES
-  (1, 1, NULL, 'ACTIVE', 'ADMIN', '입점 승인'),
-  (2, 2, NULL, 'ACTIVE', 'ADMIN', '입점 승인');
+INSERT IGNORE INTO store_status_history (store_status_history_id, store_id, from_status, to_status, actor_type, reason, created_at) VALUES
+  (11, 1, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 980 DAY + INTERVAL 10 HOUR),
+  (21, 2, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 455 DAY + INTERVAL 10 HOUR),
+  (111, 11, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 612 DAY + INTERVAL 10 HOUR),
+  (121, 12, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 890 DAY + INTERVAL 10 HOUR),
+  (131, 13, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 1320 DAY + INTERVAL 10 HOUR),
+  (151, 15, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 301 DAY + INTERVAL 10 HOUR),
+  (152, 15, 'ACTIVE', 'SUSPENDED', 'ADMIN', '반품 미처리 3건 — 처리 완료 후 해제', @today - INTERVAL 31 DAY + INTERVAL 10 HOUR),
+  (171, 17, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 540 DAY + INTERVAL 10 HOUR),
+  (181, 18, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 720 DAY + INTERVAL 10 HOUR),
+  (191, 19, NULL, 'ACTIVE', 'ADMIN', NULL, @today - INTERVAL 210 DAY + INTERVAL 10 HOUR);
