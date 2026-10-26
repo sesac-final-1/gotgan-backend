@@ -11,13 +11,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.store.apply.dto.request.DocumentPresignRequest;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
+import com.sesac.gojigi.store.apply.dto.response.DocumentPresignResponse;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.exception.ApplyException;
 import com.sesac.gojigi.store.apply.service.SellerApplyService;
+import com.sesac.gojigi.store.apply.service.SellerDocumentPresignService;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,14 +67,21 @@ class SellerApplyControllerTest {
             }
             """;
 
+    private static final String PRESIGN_BODY = """
+            { "files": [ { "docType": "BUSINESS_REG", "contentType": "application/pdf", "size": 482113 } ] }
+            """;
+
     @Mock
     private SellerApplyService sellerApplyService;
+
+    @Mock
+    private SellerDocumentPresignService sellerDocumentPresignService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new SellerApplyController(sellerApplyService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new SellerApplyController(sellerApplyService, sellerDocumentPresignService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -144,6 +156,47 @@ class SellerApplyControllerTest {
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
+    @Test
+    @DisplayName("서류 업로드 주소 발급 — 200, data 는 key · uploadUrl · expiresAt 목록")
+    void presignDocuments_validRequest_returns200() throws Exception {
+        // given
+        given(sellerDocumentPresignService.presign(eq(4L), any(DocumentPresignRequest.class)))
+                .willReturn(List.of(new DocumentPresignResponse("applications/4/a.pdf", "https://s3.example/put",
+                        OffsetDateTime.parse("2026-10-26T15:10:00+09:00"))));
+
+        // when · then
+        performPresign(PRESIGN_BODY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data[0].key").value("applications/4/a.pdf"))
+                .andExpect(jsonPath("$.data[0].uploadUrl").value("https://s3.example/put"))
+                .andExpect(jsonPath("$.data[0].expiresAt").value("2026-10-26T15:10:00+09:00"));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "files 누락      | { }",
+            "files 안 null   | { \"files\": [ null ] }",
+            "서류 종류 모름  | { \"files\": [ { \"docType\": \"CERT\", \"contentType\": \"application/pdf\", \"size\": 1 } ] }",
+            "형식 빈 값      | { \"files\": [ { \"docType\": \"BANK_COPY\", \"contentType\": \" \", \"size\": 1 } ] }",
+            "크기 누락       | { \"files\": [ { \"docType\": \"BANK_COPY\", \"contentType\": \"image/png\" } ] }"
+    })
+    @DisplayName("서류 업로드 주소 발급 형식 위반 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
+    void presignDocuments_invalidField_returns400(String caseName, String body) throws Exception {
+        performPresign(body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        verifyNoInteractions(sellerDocumentPresignService);
+    }
+
+    @Test
+    @DisplayName("서류 업로드 주소 발급 — X-User-Id 없음 401, 서비스를 부르지 않는다")
+    void presignDocuments_withoutUserHeader_returns401() throws Exception {
+        mockMvc.perform(post("/api/seller/apply/documents/presign").contentType(MediaType.APPLICATION_JSON).content(PRESIGN_BODY))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(sellerDocumentPresignService);
+    }
+
     private void assertInvalidInput(String body) throws Exception {
         assertThat(body).isNotEqualTo(VALID_BODY);   // 바꿀 문자열을 못 찾아 정상 본문이 그대로 가는 실수 방지
         perform(body)
@@ -154,6 +207,14 @@ class SellerApplyControllerTest {
 
     private ResultActions perform(String body) throws Exception {
         return mockMvc.perform(post("/api/seller/apply")
+                .header(CurrentUserArgumentResolver.USER_ID_HEADER, "4")
+                .header(CurrentUserArgumentResolver.USER_ROLES_HEADER, "BUYER")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
+    private ResultActions performPresign(String body) throws Exception {
+        return mockMvc.perform(post("/api/seller/apply/documents/presign")
                 .header(CurrentUserArgumentResolver.USER_ID_HEADER, "4")
                 .header(CurrentUserArgumentResolver.USER_ROLES_HEADER, "BUYER")
                 .contentType(MediaType.APPLICATION_JSON)

@@ -49,7 +49,7 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 
 ## 2. 입점 신청 — `POST /api/seller/apply` (STR-01 · 02 · 11)
 
-구매자(BUYER)가 입점 신청 화면(`/seller/apply`, 4단계 폼)을 제출합니다. 신청자는 게이트웨이가 넣는 `X-User-Id` 이고, 승인 때 `StoreApproved.userId` 로 그대로 나갑니다. 서류는 먼저 presign(`POST /api/seller/apply/documents/presign`, 다음 PR)으로 S3 에 올리고 받은 키를 보냅니다.
+구매자(BUYER)가 입점 신청 화면(`/seller/apply`, 4단계 폼)을 제출합니다. 신청자는 게이트웨이가 넣는 `X-User-Id` 이고, 승인 때 `StoreApproved.userId` 로 그대로 나갑니다. 서류는 먼저 2-1절 presign 으로 S3 에 올리고 받은 키를 보냅니다.
 
 ```json
 {
@@ -147,6 +147,42 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 - **접수번호 `applicationNo`** = `AP-{제출 연월 yyMM}-{applicationId, 3자리 이상}`. 저장하지 않고 응답마다 계산하는 **표시 전용** 값입니다. API 경로 · 식별에는 숫자 `applicationId` 를 씁니다. 번호는 달마다 001 부터 다시 시작하지 않습니다.
 - 진행 중 확인은 서비스 검증이라, 동시에 두 번 제출하면 2건이 생길 수 있습니다(제출 버튼 중복 클릭 방지로 줄임). 스토어는 승인 때 `uk_store_user_id` 가 하나만 허용하므로 나머지는 관리자가 반려합니다. 신청끼리 slug · 스토어명이 겹친 경우도 승인 때 `uk_store_slug` · `uk_store_store_name` 이 막고, 관리자가 보완요청으로 변경을 안내합니다(STR-04).
 - 이 API 는 이벤트를 발행하지 않습니다. `StoreApproved` 는 승인 API(5절)에서 발행합니다.
+
+## 2-1. 입점 서류 업로드 주소 발급 — `POST /api/seller/apply/documents/presign` (STR-02)
+
+브라우저가 비공개 seller-docs 버킷에 **직접** 올립니다(서버를 거치지 않음). product 이미지 presign(`product.md` 17절)과 같은 모양에 `docType` 만 더했습니다.
+
+```json
+{ "files": [
+    { "docType": "BUSINESS_REG",  "contentType": "application/pdf", "size": 482113 },
+    { "docType": "PRODUCT_PHOTO", "contentType": "image/jpeg",      "size": 834512 } ] }
+```
+
+**200** `data` = 요청과 **같은 순서**의 배열
+
+```json
+[ { "key": "applications/4/3f2a0c5e-7d1b-4c1e-9a1f-0b2c3d4e5f60.pdf",
+    "uploadUrl": "https://sesac-gojigi-seller-docs-4380.s3.ap-northeast-2.amazonaws.com/applications/4/...",
+    "expiresAt": "2026-10-26T15:10:00+09:00" }, ... ]
+```
+
+| 경우 | 처리 | 응답 | 화면 권장 처리 |
+|---|---|---|---|
+| `X-User-Id` 없음 | — | **401** `UNAUTHORIZED` | 로그인으로 |
+| `files` 누락 · 항목 null · 모르는 `docType` · `contentType` 빈 값 · `size` 누락 | — | **400** `INVALID_INPUT` | 호출 코드 버그 |
+| 개수가 1~13개 밖 | 발급 안 함 | **400** `APPLY_DOCUMENT_INVALID` | 나눠서 다시 요청 |
+| 형식 위반 — 서류 3종은 PDF · JPG · PNG, 상품 사진은 JPG · PNG | 발급 안 함(하나만 틀려도 전체) | **400** `APPLY_DOCUMENT_INVALID`, 메시지에 "n번째 파일" | 그 파일만 다시 고르기 |
+| 크기 0 이하 · 10MB 초과 | 발급 안 함 | **400** `APPLY_DOCUMENT_INVALID`, 메시지에 "n번째 파일" | 〃 |
+| 자격 증명을 얻지 못함 | — | **502** `EXTERNAL_API_ERROR` | 잠시 후 다시 |
+| 정상 | 키 `applications/{X-User-Id}/{UUID}.{pdf\|jpg\|png}`(확장자는 파일 이름이 아니라 `contentType` 으로), presigned PUT 10분 | **200** | 아래 업로드 순서 |
+
+**업로드 순서**: ① 이 API → ② 파일마다 `uploadUrl` 로 `PUT` — `Content-Type` 은 요청의 `contentType` 과 같게, 본문은 발급 때 말한 크기의 파일 그대로 → ③ 2절 `documents[]` 에 `{docType, key, originalName}` 으로 제출.
+
+- **`Content-Type` · `Content-Length` 가 서명에 들어갑니다.** 발급 때와 다른 형식 · 크기로 PUT 하면 S3 가 **403**(`SignatureDoesNotMatch`) — 10MB 넘는 파일은 버킷에 올라가지 않습니다. 브라우저 `fetch(url, {method: 'PUT', body: file, headers: {'Content-Type': file.type}})` 는 `Content-Length` 를 자동으로 붙이므로 따로 할 일은 없습니다. 만료(10분) 뒤 PUT 도 403 → 다시 발급.
+- **서류 구성(3종 각 1 + 사진 3~10)은 여기서 보지 않고 2절 제출 때 검사합니다.** 폼 단계마다 나눠 불러도 됩니다. 이미 스토어가 있는지 · 진행 중 신청이 있는지도 2절에서 확인합니다.
+- 2절은 S3 `HeadObject` 로 형식 · 크기를 **다시** 확인합니다(같은 기준). 이 API 는 1차 관문입니다.
+- 서명은 store 안에서 계산하므로 S3 를 호출하지 않습니다. 버킷 CORS(PUT · HEAD, vercel · `localhost:5173`) · store IRSA `s3:PutObject` 는 설정돼 있습니다.
+- 올리고 신청하지 않은 파일은 버킷에 남습니다(정리 규칙 없음 — 학습 프로젝트라 보류).
 
 ---
 
@@ -380,10 +416,10 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | `APPLY_REAPPLY_RESTRICTED` | 409 | `ApplyErrorCode` | 반려 후 30일 안에 다시 신청 (2절, STR-11) |
 | `APPLY_SLUG_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어 주소가 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
 | `APPLY_STORE_NAME_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어명이 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
-| `APPLY_DOCUMENT_INVALID` | 400 | `ApplyErrorCode` | 서류 종류 · 개수 · 형식 · 크기 · 키 위반, S3 에 없는 파일 (2절) |
+| `APPLY_DOCUMENT_INVALID` | 400 | `ApplyErrorCode` | 서류 종류 · 개수 · 형식 · 크기 · 키 위반, S3 에 없는 파일 (2절), 업로드 주소 발급의 개수 · 형식 · 크기 위반 (2-1절) |
 | `INVALID_INPUT` (공통) | 400 | `CommonErrorCode` | 경로 · 요청 형식 오류, 사유 누락 · 255자 초과 (6 · 7 · 9절) |
-| `UNAUTHORIZED` (공통) | 401 | `CommonErrorCode` | 사용자 헤더 없음 (2절) |
-| `EXTERNAL_API_ERROR` (공통) | 502 | `CommonErrorCode` | S3 확인 실패 (2절) |
+| `UNAUTHORIZED` (공통) | 401 | `CommonErrorCode` | 사용자 헤더 없음 (2 · 2-1절) |
+| `EXTERNAL_API_ERROR` (공통) | 502 | `CommonErrorCode` | S3 확인 실패 (2절), 업로드 주소 발급 실패 — 자격 증명 (2-1절) |
 
 호출하는 서비스는 404 · 400 을 자기 도메인 코드로 바꾸거나 그대로 전달하고, **서킷 실패로 세지 않습니다**(`ignore-exceptions` = `BusinessException`).
 
@@ -407,7 +443,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 
 **user (이경석)**: `StoreApproved` 는 승인 API PR 부터 발행됩니다(2절은 발행 없음). 신청 단계에서 기존 스토어 회원을 409 `APPLY_STORE_ALREADY_EXISTS` 로 막습니다(요청 4번).
 
-**frontend (박지연 — `features/store`)**: 4단계 폼 값을 2절 요청 모양으로 매핑. "모두 동의"는 필수 3개만 켜고 마케팅은 따로 체크 · 카테고리별 추가 서류 안내 제거 · 접수 완료 화면의 접수번호는 응답 `applicationNo`.
+**frontend (박지연 — `features/store`)**: 서류는 2-1절 발급 → S3 PUT → 받은 `key` 를 2절 `documents[].key` 로. 4단계 폼 값을 2절 요청 모양으로 매핑. "모두 동의"는 필수 3개만 켜고 마케팅은 따로 체크 · 카테고리별 추가 서류 안내 제거 · 접수 완료 화면의 접수번호는 응답 `applicationNo`.
 
 ## 10/20 설계 정리
 
@@ -430,6 +466,16 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 6 | 접수번호 | 컬럼 없이 `AP-{yyMM}-{id}` 계산 (V3 없음, 동시성 문제 없음). 달마다 001 부터 시작하지 않는 것은 받아들임 |
 | 7 | 약관 | 필수 3개 + 선택 1개를 객체로 받고, 저장은 `terms_agreed_at`(서버 시각) · `marketing_agreed` 두 컬럼. 약관 버전은 저장하지 않음 |
 | 8 | 폐점 판매자 재입점 | 막음 — `uk_store_user_id` · `uk_store_slug` · `uk_store_store_name` 이 폐점 스토어 행에도 걸려 승인이 실패하므로 신청 단계에서 같은 기준으로 거절. 재입점이 필요해지면 UK 를 바꾸는 V 파일 결정 필요 |
+
+## 10/26 설계 정리 (입점 서류 업로드 주소)
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | 경로 | `/api/seller/apply/documents/presign` — 2절과 같은 줄기. 게이트웨이 `/api/seller/apply/**` = BUYER 규칙(뼈대부터 있음)이라 수정 없음. 시트의 `/api/store-applications/...` 는 쓰지 않음 |
+| 2 | 모양 | product 17절처럼 여러 개를 한 번에(`files[]` → 같은 순서 배열). 서류마다 허용 형식이 달라 `docType` 추가. 원본 파일명은 받지 않음(2절 `originalName`) |
+| 3 | 만료 | 10분 — product presigned PUT · 4절 presigned GET 과 같게 |
+| 4 | 크기 서명 | `Content-Length` 를 서명에 포함 → 큰 파일은 업로드 단계에서 403. product 이미지 presign(4주차)도 같은 방식으로 맞출 예정 |
+| 5 | 검사 범위 | 개수 1~13 · 형식 · 크기만. 서류 구성 · 기존 스토어 · 진행 중 신청은 2절에서 — 발급은 가볍게 |
 
 ## 10/26 설계 정리 (관리자 내부 API)
 
