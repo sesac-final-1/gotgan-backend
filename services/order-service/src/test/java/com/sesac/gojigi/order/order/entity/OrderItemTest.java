@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
 import com.sesac.gojigi.order.order.exception.OrderException;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,6 +42,28 @@ class OrderItemTest {
         assertThat(item.getStatus()).isEqualTo(OrderItemStatus.CANCELLED);
         assertThatThrownBy(item::requestCancel).isInstanceOf(OrderException.class);
         assertThatThrownBy(OrderFixtures.item(OrderFixtures.order())::cancelled).isInstanceOf(OrderException.class);
+    }
+
+    @Test
+    @DisplayName("배송 — 발주확인 → 송장 등록(택배사 · 송장 · 발송 시각) → 배송완료(시각), 순서를 건너뛰면 409")
+    void delivery_transitions() {
+        // given
+        OrderItem item = OrderFixtures.item(OrderFixtures.order());
+        item.markPaymentDone();
+        LocalDateTime at = LocalDateTime.of(2026, 10, 26, 12, 0);
+        assertThatThrownBy(() -> item.ship("CJ대한통운", "1", at)).isInstanceOf(OrderException.class);
+
+        // when
+        item.prepare();
+        item.ship("CJ대한통운", "651200000001", at);
+        item.deliver(at.plusHours(1));
+
+        // then
+        assertThat(item.getStatus()).isEqualTo(OrderItemStatus.DELIVERED);
+        assertThat(item.getCourier()).isEqualTo("CJ대한통운");
+        assertThat(item.getShippedAt()).isEqualTo(at);
+        assertThat(item.getDeliveredAt()).isEqualTo(at.plusHours(1));
+        assertThatThrownBy(() -> item.deliver(at)).isInstanceOf(OrderException.class);
     }
 
     @Test
