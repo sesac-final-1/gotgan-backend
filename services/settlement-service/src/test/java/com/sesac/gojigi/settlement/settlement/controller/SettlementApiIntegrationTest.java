@@ -58,6 +58,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -106,6 +107,7 @@ class SettlementApiIntegrationTest {
     @Autowired EventOutboxRepository eventOutboxRepository;
     @Autowired EventOutboxService eventOutboxService;
     @Autowired JsonMapper jsonMapper;
+    @Autowired JdbcTemplate jdbcTemplate;
     @MockitoBean SnsEventPublisher snsEventPublisher;
     @MockitoBean S3Presigner s3Presigner;
     @MockitoBean S3Client s3Client;
@@ -215,7 +217,7 @@ class SettlementApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("휴면 · 정지 스토어는 집계 때 자동 보류 — 이력: 주간 집계 → 자동 보류")
+        @DisplayName("정지 스토어는 집계 때 자동 보류 — 이력: 주간 집계 → 자동 보류")
         void aggregate_heldStore_autoHeld() throws Exception {
             long storeId = store(true);
             storeStatus(storeId, "SUSPENDED", "2026-10-22T10:00:00+09:00");
@@ -341,6 +343,9 @@ class SettlementApiIntegrationTest {
             assertThat(pending.isSent()).isFalse();
             assertThat(pending.getAttemptCount()).isEqualTo(1);
             assertThat(pending.getLastError()).contains("SNS 연결 실패");
+            // created_at 은 DB 실제 시각이고 발행기는 고정 시계(10/26 10:00) 기준으로 "지난" 행만 고른다 → 실제 날짜가 고정 시각을 넘으면
+            // 새 행이 미래가 돼 안 골라짐(10/26 부터 실패). 고정 시계보다 과거로 돌려 둔다
+            jdbcTemplate.update("UPDATE event_outbox SET created_at = ? WHERE event_id = ?", "2026-10-26 09:00:00", pending.getEventId());
 
             eventOutboxService.publishPending();
 

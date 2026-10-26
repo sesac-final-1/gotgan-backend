@@ -28,7 +28,7 @@
 
 카테고리 · 스토어를 다시 켜면 상품은 별도 작업 없이 원래대로 보입니다.
 
-`is_store_active` 는 `StoreStatusChanged` 의 `status` 가 **`ACTIVE` 일 때만 TRUE** 입니다. 그 밖의 값(`DORMANT` · `SUSPENDED`, 나중에 생길 수 있는 값 포함)은 모두 FALSE.
+`is_store_active` 는 `StoreStatusChanged` 의 `status` 가 **`ACTIVE` 일 때만 TRUE** 입니다. 그 밖의 값(`SUSPENDED` · `CLOSED`, 나중에 생길 수 있는 값 포함)은 모두 FALSE.
 
 ---
 
@@ -275,7 +275,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 | 경우 | 응답 | 화면 |
 |---|---|---|
 | 판매 중 | **200** `purchasable: true` | 품절 옵션만 비활성 |
-| 판매중지 · 강제 판매중지 · 카테고리 꺼짐 · 스토어 휴면/정지 | **200** `purchasable: false` | "현재 구매할 수 없는 상품" · 담기 · 구매 버튼 비활성 |
+| 판매중지 · 강제 판매중지 · 카테고리 꺼짐 · 스토어 정지/폐점 | **200** `purchasable: false` | "현재 구매할 수 없는 상품" · 담기 · 구매 버튼 비활성 |
 | 없거나 삭제된 상품 | **404** `PRODUCT_NOT_FOUND` | 없는 상품 안내 |
 
 - `images`: 첫 번째가 대표, 최대 5장.

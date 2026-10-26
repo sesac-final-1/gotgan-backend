@@ -13,12 +13,11 @@
 | 시각 | ISO-8601 오프셋 포함 (Asia/Seoul) |
 | 인가 | 공개 GET: 로그인 없음 / 입점 신청: BUYER / 판매자: SELLER + `X-Store-Id` 헤더의 스토어만 / 내부: 헤더 없음 |
 
-### 스토어 상태 `status` (10/20 결정)
+### 스토어 상태 `status` (10/20 결정 · 휴면 없음 10/23)
 
 | 값 | 뜻 | 거는 쪽 → 푸는 쪽 |
 |---|---|---|
 | `ACTIVE` | 운영 중 — 승인 직후 상태 | — |
-| `DORMANT` | 휴면 | 판매자 → 판매자 |
 | `SUSPENDED` | 정지 | 관리자 → 관리자 (사유 필수) |
 | `CLOSED` | 폐점 — **되돌릴 수 없는 마지막 상태**. 판매자 탈퇴 조건 | 판매자 (폐점 API 는 다음 PR) |
 
@@ -172,7 +171,7 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 
 **user (이경석)**
 - `MockStoreClient` 를 `@HttpExchange` 클라이언트(`GET /internal/stores/{storeId}`)로 교체. 서킷 브레이커 인스턴스 이름은 **`store`**, 재시도 가능(GET).
-- user-service `StoreStatus` enum 값(ACTIVE · DORMANT · SUSPENDED · CLOSED)은 이 문서와 같습니다. 바꿀 것 없음.
+- user-service `StoreStatus` enum 값(ACTIVE · SUSPENDED · CLOSED)은 이 문서와 같습니다. 바꿀 것 없음.
 - 지금은 폐점 API 가 없어 `CLOSED` 스토어가 생기지 않습니다 → 판매자 탈퇴는 폐점 API PR 전까지 계속 409 `USER_SELLER_STORE_NOT_CLOSED`.
 
 **admin (구지훈)**: 스토어 관리(STR-14) 상세에서 1절 사용 가능. 목록 · 상태 이력 필드는 해당 PR 에서 추가.

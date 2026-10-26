@@ -24,7 +24,7 @@ public class InternalStoreController {
     private final StoreQueryService storeQueryService;
 
     @Operation(summary = "스토어 상세 (상태 포함)",
-            description = "인가: 내부. 판매자 탈퇴 전 폐점 확인 등. status = ACTIVE · DORMANT · SUSPENDED · CLOSED. "
+            description = "인가: 내부. 판매자 탈퇴 전 폐점 확인 등. status = ACTIVE · SUSPENDED · CLOSED. "
                     + "없는 스토어는 404 STORE_NOT_FOUND")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),

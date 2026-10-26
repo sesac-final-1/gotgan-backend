@@ -1,5 +1,5 @@
 -- 곳간(GOTGAN) 전체 ERD — ERD Cloud 가져오기용 (자동 생성: node docs/erd/build-erd.mjs, 직접 수정 금지)
--- 생성: 2026-10-23 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
+-- 생성: 2026-10-26 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
 -- 서비스마다 DB 가 따로라 서비스 사이 참조(user_id · order_item_id 등 "논리 참조")는 FK 로 그리지 않는다 — 컬럼 COMMENT 참고
 -- 제외: shedlock (스케줄러 잠금). 여러 DB 에 있는 같은 이름 테이블은 {db}_ 접두어
 
@@ -241,7 +241,7 @@ CREATE TABLE `productdb_processed_event` (
 );
 
 -- ============================================================ orderdb (order-service · 담당 이경석)
--- 원본: V1__init.sql · V2__order_saga_outbox.sql · V3__saga_retry.sql
+-- 원본: V1__init.sql · V2__order_saga_outbox.sql · V3__saga_retry.sql · V4__order_item_ordered.sql · V5__order_claim_restore_point.sql
 
 -- 장바구니 항목 (원본, Redis 캐시의 출처)
 CREATE TABLE `cart_item` (
@@ -311,7 +311,7 @@ CREATE TABLE `order_item` (
 	`earned_point`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '적립 포인트 (원) = (item_amt - used_point)의 5% — 취소 · 반품 시 회수액',
 	`courier`	VARCHAR(30)	NULL	COMMENT '택배사',
 	`tracking_no`	VARCHAR(40)	NULL	COMMENT '송장번호',
-	`status`	VARCHAR(30)	NOT NULL	DEFAULT 'PAYMENT_DONE'	COMMENT 'PAYMENT_DONE / PREPARING / SHIPPING / DELIVERED / CONFIRMED / CANCEL_REQUESTED / CANCELLED / RETURN_REQUESTED / RETURNED / EXCHANGE_REQUESTED',
+	`status`	VARCHAR(30)	NOT NULL	DEFAULT 'ORDERED'	COMMENT 'ORDERED / PAYMENT_DONE / PREPARING / SHIPPING / DELIVERED / CONFIRMED / CANCEL_REQUESTED / CANCELLED / RETURN_REQUESTED / RETURNED / EXCHANGE_REQUESTED',
 	`shipped_at`	DATETIME(6)	NULL	COMMENT '발송 시각',
 	`delivered_at`	DATETIME(6)	NULL	COMMENT '배송 완료 시각',
 	`confirmed_at`	DATETIME(6)	NULL	COMMENT '구매확정 시각 — 정산 기준일',
@@ -338,7 +338,7 @@ CREATE TABLE `order_claim` (
 	`order_item_id`	BIGINT	NOT NULL	COMMENT 'order_item.order_item_id',
 	`requester_id`	BIGINT	NOT NULL	COMMENT 'user-service users.user_id (논리 참조) — 요청한 구매자',
 	`claim_type`	VARCHAR(20)	NOT NULL	COMMENT 'CANCEL / RETURN / EXCHANGE',
-	`reason_code`	VARCHAR(30)	NOT NULL	COMMENT 'CHANGE_OF_MIND / DEFECTIVE / WRONG_DELIVERY / DELAYED ...',
+	`reason_code`	VARCHAR(30)	NOT NULL	COMMENT 'CHANGE_OF_MIND / DEFECTIVE / WRONG_DELIVERY / DELAYED / ETC',
 	`reason_detail`	VARCHAR(500)	NULL	COMMENT '상세 사유 (구매자 입력)',
 	`reject_reason`	VARCHAR(500)	NULL	COMMENT '판매자 거부 사유',
 	`refund_amt`	BIGINT	NULL	COMMENT '환불 금액 (원) — 교환이면 NULL (OrderItemCancelled · Returned.refundAmt)',
@@ -356,7 +356,7 @@ CREATE TABLE `saga_instance` (
 	`order_claim_id`	BIGINT	NULL	COMMENT 'order_claim.order_claim_id — 취소 · 반품 Saga일 때만',
 	`saga_id`	CHAR(36)	NOT NULL	COMMENT 'UUID — Saga 참여자 API(user · product · payment) 멱등 키',
 	`saga_type`	VARCHAR(30)	NOT NULL	COMMENT 'PLACE_ORDER / CANCEL_ITEM / RETURN_ITEM',
-	`current_step`	VARCHAR(30)	NOT NULL	COMMENT 'ORDER_CREATED / POINT_USED / STOCK_RESERVED / PAYMENT_READY / PAYMENT_VERIFIED / DONE',
+	`current_step`	VARCHAR(30)	NOT NULL	COMMENT 'PLACE_ORDER: ORDER_CREATED / POINT_USED / STOCK_RESERVED / PAYMENT_READY / PAYMENT_VERIFIED / DONE, CANCEL_ITEM · RETURN_ITEM: PAYMENT_CANCEL_REQUESTED / PAYMENT_CANCELLED / STOCK_RESTORED / POINT_RESTORED / DONE',
 	`last_error`	VARCHAR(500)	NULL	COMMENT '마지막 실패 사유',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'STARTED'	COMMENT 'STARTED / COMPENSATING / COMPLETED / COMPENSATED / FAILED',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
@@ -412,7 +412,7 @@ CREATE TABLE `payment_cancel` (
 );
 
 -- ============================================================ settlementdb (settlement-service · 담당 구지훈)
--- 원본: V1__init.sql · V2__settlement_store_processed_event.sql · V3__settlement_commission_payout.sql · V4__settlement_history_product_name.sql · V5__settlement_store_seller_email.sql · V6__settlement_carried_over_count.sql · V7__event_outbox.sql
+-- 원본: V1__init.sql · V2__settlement_store_processed_event.sql · V3__settlement_commission_payout.sql · V4__settlement_history_product_name.sql · V5__settlement_store_seller_email.sql · V6__settlement_carried_over_count.sql · V7__event_outbox.sql · V8__remove_dormant_comments.sql
 
 -- 정산용 스토어 스냅샷 (StoreApproved · StoreStatusChanged)
 CREATE TABLE `settlement_store` (
@@ -423,7 +423,7 @@ CREATE TABLE `settlement_store` (
 	`bank_name`	VARCHAR(50)	NULL	COMMENT 'StoreApproved 스냅샷 — 정산 계좌 은행',
 	`account_number`	VARCHAR(50)	NULL	COMMENT 'StoreApproved 스냅샷 — 정산 계좌번호',
 	`account_holder`	VARCHAR(50)	NULL	COMMENT 'StoreApproved 스냅샷 — 예금주',
-	`store_status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT 'ACTIVE / DORMANT / SUSPENDED — ACTIVE 가 아니면 지급 보류',
+	`store_status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT 'ACTIVE / SUSPENDED / CLOSED — ACTIVE 가 아니면 지급 보류',
 	`store_status_changed_at`	DATETIME(6)	NULL	COMMENT '마지막으로 반영한 StoreStatusChanged 의 occurredAt — 이보다 오래된 이벤트는 무시 (SQS 순서 미보장)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
@@ -460,7 +460,7 @@ CREATE TABLE `settlement` (
 	`payment_fee_amt`	BIGINT	NOT NULL	COMMENT '결제수수료 (원) = Σ payment_fee_amt',
 	`payout_amt`	BIGINT	NOT NULL	COMMENT '지급액 (원) = 매출 − 판매수수료 − 결제수수료',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'SCHEDULED'	COMMENT 'SCHEDULED(지급예정) / HELD(지급보류) / PAID(지급완료)',
-	`hold_reason`	VARCHAR(255)	NULL	COMMENT '보류 사유 — 스토어 휴면 · 정지(자동) 또는 관리자 입력',
+	`hold_reason`	VARCHAR(255)	NULL	COMMENT '보류 사유 — 스토어 정지 · 폐점(자동) 또는 관리자 입력',
 	`scheduled_pay_date`	DATE	NOT NULL	COMMENT '지급 예정일 (KST)',
 	`held_at`	DATETIME(6)	NULL	COMMENT '보류 시각',
 	`paid_at`	DATETIME(6)	NULL	COMMENT '지급 완료 시각 — SettlementPaid 발행 기준',
@@ -505,7 +505,7 @@ CREATE TABLE `settlement_history` (
 	`settlement_id`	BIGINT	NOT NULL,
 	`from_status`	VARCHAR(20)	NULL	COMMENT '변경 전 상태 — 집계로 생성될 때만 NULL',
 	`to_status`	VARCHAR(20)	NOT NULL	COMMENT '변경 후 상태 (SCHEDULED / HELD / PAID)',
-	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'SYSTEM(주간 집계 · 스토어 휴면/정지 자동 보류) / ADMIN — 관리자 ID는 남기지 않음 (storedb 이력과 같은 규칙)',
+	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'SYSTEM(주간 집계 · 스토어 정지/폐점 자동 보류) / ADMIN — 관리자 ID는 남기지 않음 (storedb 이력과 같은 규칙)',
 	`reason`	VARCHAR(255)	NULL	COMMENT '보류 · 해제 사유',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '상태가 바뀐 시각'
 );

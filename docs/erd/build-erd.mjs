@@ -69,6 +69,15 @@ for (const [svc, db, owner] of SERVICES) {
       const at = after ? table.columns.findIndex((c) => c.col === after) + 1 : table.columns.length;
       table.columns.splice(at || table.columns.length, 0, column);
     }
+    // 컬럼 정의 · 주석 변경 (ALTER TABLE t MODIFY COLUMN ...) — 자리는 그대로, 정의만 바꿈
+    for (const m of sql.matchAll(/ALTER TABLE\s+(\w+)\s+MODIFY COLUMN\s+([^;]+);/g)) {
+      const table = tables.find((t) => t.name === m[1]);
+      if (!table) continue;
+      const clause = m[2].split(/,\s*\n\s*(?:ADD|MODIFY|DROP)\b/i)[0]; // 한 ALTER 에 여러 절이면 첫 절(MODIFY)만
+      const [column] = parseTable(m[1], clause.replace(/\s+/g, ' ').trim(), '').columns;
+      const at = table.columns.findIndex((c) => c.col === column.col);
+      if (at >= 0) table.columns[at] = column;
+    }
   }
   schemas.push({ svc, db, owner, files, tables });
 }
