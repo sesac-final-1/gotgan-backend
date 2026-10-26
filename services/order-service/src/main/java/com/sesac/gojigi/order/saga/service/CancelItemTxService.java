@@ -1,32 +1,25 @@
 package com.sesac.gojigi.order.saga.service;
 
 import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
-import com.sesac.gojigi.order.claim.entity.ClaimStatus;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
 import com.sesac.gojigi.order.claim.entity.OrderClaim;
-import com.sesac.gojigi.order.claim.exception.ClaimErrorCode;
-import com.sesac.gojigi.order.claim.exception.ClaimException;
 import com.sesac.gojigi.order.claim.repository.OrderClaimRepository;
+import com.sesac.gojigi.order.claim.service.ClaimRefundPolicy;
+import com.sesac.gojigi.order.claim.service.ClaimRefundPolicy.Refund;
+import com.sesac.gojigi.order.claim.service.ClaimTxService;
+import com.sesac.gojigi.order.claim.service.ClaimTxService.ClaimTarget;
 import com.sesac.gojigi.order.order.entity.ActorType;
 import com.sesac.gojigi.order.order.entity.Order;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderItemHistory;
 import com.sesac.gojigi.order.order.entity.OrderItemStatus;
-import com.sesac.gojigi.order.order.entity.OrderStatus;
-import com.sesac.gojigi.order.order.entity.OrderStoreShipment;
-import com.sesac.gojigi.order.order.exception.OrderErrorCode;
-import com.sesac.gojigi.order.order.exception.OrderException;
 import com.sesac.gojigi.order.order.repository.OrderItemHistoryRepository;
 import com.sesac.gojigi.order.order.repository.OrderItemRepository;
-import com.sesac.gojigi.order.order.repository.OrderRepository;
-import com.sesac.gojigi.order.order.repository.OrderStoreShipmentRepository;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
 import com.sesac.gojigi.order.saga.entity.SagaType;
 import com.sesac.gojigi.order.saga.repository.SagaInstanceRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -41,17 +34,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CancelItemTxService {
 
-    /** 진행 중 클레임 — 요청됐거나 승인 후 환불 · 재배송 중 */
-    private static final Set<ClaimStatus> OPEN = Set.of(ClaimStatus.REQUESTED, ClaimStatus.APPROVED);
-    /** 환불했거나 환불 중인 클레임 — 남은 결제 금액 계산에서 빼는 금액 */
-    private static final Set<ClaimStatus> REFUNDING = Set.of(ClaimStatus.APPROVED, ClaimStatus.COMPLETED);
-    /** 스토어 배송이 더 이상 없는 상태 — 이 상품주문이 스토어 마지막인지 볼 때 */
-    private static final Set<OrderItemStatus> NOT_SHIPPING = Set.of(OrderItemStatus.CANCEL_REQUESTED,
-            OrderItemStatus.CANCELLED);
-
-    private final OrderRepository orderRepository;
+    private final ClaimTxService claimTx;
     private final OrderItemRepository orderItemRepository;
-    private final OrderStoreShipmentRepository shipmentRepository;
     private final OrderItemHistoryRepository historyRepository;
     private final OrderClaimRepository claimRepository;
     private final SagaInstanceRepository sagaInstanceRepository;
@@ -65,34 +49,22 @@ public class CancelItemTxService {
 
     /**
      * 취소 접수 — 클레임(자동 승인) · 상품주문 CANCEL_REQUESTED · 이력 · 취소 Saga 를 한 트랜잭션으로.
-     * 환불 = 현금 min(상품주문 금액 - 사용 포인트 + 스토어 마지막이면 배송비, 남은 결제 금액), 현금으로 못 돌려준 몫 + 사용 포인트는 포인트로.
-     * 주문 행을 잠가 같은 주문의 취소가 동시에 와도 남은 금액 · 스토어 마지막 여부를 차례로 계산한다.
+     * 환불은 ClaimRefundPolicy.cancel — 스토어 마지막 상품주문이면 배송비까지, 남은 결제 금액을 넘는 몫은 포인트로.
+     * ClaimTxService.lock 이 주문 행을 잠가 같은 주문의 취소가 동시에 와도 남은 금액 · 스토어 마지막 여부를 차례로 계산한다.
      */
     @Transactional
     public CancelContext open(Long buyerId, String orderNo, Long orderItemId, ClaimReasonCode reasonCode,
                               String reasonDetail) {
-        Order order = orderRepository.findMineForUpdate(orderNo, buyerId)
-                .orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
-        List<OrderItem> items = orderItemRepository.findByOrderIdOrderByIdAsc(order.getId());
-        OrderItem item = items.stream().filter(i -> i.getId().equals(orderItemId)).findFirst()
-                .orElseThrow(() -> new ClaimException(ClaimErrorCode.CLAIM_ITEM_NOT_FOUND));
-        if (claimRepository.existsByOrderItemIdAndStatusIn(orderItemId, OPEN)) {
-            throw new ClaimException(ClaimErrorCode.CLAIM_IN_PROGRESS);
-        }
-        if (order.getStatus() != OrderStatus.PAID || item.getStatus() != OrderItemStatus.PAYMENT_DONE) {
-            throw new ClaimException(ClaimErrorCode.CLAIM_NOT_CANCELLABLE);   // 배송준비 취소 요청(CLM-02) · 반품은 별도
-        }
-
-        long itemCash = item.getItemAmt() - item.getUsedPoint();
-        long shippingFee = lastOfStore(items, item) ? storeShippingFee(order, item) : 0L;
-        long cashLeft = order.getPayAmt() - claimRepository.sumRefundAmt(order.getId(), REFUNDING);
-        long refundAmt = Math.min(itemCash + shippingFee, cashLeft);
-        long restorePoint = item.getUsedPoint() + (itemCash + shippingFee - refundAmt);   // 배송비를 포인트로 냈던 몫
+        ClaimTarget target = claimTx.lock(buyerId, orderNo, orderItemId, ClaimType.CANCEL);
+        Order order = target.order();
+        OrderItem item = target.item();
+        Refund refund = ClaimRefundPolicy.cancel(item.getItemAmt(), item.getUsedPoint(),
+                target.storeShippingFeeIfLast(), target.cashLeft());
 
         LocalDateTime now = LocalDateTime.now(clock);
         OrderClaim claim = OrderClaim.builder().orderItem(item).requesterId(buyerId).claimType(ClaimType.CANCEL)
-                .reasonCode(reasonCode).reasonDetail(reasonDetail).refundAmt(refundAmt).restorePoint(restorePoint)
-                .requestedAt(now).build();
+                .reasonCode(reasonCode).reasonDetail(reasonDetail).refundAmt(refund.refundAmt())
+                .restorePoint(refund.restorePoint()).requestedAt(now).build();
         claim.approve(now);   // 결제완료 단계 취소는 판매자 승인 없이 즉시
         claimRepository.save(claim);
         item.requestCancel();
@@ -134,18 +106,6 @@ public class CancelItemTxService {
             order.markCancelled();
         }
         saga.complete();
-    }
-
-    /** 같은 스토어의 다른 상품주문이 모두 취소됐거나 취소 중이면 — 이 상품주문이 마지막이라 배송할 게 없다 */
-    private static boolean lastOfStore(List<OrderItem> items, OrderItem item) {
-        return items.stream()
-                .filter(i -> i.getStoreId().equals(item.getStoreId()) && !i.getId().equals(item.getId()))
-                .allMatch(i -> NOT_SHIPPING.contains(i.getStatus()));
-    }
-
-    private long storeShippingFee(Order order, OrderItem item) {
-        return shipmentRepository.findByOrderIdAndStoreId(order.getId(), item.getStoreId())
-                .map(OrderStoreShipment::getShippingFee).orElse(0L);
     }
 
     private static CancelContext context(SagaInstance saga, OrderClaim claim, OrderItem item, Order order) {

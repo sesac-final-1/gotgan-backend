@@ -4,17 +4,21 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.order.claim.dto.response.ClaimPreviewResponse;
 import com.sesac.gojigi.order.claim.dto.response.ClaimResponse;
+import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
 import com.sesac.gojigi.order.claim.entity.ClaimStatus;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
 import com.sesac.gojigi.order.claim.exception.ClaimErrorCode;
 import com.sesac.gojigi.order.claim.exception.ClaimException;
+import com.sesac.gojigi.order.claim.service.ClaimService;
 import com.sesac.gojigi.order.saga.service.CancelOrderItemSaga;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,11 +40,14 @@ class ClaimControllerTest {
     @Mock
     private CancelOrderItemSaga cancelOrderItemSaga;
 
+    @Mock
+    private ClaimService claimService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new ClaimController(cancelOrderItemSaga))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ClaimController(cancelOrderItemSaga, claimService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -62,6 +69,46 @@ class ClaimControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("취소를 접수했습니다. 환불을 처리하고 있어요."))
                 .andExpect(jsonPath("$.data.status").value("APPROVED"));
+    }
+
+    @Test
+    @DisplayName("반품 · 교환 — ClaimService 로 접수, 201 REQUESTED · 유형별 안내")
+    void create_returnAndExchange() throws Exception {
+        given(claimService.requestReturnOrExchange(eq(4L), eq("20261023-000001"), any()))
+                .willReturn(new ClaimResponse(791L, 456L, ClaimType.RETURN, ClaimStatus.REQUESTED, 12_000L, 2_000L))
+                .willReturn(new ClaimResponse(792L, 456L, ClaimType.EXCHANGE, ClaimStatus.REQUESTED, 0L, 0L));
+
+        mockMvc.perform(post(URL).header("X-User-Id", "4").contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY.replace("CANCEL", "RETURN")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value("반품을 신청했습니다. 판매자 확인 후 회수해 드려요."))
+                .andExpect(jsonPath("$.data.refundAmt").value(12000));
+        mockMvc.perform(post(URL).header("X-User-Id", "4").contentType(MediaType.APPLICATION_JSON)
+                        .content(BODY.replace("CANCEL", "EXCHANGE")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value("교환을 신청했습니다. 판매자 확인 후 회수해 드려요."));
+        verifyNoInteractions(cancelOrderItemSaga);
+    }
+
+    @Test
+    @DisplayName("환불 예정액 — 유형 · 사유로 계산, 신청할 수 없으면 신청과 같은 409")
+    void preview() throws Exception {
+        given(claimService.preview(4L, "20261023-000001", 456L, ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND))
+                .willReturn(new ClaimPreviewResponse(456L, ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND, 20_000L,
+                        -6_000L, false, 12_000L, 2_000L, 900L));
+        given(claimService.preview(4L, "20261023-000001", 457L, ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND))
+                .willThrow(new ClaimException(ClaimErrorCode.CLAIM_NOT_RETURNABLE));
+
+        mockMvc.perform(get(URL + "/preview").header("X-User-Id", "4")
+                        .param("orderItemId", "456").param("type", "RETURN").param("reasonCode", "CHANGE_OF_MIND"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shippingFee").value(-6000))
+                .andExpect(jsonPath("$.data.refundAmt").value(12000))
+                .andExpect(jsonPath("$.data.sellerFault").value(false));
+        mockMvc.perform(get(URL + "/preview").header("X-User-Id", "4")
+                        .param("orderItemId", "457").param("type", "RETURN").param("reasonCode", "CHANGE_OF_MIND"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CLAIM_NOT_RETURNABLE"));
     }
 
     @Test

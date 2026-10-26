@@ -15,6 +15,8 @@ public enum ClaimErrorCode implements ErrorCode {
     CLAIM_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "주문 상품을 찾을 수 없습니다."),
     /** 결제완료가 아닌 상품주문 · 결제 완료가 아닌 주문 — 즉시 취소할 수 없음 */
     CLAIM_NOT_CANCELLABLE(HttpStatus.CONFLICT, "지금은 취소할 수 없는 상품입니다."),
+    /** 배송완료가 아니거나 배송완료 후 반품 · 교환 기간(7일)이 지남 · 구매확정됨 */
+    CLAIM_NOT_RETURNABLE(HttpStatus.CONFLICT, "배송완료 후 7일 이내에만 반품 · 교환할 수 있어요."),
     /** 이 상품주문에 진행 중인 클레임이 이미 있음 (한 상품주문에 진행 중 클레임 1개 — CLM-06) */
     CLAIM_IN_PROGRESS(HttpStatus.CONFLICT, "이미 처리 중인 요청이 있습니다."),
     /** 지금 클레임 상태에서 할 수 없는 변경 — 서버 버그 또는 동시 처리 */

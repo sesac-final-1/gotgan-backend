@@ -7,6 +7,7 @@ import com.sesac.gojigi.order.order.exception.OrderErrorCode;
 import com.sesac.gojigi.order.order.exception.OrderException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /** 상품주문 상태 전이 — 주문완료(ORDERED)로 시작해 결제 완료 때만 PAYMENT_DONE */
 class OrderItemTest {
@@ -40,6 +41,25 @@ class OrderItemTest {
         assertThat(item.getStatus()).isEqualTo(OrderItemStatus.CANCELLED);
         assertThatThrownBy(item::requestCancel).isInstanceOf(OrderException.class);
         assertThatThrownBy(OrderFixtures.item(OrderFixtures.order())::cancelled).isInstanceOf(OrderException.class);
+    }
+
+    @Test
+    @DisplayName("반품 · 교환 신청 — 배송완료에서만")
+    void returnAndExchange_onlyFromDelivered() {
+        // given
+        OrderItem returning = OrderFixtures.item(OrderFixtures.order());
+        OrderItem exchanging = OrderFixtures.item(OrderFixtures.order());
+        ReflectionTestUtils.setField(returning, "status", OrderItemStatus.DELIVERED);
+        ReflectionTestUtils.setField(exchanging, "status", OrderItemStatus.DELIVERED);
+
+        // when
+        returning.requestReturn();
+        exchanging.requestExchange();
+
+        // then
+        assertThat(returning.getStatus()).isEqualTo(OrderItemStatus.RETURN_REQUESTED);
+        assertThat(exchanging.getStatus()).isEqualTo(OrderItemStatus.EXCHANGE_REQUESTED);
+        assertThatThrownBy(OrderFixtures.item(OrderFixtures.order())::requestReturn).isInstanceOf(OrderException.class);
     }
 
     @Test
