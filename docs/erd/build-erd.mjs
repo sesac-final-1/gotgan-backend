@@ -60,23 +60,26 @@ for (const [svc, db, owner] of SERVICES) {
     for (const m of sql.matchAll(/CREATE TABLE\s+(\w+)\s*\(\n([\s\S]*?)\n\)([^;]*);/g)) {
       if (!SKIP_TABLES.has(m[1])) tables.push(parseTable(m[1], m[2], m[3]));
     }
-    // 이후 버전의 컬럼 추가 (ALTER TABLE t ADD COLUMN ... [AFTER x]) — 머지된 마이그레이션은 수정하지 않으므로
-    for (const m of sql.matchAll(/ALTER TABLE\s+(\w+)\s+ADD COLUMN\s+([^;]+);/g)) {
+    // 이후 버전의 ALTER TABLE — 머지된 마이그레이션은 수정하지 않으므로 ADD COLUMN([AFTER x]) · MODIFY COLUMN 을 절 단위로 반영.
+    // 한 문장에 여러 절(ADD · MODIFY · ADD INDEX …)이 섞일 수 있어 줄 주석을 지우고 "쉼표 + 줄바꿈 + 다음 절 키워드"로 나눈다. 인덱스 · 제약은 그리지 않음
+    for (const m of sql.matchAll(/ALTER TABLE\s+(\w+)\s+([^;]+);/g)) {
       const table = tables.find((t) => t.name === m[1]);
       if (!table) continue;
-      const after = /\sAFTER\s+(\w+)\s*$/i.exec(m[2].trim())?.[1];
-      const [column] = parseTable(m[1], m[2].replace(/\sAFTER\s+\w+\s*$/i, '').replace(/\s+/g, ' ').trim(), '').columns;
-      const at = after ? table.columns.findIndex((c) => c.col === after) + 1 : table.columns.length;
-      table.columns.splice(at || table.columns.length, 0, column);
-    }
-    // 컬럼 정의 · 주석 변경 (ALTER TABLE t MODIFY COLUMN ...) — 자리는 그대로, 정의만 바꿈
-    for (const m of sql.matchAll(/ALTER TABLE\s+(\w+)\s+MODIFY COLUMN\s+([^;]+);/g)) {
-      const table = tables.find((t) => t.name === m[1]);
-      if (!table) continue;
-      const clause = m[2].split(/,\s*\n\s*(?:ADD|MODIFY|DROP)\b/i)[0]; // 한 ALTER 에 여러 절이면 첫 절(MODIFY)만
-      const [column] = parseTable(m[1], clause.replace(/\s+/g, ' ').trim(), '').columns;
-      const at = table.columns.findIndex((c) => c.col === column.col);
-      if (at >= 0) table.columns[at] = column;
+      const body = m[2].replace(/--[^\n]*/g, '');
+      for (const clause of body.split(/,\s*\n\s*(?=(?:ADD|MODIFY|DROP|CHANGE|RENAME)\b)/i)) {
+        const c = /^\s*(ADD|MODIFY)\s+COLUMN\s+([\s\S]+)$/i.exec(clause);
+        if (!c) continue;
+        const def = c[2].replace(/\s+/g, ' ').trim();
+        const after = /\sAFTER\s+(\w+)$/i.exec(def)?.[1];
+        const [column] = parseTable(m[1], def.replace(/\sAFTER\s+\w+$/i, ''), '').columns;
+        const existing = table.columns.findIndex((col) => col.col === column.col);
+        if (c[1].toUpperCase() === 'MODIFY') {
+          if (existing >= 0) table.columns[existing] = column; // 자리는 그대로, 정의만 바꿈
+        } else {
+          const at = after ? table.columns.findIndex((col) => col.col === after) + 1 : table.columns.length;
+          table.columns.splice(at || table.columns.length, 0, column);
+        }
+      }
     }
   }
   schemas.push({ svc, db, owner, files, tables });
