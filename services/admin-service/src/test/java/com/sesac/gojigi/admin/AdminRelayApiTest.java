@@ -16,6 +16,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.admin.user.client.UserClient;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,10 +51,13 @@ class AdminRelayApiTest {
     @Autowired JsonMapper json;
     @MockitoBean UserClient userClient;
     @MockitoBean SettlementClient settlementClient;
+    @Autowired CircuitBreakerRegistry circuitBreakers;
 
+    /** 목 · 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
     @BeforeEach
     void resetMocks() {
         reset(userClient, settlementClient);
+        circuitBreakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
     }
 
     private ApiResponse<JsonNode> ok(String data) {
@@ -111,6 +116,11 @@ class AdminRelayApiTest {
                         .content("{\"status\":\"ACTIVE\",\"reason\":\"해제\"}"))
                 .andExpect(status().isBadGateway());
         verify(userClient, times(1)).changeStatus(eq(ADMIN_ID), eq(4L), any());
+
+        when(userClient.list(ADMIN_ID, null, null, null, null)).thenThrow(new ResourceAccessException("connect timed out"));
+        mockMvc.perform(get("/api/admin/users").header("X-User-Id", ADMIN_ID)).andExpect(status().isBadGateway());
+        when(userClient.points(ADMIN_ID, 4L, null, null)).thenThrow(new ResourceAccessException("connect timed out"));
+        mockMvc.perform(get("/api/admin/users/4/points").header("X-User-Id", ADMIN_ID)).andExpect(status().isBadGateway());
     }
 
     @Test
