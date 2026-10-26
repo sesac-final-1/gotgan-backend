@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class SettlementQueryService {
 
     private static final int RECENT_WEEKS = 8;
+    private static final int TOP_STORES = 10;
 
     private final SettlementRepository settlementRepository;
     private final SettlementItemRepository settlementItemRepository;
@@ -99,10 +100,41 @@ public class SettlementQueryService {
         long commissionThisMonth = settlementItemRepository
                 .findByConfirmedAtGreaterThanEqualAndConfirmedAtLessThan(monthStart.atStartOfDay(), monthStart.plusMonths(1).atStartOfDay())
                 .stream().mapToLong(SettlementItem::getCommissionAmt).sum();
+        LocalDate salesFrom = SettlementWeek.of(LocalDate.now(clock)).minusWeeks(RECENT_WEEKS - 1L).start();
+        List<SettlementItem> recent = settlementItemRepository.findByConfirmedAtGreaterThanEqualAndConfirmedAtLessThan(
+                salesFrom.atStartOfDay(), LocalDate.now(clock).plusDays(1).atStartOfDay());
         return new SettlementStatsResponse(null, new SettlementStatsResponse.PlatformStats(
                 count(unpaid, SettlementStatus.SCHEDULED), sum(unpaid, SettlementStatus.SCHEDULED),
                 count(unpaid, SettlementStatus.HELD), sum(unpaid, SettlementStatus.HELD),
-                paidThisMonth, commissionThisMonth));
+                paidThisMonth, commissionThisMonth, salesFrom, categorySales(recent), topStores(recent)));
+    }
+
+    /** 관리자 대시보드 "카테고리별 거래액" — 구매확정일 기준 (settlement.md 대시보드 기준) */
+    private static List<SettlementStatsResponse.CategorySales> categorySales(List<SettlementItem> items) {
+        return items.stream().collect(Collectors.groupingBy(SettlementItem::getCategoryId)).entrySet().stream()
+                .map(e -> new SettlementStatsResponse.CategorySales(e.getKey(), e.getValue().size(),
+                        itemAmt(e.getValue()), commissionAmt(e.getValue())))
+                .sorted(Comparator.comparingLong(SettlementStatsResponse.CategorySales::salesAmt).reversed())
+                .toList();
+    }
+
+    /** 관리자 대시보드 "스토어 거래액 순위" — 매출 상위 TOP_STORES 개 */
+    private List<SettlementStatsResponse.StoreSales> topStores(List<SettlementItem> items) {
+        return items.stream().collect(Collectors.groupingBy(SettlementItem::getStoreId)).entrySet().stream()
+                .sorted(Comparator.comparingLong((Map.Entry<Long, List<SettlementItem>> e) -> itemAmt(e.getValue())).reversed())
+                .limit(TOP_STORES)
+                .map(e -> new SettlementStatsResponse.StoreSales(e.getKey(),
+                        settlementStoreRepository.findByStoreId(e.getKey()).map(SettlementStore::getStoreName).orElse(null),
+                        e.getValue().size(), itemAmt(e.getValue()), commissionAmt(e.getValue())))
+                .toList();
+    }
+
+    private static long itemAmt(List<SettlementItem> items) {
+        return items.stream().mapToLong(SettlementItem::getItemAmt).sum();
+    }
+
+    private static long commissionAmt(List<SettlementItem> items) {
+        return items.stream().mapToLong(SettlementItem::getCommissionAmt).sum();
     }
 
     /** 스토어 미정산 현황 — 폐점 · 판매자 탈퇴 전 확인 (집계 전 구매확정 · 지급예정 · 보류가 모두 0 이어야 clear) */

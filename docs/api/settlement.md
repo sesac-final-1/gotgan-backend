@@ -56,7 +56,7 @@
 | `POST /internal/settlements/pay` | `{ids[]}` | `{success[ids], failed[{id, code, message}]}` — 건마다 따로 커밋 |
 | `PATCH /internal/settlements/{id}/hold` | `{hold, reason}` | 상세 — `hold=true` 면 reason 필수 |
 | `GET /internal/settlements/outstanding?storeId=` | | `{storeId, unsettledItemCount, unsettledPayoutAmt, scheduledCount, scheduledPayoutAmt, heldCount, heldPayoutAmt, clear}` — 스토어 폐점 · 판매자 탈퇴 전 확인, 셋 다 0 이면 `clear=true` |
-| `GET /internal/stats/settlements?storeId=` | | storeId 있으면 `store{pendingItemCount, pendingPayoutAmt, nextPayout, recentPaid[8주]}`, 없으면 `platform{scheduledCount, scheduledAmt, heldCount, heldAmt, paidThisMonthAmt, commissionRevenueThisMonth}` |
+| `GET /internal/stats/settlements?storeId=` | | storeId 있으면 `store{pendingItemCount, pendingPayoutAmt, nextPayout, recentPaid[8주]}`, 없으면 `platform{scheduledCount, scheduledAmt, heldCount, heldAmt, paidThisMonthAmt, commissionRevenueThisMonth, salesFrom, categorySales[{categoryId, itemCount, salesAmt, commissionAmt}], topStores[{storeId, storeName, itemCount, salesAmt, commissionAmt}](10개)}` — salesFrom(이번 주 포함 8주 전 월요일)부터 오늘까지 구매확정분, 매출 큰 순 (10/26 관리자 대시보드 카테고리별 거래액 · 스토어 순위) |
 
 `Summary` = `{id, storeId, storeName, week, weekStart, weekEnd, itemCount, carriedOverCount, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt, status, holdReason, scheduledPayDate, paidAt, bank{bankName, accountNumber, accountHolder}}`
 
