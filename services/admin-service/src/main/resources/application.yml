@@ -2,6 +2,18 @@ spring:
   application:
     name: admin-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
 
+  # admindb — 신고 · 조치 이력만 (ADR-0001 예외, 10/26). 다른 서비스 데이터는 갖지 않는다
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:3306/admindb?connectionTimeZone=Asia/Seoul
+    username: ${DB_USERNAME:admin}            # 클러스터에서는 secrets-sync 가 만든 admin-service-secret → 환경 변수
+    password: ${DB_PASSWORD:local-pass}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
+  flyway:
+    locations: classpath:db/migration
+
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
 
@@ -19,6 +31,8 @@ app:
     settlement-url: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}
     user-url: ${USER_SERVICE_URI:http://localhost:8081}
     order-url: ${ORDER_SERVICE_URI:http://localhost:8084}
+    review-url: ${REVIEW_SERVICE_URI:http://localhost:8087}
+    review-mock: ${REVIEW_CLIENT_MOCK:true}  # review 내부 API(GET · PATCH /internal/reviews/{id}) 배포 전 — true 면 MockReviewClient (10/26 확인 요청 4-2)
 
 resilience4j:
   circuitbreaker:
@@ -42,7 +56,8 @@ resilience4j:
       settlement: { base-config: remote }
       product: { base-config: remote }      # 카테고리 관리
       order: { base-config: remote }        # 대시보드 주문 통계
-      store: { base-config: remote }        # 입점 심사 · 스토어 관리 (store.md #97 계약) — review 는 그 API 를 붙일 때 추가
+      store: { base-config: remote }        # 입점 심사 · 스토어 관리 (store.md #97 계약)
+      review: { base-config: remote }       # 신고 — 리뷰 조회 · 블라인드
   retry:
     retry-aspect-order: 2
     configs:
@@ -60,6 +75,7 @@ resilience4j:
       product: { base-config: default }     # ProductClientAdapter#categories 에만
       order: { base-config: default }       # OrderClientAdapter#platformStats
       store: { base-config: default }       # StoreClientAdapter 의 GET 에만
+      review: { base-config: default }      # ReviewClientAdapter#get 에만
 
 management:
   endpoints:

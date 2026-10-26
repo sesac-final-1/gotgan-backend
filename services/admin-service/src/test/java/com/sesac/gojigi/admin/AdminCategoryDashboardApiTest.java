@@ -47,7 +47,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
 @AutoConfigureMockMvc
-@Import(AdminCategoryDashboardApiTest.FixedClock.class)
+@Import({TestcontainersConfiguration.class, AdminCategoryDashboardApiTest.FixedClock.class})
 @ActiveProfiles("test")
 class AdminCategoryDashboardApiTest {
 

@@ -24,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -41,6 +42,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 트레이스 샘플링 0 — 같은 JVM 의 LogbackConfigTest 에 Zipkin 경고가 섞이지 않게 (product #90 과 같은 이유)
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
+@Import(TestcontainersConfiguration.class)   // admindb(신고) 가 생겨 컨텍스트에 DB 가 필요
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class AdminRelayApiTest {

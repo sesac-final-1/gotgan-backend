@@ -2,6 +2,7 @@ package com.sesac.gojigi.admin.common.client;
 
 import com.sesac.gojigi.admin.category.client.ProductClient;
 import com.sesac.gojigi.admin.dashboard.client.OrderClient;
+import com.sesac.gojigi.admin.review.client.ReviewClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.admin.store.client.StoreClient;
 import com.sesac.gojigi.admin.user.client.UserClient;
@@ -39,6 +40,11 @@ public class AdminClientConfig {
     @Bean
     public StoreClient storeClient(RestClient.Builder restClientBuilder, @Value("${app.client.store-url}") String baseUrl) {
         return create(restClientBuilder, baseUrl, StoreClient.class);
+    }
+
+    @Bean
+    public ReviewClient reviewClient(RestClient.Builder restClientBuilder, @Value("${app.client.review-url}") String baseUrl) {
+        return create(restClientBuilder, baseUrl, ReviewClient.class);
     }
 
     private static <T> T create(RestClient.Builder builder, String baseUrl, Class<T> type) {
