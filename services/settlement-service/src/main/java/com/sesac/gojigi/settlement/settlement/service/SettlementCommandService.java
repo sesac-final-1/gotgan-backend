@@ -40,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SettlementCommandService {
 
-    static final String AUTO_HOLD_REASON = "스토어 휴면 · 정지 — 자동 보류";
+    static final String AUTO_HOLD_REASON = "스토어 정지 · 폐점 — 자동 보류";
     static final String CLOSED_HOLD_REASON = "스토어 폐점 — 자동 보류";
     static final String AUTO_RELEASE_REASON = "스토어 운영 재개 — 자동 해제";
 
@@ -137,7 +137,7 @@ public class SettlementCommandService {
     }
 
     /**
-     * StoreStatusChanged 반영 직후 — 운영 중(ACTIVE)이 아니면(휴면 · 정지 · 폐점) 지급예정 정산서를 자동 보류, 운영 재개면 "자동 보류"만 자동 해제.
+     * StoreStatusChanged 반영 직후 — 운영 중(ACTIVE)이 아니면(정지 · 폐점) 지급예정 정산서를 자동 보류, 운영 재개면 "자동 보류"만 자동 해제.
      * 관리자가 직접 건 보류는 관리자가 푼다 (마지막 이력이 SYSTEM 인 것만 해제). 폐점은 다시 ACTIVE 가 되지 않으므로 자동 해제도 없다.
      */
     @Transactional

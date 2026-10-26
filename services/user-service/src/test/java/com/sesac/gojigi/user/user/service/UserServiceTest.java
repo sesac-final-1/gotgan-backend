@@ -148,14 +148,12 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("판매자 — 휴면 · 정지 스토어도 폐점이 아니라 탈퇴 불가")
-    void withdraw_sellerWithDormantOrSuspendedStore_throws() {
+    @DisplayName("판매자 — 정지 스토어도 폐점이 아니라 탈퇴 불가")
+    void withdraw_sellerWithSuspendedStore_throws() {
         // given
-        given(storeClient.getStoreStatus(1L)).willReturn(StoreStatus.DORMANT);
         given(storeClient.getStoreStatus(2L)).willReturn(StoreStatus.SUSPENDED);
 
         // when · then
-        assertThatThrownBy(() -> userService.withdraw(2L, 1L)).isInstanceOf(UserException.class);
         assertThatThrownBy(() -> userService.withdraw(3L, 2L)).isInstanceOf(UserException.class);
     }
 
