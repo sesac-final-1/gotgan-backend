@@ -1,11 +1,15 @@
 package com.sesac.gojigi.order.stats.controller;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.order.stats.dto.response.DailyOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
 import com.sesac.gojigi.order.stats.service.OrderStatsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -27,6 +31,17 @@ public class InternalOrderStatsController {
     @GetMapping(value = "/internal/stats/orders", params = "storeId")
     public ApiResponse<StoreOrderStatsResponse> getStoreStats(@RequestParam Long storeId) {
         return ApiResponse.success("스토어 주문 통계를 조회했습니다.", orderStatsService.getStoreStats(storeId));
+    }
+
+    @Operation(summary = "결제일별 주문 통계 (일별 거래액 차트)", description = """
+            오늘(KST) 포함 최근 days 일(기본 30, 1~90)의 결제일별 [{date, tradeAmt, orderCount}], 오래된 날부터 · 거래 없는 날도 0.
+            tradeAmt = 그날 결제된 상품주문 금액 합계(배송비 · 포인트 차감 전, 결제 전 · 취소 · 반품 완료 제외) — totalTradeAmt 와 같은 기준.
+            orderCount = 그날 결제된 결제 완료(PAID) 주문 수(전체 취소 제외). storeId 를 넣으면 그 스토어 상품주문만 — 주문 수는 그 스토어 매출 상품주문이 든 주문(판매자 일별 결제금액).
+            에러: 400 INVALID_INPUT(days 범위 밖 · 숫자 아님)""")
+    @GetMapping("/internal/stats/orders/daily")
+    public ApiResponse<List<DailyOrderStatsResponse>> getDailyStats(@RequestParam(required = false) Long storeId,
+                                                                     @RequestParam(defaultValue = "30") @Min(1) @Max(90) int days) {
+        return ApiResponse.success("일별 주문 통계를 조회했습니다.", orderStatsService.getDailyStats(storeId, days));
     }
 
     @Operation(summary = "전체 주문 통계 (관리자 대시보드)", description = """

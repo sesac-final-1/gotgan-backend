@@ -6,13 +6,17 @@ import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
 import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.repository.OrderRepository;
+import com.sesac.gojigi.order.stats.dto.response.DailyOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
 import com.sesac.gojigi.order.stats.repository.OrderStatsRepository;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +58,25 @@ public class OrderStatsService {
                 // 취소 완료(CANCELLED)여도 환불이 끝나지 않았으면(클레임 APPROVED) 진행 중으로 센다
                 orderStatsRepository.countInProgress(storeId, IN_PROGRESS, OPEN_CLAIMS),
                 orderItemRepository.sumStoreSales(storeId, NOT_SALES, today, today.plusDays(1)));
+    }
+
+    /** 오늘(KST) 포함 최근 days 일의 결제일별 거래액 · 주문 수, 오래된 날부터 — 거래가 없는 날은 0. storeId 가 null 이면 전체 */
+    @Transactional(readOnly = true)
+    public List<DailyOrderStatsResponse> getDailyStats(Long storeId, int days) {
+        LocalDate today = LocalDate.now(clock);
+        LocalDate first = today.minusDays(days - 1L);
+        LocalDateTime from = first.atStartOfDay();
+        LocalDateTime to = today.plusDays(1).atStartOfDay();
+        Map<LocalDate, Long> tradeAmt = byDate(orderStatsRepository.sumDailyTradeAmt(storeId, NOT_SALES, from, to));
+        Map<LocalDate, Long> orderCount = byDate(
+                orderStatsRepository.countDailyOrders(storeId, OrderStatus.PAID, NOT_SALES, from, to));
+        return first.datesUntil(today.plusDays(1))
+                .map(d -> new DailyOrderStatsResponse(d, tradeAmt.getOrDefault(d, 0L), orderCount.getOrDefault(d, 0L)))
+                .toList();
+    }
+
+    private static Map<LocalDate, Long> byDate(List<Object[]> rows) {
+        return rows.stream().collect(Collectors.toMap(r -> (LocalDate) r[0], r -> ((Number) r[1]).longValue()));
     }
 
     @Transactional(readOnly = true)

@@ -1,6 +1,7 @@
 package com.sesac.gojigi.order.stats.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.sesac.gojigi.order.TestcontainersConfiguration;
 import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
@@ -18,10 +19,12 @@ import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.service.OrderPricing;
 import com.sesac.gojigi.order.order.service.OrderTxService;
+import com.sesac.gojigi.order.stats.dto.response.DailyOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -53,6 +56,8 @@ class OrderStatsServiceIntegrationTest {
     private static final long OTHER_STORE = 702L;
     /** 전체 통계 테스트 전용 — 스토어 통계 테스트의 STORE 건수에 섞이지 않게 */
     private static final long PLATFORM_STORE = 711L;
+    /** 일별 통계 테스트 전용 */
+    private static final long DAILY_STORE = 721L;
 
     @TestConfiguration
     static class FixedClock {
@@ -158,6 +163,41 @@ class OrderStatsServiceIntegrationTest {
 
         assertThat(result.inProgressCount()).isZero();
         assertThat(result.todaySalesAmt()).isZero();
+    }
+
+    private void paidAt(Order order, LocalDateTime at) {
+        jdbc.update("update orders set paid_at = ? where order_id = ?", at, order.getId());
+    }
+
+    @Test
+    @DisplayName("일별 통계 — 최근 days 일을 결제일(KST)별로, 거래 없는 날은 0 · 취소 상품주문 제외 · 범위 밖 · 결제 전은 빠진다")
+    void getDailyStats() {
+        // given — 오늘 2026-10-22, days=3 → 10-20 ~ 10-22
+        List<DailyOrderStatsResponse> before = stats.getDailyStats(null, 3);
+        order(DAILY_STORE, true);                                         // 오늘 · 스토어 20,000 + 다른 스토어 5,000
+        paidAt(order(DAILY_STORE, true), LocalDateTime.of(2026, 10, 21, 23, 59));   // 어제 끝
+        Order cancelled = order(DAILY_STORE, true);                       // 오늘 · 스토어 상품주문 취소 → 다른 스토어 5,000 만
+        setStatus(storeItem(cancelled), OrderItemStatus.CANCELLED);
+        paidAt(order(DAILY_STORE, true), LocalDateTime.of(2026, 10, 19, 23, 59));   // 범위 밖
+        order(DAILY_STORE, false);                                        // 결제 전
+
+        // when
+        List<DailyOrderStatsResponse> store = stats.getDailyStats(DAILY_STORE, 3);
+        List<DailyOrderStatsResponse> after = stats.getDailyStats(null, 3);
+
+        // then — 스토어: 그 스토어 매출 상품주문만, 주문 수도 그 상품주문이 든 주문만
+        assertThat(store).extracting(DailyOrderStatsResponse::date, DailyOrderStatsResponse::tradeAmt,
+                        DailyOrderStatsResponse::orderCount)
+                .containsExactly(tuple(LocalDate.of(2026, 10, 20), 0L, 0L), tuple(LocalDate.of(2026, 10, 21), 20_000L, 1L),
+                        tuple(LocalDate.of(2026, 10, 22), 20_000L, 1L));
+        // 전체: 다른 테스트 데이터와 섞이므로 증가분 — 어제 1건 25,000, 오늘 2건 25,000 + 5,000
+        assertThat(after).extracting(DailyOrderStatsResponse::date).isEqualTo(before.stream().map(DailyOrderStatsResponse::date).toList());
+        assertThat(after.get(1).tradeAmt() - before.get(1).tradeAmt()).isEqualTo(25_000L);
+        assertThat(after.get(1).orderCount() - before.get(1).orderCount()).isEqualTo(1L);
+        assertThat(after.get(2).tradeAmt() - before.get(2).tradeAmt()).isEqualTo(30_000L);
+        assertThat(after.get(2).orderCount() - before.get(2).orderCount()).isEqualTo(2L);
+        assertThat(stats.getDailyStats(DAILY_STORE, 30)).hasSize(30).first()
+                .extracting(DailyOrderStatsResponse::date).isEqualTo(LocalDate.of(2026, 9, 23));
     }
 
     @Test
