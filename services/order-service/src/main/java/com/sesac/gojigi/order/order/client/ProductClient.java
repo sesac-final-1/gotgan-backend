@@ -5,6 +5,7 @@ import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
 import com.sesac.gojigi.order.order.client.dto.StockReleaseRequest;
 import com.sesac.gojigi.order.order.client.dto.StockReservationResponse;
 import com.sesac.gojigi.order.order.client.dto.StockReserveRequest;
+import com.sesac.gojigi.order.order.client.dto.StockRestoreRequest;
 import java.util.List;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,4 +32,8 @@ public interface ProductClient {
     /** 재고 해제 (Saga 보상) — 예약이 없으면 해제 표식만 남김 */
     @PostExchange("/stock/reservations/{sagaId}/release")
     ApiResponse<StockReservationResponse> release(@PathVariable String sagaId, @RequestBody StockReleaseRequest request);
+
+    /** 재고 복원 (취소 · 반품 Saga) — claimId 멱등, 옵션이 판매중지 · 삭제돼도 복원 (product.md 3절) */
+    @PostExchange("/stock/restorations")
+    ApiResponse<Void> restore(@RequestBody StockRestoreRequest request);
 }

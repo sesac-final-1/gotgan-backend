@@ -127,6 +127,14 @@ public class Order extends BaseTimeEntity {
         this.status = OrderStatus.FAILED;
     }
 
+    /** 주문 전체 취소 — 모든 상품주문이 취소 완료됨 (스펙 05장 "모든 상품주문이 취소되면 CANCELLED") */
+    public void markCancelled() {
+        if (status != OrderStatus.PAID) {
+            throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);
+        }
+        this.status = OrderStatus.CANCELLED;
+    }
+
     private void requirePending() {
         if (status != OrderStatus.PENDING) {
             throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);

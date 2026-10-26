@@ -1,8 +1,10 @@
 package com.sesac.gojigi.user.point.service;
 
+import com.sesac.gojigi.user.point.dto.request.ReversePointRequest;
 import com.sesac.gojigi.user.point.dto.request.UsePointRequest;
 import com.sesac.gojigi.user.point.dto.response.MyPointsResponse;
 import com.sesac.gojigi.user.point.dto.response.PointRestoreResponse;
+import com.sesac.gojigi.user.point.dto.response.PointReversalResponse;
 import com.sesac.gojigi.user.point.dto.response.PointUseResponse;
 import com.sesac.gojigi.user.point.dto.response.UserPointsResponse;
 import com.sesac.gojigi.user.point.entity.PointHistory;
@@ -16,6 +18,7 @@ import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
 import com.sesac.gojigi.user.user.exception.UserException;
 import com.sesac.gojigi.user.user.repository.UserRepository;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 포인트 — 내 포인트 조회 · 관리자 회원 포인트 조회 · 주문 사용(Saga) · 사용 취소(Saga 보상). 적립(OrderPaid) · 클레임 환원 · 회수는 후속.
+ * 포인트 — 내 포인트 조회 · 관리자 회원 포인트 조회 · 주문 사용(Saga) · 사용 취소(Saga 보상) · 취소 · 반품 환원 · 회수. 적립(OrderPaid)은 후속.
  * 잔액은 users.point_balance 조건부 UPDATE 로만 바꾸고(음수 · 동시 차감 방지), 같은 트랜잭션에서 이력을 남긴다.
  * 멱등: ref_key = sagaId — 같은 sagaId 재요청은 처음 결과를 그대로 돌려준다. 동시에 두 번 오면
  * uk_point_history_type_ref_key 에 걸린 쪽이 롤백되고 먼저 커밋된 결과를 돌려준다.
@@ -93,6 +96,72 @@ public class PointService {
             }
             return transactionTemplate.execute(status -> doCancelUse(sagaId));
         }
+    }
+
+    /**
+     * 취소 · 반품 환원 · 회수 (order 취소 · 반품 Saga) — 쓴 포인트를 돌려주고, 이 상품주문으로 실제 적립된 포인트만큼 회수한다.
+     * 한 트랜잭션: 환원 먼저(돌려준 포인트로 회수할 수 있게) → 회수는 잔액 0 까지만, 못 뺀 차액은 shortfall 로 남긴다.
+     * 멱등: ref_key = claim-{claimId}-{orderItemId} — 이미 처리했으면 처음 결과 그대로. 탈퇴 회원이면 아무것도 하지 않고 0.
+     */
+    public PointReversalResponse reverse(ReversePointRequest request) {
+        try {
+            return transactionTemplate.execute(status -> doReverse(request));
+        } catch (DataIntegrityViolationException e) {
+            // 같은 클레임이 동시에 두 번 → uk 에 걸린 쪽은 롤백, 먼저 커밋된 결과
+            return processedReversal(request).orElseThrow(() -> e);
+        }
+    }
+
+    private PointReversalResponse doReverse(ReversePointRequest request) {
+        Optional<PointReversalResponse> processed = processedReversal(request);
+        if (processed.isPresent()) {
+            return processed.get();
+        }
+        Optional<User> locked = userRepository.findByIdForUpdate(request.userId());   // 회수는 현재 잔액으로 계산 — 행 잠금
+        if (locked.isEmpty()) {
+            log.warn("포인트 환원 · 회수 — 탈퇴 회원이라 처리하지 않음 userId={} claimId={}", request.userId(), request.claimId());
+            return PointReversalResponse.of(request.claimId(), request.orderItemId(), null, null);
+        }
+        long balance = locked.get().getPointBalance();
+        PointHistory restore = null;
+        if (request.restoreAmount() > 0) {
+            userRepository.addPoint(request.userId(), request.restoreAmount());
+            balance += request.restoreAmount();
+            restore = pointHistoryRepository.save(PointHistory.restore(locked.get(), request.orderItemId(),
+                    request.orderNo(), request.restoreAmount(), balance, request.refKey()));
+        }
+        PointHistory reclaim = null;
+        long reclaimable = Math.min(request.reclaimAmount(), earnedFor(request.orderItemId()));
+        long taken = Math.min(reclaimable, balance);
+        if (taken > 0) {
+            userRepository.deductPoint(request.userId(), taken);   // 잠금 + taken ≤ 잔액이라 항상 1건
+            balance -= taken;
+            reclaim = pointHistoryRepository.save(PointHistory.reclaim(locked.get(), request.orderItemId(),
+                    request.orderNo(), taken, reclaimable - taken, balance, request.refKey()));
+        } else if (reclaimable > 0) {
+            log.warn("포인트 회수 — 잔액 0 이라 회수하지 못함 userId={} claimId={} shortfall={}",
+                    request.userId(), request.claimId(), reclaimable);
+        }
+        log.info("포인트 환원 · 회수 userId={} orderNo={} claimId={} restored={} reclaimed={} balanceAfter={}",
+                request.userId(), request.orderNo(), request.claimId(), request.restoreAmount(), taken, balance);
+        return PointReversalResponse.of(request.claimId(), request.orderItemId(), restore, reclaim);
+    }
+
+    /** 이미 처리한 클레임이면 그 결과 — RESTORE · RECLAIM 중 하나라도 있으면 처리된 것 (한 트랜잭션에서 같이 남기므로) */
+    private Optional<PointReversalResponse> processedReversal(ReversePointRequest request) {
+        Optional<PointHistory> restore = pointHistoryRepository.findByTypeAndRefKey(PointType.RESTORE, request.refKey());
+        Optional<PointHistory> reclaim = pointHistoryRepository.findByTypeAndRefKey(PointType.RECLAIM, request.refKey());
+        if (restore.isEmpty() && reclaim.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(PointReversalResponse.of(request.claimId(), request.orderItemId(), restore.orElse(null),
+                reclaim.orElse(null)));
+    }
+
+    /** 이 상품주문으로 실제 적립된 포인트 — 적립 전이면 0 (회수할 게 없음) */
+    private long earnedFor(Long orderItemId) {
+        return pointHistoryRepository.findByOrderItemIdAndTypeIn(orderItemId, List.of(PointType.EARN)).stream()
+                .mapToLong(PointHistory::getAmount).sum();
     }
 
     private UseResult doUse(UsePointRequest request) {

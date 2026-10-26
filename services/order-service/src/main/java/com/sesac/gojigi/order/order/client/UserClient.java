@@ -2,6 +2,8 @@ package com.sesac.gojigi.order.order.client;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.order.order.client.dto.PointRestoreResponse;
+import com.sesac.gojigi.order.order.client.dto.PointReversalRequest;
+import com.sesac.gojigi.order.order.client.dto.PointReversalResponse;
 import com.sesac.gojigi.order.order.client.dto.PointUseRequest;
 import com.sesac.gojigi.order.order.client.dto.PointUseResponse;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
@@ -26,4 +28,8 @@ public interface UserClient {
     /** 포인트 사용 취소 (Saga 보상) — 되돌릴 사용이 없어도 200 */
     @DeleteExchange("/points/use/{sagaId}")
     ApiResponse<PointRestoreResponse> restorePoints(@PathVariable String sagaId);
+
+    /** 취소 · 반품 포인트 환원 · 회수 — claim-{claimId}-{orderItemId} 멱등 */
+    @PostExchange("/points/reversals")
+    ApiResponse<PointReversalResponse> reversePoints(@RequestBody PointReversalRequest request);
 }
