@@ -30,8 +30,10 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * 카테고리 관리 (/internal/categories) · 공개 트리 (/api/categories) — 실제 MySQL · Flyway V1~V2.
  * 테스트마다 카테고리 표를 비우고 필요한 것만 만든다 (아직 product 행이 없어 FK 걱정 없음).
+ * 트레이스 샘플링 0 — span 이 생기면 Zipkin 전송 스레드가 없는 localhost:9411 에 실패해 WARN 을 남기고,
+ * 그 줄이 같은 JVM 의 LogbackConfigTest 가짜 Loki 에 섞여 "1줄" 검사가 깨진다 (CI 실패 10/26).
  */
-@SpringBootTest
+@SpringBootTest(properties = "management.tracing.sampling.probability=0")
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 @ActiveProfiles("test")
