@@ -21,11 +21,11 @@ CREATE TABLE `users` (
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT 'ACTIVE / SUSPENDED — 정지 시 Keycloak 계정 enabled=false 동기화',
 	`status_reason`	VARCHAR(255)	NULL	COMMENT '이용정지 · 해제 사유 (관리자 입력 필수)',
 	`suspended_at`	DATETIME(6)	NULL	COMMENT '이용정지 시각 (애플리케이션이 기록)',
+	`suspended_until`	DATETIME(6)	NULL	COMMENT '이용정지 종료 시각 — NULL 이면 영구 정지(관리자가 해제). 지나면 스케줄러가 자동 해제',
 	`last_login_at`	DATETIME(6)	NULL	COMMENT '마지막 로그인 시각 (애플리케이션이 기록) — 관리자 회원 상세',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '가입 시각 (= joinedAt)',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (회원 물리 DELETE 금지)',
-	`suspended_until`	DATETIME(6)	NULL	COMMENT '이용정지 종료 시각 — NULL 이면 영구 정지(관리자가 해제). 지나면 스케줄러가 자동 해제'
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (회원 물리 DELETE 금지)'
 );
 
 -- 회원 배송지
@@ -91,8 +91,11 @@ CREATE TABLE `store_application` (
 	`manager_email`	VARCHAR(100)	NOT NULL	COMMENT '심사 결과(승인 · 반려 · 보완요청) 메일 수신 주소 — 이벤트 payload 에 포함',
 	`business_address`	VARCHAR(255)	NOT NULL	COMMENT '사업장 주소',
 	`store_name`	VARCHAR(50)	NOT NULL	COMMENT '신청 당시 스토어명 — 승인 시 store.store_name 으로 복사',
+	`slug`	VARCHAR(50)	NOT NULL	COMMENT '신청한 스토어 주소 gotgan.kr/store/{slug} — 승인 시 store.slug 로 복사. 형식(영소문자 · 숫자 · -)과 중복은 서비스 검증',
 	`intro`	TEXT	NULL	COMMENT '스토어 소개 (sanitizer 정화 HTML) — 승인 시 store.intro 초기값',
 	`representative_products`	JSON	NOT NULL	COMMENT '대표 상품 3개 이상 [{name, subCategory, price}] — 심사 화면 표시용 (검색 · 집계 없음)',
+	`expected_monthly_sales`	VARCHAR(20)	NULL	COMMENT '월 예상 매출 UNDER_5M / FROM_5M_TO_20M / FROM_20M_TO_100M / OVER_100M — 심사 화면 표시용',
+	`sales_channel`	VARCHAR(255)	NULL	COMMENT '운영 중인 채널 (자사몰 · 인스타그램 등 URL) — 선택 입력, 심사 참고용',
 	`bank_name`	VARCHAR(30)	NOT NULL	COMMENT '정산 은행',
 	`account_no`	VARCHAR(30)	NOT NULL	COMMENT '정산 계좌번호',
 	`account_holder`	VARCHAR(50)	NOT NULL	COMMENT '예금주',
@@ -103,8 +106,7 @@ CREATE TABLE `store_application` (
 	`status_changed_at`	DATETIME(6)	NOT NULL	COMMENT '마지막 상태 변경 시각 — 7일 자동 반려(SUPPLEMENT) · 30일 재신청 제한(REJECTED) 기준',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '제출 시각',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '낙관적 락(@Version) — 재제출과 자동 반려가 동시에 저장되는 것 방지',
-	`slug`	VARCHAR(50)	NOT NULL	COMMENT '신청한 스토어 주소 gotgan.kr/store/{slug} — 승인 시 store.slug 로 복사. 형식(영소문자 · 숫자 · -)과 중복은 서비스 검증'
+	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '낙관적 락(@Version) — 재제출과 자동 반려가 동시에 저장되는 것 방지'
 );
 
 -- 입점 신청 서류
@@ -138,17 +140,21 @@ CREATE TABLE `store` (
 	`store_application_id`	BIGINT	NOT NULL	COMMENT '원래 입점 신청 — 대표자 · 사업자번호는 이 신청서를 조인해 노출',
 	`user_id`	BIGINT	NOT NULL	COMMENT 'user-service users.user_id (논리 참조) — 판매자',
 	`store_name`	VARCHAR(50)	NOT NULL	COMMENT '스토어명',
+	`slug`	VARCHAR(50)	NOT NULL	COMMENT '스토어 주소 gotgan.kr/store/{slug} — 승인 시 신청서에서 복사, 판매자는 수정 불가',
 	`intro`	TEXT	NULL	COMMENT '스토어 소개 (sanitizer 정화 HTML)',
 	`image_key`	VARCHAR(255)	NULL	COMMENT '대표 이미지 S3 images 키 (stores/ 공개 경로)',
+	`color`	VARCHAR(7)	NOT NULL	DEFAULT '#5b6b4a'	COMMENT '스토어 표시 색 (#RRGGBB) — 이미지 없을 때 아바타 배경, 판매자 설정에서 선택',
 	`cs_phone`	VARCHAR(20)	NOT NULL	COMMENT '고객 문의 연락처 — 승인 시 신청서 담당자 휴대폰 복사, 이후 판매자 수정',
 	`shipping_fee`	BIGINT	NOT NULL	DEFAULT 3000	COMMENT '스토어 묶음 기본 배송비 (원) — 승인 직후 3,000원',
 	`free_shipping_threshold`	BIGINT	NULL	COMMENT '무료배송 기준 금액 (원) — NULL 이면 무료배송 없음',
+	`courier`	VARCHAR(30)	NULL	COMMENT '기본 택배사 이름 예: CJ대한통운 — 상품 상세 배송 안내 · 송장 입력 기본값 (order_item.courier 와 같은 형식). 승인 직후 NULL',
+	`dispatch_note`	VARCHAR(100)	NULL	COMMENT '출고 안내 문구 예: 평일 14시 이전 결제 시 당일 출고',
+	`grade`	VARCHAR(20)	NOT NULL	DEFAULT 'SPROUT'	COMMENT '판매자 등급 SPROUT(새싹) / POWER(파워) / BIG_POWER(빅파워) — 승인 시 SPROUT, 승급 기준은 미정',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT 'ACTIVE / DORMANT(판매자 휴면) / SUSPENDED(관리자 정지)',
 	`status_reason`	VARCHAR(255)	NULL	COMMENT '가장 최근 정지 · 해제 사유 (전체는 store_status_history)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (물리 DELETE 금지)',
-	`slug`	VARCHAR(50)	NOT NULL	DEFAULT '#5b6b4a'	COMMENT '스토어 주소 gotgan.kr/store/{slug} — 승인 시 신청서에서 복사, 판매자는 수정 불가'
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (물리 DELETE 금지)'
 );
 
 -- 스토어 상태 이력 (STR-14)
@@ -187,6 +193,8 @@ CREATE TABLE `product` (
 	`discount_rate`	DECIMAL(5,2)	NOT NULL	DEFAULT 0	COMMENT '즉시할인율 % (0~90, 판매자 입력) — 수정 화면 표시용, 비율이라 DECIMAL (컨벤션 3-6)',
 	`sale_price`	BIGINT	NOT NULL	COMMENT '할인 적용가 (원) — 서버가 price · discount_rate 로 계산(10원 단위 반올림). 정렬 · 주문 금액 기준',
 	`description`	TEXT	NULL	COMMENT '상세 설명 (sanitizer 정화 HTML)',
+	`material`	VARCHAR(100)	NOT NULL	COMMENT '소재 · 원재료 (상품정보 제공고시) 예: 리넨 100%',
+	`origin`	VARCHAR(50)	NOT NULL	COMMENT '제조국 · 원산지 (상품정보 제공고시) 예: 대한민국',
 	`option1_name`	VARCHAR(30)	NULL	COMMENT '옵션 그룹 1 이름 예: 색상 — 옵션 없으면 NULL',
 	`option2_name`	VARCHAR(30)	NULL	COMMENT '옵션 그룹 2 이름 예: 사이즈 — 최대 2개',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ON_SALE'	COMMENT 'ON_SALE / STOPPED(판매자 판매중지) / BLOCKED(관리자 강제 판매중지 — 해제하면 STOPPED)',
@@ -195,8 +203,7 @@ CREATE TABLE `product` (
 	`store_status_changed_at`	DATETIME(6)	NULL	COMMENT '마지막으로 반영한 StoreStatusChanged 의 occurredAt — 이보다 오래된 이벤트는 무시 (SQS 순서 미보장)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '등록 시각 (신상품 정렬)',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (주문 스냅샷 보존, 물리 DELETE 금지)',
-	`material`	VARCHAR(100)	NOT NULL	COMMENT '소재 · 원재료 (상품정보 제공고시) 예: 리넨 100%'
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (주문 스냅샷 보존, 물리 DELETE 금지)'
 );
 
 -- 상품 옵션 조합 · 재고 (조합 중복은 서비스 검증)
@@ -342,6 +349,7 @@ CREATE TABLE `order_claim` (
 	`reason_detail`	VARCHAR(500)	NULL	COMMENT '상세 사유 (구매자 입력)',
 	`reject_reason`	VARCHAR(500)	NULL	COMMENT '판매자 거부 사유',
 	`refund_amt`	BIGINT	NULL	COMMENT '환불 금액 (원) — 교환이면 NULL (OrderItemCancelled · Returned.refundAmt)',
+	`restore_point`	BIGINT	NULL	COMMENT '돌려줄 사용 포인트 (원) — 교환이면 NULL (OrderItemCancelled · Returned.restoredPoint)',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'REQUESTED'	COMMENT 'REQUESTED / APPROVED / REJECTED / COMPLETED',
 	`requested_at`	DATETIME(6)	NOT NULL	COMMENT '요청 시각 (애플리케이션이 기록)',
 	`processed_at`	DATETIME(6)	NULL	COMMENT '승인 · 거부 · 완료 처리 시각',
@@ -357,8 +365,10 @@ CREATE TABLE `saga_instance` (
 	`saga_id`	CHAR(36)	NOT NULL	COMMENT 'UUID — Saga 참여자 API(user · product · payment) 멱등 키',
 	`saga_type`	VARCHAR(30)	NOT NULL	COMMENT 'PLACE_ORDER / CANCEL_ITEM / RETURN_ITEM',
 	`current_step`	VARCHAR(30)	NOT NULL	COMMENT 'PLACE_ORDER: ORDER_CREATED / POINT_USED / STOCK_RESERVED / PAYMENT_READY / PAYMENT_VERIFIED / DONE, CANCEL_ITEM · RETURN_ITEM: PAYMENT_CANCEL_REQUESTED / PAYMENT_CANCELLED / STOCK_RESTORED / POINT_RESTORED / DONE',
+	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '현재 단계 재시도 횟수 — 단계가 넘어가면 0, 8회 넘으면 FAILED',
 	`last_error`	VARCHAR(500)	NULL	COMMENT '마지막 실패 사유',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'STARTED'	COMMENT 'STARTED / COMPENSATING / COMPLETED / COMPENSATED / FAILED',
+	`next_retry_at`	DATETIME(6)	NULL	COMMENT '다음 재시도 시각 — NULL 이면 재시도 대상 아님 (복구 스케줄러가 status · next_retry_at 으로 조회)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각'
 );
@@ -404,11 +414,15 @@ CREATE TABLE `payment_cancel` (
 	`order_item_id`	BIGINT	NULL	COMMENT 'order-service order_item.order_item_id (논리 참조) — 전액 취소면 NULL',
 	`saga_id`	CHAR(36)	NULL	COMMENT 'order-service saga_instance.saga_id (논리 참조) — 같은 취소 재요청 멱등 키',
 	`cancel_amount`	BIGINT	NOT NULL	COMMENT '취소 금액 (원)',
+	`cancellable_before`	BIGINT	NULL	COMMENT '취소 요청 직전 취소 가능 잔액 — 포트원 currentCancellableAmount 로 보내 같은 취소가 두 번 나가지 않게 함',
 	`reason`	VARCHAR(200)	NOT NULL	COMMENT '취소 사유 예: 구매자 취소 / 반품 / 결제 금액 불일치 자동 취소 / 주문 처리 실패',
 	`portone_cancellation_id`	VARCHAR(64)	NULL	COMMENT '포트원 취소 응답의 cancellation id',
-	`cancelled_at`	DATETIME(6)	NOT NULL	COMMENT '포트원 취소 완료 시각 (애플리케이션이 기록)',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'SUCCEEDED'	COMMENT 'PENDING(포트원 결과 미확정) / SUCCEEDED / FAILED — V1 행은 모두 성공 기록이라 기본값 SUCCEEDED',
+	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '포트원 취소 요청 · 대조 시도 횟수 (복구 스케줄러 경보 기준)',
+	`last_error`	VARCHAR(200)	NULL	COMMENT '마지막 실패 · 미확정 사유 (포트원 오류 type 등, 비밀 값 금지)',
+	`cancelled_at`	DATETIME(6)	NULL	COMMENT '포트원 취소 완료 시각 — SUCCEEDED 일 때만 값이 있음',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`cancellable_before`	BIGINT	NOT NULL	DEFAULT 'SUCCEEDED'	COMMENT '취소 요청 직전 취소 가능 잔액 — 포트원 currentCancellableAmount 로 보내 같은 취소가 두 번 나가지 않게 함'
+	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
 -- ============================================================ settlementdb (settlement-service · 담당 구지훈)
