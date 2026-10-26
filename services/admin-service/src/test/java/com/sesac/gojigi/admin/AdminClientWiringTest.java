@@ -28,7 +28,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 실제 @HttpExchange 클라이언트(AdminClientConfig) → 가짜 user · settlement 서버(JDK HttpServer) 까지 — 경로 · 쿼리 · 헤더 · 본문이
+ * 실제 @HttpExchange 클라이언트(AdminClientConfig) → 가짜 user · settlement · product · order 서버(JDK HttpServer) 까지 — 경로 · 쿼리 · 헤더 · 본문이
  * 내부 API 계약과 맞는지 확인한다. 가짜 서버는 받은 요청을 기록하고 받은 경로를 data 로 돌려준다.
  * 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
  */
@@ -68,6 +68,8 @@ class AdminClientWiringTest {
         String url = "http://127.0.0.1:" + FAKE.getAddress().getPort();
         registry.add("app.client.user-url", () -> url);
         registry.add("app.client.settlement-url", () -> url);
+        registry.add("app.client.product-url", () -> url);
+        registry.add("app.client.order-url", () -> url);
     }
 
     @AfterAll
@@ -134,5 +136,22 @@ class AdminClientWiringTest {
                         .contentType(MediaType.APPLICATION_JSON).content("[{\"categoryId\":3,\"rate\":11.5}]"))
                 .andExpect(status().isOk());
         assertThat(last()).extracting(Received::method, Received::uri).containsExactly("PUT", "/internal/commissions");
+    }
+    @Test
+    @DisplayName("카테고리 · 대시보드 — product 카테고리 경로 · 메서드, order 전체 통계 · settlement 통계 경로")
+    void category_dashboard_paths() throws Exception {
+        mockMvc.perform(get("/api/admin/categories")).andExpect(jsonPath("$.data.path").value("/internal/categories"));
+
+        mockMvc.perform(post("/api/admin/categories").contentType(MediaType.APPLICATION_JSON).content("{\"parentId\":3,\"name\":\"블라우스\"}"))
+                .andExpect(status().isCreated());
+        assertThat(last()).extracting(Received::method, Received::uri).containsExactly("POST", "/internal/categories");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/admin/categories/301")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"셔츠\",\"sortOrder\":1}"))
+                .andExpect(status().isOk());
+        assertThat(last()).extracting(Received::method, Received::uri).containsExactly("PUT", "/internal/categories/301");
+
+        mockMvc.perform(get("/api/admin/dashboard")).andExpect(status().isOk()).andExpect(jsonPath("$.data.order.path").value("/internal/stats/orders"));
+        assertThat(RECEIVED).extracting(Received::uri).contains("/internal/stats/settlements", "/internal/stats/orders");
     }
 }

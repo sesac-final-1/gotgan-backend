@@ -17,6 +17,8 @@ import com.sesac.gojigi.admin.category.client.ProductClient;
 import com.sesac.gojigi.admin.dashboard.client.OrderClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -63,10 +65,13 @@ class AdminCategoryDashboardApiTest {
     @MockitoBean ProductClient productClient;
     @MockitoBean SettlementClient settlementClient;
     @MockitoBean OrderClient orderClient;
+    @Autowired CircuitBreakerRegistry circuitBreakers;
 
+    /** 목 · 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
     @BeforeEach
     void resetMocks() {
         reset(productClient, settlementClient, orderClient);
+        circuitBreakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
     }
 
     private ApiResponse<JsonNode> ok(String data) {

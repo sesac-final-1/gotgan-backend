@@ -64,7 +64,7 @@ public class SettlementClientAdapter {
     @Retry(name = TARGET)
     @CircuitBreaker(name = TARGET, fallbackMethod = "noArgFallback")
     public JsonNode platformStats() {
-        return call(settlementClient::platformStats).path("platform");
+        return call(settlementClient::platformStats).get("platform");   // 없으면 null (MissingNode 는 직렬화하지 않게)
     }
 
     private static JsonNode call(Supplier<ApiResponse<JsonNode>> request) {
