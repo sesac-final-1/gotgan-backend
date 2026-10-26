@@ -8,9 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.order.stats.dto.response.DailyOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
 import com.sesac.gojigi.order.stats.service.OrderStatsService;
+import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -58,6 +61,29 @@ class InternalOrderStatsControllerTest {
                 .andExpect(jsonPath("$.message").value("전체 주문 통계를 조회했습니다."))
                 .andExpect(jsonPath("$.data.totalTradeAmt").value(1250000))
                 .andExpect(jsonPath("$.data.orderCount").value(37));
+    }
+
+    @Test
+    @DisplayName("일별 통계 — storeId 는 선택, days 기본 30 · 1~90 밖이면 400")
+    void dailyStats() throws Exception {
+        given(orderStatsService.getDailyStats(null, 30)).willReturn(
+                List.of(new DailyOrderStatsResponse(LocalDate.of(2026, 10, 22), 1_234_000L, 12L)));
+        given(orderStatsService.getDailyStats(1L, 7)).willReturn(List.of());
+
+        mockMvc.perform(get("/internal/stats/orders/daily"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("일별 주문 통계를 조회했습니다."))
+                .andExpect(jsonPath("$.data[0].date").value("2026-10-22"))
+                .andExpect(jsonPath("$.data[0].tradeAmt").value(1234000))
+                .andExpect(jsonPath("$.data[0].orderCount").value(12));
+        mockMvc.perform(get("/internal/stats/orders/daily").param("storeId", "1").param("days", "7"))
+                .andExpect(status().isOk());
+        verify(orderStatsService).getDailyStats(1L, 7);
+        mockMvc.perform(get("/internal/stats/orders/daily").param("days", "91"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        mockMvc.perform(get("/internal/stats/orders/daily").param("days", "0"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
