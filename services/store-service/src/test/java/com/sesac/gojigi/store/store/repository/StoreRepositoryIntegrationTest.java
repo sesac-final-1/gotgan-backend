@@ -30,14 +30,14 @@ class StoreRepositoryIntegrationTest {
     private EntityManager entityManager;
 
     @Test
-    @DisplayName("시드 스토어 1 은 판매자 user 2 의 곳간상회, 운영 중")
+    @DisplayName("시드 스토어 1 은 판매자 user 2 의 산골농부 박씨네, 운영 중")
     void findByIdAndDeletedAtIsNull_seedStore_returnsStore() {
         // when
         Store store = storeRepository.findByIdAndDeletedAtIsNull(1L).orElseThrow();
 
         // then
         assertThat(store.getUserId()).isEqualTo(2L);
-        assertThat(store.getStoreName()).isEqualTo("곳간상회");
+        assertThat(store.getStoreName()).isEqualTo("산골농부 박씨네");
         assertThat(store.getStatus()).isEqualTo(StoreStatus.ACTIVE);
     }
 

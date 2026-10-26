@@ -31,29 +31,30 @@ class DemoSeedTest {
     private JdbcTemplate jdbc;
 
     @Test
-    @DisplayName("시드가 신청서 · 이력 · 스토어 · 상태 이력을 빠짐없이 넣는다 (시연 판매자 2명)")
+    @DisplayName("시드가 신청서 · 이력 · 스토어 · 상태 이력을 빠짐없이 넣는다 (목업 스토어 9개, 그중 정지 1)")
     void seed_afterV2_insertsAllRows() {
-        assertThat(count("store_application")).isEqualTo(2);
-        assertThat(count("application_history")).isEqualTo(4);
-        assertThat(count("store")).isEqualTo(2);
-        assertThat(count("store_status_history")).isEqualTo(2);
+        assertThat(count("store_application")).isEqualTo(9);
+        assertThat(count("application_history")).isEqualTo(18);
+        assertThat(count("store")).isEqualTo(9);
+        assertThat(count("store_status_history")).isEqualTo(10);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM store WHERE status = 'SUSPENDED'", Integer.class)).isEqualTo(1);
     }
 
     @Test
-    @DisplayName("시드 스토어는 user_id · store_id 가 Keycloak 시드와 같고, 스토어 주소는 신청서와 같다")
+    @DisplayName("시연 판매자 스토어 1 · 2 는 user_id 가 Keycloak 시드와 같고, 모든 스토어 주소는 신청서와 같다")
     void seed_stores_matchKeycloakAndApplication() {
         List<Map<String, Object>> stores = jdbc.queryForList("""
                 SELECT s.store_id, s.user_id, s.slug, a.slug AS application_slug, s.grade
                 FROM store s JOIN store_application a ON a.store_application_id = s.store_application_id
-                ORDER BY s.store_id
+                WHERE s.store_id IN (1, 2) ORDER BY s.store_id
                 """);
 
         assertThat(stores).extracting(row -> row.get("user_id")).containsExactly(2L, 3L);
-        assertThat(stores).extracting(row -> row.get("slug")).containsExactly("gotgan-sanghoe", "gotgan-living");
-        assertThat(stores).allSatisfy(row -> {
-            assertThat(row.get("slug")).isEqualTo(row.get("application_slug"));
-            assertThat(row.get("grade")).isEqualTo("SPROUT");
-        });
+        assertThat(stores).extracting(row -> row.get("slug")).containsExactly("park-farm", "todam");
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM store s JOIN store_application a ON a.store_application_id = s.store_application_id
+                WHERE s.slug <> a.slug OR s.user_id <> a.user_id
+                """, Integer.class)).isZero();   // 9개 모두 신청서와 같은 주소 · 신청자
     }
 
     private int count(String table) {

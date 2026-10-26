@@ -73,8 +73,8 @@ class StoreApplicationRepositoryIntegrationTest {
         assertThat(storeApplicationRepository.existsByUserIdAndStatusIn(5L, IN_PROGRESS)).isFalse();
         assertThat(storeApplicationRepository.existsBySlugAndStatusIn("linen-lab", IN_PROGRESS)).isTrue();
         assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusIn("linenlab", IN_PROGRESS)).isTrue();
-        // 시드의 승인된 신청서(곳간상회)는 진행 중이 아니라 신청서 쪽 검사에는 걸리지 않는다 — 스토어 쪽 검사가 막음
-        assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusIn("곳간상회", IN_PROGRESS)).isFalse();
+        // 시드의 승인된 신청서(산골농부 박씨네)는 진행 중이 아니라 신청서 쪽 검사에는 걸리지 않는다 — 스토어 쪽 검사가 막음
+        assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusIn("산골농부 박씨네", IN_PROGRESS)).isFalse();
     }
 
     @Test
@@ -93,14 +93,14 @@ class StoreApplicationRepositoryIntegrationTest {
     @Test
     @DisplayName("스토어 검사는 폐점 스토어도 본다 — UK 가 모든 행에 걸리므로")
     void storeExists_closedStore_stillMatches() {
-        // given — 시드 스토어 2(user 3, 곳간리빙)를 폐점
+        // given — 시드 스토어 2(user 3, 토담공방)를 폐점
         update("UPDATE store SET status = 'CLOSED' WHERE store_id = 2");
 
         // when · then
         assertThat(storeRepository.existsByUserId(3L)).isTrue();
         assertThat(storeRepository.existsByUserId(4L)).isFalse();
         assertThat(storeRepository.existsBySlug(slugOfStore(2L))).isTrue();
-        assertThat(storeRepository.existsByNormalizedStoreName("곳간리빙")).isTrue();
+        assertThat(storeRepository.existsByNormalizedStoreName("토담공방")).isTrue();
     }
 
     @Test
