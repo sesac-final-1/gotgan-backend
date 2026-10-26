@@ -55,4 +55,14 @@ class SecurityConfigTest {
                 .get().uri("/api/admin/users").exchange()
                 .expectStatus().isForbidden();
     }
+
+    @Test
+    @DisplayName("신고 접수는 구매자 · 판매자만 — 관리자 토큰만 있으면 403, 토큰 없으면 401")
+    void reportPath_buyerOrSellerOnly() {
+        client.mutateWith(mockJwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
+                .post().uri("/api/reports").exchange()
+                .expectStatus().isForbidden();
+        client.post().uri("/api/reports").exchange()
+                .expectStatus().isUnauthorized();
+    }
 }

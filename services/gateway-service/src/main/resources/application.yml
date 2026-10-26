@@ -41,7 +41,7 @@ spring:
             - id: admin-service
               uri: ${ADMIN_SERVICE_URI:http://localhost:8088}
               predicates:
-                - Path=/api/admin/**
+                - Path=/api/admin/**,/api/reports/**       # 신고 접수(구매자 · 판매자)도 admin-service — 신고 · 조치 이력이 admindb (10/26)
             - id: keycloak                  # 소셜 로그인 — 브라우저가 Keycloak 로그인 · 제공자 복귀(broker) 화면으로 온다. gotgan realm 과 화면 리소스만 (관리 콘솔 · master realm 은 열지 않음)
               uri: ${KEYCLOAK_URI:http://localhost:8180}
               predicates:

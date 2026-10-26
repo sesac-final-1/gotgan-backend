@@ -1,4 +1,4 @@
-// admin-service — 관리자 API 진입점 · /internal/** 조합 · 관리자 대시보드 (DB 없음)
+// admin-service — 관리자 API 진입점 · /internal/** 조합 · 관리자 대시보드 · 신고(admindb — 신고 · 조치 이력만, ADR-0001 예외 10/26)
 // 의존성 선택 기준: 가이드라인 15장 4절 "의존성 매트릭스". 버전 변수는 gradle.properties (전 서비스 동일)
 plugins {
     id 'java'
@@ -31,6 +31,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+    // 데이터 — 신고 · 조치 이력(admindb). 스키마는 Flyway 만 (컨벤션 3-10)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-mysql'
+    runtimeOnly    'com.mysql:mysql-connector-j'
     // 복원력 — 모든 동기 호출의 표준: 타임아웃 · 서킷 브레이커 · 폴백 (가이드라인 06장 · 13장)
     implementation "io.github.resilience4j:resilience4j-spring-boot4:${resilience4jVersion}"
     implementation 'org.springframework.boot:spring-boot-starter-aspectj'
@@ -44,6 +49,10 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     // 테스트 (Boot 4는 기술별 테스트 스타터)
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testcontainersVersion}"
+    testImplementation "org.testcontainers:testcontainers-mysql:${testcontainersVersion}"
     testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
 }
 

@@ -41,6 +41,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/seller/apply/**").hasRole("BUYER")                      // 입점 신청은 구매자
                         .pathMatchers("/api/seller/**").hasRole("SELLER")
                         .pathMatchers("/api/admin/**").hasRole("ADMIN")                             // 전부 admin-service 로
+                        .pathMatchers("/api/reports/**").hasAnyRole("BUYER", "SELLER")             // 신고 접수 → admin-service (판매자 검토 요청 포함, 10/26)
                         .anyExchange().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(authenticationEntryPoint)

@@ -13,13 +13,14 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       TZ: Asia/Seoul
-      USER_DB_PASSWORD: local-pass             # init-schemas.sh 가 스키마 8개 · 계정 8개를 만든다
+      USER_DB_PASSWORD: local-pass             # init-schemas.sh 가 스키마 9개 · 계정 9개를 만든다
       STORE_DB_PASSWORD: local-pass
       PRODUCT_DB_PASSWORD: local-pass
       ORDER_DB_PASSWORD: local-pass
       PAYMENT_DB_PASSWORD: local-pass
       REVIEW_DB_PASSWORD: local-pass
       SETTLEMENT_DB_PASSWORD: local-pass
+      ADMIN_DB_PASSWORD: local-pass            # admindb — 신고 · 조치 이력 (10/26)
       KEYCLOAK_DB_PASSWORD: local-pass
     ports: ["3306:3306"]
     volumes:
