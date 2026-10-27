@@ -96,4 +96,20 @@ class OrderItemTest {
         assertThatThrownBy(item::markPaymentDone).isInstanceOf(OrderException.class)
                 .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATUS);
     }
+
+    @Test
+    @DisplayName("회수할 적립 포인트 — 적립은 구매확정 때라 확정 전에는 0, 확정 후에는 earnedPoint")
+    void revocablePoint() {
+        OrderItem item = OrderFixtures.item(OrderFixtures.order());
+        java.time.LocalDateTime at = java.time.LocalDateTime.of(2026, 10, 27, 12, 0);
+        item.markPaymentDone();
+        item.prepare();
+        item.ship("CJ대한통운", "651200000001", at);
+        item.deliver(at);
+        assertThat(item.revocablePoint()).isZero();
+
+        item.confirm(at);
+
+        assertThat(item.revocablePoint()).isEqualTo(item.getEarnedPoint());
+    }
 }

@@ -91,7 +91,7 @@ public class CancelOrderItemSaga {
             }
             if (step == SagaStep.STOCK_RESTORED) {                                              // ③ 포인트 환원 · 회수
                 user.reversePoints(new PointReversalRequest(ctx.claimId(), ctx.orderItemId(), ctx.buyerId(),
-                        ctx.orderNo(), ctx.restorePoint(), ctx.earnedPoint()));
+                        ctx.orderNo(), ctx.restorePoint(), ctx.revokePoint()));
                 step = advance(ctx, SagaStep.POINT_RESTORED);
             }
             if (step == SagaStep.POINT_RESTORED) {

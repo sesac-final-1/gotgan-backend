@@ -156,6 +156,7 @@ class OrderEventOutboxIntegrationTest {
         assertThat(payload.get("productName").asString()).isEqualTo("사과");
         assertThat(payload.get("refundAmt").asLong()).isEqualTo(ctx.refundAmt());
         assertThat(payload.get("restoredPoint").asLong()).isEqualTo(item.getUsedPoint());
-        assertThat(payload.get("revokedPoint").asLong()).isEqualTo(item.getEarnedPoint());
+        assertThat(item.getEarnedPoint()).isPositive();
+        assertThat(payload.get("revokedPoint").asLong()).isZero();   // 적립은 구매확정 때 — 확정 전 취소라 회수할 게 없다
     }
 }

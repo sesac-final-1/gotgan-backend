@@ -52,7 +52,7 @@ public class CancelItemTxService {
     /** 취소 Saga 가 단계마다 쓰는 값 — 클레임을 만들 때 정해 두고 재시도해도 같은 값 */
     public record CancelContext(Long sagaInstanceId, String sagaId, Long claimId, ClaimType type, Long orderItemId,
                                 String orderNo, Long buyerId, Long productOptionId, int quantity, long refundAmt,
-                                long restorePoint, long earnedPoint) {
+                                long restorePoint, long revokePoint) {
     }
 
     /**
@@ -145,6 +145,6 @@ public class CancelItemTxService {
         return new CancelContext(saga.getId(), saga.getSagaId(), claim.getId(), claim.getClaimType(), item.getId(),
                 order.getOrderNo(),
                 order.getBuyerId(), item.getProductOptionId(), item.getQuantity(), claim.getRefundAmt(),
-                claim.getRestorePoint(), item.getEarnedPoint());
+                claim.getRestorePoint(), item.revocablePoint());
     }
 }

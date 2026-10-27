@@ -56,7 +56,7 @@ class ClaimServiceTest {
     @DisplayName("취소 — 스토어 마지막이면 배송비까지 돌려받고, 적립 포인트는 회수 예정")
     void preview_cancel() {
         assertThat(preview(ClaimType.CANCEL, ClaimReasonCode.CHANGE_OF_MIND)).isEqualTo(new ClaimPreviewResponse(
-                456L, ClaimType.CANCEL, ClaimReasonCode.CHANGE_OF_MIND, 64_000L, 3_000L, false, 65_000L, 2_000L, 3_100L));
+                456L, ClaimType.CANCEL, ClaimReasonCode.CHANGE_OF_MIND, 64_000L, 3_000L, false, 65_000L, 2_000L, 0L));   // 구매확정 전 — 회수할 적립 없음
         verifyNoInteractions(shippingPolicy);
     }
 
