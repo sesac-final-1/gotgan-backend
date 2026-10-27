@@ -12,6 +12,7 @@ public enum ProductErrorCode implements ErrorCode {
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
     PRODUCT_OPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "상품 옵션을 찾을 수 없습니다."),
     PRODUCT_NOT_PURCHASABLE(HttpStatus.CONFLICT, "현재 구매할 수 없는 상품이 있습니다."),
+    PRODUCT_BLOCKED(HttpStatus.CONFLICT, "관리자가 판매중지한 상품은 판매 상태를 바꿀 수 없습니다."),
     PRODUCT_BLOCK_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "강제 판매중지 사유를 입력해 주세요."),
     PRODUCT_CATEGORY_INVALID(HttpStatus.BAD_REQUEST, "사용 중인 하위 카테고리를 선택해 주세요."),
     PRODUCT_OPTION_INVALID(HttpStatus.BAD_REQUEST, "옵션 구성이 올바르지 않습니다."),

@@ -3,6 +3,7 @@ package com.sesac.gojigi.product.product.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -13,6 +14,9 @@ import com.sesac.gojigi.product.TestcontainersConfiguration;
 import com.sesac.gojigi.product.category.entity.Category;
 import com.sesac.gojigi.product.category.repository.CategoryRepository;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
+import com.sesac.gojigi.product.product.dto.request.ProductStatusChangeRequest;
+import com.sesac.gojigi.product.product.dto.response.ProductStatusChangeResponse;
+import com.sesac.gojigi.product.product.entity.ProductStatus;
 import com.sesac.gojigi.product.product.entity.Product;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
 import com.sesac.gojigi.product.product.service.SellerProductService;
@@ -22,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +50,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 판매자 상품 목록 (GET /api/seller/products, 11절) · 상세 (GET /api/seller/products/{id}, 12절) · 등록 (POST, 13절) · 수정 (PUT, 13절) · 삭제 (DELETE, 16절) — 실제 MySQL · Flyway V1~V2.
+ * 판매자 상품 목록 (GET /api/seller/products, 11절) · 상세 (GET /api/seller/products/{id}, 12절) · 등록 (POST, 13절) · 수정 (PUT, 13절) · 판매중지/재개 (PATCH /status, 15절) · 삭제 (DELETE, 16절) — 실제 MySQL · Flyway V1~V2.
  * 게이트웨이가 넣는 X-User-* · X-Store-Id 헤더를 직접 붙인다. 상품 → 카테고리 순으로 비워 FK 에 걸리지 않게 한다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게 (CategoryApiIntegrationTest 와 같음).
  */
@@ -144,6 +150,16 @@ class SellerProductApiIntegrationTest {
         var req = put("/api/seller/products/" + productId).header("X-User-Id", "2").header("X-User-Roles", "SELLER")
                 .contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(body));
         return mockMvc.perform(storeId == null ? req : req.header("X-Store-Id", storeId));
+    }
+
+    private ResultActions changeStatus(String storeId, String json) throws Exception {
+        var req = patch("/api/seller/products/status").header("X-User-Id", "2").header("X-User-Roles", "SELLER")
+                .contentType(MediaType.APPLICATION_JSON).content(json);
+        return mockMvc.perform(storeId == null ? req : req.header("X-Store-Id", storeId));
+    }
+
+    private String productStatus(long productId) {
+        return jdbc.queryForObject("SELECT status FROM product WHERE product_id = ?", String.class, productId);
     }
 
     private ResultActions remove(long productId, String storeId) throws Exception {
@@ -738,6 +754,122 @@ class SellerProductApiIntegrationTest {
             remove(999999L, String.valueOf(STORE_ID)).andExpect(status().isNotFound());
             remove(productId, null).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
             assertThat(jdbc.queryForObject("SELECT deleted_at IS NULL FROM product WHERE product_id = ?", Boolean.class, productId)).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("판매중지 · 재개 (일괄)")
+    class ChangeStatus {
+
+        @Test
+        @DisplayName("섞인 요청 — 판매중 · 이미 판매중지는 success, 강제 판매중지 · 남의 · 없는 · 삭제된 상품은 failed, 같은 ID 는 한 번")
+        void changeStatus_mixed_splitsSuccessAndFailed() throws Exception {
+            // given
+            long onSale = registerOk();
+            String stoppedBody = register(b -> b.put("status", "STOPPED")).andReturn().getResponse().getContentAsString();
+            long stopped = jsonMapper.readTree(stoppedBody).path("data").path("productId").asLong();
+            long blocked = registerOk();
+            jdbc.update("UPDATE product SET status = 'BLOCKED', status_reason = '허위 표시' WHERE product_id = ?", blocked);
+            long deleted = registerOk();
+            jdbc.update("UPDATE product SET deleted_at = NOW(6) WHERE product_id = ?", deleted);
+            long others = registerOk();
+            jdbc.update("UPDATE product SET store_id = 2 WHERE product_id = ?", others);
+
+            // when
+            changeStatus(String.valueOf(STORE_ID), "{\"productIds\":[" + onSale + "," + stopped + "," + blocked + "," + others + ",999999,"
+                    + deleted + "," + onSale + "],\"status\":\"STOPPED\"}")
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.success.length()").value(2))
+                    .andExpect(jsonPath("$.data.success[0]").value(onSale))
+                    .andExpect(jsonPath("$.data.success[1]").value(stopped))
+                    .andExpect(jsonPath("$.data.failed.length()").value(4))
+                    .andExpect(jsonPath("$.data.failed[0].productId").value(blocked))
+                    .andExpect(jsonPath("$.data.failed[0].code").value("PRODUCT_BLOCKED"))
+                    .andExpect(jsonPath("$.data.failed[0].message").value("관리자가 판매중지한 상품은 판매 상태를 바꿀 수 없습니다."))
+                    .andExpect(jsonPath("$.data.failed[1].productId").value(others))
+                    .andExpect(jsonPath("$.data.failed[1].code").value("PRODUCT_NOT_FOUND"))
+                    .andExpect(jsonPath("$.data.failed[2].productId").value(999999))
+                    .andExpect(jsonPath("$.data.failed[3].productId").value(deleted));
+            assertThat(productStatus(onSale)).isEqualTo("STOPPED");
+            assertThat(productStatus(stopped)).isEqualTo("STOPPED");
+            assertThat(productStatus(blocked)).isEqualTo("BLOCKED");
+            assertThat(productStatus(others)).isEqualTo("ON_SALE");
+
+            // 판매중지된 상품은 목록에서 미노출 이유 STOPPED
+            list(String.valueOf(STORE_ID))
+                    .andExpect(jsonPath("$.data[?(@.productId == " + onSale + ")].hiddenReason").value("STOPPED"));
+        }
+
+        @Test
+        @DisplayName("재개 — STOPPED → ON_SALE, 재고 0 인 상품도 재개(품절로 보임)")
+        void changeStatus_resume_allowedEvenSoldOut() throws Exception {
+            // given
+            String body = register(b -> {
+                b.put("status", "STOPPED");
+                b.put("options", List.of(option("오트밀", "M", 0, 0)));
+            }).andReturn().getResponse().getContentAsString();
+            long soldOut = jsonMapper.readTree(body).path("data").path("productId").asLong();
+
+            // when · then
+            changeStatus(String.valueOf(STORE_ID), "{\"productIds\":[" + soldOut + "],\"status\":\"ON_SALE\"}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.success[0]").value(soldOut))
+                    .andExpect(jsonPath("$.data.failed.length()").value(0));
+            detail(soldOut, String.valueOf(STORE_ID))
+                    .andExpect(jsonPath("$.data.status").value("ON_SALE"))
+                    .andExpect(jsonPath("$.data.soldOut").value(true));
+        }
+
+        @Test
+        @DisplayName("BLOCKED 로 바꾸기 · 없는 상태 · status 없음 · productIds 비었음 · 101개 — 400, 아무것도 안 바뀜 / 헤더 없음 403")
+        void changeStatus_invalidInput_rejectsAll() throws Exception {
+            long id = registerOk();
+            String hundredOne = LongStream.rangeClosed(1, 101).mapToObj(String::valueOf).collect(Collectors.joining(","));
+            for (String json : List.of(
+                    "{\"productIds\":[" + id + "],\"status\":\"BLOCKED\"}",
+                    "{\"productIds\":[" + id + "],\"status\":\"SOLD_OUT\"}",
+                    "{\"productIds\":[" + id + "]}",
+                    "{\"productIds\":[],\"status\":\"STOPPED\"}",
+                    "{\"productIds\":[" + hundredOne + "],\"status\":\"STOPPED\"}")) {
+                changeStatus(String.valueOf(STORE_ID), json)
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            }
+            changeStatus(null, "{\"productIds\":[" + id + "],\"status\":\"STOPPED\"}").andExpect(status().isForbidden());
+            assertThat(productStatus(id)).isEqualTo("ON_SALE");
+        }
+
+        @Test
+        @DisplayName("재개하는 사이 관리자가 강제 판매중지 — 잠금 뒤 BLOCKED 를 보고 failed, 차단이 풀리지 않음")
+        void changeStatus_concurrentAdminBlock_staysBlocked() throws Exception {
+            // given — 판매중지 상태
+            String body = register(b -> b.put("status", "STOPPED")).andReturn().getResponse().getContentAsString();
+            long productId = jsonMapper.readTree(body).path("data").path("productId").asLong();
+
+            // 관리자 트랜잭션이 BLOCKED 로 바꾸고 커밋하지 않은 채 1초 붙잡는다 (행 잠금)
+            CountDownLatch locked = new CountDownLatch(1);
+            Thread admin = new Thread(() -> transactionTemplate.executeWithoutResult(tx -> {
+                jdbc.update("UPDATE product SET status = 'BLOCKED', status_reason = '동시 차단' WHERE product_id = ?", productId);
+                locked.countDown();
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            admin.start();
+            locked.await();
+
+            // when — 판매자 재개: 잠금을 기다렸다가 관리자 커밋 뒤의 상태를 본다
+            ProductStatusChangeResponse result = sellerProductService.changeStatus(STORE_ID,
+                    new ProductStatusChangeRequest(List.of(productId), ProductStatus.ON_SALE));
+            admin.join();
+
+            // then
+            assertThat(result.success()).isEmpty();
+            assertThat(result.failed()).extracting(ProductStatusChangeResponse.Failure::code).containsExactly("PRODUCT_BLOCKED");
+            assertThat(productStatus(productId)).isEqualTo("BLOCKED");
         }
     }
 }

@@ -407,9 +407,11 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | 이미 그 상태 | `success` (멱등) |
 | `BLOCKED` 상품 | `failed` · `PRODUCT_BLOCKED` |
 | 없음 · 삭제됨 · 다른 스토어 상품 | `failed` · `PRODUCT_NOT_FOUND` |
-| `status` 가 `ON_SALE` · `STOPPED` 가 아님 · `productIds` 비었음 · 100개 초과 | **400** `INVALID_INPUT` (아무것도 처리 안 함) |
+| `status` 가 `ON_SALE` · `STOPPED` 가 아님(없음 포함) · `productIds` 비었음 · 100개 초과 | **400** `INVALID_INPUT` (아무것도 처리 안 함) |
+| 같은 ID 를 여러 번 | 한 번만 처리 — `success` · `failed` 는 요청 순서(처음 나온 자리) |
 
 - 재고 0 인 상품도 재개할 수 있습니다(품절로 보임).
+- 구현 메모(product 내부): 요청 상품 행을 **ID 오름차순으로 먼저 잠근 뒤**(`SELECT … FOR UPDATE`) 상태를 봅니다 — 재개하는 사이 관리자가 강제 판매중지해도 잠금 뒤 `BLOCKED` 를 보고 `failed` 로 넘겨 차단이 풀리지 않습니다(같은 `status` 컬럼이라 `@DynamicUpdate` 로는 못 막음, 10/27).
 
 ## 16. 상품 삭제 — `DELETE /api/seller/products/{productId}` (PRD-05)
 

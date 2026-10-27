@@ -2,10 +2,12 @@ package com.sesac.gojigi.product.product.repository;
 
 import com.sesac.gojigi.product.product.entity.Product;
 import com.sesac.gojigi.product.product.entity.ProductStatus;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,6 +15,15 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /** "없거나 삭제된 상품 → 404 PRODUCT_NOT_FOUND" 공통 조회 (6-2 · 13 · 15 · 16절). findById 는 삭제된 상품도 읽는다 — 재고 복원 · 지난 주문용 */
     Optional<Product> findByIdAndDeletedAtIsNull(Long id);
+
+    /**
+     * 판매중지 · 재개(15절)의 첫 쿼리 — 상품 행을 ID 오름차순으로 잠근다(SELECT … FOR UPDATE).
+     * 그 사이 관리자가 강제 판매중지해도 잠금 뒤 최신 상태(BLOCKED)를 보고 건너뛴다 — 같은 status 컬럼이라 @DynamicUpdate 로는 못 막음.
+     * 삭제 · 다른 스토어 여부는 서비스가 가려 PRODUCT_NOT_FOUND 로.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Product p where p.id in :ids order by p.id")
+    List<Product> findAllByIdForUpdate(@Param("ids") Collection<Long> ids);
 
     /** 스토어 상품 전체 (11절 · 6-1절) — 삭제만 빼고 상태 무관, 등록일 최신 순 */
     List<Product> findByStoreIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(Long storeId);
