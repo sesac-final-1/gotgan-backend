@@ -423,10 +423,15 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 
 | 경우 | 응답 |
 |---|---|
-| 1~5개 · `image/jpeg` · `image/png` · `image/webp` · 각 10MB 이하 | **200** — 키는 `products/{storeId}/{UUID}.{확장자}`, 주소 유효 10분 |
-| 개수 · 형식 · 크기 위반 | **400** `PRODUCT_IMAGE_INVALID` |
+| 1 ~ 5개 · `image/jpeg` · `image/png` · `image/webp` · 각 10MB 이하 | **200** — 요청과 같은 순서, 키는 `products/{storeId}/{UUID}.{jpg\|png\|webp}`(확장자는 형식으로 정함), 주소 유효 10분 |
+| 개수 · 형식 · 크기 위반 | **400** `PRODUCT_IMAGE_INVALID` — 하나라도 틀리면 전체 거절, 메시지에 "n번째 파일: …" |
+| `files` · `contentType` · `size` 없음 | **400** `INVALID_INPUT` |
+| 스토어 헤더 없음 | **403** `FORBIDDEN` |
+| 서명용 자격 증명(IRSA)을 못 얻음 | **502** `EXTERNAL_API_ERROR` |
 
 **업로드 순서**: ① 이 API → ② 브라우저가 `uploadUrl` 로 `PUT`(요청 `Content-Type` 을 발급 때와 같게) → ③ 13절 `imageKeys` 에 키를 넣어 저장.
+
+**`Content-Type` · 크기(`Content-Length`)는 서명에 들어갑니다** — 발급 때 말한 형식 · 크기와 다른 파일을 PUT 하면 S3 가 403 `SignatureDoesNotMatch` 로 막습니다(10MB 넘는 파일이 버킷에 올라가지 않음). 브라우저는 파일 크기를 자동으로 보내므로 화면은 `file.type` · `file.size` 를 그대로 발급 요청에 넣으면 됩니다. store 입점 서류 presign(`store.md` 2-1절)과 같은 방식.
 
 - 버킷 `sesac-gojigi-images-4380` 의 `products/` 는 공개 읽기, 쓰기는 presigned PUT 만. CORS(PUT · HEAD, vercel · `localhost:5173`)는 설정돼 있습니다.
 - 올리고 저장하지 않은 파일은 S3 에 남습니다(삭제 권한 없음 — 학습 프로젝트라 보류).
