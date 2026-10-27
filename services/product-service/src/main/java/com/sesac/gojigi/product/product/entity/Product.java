@@ -146,6 +146,11 @@ public class Product extends BaseTimeEntity {
         this.statusReason = null;
     }
 
+    /** 소프트 삭제 (16절) — 옵션 · 재고 이력은 그대로 둔다. 시각은 서비스가 Clock 으로 넘긴다 */
+    public void delete(LocalDateTime now) {
+        this.deletedAt = now;
+    }
+
     private void changePrice(long price, int discountRate) {
         this.price = price;
         this.discountRate = BigDecimal.valueOf(discountRate);
