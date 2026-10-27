@@ -15,19 +15,21 @@ on:
 
 concurrency:
   group: backend-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}   # PR 은 최신 커밋만, main 은 순서대로 끝까지
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}   # PR 은 최신 커밋만, main 은 실행 중인 run 을 끝까지
+  # main 도 대기 자리는 1개라 연속 머지 시 대기 run 이 취소된다 → 취소된 커밋의 변경은 다음 run 이 이어받는다 (changes job 의 base, 10/27)
 
 permissions:
   contents: read
   id-token: write          # AWS OIDC (configure-aws-credentials)
   pull-requests: read
+  actions: read            # changes job — 마지막 성공 run 조회 (gh run list)
 
 jobs:
   # 1) 어떤 서비스가 바뀌었나 — 서비스마다 output 하나 + matrix 용 JSON 배열(services)
   changes:
     runs-on: ubuntu-latest
     outputs:
-      services: ${{ steps.filter.outputs.changes }}      # 예: ["order","payment"]
+      services: ${{ steps.filter.outputs.changes || '[]' }}   # 예: ["order","payment"]. 옛 커밋 run(필터 건너뜀)이면 []
       gateway: ${{ steps.filter.outputs.gateway }}
       user: ${{ steps.filter.outputs.user }}
       store: ${{ steps.filter.outputs.store }}
@@ -42,11 +44,34 @@ jobs:
       lib: ${{ steps.config.outputs.lib }}              # libs/common-web 변경 — 모듈 자체 테스트(lib job)
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0                     # 마지막 성공 커밋과 diff · 조상 확인에 전체 이력 필요
+      # push 비교 기준 = main 에서 마지막으로 성공한 run 의 커밋 (없으면 직전 커밋). 직전 커밋과만 비교하면
+      # 연속 머지로 취소된 run 의 변경을 다음 run 이 보지 못해 그 서비스 이미지가 빠진다 (10/27 #125 · #128 · #132)
+      # 마지막 성공 커밋이 이 커밋의 조상이 아니면 이미 더 새 커밋이 배포된 옛 커밋 run(재실행 등) → 빌드 · 태그 교체 안 함 (태그 되돌림 방지)
+      - id: base
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          sha=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backend.yml --branch main --event push \
+                --status success --limit 1 --json headSha -q '.[0].headSha')
+          sha=${sha:-$BEFORE}
+          echo "base=$sha"
+          if git merge-base --is-ancestor "$sha" HEAD; then
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::마지막 성공 커밋($sha)이 이 커밋의 조상이 아님 — 옛 커밋 run 이라 빌드 · 배포를 건너뜀"
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
       # libs/common-web 은 composite build 로 서비스 jar 에 들어가므로, 바뀌면 의존 서비스 9개를 모두 테스트 · 이미지 재빌드 (결정 5번 B-1)
       # gateway 는 WebFlux 라 common-web(Servlet 전용)을 쓰지 않아 제외
       - id: filter
+        if: steps.base.outputs.stale != 'true'
         uses: dorny/paths-filter@v3
         with:
+          base: ${{ steps.base.outputs.sha }}   # PR 은 비어 있어 기존처럼 PR base 와 비교
           filters: |
             gateway:    [services/gateway-service/**]
             user:       [services/user-service/**, libs/common-web/**]
@@ -59,8 +84,10 @@ jobs:
             admin:      [services/admin-service/**, libs/common-web/**]
             chat:       [services/chat-service/**, libs/common-web/**]
       - id: config                           # 서비스 목록(services)에 섞이지 않게 필터를 따로 둔다
+        if: steps.base.outputs.stale != 'true'
         uses: dorny/paths-filter@v3
         with:
+          base: ${{ steps.base.outputs.sha }}
           filters: |
             sonar: [sonar-project.properties]
             lib:   [libs/common-web/**]
