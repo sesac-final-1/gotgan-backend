@@ -17,10 +17,12 @@ import com.sesac.gojigi.product.product.entity.ProductStatus;
 import com.sesac.gojigi.product.product.exception.ProductErrorCode;
 import com.sesac.gojigi.product.product.exception.ProductException;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 판매자 상품 목록 · 등록 · 상세 (PRD-01 · 03 · 04, product.md 11 · 12 · 13절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
+ * 판매자 상품 목록 · 등록 · 수정 · 상세 (PRD-01 · 02 · 03 · 04, product.md 11 · 12 · 13절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
  * TODO 박지연: 정지 · 폐점 스토어도 등록되면 바로 노출됨(storeActive=true 로 시작) — StoreStatusChanged 소비 PR 에서 함께 정한다.
  */
 @Slf4j
@@ -60,6 +62,7 @@ public class SellerProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ImageUrls imageUrls;
+    private final Clock clock;
 
     /**
      * 스토어 상품 전체 (11절 · 6-1절) — 페이징 · 필터 없음(화면이 셈 · 검색 · 정렬, 프론트 컨벤션 4-7), 삭제된 상품만 빠짐, 등록일 최신 순.
@@ -82,9 +85,7 @@ public class SellerProductService {
 
     /** 수정 화면용 상세 (12절) — 다른 스토어 상품도 "없음"과 같은 404 (있는지 알려 주지 않음) */
     public SellerProductDetailResponse get(Long storeId, Long productId) {
-        Product product = productRepository.findByIdAndDeletedAtIsNull(productId)
-                .filter(p -> p.getStoreId().equals(storeId))
-                .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        Product product = getOwnProduct(storeId, productId);
         Category category = categoryRepository.findById(product.getCategoryId()).orElseThrow(); // 카테고리는 삭제하지 않는다
         Category top = categoryRepository.findById(category.getParentId()).orElseThrow();
         return SellerProductDetailResponse.of(product, category, top, imageUrls);
@@ -97,8 +98,8 @@ public class SellerProductService {
                 .filter(Category::isActive)
                 .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_CATEGORY_INVALID));
         List<String> optionNames = optionNames(request.option1Name(), request.option2Name());
-        List<ProductOption> options = toOptions(optionNames.size(), request.options());
-        List<String> imageKeys = checkImageKeys(storeId, request.imageKeys());
+        List<OptionSpec> options = checkOptions(optionNames.size(), request.options());
+        List<String> imageKeys = checkImageKeys(storeId, request.imageKeys(), Set.of());
         ProductStatus status = initialStatus(request.status());
 
         Product product = Product.builder()
@@ -114,13 +115,72 @@ public class SellerProductService {
                 .option2Name(optionNames.size() < 2 ? null : optionNames.get(1))
                 .status(status)
                 .build();
-        options.forEach(product::addOption);
+        options.forEach(spec -> product.addOption(spec.toNewOption()));   // 상품 복사(12절 응답 재등록)의 productOptionId 는 무시
         for (int i = 0; i < imageKeys.size(); i++) {
             product.addImage(ProductImage.of(imageKeys.get(i), i));
         }
         productRepository.save(product);
         log.info("상품 등록 - storeId={}, productId={}, options={}", storeId, product.getId(), options.size());
         return SellerProductDetailResponse.of(product, category, top, imageUrls);
+    }
+
+    /**
+     * 수정 (13절 PUT) — 등록과 같은 본문 · 같은 검사, status 는 무시하고 재고 · 판매 상태는 바꾸지 않는다(BLOCKED 도 수정 가능, 상태 그대로).
+     * 옵션은 productOptionId 로 맞춘다: 있으면 추가금만 · 없으면 새 조합 · 요청에 없는 기존 조합은 소프트 삭제.
+     * 이미지는 요청 순서대로 다시 저장 — 이 상품에 이미 붙어 있는 키(시드 이미지 포함)는 모양 검사 없이 받는다.
+     */
+    @Transactional
+    public SellerProductDetailResponse update(Long storeId, Long productId, ProductCreateRequest request) {
+        Product product = getOwnProduct(storeId, productId);
+        Category category = getSubCategory(request.categoryId());
+        Category top = categoryRepository.findById(category.getParentId())
+                .filter(Category::isActive)
+                .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_CATEGORY_INVALID));
+        List<String> optionNames = optionNames(request.option1Name(), request.option2Name());
+        List<OptionSpec> options = checkOptions(optionNames.size(), request.options());
+        Set<String> currentKeys = product.getImages().stream().map(ProductImage::getS3Key).collect(Collectors.toSet());
+        List<String> imageKeys = checkImageKeys(storeId, request.imageKeys(), currentKeys);
+
+        applyOptions(product, options);
+        product.update(category.getId(), request.name().strip(), request.price(), request.discountRate(),
+                sanitizeDescription(request.description()), request.material().strip(), request.origin().strip(),
+                optionNames.isEmpty() ? null : optionNames.getFirst(), optionNames.size() < 2 ? null : optionNames.get(1));
+        product.replaceImages(imageKeys);
+        productRepository.flush();   // 새 조합 ID · 수정 시각을 응답에 담으려고
+        log.info("상품 수정 - storeId={}, productId={}, options={}", storeId, productId, options.size());
+        return SellerProductDetailResponse.of(product, category, top, imageUrls);
+    }
+
+    /** 내 스토어의 삭제 안 된 상품 — 다른 스토어 상품도 "없음"과 같은 404 (있는지 알려 주지 않음, 12절) */
+    private Product getOwnProduct(Long storeId, Long productId) {
+        return productRepository.findByIdAndDeletedAtIsNull(productId)
+                .filter(p -> p.getStoreId().equals(storeId))
+                .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
+    }
+
+    /** 기존 조합은 추가금만(값이 다르면 400) · 새 조합은 추가 · 요청에 없는 기존 조합은 소프트 삭제 */
+    private void applyOptions(Product product, List<OptionSpec> specs) {
+        Map<Long, ProductOption> live = product.getOptions().stream()
+                .filter(o -> o.getDeletedAt() == null)
+                .collect(Collectors.toMap(ProductOption::getId, Function.identity()));
+        Set<Long> kept = new HashSet<>();
+        for (OptionSpec spec : specs) {
+            if (spec.productOptionId() == null) {
+                product.addOption(spec.toNewOption());
+                continue;
+            }
+            ProductOption option = live.get(spec.productOptionId());
+            if (option == null) {
+                throw invalidOption("이 상품의 옵션이 아니거나 삭제된 옵션입니다. (옵션 " + spec.productOptionId() + ")");
+            }
+            if (!option.hasValues(spec.value1(), spec.value2())) {
+                throw invalidOption("기존 조합의 옵션 값은 바꿀 수 없습니다. 새 조합으로 추가해 주세요. (옵션 " + spec.productOptionId() + ")");
+            }
+            option.changeExtraPrice(spec.extraPrice());
+            kept.add(option.getId());
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        live.values().stream().filter(o -> !kept.contains(o.getId())).forEach(o -> o.delete(now));
     }
 
     /** 사용 중인 하위만 — 없거나 · 상위이거나 · 꺼진 카테고리는 같은 코드 (CAT-03, product 자기 DB 로 검증) */
@@ -148,7 +208,7 @@ public class SellerProductService {
     }
 
     /** 조합 1~100개 · 그룹 수와 값 개수가 맞음 · 조합 중복 없음 · 추가금 · 재고 0 이상. 그룹이 없으면 값이 null 인 1개만 */
-    private static List<ProductOption> toOptions(int groupCount, List<OptionItem> items) {
+    private static List<OptionSpec> checkOptions(int groupCount, List<OptionItem> items) {
         if (items == null || items.isEmpty() || items.size() > MAX_OPTIONS) {
             throw invalidOption("옵션 조합은 1~100개여야 합니다.");
         }
@@ -156,7 +216,7 @@ public class SellerProductService {
             throw invalidOption("옵션이 없는 상품은 조합을 1개만 보내 주세요.");
         }
         Set<List<String>> seen = new HashSet<>();
-        List<ProductOption> options = new ArrayList<>();
+        List<OptionSpec> options = new ArrayList<>();
         for (OptionItem item : items) {
             if (item == null) {
                 throw invalidOption("빈 옵션 조합이 있습니다.");
@@ -178,18 +238,21 @@ public class SellerProductService {
             if (!seen.add(Arrays.asList(value1, value2))) {
                 throw invalidOption("같은 옵션 조합이 있습니다.");
             }
-            options.add(ProductOption.of(value1, value2, item.extraPrice(), item.stock()));
+            options.add(new OptionSpec(item.productOptionId(), value1, value2, item.extraPrice(), item.stock()));
         }
         return options;
     }
 
-    /** 1~5개 · 중복 없음 · presign 이 발급하는 내 스토어 키 모양(products/{storeId}/{UUID}.{jpg|png|webp}). S3 존재 확인은 하지 않는다 */
-    private static List<String> checkImageKeys(Long storeId, List<String> keys) {
+    /**
+     * 1~5개 · 중복 없음 · presign 이 발급하는 내 스토어 키 모양(products/{storeId}/{UUID}.{jpg|png|webp}) 또는 이 상품에 이미 붙어 있는 키(수정).
+     * S3 존재 확인은 하지 않는다.
+     */
+    private static List<String> checkImageKeys(Long storeId, List<String> keys, Set<String> currentKeys) {
         if (keys == null || keys.isEmpty() || keys.size() > MAX_IMAGES) {
             throw invalidImage("상품 이미지는 1~5장이어야 합니다.");
         }
         Pattern ownKey = Pattern.compile("products/" + storeId + "/[A-Za-z0-9-]{1,64}\\.(jpg|png|webp)");
-        if (keys.stream().anyMatch(key -> key == null || !ownKey.matcher(key).matches())) {
+        if (keys.stream().anyMatch(key -> key == null || !(currentKeys.contains(key) || ownKey.matcher(key).matches()))) {
             throw invalidImage("업로드 주소 발급으로 받은 내 스토어 이미지만 사용할 수 있습니다.");
         }
         if (new HashSet<>(keys).size() != keys.size()) {
@@ -244,5 +307,13 @@ public class SellerProductService {
 
     private static String blankToNull(String value) {
         return StringUtils.hasText(value) ? value.strip() : null;
+    }
+
+    /** 검사를 마친 옵션 조합 한 줄 — 등록은 새 조합으로, 수정은 productOptionId 로 기존 조합과 맞춘다 */
+    private record OptionSpec(Long productOptionId, String value1, String value2, long extraPrice, int stock) {
+
+        ProductOption toNewOption() {
+            return ProductOption.of(value1, value2, extraPrice, stock);
+        }
     }
 }

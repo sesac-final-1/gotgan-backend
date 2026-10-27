@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 상품 등록 (product.md 13절) — 옵션 · 이미지를 통째로 보낸다.
+ * 상품 등록 · 수정 (product.md 13절) — 옵션 · 이미지를 통째로 보낸다. 같은 본문을 PUT 에도 쓴다(status 는 수정 때 무시).
  * 형식 오류는 여기서 INVALID_INPUT, 옵션 · 이미지 규칙은 서비스가 PRODUCT_OPTION_INVALID · PRODUCT_IMAGE_INVALID 로 본다 (계약의 코드 구분).
  */
 public record ProductCreateRequest(
@@ -44,7 +44,7 @@ public record ProductCreateRequest(
         List<OptionItem> options,
         @Schema(description = "presign 으로 받은 내 스토어 키(products/{storeId}/…) 1~5개 — 첫 번째가 대표", example = "[\"products/1/7f3c9e2a.jpg\"]")
         List<String> imageKeys,
-        @Schema(description = "ON_SALE(기본) · STOPPED", example = "ON_SALE")
+        @Schema(description = "등록 때만 ON_SALE(기본) · STOPPED — 수정 때는 무시", example = "ON_SALE")
         ProductStatus status) {
 
     public record OptionItem(
