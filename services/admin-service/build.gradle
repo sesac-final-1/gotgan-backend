@@ -36,6 +36,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-mysql'
     runtimeOnly    'com.mysql:mysql-connector-j'
+    // 알림 센터(NTF-08, 10/27) — 이벤트 구독(SQS 롱폴링) · 알림함(DynamoDB) · 파드 간 실시간 전달(Redis Pub/Sub → SSE)
+    implementation 'software.amazon.awssdk:sqs'
+    implementation 'software.amazon.awssdk:dynamodb'
+    implementation 'software.amazon.awssdk:sts'    // IRSA(웹 아이덴티티 토큰) 자격 증명 — 없으면 클러스터에서 기본 자격 증명 체인이 실패
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     // 복원력 — 모든 동기 호출의 표준: 타임아웃 · 서킷 브레이커 · 폴백 (가이드라인 06장 · 13장)
     implementation "io.github.resilience4j:resilience4j-spring-boot4:${resilience4jVersion}"
     implementation 'org.springframework.boot:spring-boot-starter-aspectj'
