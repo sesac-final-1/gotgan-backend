@@ -98,8 +98,7 @@ public class PlaceOrderSaga {
 
             if (order.getPayAmt() == 0) {
                 // 전액 포인트 — 포트원은 0원 결제창이 없어 결제 준비 · 검증을 건너뛰고 바로 PAID (docs/api/payment.md 1절)
-                // TODO(결제 확인 PR · ORD-09): OrderPaid 이벤트를 결제 확인과 같은 경로로 발행
-                orderTx.markPaid(order.getId());
+                orderTx.markPaid(order.getId());   // OrderPaid 도 이 트랜잭션에서 (OrderEventRecorder)
                 sagaTx.complete(saga.getId());
                 log.info("주문 완료(전액 포인트) - usedPoint={}", order.getUsedPoint());
                 return new OrderCreateResponse(order.getOrderNo(), OrderStatus.PAID, 0L, null, orderName);
@@ -184,8 +183,7 @@ public class PlaceOrderSaga {
             throw e;   // ORDER_PAYMENT_NOT_COMPLETED · ORDER_PAYMENT_FAILED
         }
         sagaTx.advance(saga.getId(), SagaStep.PAYMENT_VERIFIED);
-        orderTx.markPaid(order.getId());   // 주문 PAID + 상품주문 PAYMENT_DONE
-        // TODO(ORD-09): OrderPaid 이벤트를 커밋 후 발행 (0원 주문도 같은 경로)
+        orderTx.markPaid(order.getId());   // 주문 PAID + 상품주문 PAYMENT_DONE + OrderPaid(아웃박스, 커밋 후 발행)
         sagaTx.complete(saga.getId());
     }
 
