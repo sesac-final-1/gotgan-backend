@@ -7,7 +7,9 @@ import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
 import com.sesac.gojigi.product.product.dto.request.ProductStatusChangeRequest;
+import com.sesac.gojigi.product.product.dto.request.ProductStockUpdateRequest;
 import com.sesac.gojigi.product.product.dto.response.ProductStatusChangeResponse;
+import com.sesac.gojigi.product.product.dto.response.ProductStockUpdateResponse;
 import com.sesac.gojigi.product.product.dto.response.SellerProductDetailResponse;
 import com.sesac.gojigi.product.product.dto.response.SellerProductResponse;
 import com.sesac.gojigi.product.product.service.SellerProductService;
@@ -107,6 +109,26 @@ public class SellerProductController {
             @Parameter(description = "상품 ID", example = "3") @PathVariable Long productId,
             @Valid @RequestBody ProductCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.success("상품을 수정했습니다.", sellerProductService.update(storeId(user), productId, request)));
+    }
+
+    @Operation(summary = "재고 수정", description = """
+            인가: SELLER (스토어 = X-Store-Id). 화면에서 본 재고(seenStock)를 같이 보냄 — 지금 재고와 같을 때만 바꿈, 하나라도 그 사이 바뀌었으면 전체 롤백 409.
+            전부 바꾸거나 하나도 안 바꿈. status 는 바꾸지 않음(재고 0 이면 품절로 보임, BLOCKED 상품도 가능). 응답은 바꾼 옵션만(ID 오름차순) (product.md 14절).
+            에러: 400 INVALID_INPUT(items 비었음 · stock/seenStock 없음 · 0 미만 · 같은 옵션 중복) / 403 FORBIDDEN /
+            404 PRODUCT_NOT_FOUND(없거나 삭제 · 다른 스토어 상품) · PRODUCT_OPTION_NOT_FOUND(이 상품의 옵션이 아님 · 삭제된 옵션) / 409 STOCK_CHANGED""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 — 바꾼 옵션 · 재고"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PRODUCT_NOT_FOUND · PRODUCT_OPTION_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "STOCK_CHANGED")
+    })
+    @PatchMapping("/{productId}/stocks")
+    public ResponseEntity<ApiResponse<ProductStockUpdateResponse>> updateStocks(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Parameter(description = "상품 ID", example = "3") @PathVariable Long productId,
+            @Valid @RequestBody ProductStockUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("재고를 수정했습니다.", sellerProductService.updateStocks(storeId(user), productId, request)));
     }
 
     @Operation(summary = "판매중지 · 재개 (일괄)", description = """

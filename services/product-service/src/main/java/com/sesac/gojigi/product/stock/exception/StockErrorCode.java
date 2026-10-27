@@ -10,7 +10,8 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum StockErrorCode implements ErrorCode {
     STOCK_INSUFFICIENT(HttpStatus.CONFLICT, "재고가 부족한 상품이 있습니다."),
-    STOCK_RESERVATION_RELEASED(HttpStatus.CONFLICT, "이미 해제된 주문의 재고 예약입니다.");
+    STOCK_RESERVATION_RELEASED(HttpStatus.CONFLICT, "이미 해제된 주문의 재고 예약입니다."),
+    STOCK_CHANGED(HttpStatus.CONFLICT, "그 사이 주문이 들어와 재고가 바뀌었어요. 다시 불러온 뒤 입력해 주세요.");
 
     private final HttpStatus status;
     private final String message;

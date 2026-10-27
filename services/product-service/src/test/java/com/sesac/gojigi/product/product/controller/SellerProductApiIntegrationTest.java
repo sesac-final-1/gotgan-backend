@@ -10,21 +10,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.product.TestcontainersConfiguration;
 import com.sesac.gojigi.product.category.entity.Category;
 import com.sesac.gojigi.product.category.repository.CategoryRepository;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
 import com.sesac.gojigi.product.product.dto.request.ProductStatusChangeRequest;
+import com.sesac.gojigi.product.product.dto.request.ProductStockUpdateRequest;
 import com.sesac.gojigi.product.product.dto.response.ProductStatusChangeResponse;
 import com.sesac.gojigi.product.product.entity.ProductStatus;
 import com.sesac.gojigi.product.product.entity.Product;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
 import com.sesac.gojigi.product.product.service.SellerProductService;
+import com.sesac.gojigi.product.stock.dto.request.StockItem;
+import com.sesac.gojigi.product.stock.dto.request.StockReserveRequest;
+import com.sesac.gojigi.product.stock.service.StockReservationService;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -50,7 +58,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 판매자 상품 목록 (GET /api/seller/products, 11절) · 상세 (GET /api/seller/products/{id}, 12절) · 등록 (POST, 13절) · 수정 (PUT, 13절) · 판매중지/재개 (PATCH /status, 15절) · 삭제 (DELETE, 16절) — 실제 MySQL · Flyway V1~V2.
+ * 판매자 상품 목록 (GET /api/seller/products, 11절) · 상세 (GET /api/seller/products/{id}, 12절) · 등록 (POST, 13절) · 수정 (PUT, 13절) · 재고 수정 (PATCH /stocks, 14절) · 판매중지/재개 (PATCH /status, 15절) · 삭제 (DELETE, 16절) — 실제 MySQL · Flyway V1~V2.
  * 게이트웨이가 넣는 X-User-* · X-Store-Id 헤더를 직접 붙인다. 상품 → 카테고리 순으로 비워 FK 에 걸리지 않게 한다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게 (CategoryApiIntegrationTest 와 같음).
  */
@@ -69,6 +77,7 @@ class SellerProductApiIntegrationTest {
     @Autowired TransactionTemplate transactionTemplate;
     @Autowired JdbcTemplate jdbc;
     @Autowired SellerProductService sellerProductService;
+    @Autowired StockReservationService stockReservationService;
 
     private Category top;
     private Category shirts;
@@ -84,6 +93,7 @@ class SellerProductApiIntegrationTest {
 
     @AfterEach
     void clean() {
+        jdbc.update("DELETE FROM stock_history"); // 재고 수정 · 예약 테스트가 남긴 원장 — 옵션 FK 보다 먼저
         productRepository.deleteAll(); // 옵션 · 이미지는 cascade 로 함께
         categoryRepository.deleteAll(categoryRepository.findAll().stream().filter(c -> !c.isTop()).toList());
         categoryRepository.deleteAll();
@@ -150,6 +160,25 @@ class SellerProductApiIntegrationTest {
         var req = put("/api/seller/products/" + productId).header("X-User-Id", "2").header("X-User-Roles", "SELLER")
                 .contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(body));
         return mockMvc.perform(storeId == null ? req : req.header("X-Store-Id", storeId));
+    }
+
+    private ResultActions updateStocks(long productId, String storeId, String json) throws Exception {
+        var req = patch("/api/seller/products/" + productId + "/stocks").header("X-User-Id", "2").header("X-User-Roles", "SELLER")
+                .contentType(MediaType.APPLICATION_JSON).content(json);
+        return mockMvc.perform(storeId == null ? req : req.header("X-Store-Id", storeId));
+    }
+
+    private static String stockItems(long... optionIdStockSeen) {
+        List<String> items = new ArrayList<>();
+        for (int i = 0; i < optionIdStockSeen.length; i += 3) {
+            items.add("{\"productOptionId\":" + optionIdStockSeen[i] + ",\"stock\":" + optionIdStockSeen[i + 1]
+                    + ",\"seenStock\":" + optionIdStockSeen[i + 2] + "}");
+        }
+        return "{\"items\":[" + String.join(",", items) + "]}";
+    }
+
+    private int stockOf(long optionId) {
+        return jdbc.queryForObject("SELECT stock FROM product_option WHERE product_option_id = ?", Integer.class, optionId);
     }
 
     private ResultActions changeStatus(String storeId, String json) throws Exception {
@@ -870,6 +899,168 @@ class SellerProductApiIntegrationTest {
             assertThat(result.success()).isEmpty();
             assertThat(result.failed()).extracting(ProductStatusChangeResponse.Failure::code).containsExactly("PRODUCT_BLOCKED");
             assertThat(productStatus(productId)).isEqualTo("BLOCKED");
+        }
+    }
+
+    @Nested
+    @DisplayName("재고 수정")
+    class UpdateStocks {
+
+        @Test
+        @DisplayName("본 재고가 그대로면 — 200, 두 옵션 모두 바뀜, 응답은 바꾼 옵션만 ID 오름차순, 상태 · 재고 이력 그대로")
+        void updateStocks_unchanged_updatesAll() throws Exception {
+            // given — M 30 · L 0
+            long productId = registerOk();
+            List<Long> ids = optionIds(productId);
+
+            // when — 큰 ID 먼저 보냄
+            updateStocks(productId, String.valueOf(STORE_ID), stockItems(ids.get(1), 15, 0, ids.get(0), 50, 30))
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.options.length()").value(2))
+                    .andExpect(jsonPath("$.data.options[0].productOptionId").value(ids.get(0)))
+                    .andExpect(jsonPath("$.data.options[0].stock").value(50))
+                    .andExpect(jsonPath("$.data.options[1].stock").value(15));
+            assertThat(stockOf(ids.get(0))).isEqualTo(50);
+            assertThat(stockOf(ids.get(1))).isEqualTo(15);
+            assertThat(productStatus(productId)).isEqualTo("ON_SALE");
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM stock_history", Integer.class)).isZero();
+
+            // 재고 0 으로 → 품절로 보임, 상태는 그대로
+            updateStocks(productId, String.valueOf(STORE_ID), stockItems(ids.get(0), 0, 50, ids.get(1), 0, 15)).andExpect(status().isOk());
+            detail(productId, String.valueOf(STORE_ID))
+                    .andExpect(jsonPath("$.data.soldOut").value(true))
+                    .andExpect(jsonPath("$.data.status").value("ON_SALE"));
+        }
+
+        @Test
+        @DisplayName("본 뒤 주문이 재고를 뺌 — 409 STOCK_CHANGED, 앞 옵션까지 전체 롤백 (예약이 뺀 재고는 그대로)")
+        void updateStocks_changedByOrder_rollsBackAll() throws Exception {
+            // given — 판매자가 화면에서 M 30 · L 0 을 봄 → 그 사이 주문이 M 2개 예약
+            long productId = registerOk();
+            List<Long> ids = optionIds(productId);
+            stockReservationService.reserve(new StockReserveRequest("saga-seen", List.of(new StockItem(ids.get(0), 2))));
+
+            // when — L 은 그대로라 통과할 수 있지만 M 이 달라 전체 거절
+            updateStocks(productId, String.valueOf(STORE_ID), stockItems(ids.get(1), 10, 0, ids.get(0), 50, 30))
+                    // then
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("STOCK_CHANGED"));
+            assertThat(stockOf(ids.get(0))).isEqualTo(28);
+            assertThat(stockOf(ids.get(1))).isZero();
+        }
+
+        @Test
+        @DisplayName("강제 판매중지 상품도 재고 수정 가능 — 상태는 BLOCKED 그대로")
+        void updateStocks_blockedProduct_allowed() throws Exception {
+            long productId = registerOk();
+            jdbc.update("UPDATE product SET status = 'BLOCKED', status_reason = '허위 표시' WHERE product_id = ?", productId);
+            long m = optionIds(productId).getFirst();
+
+            updateStocks(productId, String.valueOf(STORE_ID), stockItems(m, 40, 30)).andExpect(status().isOk());
+            assertThat(stockOf(m)).isEqualTo(40);
+            assertThat(productStatus(productId)).isEqualTo("BLOCKED");
+        }
+
+        @Test
+        @DisplayName("다른 상품의 옵션 · 삭제된 옵션 — 404 PRODUCT_OPTION_NOT_FOUND, 아무것도 안 바뀜")
+        void updateStocks_notThisProductsOption_notFound() throws Exception {
+            // given
+            long productId = registerOk();
+            List<Long> ids = optionIds(productId);
+            long otherOption = optionIds(registerOk()).getFirst();
+            jdbc.update("UPDATE product_option SET deleted_at = NOW(6) WHERE product_option_id = ?", ids.get(1));
+
+            // when · then
+            for (long bad : List.of(otherOption, ids.get(1))) {
+                updateStocks(productId, String.valueOf(STORE_ID), stockItems(ids.get(0), 50, 30, bad, 5, 0))
+                        .andExpect(status().isNotFound())
+                        .andExpect(jsonPath("$.code").value("PRODUCT_OPTION_NOT_FOUND"));
+            }
+            assertThat(stockOf(ids.get(0))).isEqualTo(30);
+        }
+
+        @Test
+        @DisplayName("다른 스토어 · 삭제된 · 없는 상품 404 PRODUCT_NOT_FOUND, 헤더 없음 403")
+        void updateStocks_notMineOrMissing_rejected() throws Exception {
+            long productId = registerOk();
+            long m = optionIds(productId).getFirst();
+            long deletedId = registerOk();
+            jdbc.update("UPDATE product SET deleted_at = NOW(6) WHERE product_id = ?", deletedId);
+
+            updateStocks(productId, "2", stockItems(m, 50, 30)).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+            updateStocks(deletedId, String.valueOf(STORE_ID), stockItems(m, 50, 30)).andExpect(status().isNotFound());
+            updateStocks(999999L, String.valueOf(STORE_ID), stockItems(m, 50, 30)).andExpect(status().isNotFound());
+            updateStocks(productId, null, stockItems(m, 50, 30)).andExpect(status().isForbidden());
+            assertThat(stockOf(m)).isEqualTo(30);
+        }
+
+        @Test
+        @DisplayName("items 비었음 · 재고 음수 · seenStock 없음 · 같은 옵션 중복 — 400 INVALID_INPUT")
+        void updateStocks_invalidInput_badRequest() throws Exception {
+            long productId = registerOk();
+            long m = optionIds(productId).getFirst();
+            for (String json : List.of(
+                    "{\"items\":[]}",
+                    stockItems(m, -1, 30),
+                    "{\"items\":[{\"productOptionId\":" + m + ",\"stock\":50}]}",
+                    stockItems(m, 50, 30, m, 40, 30))) {
+                updateStocks(productId, String.valueOf(STORE_ID), json)
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            }
+            assertThat(stockOf(m)).isEqualTo(30);
+        }
+
+        @Test
+        @DisplayName("재고 수정과 주문 예약이 반대 순서로 같은 두 옵션을 동시에 10번 — 데드락 없이 둘 중 하나로 끝나고 재고가 맞음 (두 순서 모두 나옴)")
+        void updateStocks_concurrentWithReservation_noDeadlock() throws Exception {
+            // given
+            long productId = registerOk();
+            List<Long> ids = optionIds(productId);
+            long m = ids.get(0);
+            long l = ids.get(1);
+            jdbc.update("UPDATE product_option SET stock = 100 WHERE product_option_id IN (?, ?)", m, l);
+            List<String> outcomes = new ArrayList<>();
+
+            for (int i = 0; i < 10; i++) {
+                int seenM = stockOf(m);
+                int seenL = stockOf(l);
+                String sagaId = "saga-race-" + i;
+                CountDownLatch start = new CountDownLatch(1);
+                ExecutorService pool = Executors.newFixedThreadPool(2);
+                long reserveDelay = i % 2 == 0 ? 0 : 30;   // 짝수 회차는 동시 출발(예약이 먼저인 경우가 많음), 홀수 회차는 예약을 늦춰 수정이 먼저 커밋되게
+                Future<String> reserve = pool.submit(() -> {
+                    start.await();
+                    Thread.sleep(reserveDelay);
+                    stockReservationService.reserve(new StockReserveRequest(sagaId, List.of(new StockItem(m, 1), new StockItem(l, 1))));
+                    return "reserved";
+                });
+                Future<String> update = pool.submit(() -> {
+                    start.await();
+                    try {
+                        sellerProductService.updateStocks(STORE_ID, productId, new ProductStockUpdateRequest(List.of(
+                                new ProductStockUpdateRequest.Item(l, seenL + 10, seenL),
+                                new ProductStockUpdateRequest.Item(m, seenM + 10, seenM))));
+                        return "updated";
+                    } catch (BusinessException e) {
+                        return e.getErrorCode().getCode();
+                    }
+                });
+                start.countDown();
+                String reserveResult = reserve.get();
+                String updateResult = update.get();
+                pool.shutdown();
+
+                // 수정이 먼저면 (+10 뒤 −1 = +9), 예약이 먼저면 수정은 409 (−1)
+                assertThat(reserveResult).isEqualTo("reserved");
+                assertThat(updateResult).isIn("updated", "STOCK_CHANGED");
+                int expectedDelta = updateResult.equals("updated") ? 9 : -1;
+                assertThat(stockOf(m)).as("시도 %d M", i).isEqualTo(seenM + expectedDelta);
+                assertThat(stockOf(l)).as("시도 %d L", i).isEqualTo(seenL + expectedDelta);
+                outcomes.add(updateResult);
+            }
+            assertThat(outcomes).as("수정 먼저 · 예약 먼저 두 경우가 모두 시험됐는지").contains("updated", "STOCK_CHANGED");
         }
     }
 }
