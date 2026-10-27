@@ -54,7 +54,7 @@ resilience4j:
     instances:
       user: { base-config: remote }
       settlement: { base-config: remote }
-      product: { base-config: remote }      # 카테고리 관리
+      product: { base-config: remote }      # 카테고리 관리 · 관리자 상품 · 상품 통계
       order: { base-config: remote }        # 대시보드 주문 통계
       store: { base-config: remote }        # 입점 심사 · 스토어 관리 (store.md #97 계약)
       review: { base-config: remote }       # 신고 — 리뷰 조회 · 블라인드
@@ -72,8 +72,8 @@ resilience4j:
     instances:
       user: { base-config: default }        # UserClientAdapter 의 GET 에만
       settlement: { base-config: default }  # SettlementClientAdapter 의 GET 에만
-      product: { base-config: default }     # ProductClientAdapter#categories 에만
-      order: { base-config: default }       # OrderClientAdapter#platformStats
+      product: { base-config: default }     # ProductClientAdapter#categories · AdminProductClientAdapter 의 GET 에만
+      order: { base-config: default }       # OrderClientAdapter#platformStats · dailyStats
       store: { base-config: default }       # StoreClientAdapter 의 GET 에만
       review: { base-config: default }      # ReviewClientAdapter#get 에만
 

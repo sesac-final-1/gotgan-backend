@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sesac.gojigi.admin.category.client.ProductClient;
 import com.sesac.gojigi.admin.dashboard.client.OrderClient;
+import com.sesac.gojigi.admin.product.client.AdminProductClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -42,7 +43,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 카테고리 조합(product + settlement 수수료) · 대시보드 부분 응답. 시각 고정 2026-10-26 KST — 신규 상위 수수료 적용 시작일 = 오늘.
+ * 카테고리 조합(product + settlement 수수료) · 대시보드 부분 응답(정산 · 주문 · 일별 · 상품). 시각 고정 2026-10-26 KST — 신규 상위 수수료 적용 시작일 = 오늘.
  * 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -65,12 +66,13 @@ class AdminCategoryDashboardApiTest {
     @MockitoBean ProductClient productClient;
     @MockitoBean SettlementClient settlementClient;
     @MockitoBean OrderClient orderClient;
+    @MockitoBean AdminProductClient adminProductClient;
     @Autowired CircuitBreakerRegistry circuitBreakers;
 
     /** 목 · 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
     @BeforeEach
     void resetMocks() {
-        reset(productClient, settlementClient, orderClient);
+        reset(productClient, settlementClient, orderClient, adminProductClient);
         circuitBreakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
     }
 
@@ -161,22 +163,32 @@ class AdminCategoryDashboardApiTest {
     }
 
     @Test
-    @DisplayName("대시보드 — 두 영역 모두, 한쪽 장애면 그 영역 null + unavailable 로 200")
+    @DisplayName("대시보드 — 네 영역(정산 · 주문 · 최근 30일 일별 · 상품) 모두, 장애난 영역만 null + unavailable 로 200")
     void dashboard_partial() throws Exception {
         when(settlementClient.platformStats()).thenReturn(ok("{\"store\":null,\"platform\":{\"scheduledCount\":3,\"heldCount\":1}}"));
         when(orderClient.platformStats()).thenReturn(ok("{\"totalTradeAmt\":1200000,\"orderCount\":42}"));
+        when(orderClient.dailyStats(30)).thenReturn(ok("[{\"date\":\"2026-10-26\",\"tradeAmt\":89000,\"orderCount\":2}]"));
+        when(adminProductClient.platformStats())
+                .thenReturn(ok("{\"store\":null,\"platform\":{\"onSaleCount\":12,\"lowStockCount\":2,\"soldOutCount\":1,\"blockedCount\":1}}"));
 
         mockMvc.perform(get("/api/admin/dashboard"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.settlement.scheduledCount").value(3))
                 .andExpect(jsonPath("$.data.order.orderCount").value(42))
+                .andExpect(jsonPath("$.data.orderDaily[0].tradeAmt").value(89000))
+                .andExpect(jsonPath("$.data.product.onSaleCount").value(12))
+                .andExpect(jsonPath("$.data.product.store").doesNotExist())
                 .andExpect(jsonPath("$.data.unavailable").isEmpty());
 
         when(orderClient.platformStats()).thenThrow(new ResourceAccessException("connect timed out"));
+        when(adminProductClient.platformStats()).thenThrow(new ResourceAccessException("connect timed out"));
         mockMvc.perform(get("/api/admin/dashboard"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.settlement.heldCount").value(1))
                 .andExpect(jsonPath("$.data.order").doesNotExist())
-                .andExpect(jsonPath("$.data.unavailable[0]").value("order"));
+                .andExpect(jsonPath("$.data.orderDaily[0].orderCount").value(2))
+                .andExpect(jsonPath("$.data.product").doesNotExist())
+                .andExpect(jsonPath("$.data.unavailable[0]").value("order"))
+                .andExpect(jsonPath("$.data.unavailable[1]").value("product"));
     }
 }

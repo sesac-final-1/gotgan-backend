@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.sesac.gojigi.admin.product.client.AdminProductClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.admin.user.client.UserClient;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
@@ -38,7 +39,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * admin 중계 — 관리자 회원(user) · 정산 · 수수료(settlement). 다른 서비스 클라이언트는 가짜, 서킷 브레이커 · 재시도 · 오류 전달은 실제.
+ * admin 중계 — 관리자 회원(user) · 정산 · 수수료(settlement) · 상품(product). 다른 서비스 클라이언트는 가짜, 서킷 브레이커 · 재시도 · 오류 전달은 실제.
  * 트레이스 샘플링 0 — 같은 JVM 의 LogbackConfigTest 에 Zipkin 경고가 섞이지 않게 (product #90 과 같은 이유)
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -53,12 +54,13 @@ class AdminRelayApiTest {
     @Autowired JsonMapper json;
     @MockitoBean UserClient userClient;
     @MockitoBean SettlementClient settlementClient;
+    @MockitoBean AdminProductClient adminProductClient;
     @Autowired CircuitBreakerRegistry circuitBreakers;
 
     /** 목 · 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
     @BeforeEach
     void resetMocks() {
-        reset(userClient, settlementClient);
+        reset(userClient, settlementClient, adminProductClient);
         circuitBreakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
     }
 
@@ -123,6 +125,39 @@ class AdminRelayApiTest {
         mockMvc.perform(get("/api/admin/users").header("X-User-Id", ADMIN_ID)).andExpect(status().isBadGateway());
         when(userClient.points(ADMIN_ID, 4L, null, null)).thenThrow(new ResourceAccessException("connect timed out"));
         mockMvc.perform(get("/api/admin/users/4/points").header("X-User-Id", ADMIN_ID)).andExpect(status().isBadGateway());
+    }
+
+    @Test
+    @DisplayName("상품 — 스토어 상품 목록 그대로, 강제 판매중지 본문 그대로 · product 의 400 · 404 그대로, PATCH 는 재시도 없이 502")
+    void products_relay() throws Exception {
+        when(adminProductClient.products(7L)).thenReturn(ok("[{\"productId\":3,\"status\":\"ON_SALE\",\"hiddenReason\":null}]"));
+        mockMvc.perform(get("/api/admin/stores/7/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].productId").value(3));
+
+        String body = "{\"blocked\":true,\"reason\":\"원산지 표기 누락\"}";
+        when(adminProductClient.block(eq(3L), any())).thenReturn(ok("{\"productId\":3,\"status\":\"BLOCKED\",\"statusReason\":\"원산지 표기 누락\"}"));
+        mockMvc.perform(patch("/api/admin/products/3/block").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("BLOCKED"));
+        verify(adminProductClient).block(eq(3L), eq(json.readTree(body)));
+
+        when(adminProductClient.block(eq(4L), any())).thenThrow(rejected(HttpStatus.BAD_REQUEST,
+                "{\"code\":\"PRODUCT_BLOCK_REASON_REQUIRED\",\"message\":\"강제 판매중지 사유를 입력해 주세요.\",\"data\":null}"));
+        mockMvc.perform(patch("/api/admin/products/4/block").contentType(MediaType.APPLICATION_JSON).content("{\"blocked\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRODUCT_BLOCK_REASON_REQUIRED"));
+
+        when(adminProductClient.block(eq(5L), any())).thenThrow(rejected(HttpStatus.NOT_FOUND,
+                "{\"code\":\"PRODUCT_NOT_FOUND\",\"message\":\"상품을 찾을 수 없습니다.\",\"data\":null}"));
+        mockMvc.perform(patch("/api/admin/products/5/block").contentType(MediaType.APPLICATION_JSON).content("{\"blocked\":false}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+
+        when(adminProductClient.block(eq(6L), any())).thenThrow(new ResourceAccessException("connect timed out"));
+        mockMvc.perform(patch("/api/admin/products/6/block").contentType(MediaType.APPLICATION_JSON).content("{\"blocked\":false}"))
+                .andExpect(status().isBadGateway());
+        verify(adminProductClient, times(1)).block(eq(6L), any());
     }
 
     @Test
