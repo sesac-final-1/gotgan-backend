@@ -42,6 +42,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import com.sesac.gojigi.order.cart.dto.request.CartItemUpdateRequest;
+import com.sesac.gojigi.order.cart.repository.CartRedisRepository.CachedLine;
 
 /** 장바구니 담기 · 삭제 · 결제 확정 시 비우기 + 커밋 후 Redis 갱신 — MySQL 8.4 + Flyway (Redis · product 는 목) */
 @DataJpaTest
@@ -88,7 +90,7 @@ class CartServiceIntegrationTest {
                         org.assertj.core.groups.Tuple.tuple(12L, 102L, 4, true));
         assertThat(cartItemRepository.findByUserIdOrderByIdAsc(buyer)).extracting(CartItem::getQuantity)
                 .containsExactly(3, 4);
-        verify(cartRedisRepository).replace(buyer, Map.of(11L, 3, 12L, 4));
+        verify(cartRedisRepository).replace(buyer, Map.of(11L, on(3), 12L, on(4)));
     }
 
     @Test
@@ -143,7 +145,7 @@ class CartServiceIntegrationTest {
         assertThat(selected.items()).extracting(CartItemsResponse.Item::productOptionId).containsExactly(12L);
         assertThat(all.cartCount()).isZero();
         assertThat(cartItemRepository.findByUserIdOrderByIdAsc(buyer)).isEmpty();
-        verify(cartRedisRepository).replace(buyer, Map.of(12L, 2));
+        verify(cartRedisRepository).replace(buyer, Map.of(12L, on(2)));
         verify(cartRedisRepository).replace(buyer, Map.of());
     }
 
@@ -162,7 +164,7 @@ class CartServiceIntegrationTest {
         // then
         assertThat(cartItemRepository.findByUserIdOrderByIdAsc(buyer)).extracting(CartItem::getProductOptionId)
                 .containsExactly(13L);
-        verify(cartRedisRepository).replace(buyer, Map.of(13L, 1));
+        verify(cartRedisRepository).replace(buyer, Map.of(13L, on(1)));
     }
 
     private void givenOptions(ProductOptionResponse... options) {
@@ -191,5 +193,35 @@ class CartServiceIntegrationTest {
 
     private static CartItemAddRequest.Item item(long optionId, int quantity) {
         return new CartItemAddRequest.Item(optionId, quantity);
+    }
+
+    private static CachedLine on(int quantity) {
+        return new CachedLine(quantity, true);
+    }
+
+    @Test
+    @DisplayName("수량 · 선택 변경 — 보낸 것만 바꾸고 커밋 뒤 캐시 갱신, 선택 한꺼번에(전체 · 고른 것), 없는 옵션은 404")
+    void updateAndCheck() {
+        // given
+        long buyer = BUYERS.incrementAndGet();
+        givenOptions(option(11L, 101L, true), option(12L, 102L, true));
+        cartService.add(buyer, request(item(11L, 1), item(12L, 2)));
+
+        // when
+        cartService.update(buyer, 11L, new CartItemUpdateRequest(5, null));
+        CartItemsResponse unchecked = cartService.update(buyer, 12L, new CartItemUpdateRequest(null, false));
+
+        // then
+        assertThat(unchecked.items()).extracting(CartItemsResponse.Item::quantity, CartItemsResponse.Item::checked)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(5, true), org.assertj.core.groups.Tuple.tuple(2, false));
+        verify(cartRedisRepository).replace(buyer, Map.of(11L, on(5), 12L, new CachedLine(2, false)));
+        assertThat(cartService.check(buyer, null, false).items()).extracting(CartItemsResponse.Item::checked)
+                .containsOnly(false);
+        assertThat(cartService.check(buyer, List.of(12L, 99L), true).items())
+                .extracting(CartItemsResponse.Item::productOptionId, CartItemsResponse.Item::checked)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(11L, false), org.assertj.core.groups.Tuple.tuple(12L, true));
+        assertThatThrownBy(() -> cartService.update(buyer, 99L, new CartItemUpdateRequest(1, null)))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(CartErrorCode.CART_ITEM_NOT_FOUND);
     }
 }

@@ -59,4 +59,14 @@ public class CartItem extends BaseTimeEntity {
     public void addQuantity(int quantity) {
         this.quantity += quantity;
     }
+
+    /** 장바구니에서 수량 변경 (+/− · 직접 입력) */
+    public void changeQuantity(int quantity) {
+        this.quantity = quantity;
+    }
+
+    /** 주문할 상품으로 선택 · 해제 */
+    public void check(boolean checked) {
+        this.checked = checked;
+    }
 }
