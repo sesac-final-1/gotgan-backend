@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.security.web.server.header.StaticServerHttpHeadersWriter;
 
 /**
  * 거친 인가(역할) 는 여기서, 세밀한 인가(소유권) 는 각 서비스에서 (가이드라인 08장).
@@ -24,6 +25,13 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    /**
+     * API 응답 보안 헤더 (SYS-23, 10/27) — JSON 만 돌려주므로 아무것도 불러오거나 끼워 넣지 못하게.
+     * 이미 같은 헤더가 있는 응답(Keycloak 로그인 화면 /realms/** — 자기 CSP · HSTS 를 보냄)은 덮어쓰지 않는다
+     */
+    static final String API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+    static final String HSTS = "max-age=31536000; includeSubDomains";
+
     private final GatewayAuthenticationEntryPoint authenticationEntryPoint;
     private final GatewayAccessDeniedHandler accessDeniedHandler;
 
@@ -31,6 +39,10 @@ public class SecurityConfig {
     SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .headers(h -> h
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(API_CSP))
+                        .hsts(ServerHttpSecurity.HeaderSpec.HstsSpec::disable)   // 기본 HSTS 는 https 요청에만 — NLB 가 TLS 를 끝내 파드엔 http 로 와서 직접 붙인다
+                        .writer(StaticServerHttpHeadersWriter.builder().header("Strict-Transport-Security", HSTS).build()))
                 .authorizeExchange(auth -> auth
                         .pathMatchers("/api/auth/**").permitAll()                                   // 가입 · 로그인 · refresh (user-service 가 Keycloak 대리 호출)
                         .pathMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()          // 포트원 웹훅 (서명은 payment 가 검증)

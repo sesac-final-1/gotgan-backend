@@ -27,6 +27,19 @@ class SecurityConfigTest {
     }
 
     @Test
+    @DisplayName("API 응답 보안 헤더 — CSP(아무것도 못 불러옴 · 끼워 넣기 금지) · HSTS(http 로 와도) · nosniff · X-Frame-Options DENY, 401 응답에도")
+    void apiResponses_haveSecurityHeaders() {
+        client.get().uri("/actuator/health").exchange()
+                .expectHeader().valueEquals("Content-Security-Policy", SecurityConfig.API_CSP)
+                .expectHeader().valueEquals("Strict-Transport-Security", SecurityConfig.HSTS)
+                .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                .expectHeader().valueEquals("X-Frame-Options", "DENY");
+        client.delete().uri("/api/users/me").exchange()
+                .expectStatus().isUnauthorized()
+                .expectHeader().valueEquals("Content-Security-Policy", SecurityConfig.API_CSP);
+    }
+
+    @Test
     @DisplayName("토큰 없이 인증 필요 경로 → 401 { code: UNAUTHORIZED }")
     void protectedPath_withoutToken_returns401Envelope() {
         client.delete().uri("/api/users/me").exchange()
