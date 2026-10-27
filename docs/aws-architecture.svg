@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2380 4296" width="2380" height="4296" font-family="Pretendard, 'Malgun Gothic', sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2380 4464" width="2380" height="4464" font-family="Pretendard, 'Malgun Gothic', sans-serif">
 <style>text{font-family:Pretendard, 'Malgun Gothic', sans-serif;}</style>
 <defs>
 <symbol id="ic-cloudwatch" viewBox="0 0 80 80">
@@ -162,7 +162,7 @@
     </g>
 </symbol>
 </defs>
-<rect class="bg" x="0" y="0" width="2380" height="4296" fill="#ffffff"/>
+<rect class="bg" x="0" y="0" width="2380" height="4464" fill="#ffffff"/>
 <rect class="pill" x="16" y="16" width="293" height="56" rx="28" fill="#1565c0"/>
 <text x="162.5" y="54" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">프론트 티어 · Vercel</text>
 <path class="lg" d="M319,44 H345" stroke="#444" stroke-width="3"/><polygon class="ah" points="359,44 343,36 343,52" fill="#444"/>
@@ -201,7 +201,7 @@
 <use href="#ic-grp-private-subnet" x="576" y="1034" width="32" height="32"/>
 <text class="flabel" x="618" y="1064" font-size="30" font-weight="bold" fill="#147eba" text-anchor="start">private-a · 2a</text>
 <text x="618" y="1101" font-size="24" font-weight="normal" fill="#222" text-anchor="start">10.0.11.0/24</text>
-<rect class="frame" x="1151" y="1020" width="527" height="1468" rx="8" fill="#eef4fa" stroke="#147eba" stroke-width="2.5"/>
+<rect class="frame" x="1151" y="1020" width="527" height="1588" rx="8" fill="#eef4fa" stroke="#147eba" stroke-width="2.5"/>
 <rect class="tab" x="1151" y="1020" width="289" height="98" rx="6" fill="#fff" stroke="#147eba" stroke-width="1.5"/>
 <use href="#ic-grp-private-subnet" x="1163" y="1034" width="32" height="32"/>
 <text class="flabel" x="1205" y="1064" font-size="30" font-weight="bold" fill="#147eba" text-anchor="start">private-c · 2c</text>
@@ -241,7 +241,7 @@
 <text x="48" y="2138" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">Terraform · Helm values</text>
 <rect class="box" x="32" y="2178" width="316" height="96" rx="14" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/>
 <text x="48" y="2220" font-size="28" font-weight="bold" fill="#222" text-anchor="start">gotgan-backend</text>
-<text x="48" y="2258" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">Spring Boot 서비스 9개</text>
+<text x="48" y="2258" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">Spring Boot 서비스 10개</text>
 <rect class="box" x="32" y="2298" width="316" height="130" rx="14" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/>
 <text x="48" y="2340" font-size="28" font-weight="bold" fill="#222" text-anchor="start">GitHub Actions</text>
 <text x="48" y="2378" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">OIDC · CI · bootstrap</text>
@@ -270,7 +270,7 @@
 <text x="610" y="1188" font-size="28" font-weight="bold" fill="#bf5b00" text-anchor="middle">백</text>
 <text x="610" y="1226" font-size="28" font-weight="bold" fill="#bf5b00" text-anchor="middle">티</text>
 <text x="610" y="1264" font-size="28" font-weight="bold" fill="#bf5b00" text-anchor="middle">어</text>
-<rect class="band" x="1167" y="1146" width="495" height="1282" rx="14" fill="#fff1e0"/>
+<rect class="band" x="1167" y="1146" width="495" height="1402" rx="14" fill="#fff1e0"/>
 <text x="1197" y="1188" font-size="28" font-weight="bold" fill="#bf5b00" text-anchor="middle">백</text>
 <text x="1197" y="1226" font-size="28" font-weight="bold" fill="#bf5b00" text-anchor="middle">티</text>
 <text x="1197" y="1264" font-size="28" font-weight="bold" fill="#bf5b00" text-anchor="middle">어</text>
@@ -285,7 +285,7 @@
 <text x="656" y="1304" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">프라이빗 2a</text>
 <rect class="badge" x="883" y="1176" width="152" height="54" rx="26" fill="#ef6c00"/>
 <text x="959" y="1213" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">매일 재생성</text>
-<rect class="card" x="1227" y="1162" width="411" height="1250" rx="14" fill="#fff" stroke="#ef6c00" stroke-width="2.5"/>
+<rect class="card" x="1227" y="1162" width="411" height="1370" rx="14" fill="#fff" stroke="#ef6c00" stroke-width="2.5"/>
 <use href="#ic-res-ec2-instance" x="1243" y="1178" width="45" height="45"/>
 <text x="1300" y="1212" font-size="28" font-weight="bold" fill="#222" text-anchor="start">워커 노드 2</text>
 <text x="1243" y="1268" font-size="28" font-weight="bold" fill="#222" text-anchor="start">app 노드 그룹 · t3.xlarge</text>
@@ -331,35 +331,38 @@
 <text x="1433" y="1536" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">Spring Cloud Gateway</text>
 <rect class="chip" x="1283" y="1578" width="300" height="94" rx="14" fill="#e0f2f1" stroke="#0f9d8a" stroke-width="2"/>
 <text x="1433" y="1620" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">admin</text>
-<text x="1433" y="1656" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">DB 없음 · /internal</text>
+<text x="1433" y="1656" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">admindb · 알림 센터</text>
 <rect class="chip" x="1283" y="1698" width="300" height="94" rx="14" fill="#e0f2f1" stroke="#0f9d8a" stroke-width="2"/>
 <text x="1433" y="1740" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">settlement</text>
 <text x="1433" y="1776" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">정산 · 리포트</text>
 <rect class="chip" x="1283" y="1818" width="300" height="94" rx="14" fill="#e0f2f1" stroke="#0f9d8a" stroke-width="2"/>
 <text x="1433" y="1860" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">review</text>
 <text x="1433" y="1896" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">리뷰</text>
-<rect class="chip" x="1283" y="1938" width="300" height="94" rx="14" fill="#fff8e1" stroke="#c77700" stroke-width="2"/>
-<text x="1433" y="1980" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Prometheus</text>
-<text x="1433" y="2016" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">지표</text>
+<rect class="chip" x="1283" y="1938" width="300" height="94" rx="14" fill="#e0f2f1" stroke="#0f9d8a" stroke-width="2"/>
+<text x="1433" y="1980" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">chat</text>
+<text x="1433" y="2016" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">1:1 채팅 · WebSocket</text>
 <rect class="chip" x="1283" y="2058" width="300" height="94" rx="14" fill="#fff8e1" stroke="#c77700" stroke-width="2"/>
-<text x="1433" y="2100" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Grafana</text>
-<text x="1433" y="2136" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">System Status</text>
+<text x="1433" y="2100" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Prometheus</text>
+<text x="1433" y="2136" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">지표</text>
 <rect class="chip" x="1283" y="2178" width="300" height="94" rx="14" fill="#fff8e1" stroke="#c77700" stroke-width="2"/>
-<text x="1433" y="2220" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Loki</text>
-<text x="1433" y="2256" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">로그</text>
+<text x="1433" y="2220" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Grafana</text>
+<text x="1433" y="2256" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">System Status</text>
 <rect class="chip" x="1283" y="2298" width="300" height="94" rx="14" fill="#fff8e1" stroke="#c77700" stroke-width="2"/>
-<text x="1433" y="2340" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Zipkin</text>
-<text x="1433" y="2376" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">트레이스</text>
+<text x="1433" y="2340" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Loki</text>
+<text x="1433" y="2376" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">로그</text>
+<rect class="chip" x="1283" y="2418" width="300" height="94" rx="14" fill="#fff8e1" stroke="#c77700" stroke-width="2"/>
+<text x="1433" y="2460" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Zipkin</text>
+<text x="1433" y="2496" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">트레이스</text>
 <rect class="chip" x="696" y="2650" width="300" height="94" rx="14" fill="#e1f5fe" stroke="#00758f" stroke-width="2"/>
 <text x="846" y="2692" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">MySQL</text>
-<text x="846" y="2728" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">스키마 8</text>
+<text x="846" y="2728" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">스키마 10</text>
 <path class="conn" d="M729,2744 V2770" stroke="#777" stroke-width="2"/>
 <use href="#ic-res-ebs-volume" x="696" y="2770" width="67" height="67"/>
 <text x="777" y="2798" font-size="28" font-weight="bold" fill="#222" text-anchor="start">EBS 볼륨</text>
 <text x="777" y="2832" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">(gp3 디스크)</text>
 <rect class="chip" x="696" y="2867" width="300" height="94" rx="14" fill="#ffebee" stroke="#d82c20" stroke-width="2"/>
 <text x="846" y="2909" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">Redis</text>
-<text x="846" y="2945" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">장바구니 캐시 · AOF</text>
+<text x="846" y="2945" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">캐시 · Pub/Sub · AOF</text>
 <path class="conn" d="M729,2961 V2987" stroke="#777" stroke-width="2"/>
 <use href="#ic-res-ebs-volume" x="696" y="2987" width="67" height="67"/>
 <text x="777" y="3015" font-size="28" font-weight="bold" fill="#222" text-anchor="start">EBS 볼륨</text>
@@ -383,22 +386,24 @@
 <text x="1978" y="854" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">store · order</text>
 <text x="1978" y="886" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">settlement-events</text>
 <use href="#ic-sqs" x="1874" y="940" width="90" height="90"/>
-<text x="1978" y="970" font-size="28" font-weight="bold" fill="#222" text-anchor="start">SQS 큐 9 + DLQ</text>
-<text x="1978" y="1004" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">서비스 4개 + Lambda</text>
+<text x="1978" y="970" font-size="28" font-weight="bold" fill="#222" text-anchor="start">SQS 큐 12 + DLQ</text>
+<text x="1978" y="1004" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">서비스 5개 + Lambda</text>
 <use href="#ic-lambda" x="1874" y="1090" width="90" height="90"/>
-<text x="1978" y="1120" font-size="28" font-weight="bold" fill="#222" text-anchor="start">Lambda ×3</text>
+<text x="1978" y="1120" font-size="28" font-weight="bold" fill="#222" text-anchor="start">Lambda ×4</text>
 <text x="1978" y="1154" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">order-notification</text>
 <text x="1978" y="1186" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">settlement-report 외</text>
+<text x="1978" y="1218" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">upload-guard</text>
 <use href="#ic-ses" x="1874" y="1240" width="90" height="90"/>
 <text x="1978" y="1270" font-size="28" font-weight="bold" fill="#222" text-anchor="start">SES</text>
 <text x="1978" y="1304" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">주문 알림 · 정산 메일</text>
 <use href="#ic-dynamodb" x="1874" y="1390" width="90" height="90"/>
-<text x="1978" y="1420" font-size="28" font-weight="bold" fill="#222" text-anchor="start">DynamoDB ×2</text>
-<text x="1978" y="1454" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">notifications</text>
+<text x="1978" y="1420" font-size="28" font-weight="bold" fill="#222" text-anchor="start">DynamoDB ×3</text>
+<text x="1978" y="1454" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">notifications · inbox</text>
 <text x="1978" y="1486" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">settlement-reports</text>
 <use href="#ic-eventbridge" x="1874" y="1540" width="90" height="90"/>
 <text x="1978" y="1570" font-size="28" font-weight="bold" fill="#222" text-anchor="start">EventBridge</text>
 <text x="1978" y="1604" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">매일 03:00 → Lambda</text>
+<text x="1978" y="1636" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">S3 업로드 → upload-guard</text>
 <use href="#ic-cloudwatch" x="1874" y="1690" width="90" height="90"/>
 <text x="1978" y="1720" font-size="28" font-weight="bold" fill="#222" text-anchor="start">CloudWatch Logs</text>
 <text x="1978" y="1754" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">Lambda 로그 → S3</text>
@@ -406,10 +411,10 @@
 <use href="#ic-iam" x="1874" y="1840" width="90" height="90"/>
 <text x="1978" y="1870" font-size="28" font-weight="bold" fill="#222" text-anchor="start">IAM</text>
 <text x="1978" y="1904" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">GitHub OIDC 역할</text>
-<text x="1978" y="1936" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">IRSA 6개</text>
+<text x="1978" y="1936" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">IRSA 7개</text>
 <use href="#ic-ecr" x="1874" y="1990" width="90" height="90"/>
 <text x="1978" y="2020" font-size="28" font-weight="bold" fill="#222" text-anchor="start">ECR</text>
-<text x="1978" y="2054" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">저장소 9개</text>
+<text x="1978" y="2054" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">저장소 10개</text>
 <path class="flow" d="M194,426 V472" fill="none" stroke="#37474f" stroke-width="3.5"/>
 <polygon class="ah" points="194,472 185,455 203,455" fill="#37474f"/>
 <g class="num"><circle cx="194" cy="450" r="22" fill="#e53935"/><text x="194" y="459" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">1</text></g>
@@ -446,8 +451,9 @@
 <path class="flow" d="M1919,880 V938" fill="none" stroke="#1e88e5" stroke-width="3.5" stroke-dasharray="14 8"/>
 <polygon class="ah" points="1919,938 1910,921 1928,921" fill="#1e88e5"/>
 <g class="num"><circle cx="1919" cy="910" r="22" fill="#e53935"/><text x="1919" y="919" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">7</text></g>
-<path class="flow" d="M1874,985 H1796 V1865 H1585" fill="none" stroke="#1e88e5" stroke-width="3.5" stroke-dasharray="14 8"/>
+<path class="flow" d="M1874,985 H1796 V1865 H1585 M1796,1625 H1585" fill="none" stroke="#1e88e5" stroke-width="3.5" stroke-dasharray="14 8"/>
 <polygon class="ah" points="1585,1865 1602,1856 1602,1874" fill="#1e88e5"/>
+<polygon class="ah" points="1585,1625 1602,1616 1602,1634" fill="#1e88e5"/>
 <g class="num"><circle cx="1796" cy="1820" r="22" fill="#e53935"/><text x="1796" y="1829" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">7</text></g>
 <path class="flow" d="M696,1865 H544 V746 H866 V772" fill="none" stroke="#37474f" stroke-width="3.5"/>
 <polygon class="ah" points="866,772 857,755 875,755" fill="#37474f"/>
@@ -477,24 +483,46 @@
 <path class="flow" d="M348,2105 H694" fill="none" stroke="#ef6c00" stroke-width="3.5"/>
 <polygon class="ah" points="694,2105 677,2114 677,2096" fill="#ef6c00"/>
 <g class="num"><circle cx="464" cy="2105" r="22" fill="#e53935"/><text x="464" y="2114" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">12</text></g>
-<path class="flow" d="M1874,2035 H1796 V2452 H1433 V2414" fill="none" stroke="#ef6c00" stroke-width="3.5"/>
-<polygon class="ah" points="1433,2414 1442,2431 1424,2431" fill="#ef6c00"/>
+<path class="flow" d="M1874,2035 H1796 V2572 H1433 V2534" fill="none" stroke="#ef6c00" stroke-width="3.5"/>
+<polygon class="ah" points="1433,2534 1442,2551 1424,2551" fill="#ef6c00"/>
 <g class="num"><circle cx="1796" cy="2250" r="22" fill="#e53935"/><text x="1796" y="2259" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">12</text></g>
-<path class="flow" d="M1051,1985 H1281 M1189,1985 V2225 H1281" fill="none" stroke="#8e44ad" stroke-width="3.5" stroke-dasharray="6 6"/>
-<polygon class="ah" points="1281,1985 1264,1994 1264,1976" fill="#8e44ad"/>
-<polygon class="ah" points="1281,2225 1264,2234 1264,2216" fill="#8e44ad"/>
-<g class="num"><circle cx="1121" cy="1985" r="22" fill="#e53935"/><text x="1121" y="1994" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">14</text></g>
-<path class="flow" d="M1433,2032 V2056 M1433,2178 V2154 M1583,2345 H1614 V2105 H1585" fill="none" stroke="#8e44ad" stroke-width="3.5" stroke-dasharray="6 6"/>
-<polygon class="ah" points="1433,2056 1424,2039 1442,2039" fill="#8e44ad"/>
-<polygon class="ah" points="1433,2154 1442,2171 1424,2171" fill="#8e44ad"/>
-<polygon class="ah" points="1585,2105 1602,2096 1602,2114" fill="#8e44ad"/>
+<path class="flow" d="M1051,2105 H1281 M1189,2105 V2345 H1281" fill="none" stroke="#8e44ad" stroke-width="3.5" stroke-dasharray="6 6"/>
+<polygon class="ah" points="1281,2105 1264,2114 1264,2096" fill="#8e44ad"/>
+<polygon class="ah" points="1281,2345 1264,2354 1264,2336" fill="#8e44ad"/>
+<g class="num"><circle cx="1121" cy="2105" r="22" fill="#e53935"/><text x="1121" y="2114" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">14</text></g>
+<path class="flow" d="M1433,2152 V2176 M1433,2298 V2274 M1583,2465 H1614 V2225 H1585" fill="none" stroke="#8e44ad" stroke-width="3.5" stroke-dasharray="6 6"/>
+<polygon class="ah" points="1433,2176 1424,2159 1442,2159" fill="#8e44ad"/>
+<polygon class="ah" points="1433,2274 1442,2291 1424,2291" fill="#8e44ad"/>
+<polygon class="ah" points="1585,2225 1602,2216 1602,2234" fill="#8e44ad"/>
 <path class="flow" d="M348,1985 H392 V556 H366" fill="none" stroke="#ef6c00" stroke-width="3.5"/>
 <polygon class="ah" points="366,556 383,547 383,565" fill="#ef6c00"/>
 <g class="num"><circle cx="392" cy="1200" r="22" fill="#e53935"/><text x="392" y="1209" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">15</text></g>
+<path class="flow" d="M364,400 H406 V722 H366" fill="none" stroke="#37474f" stroke-width="3.5"/>
+<polygon class="ah" points="366,722 383,713 383,731" fill="#37474f"/>
+<g class="num"><circle cx="406" cy="430" r="22" fill="#e53935"/><text x="406" y="439" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">16</text></g>
+<rect class="box" x="1964" y="2376" width="316" height="96" rx="14" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/>
+<text x="1980" y="2418" font-size="28" font-weight="bold" fill="#222" text-anchor="start">S3 업로드</text>
+<text x="1980" y="2456" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">images · seller-docs</text>
+<rect class="box" x="1964" y="2530" width="316" height="96" rx="14" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/>
+<text x="1980" y="2572" font-size="28" font-weight="bold" fill="#222" text-anchor="start">EventBridge</text>
+<text x="1980" y="2610" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">Object Created 규칙</text>
+<rect class="box" x="1964" y="2684" width="316" height="96" rx="14" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/>
+<text x="1980" y="2726" font-size="28" font-weight="bold" fill="#222" text-anchor="start">upload-guard</text>
+<text x="1980" y="2764" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">Lambda · 매직 바이트 확인</text>
+<rect class="box" x="1964" y="2838" width="316" height="96" rx="14" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/>
+<text x="1980" y="2880" font-size="28" font-weight="bold" fill="#222" text-anchor="start">SNS alerts</text>
+<text x="1980" y="2918" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="start">위조면 삭제 + 메일 알림</text>
+<path class="flow" d="M2122,2472 V2528" fill="none" stroke="#1e88e5" stroke-width="3.5" stroke-dasharray="14 8"/>
+<polygon class="ah" points="2122,2528 2113,2511 2131,2511" fill="#1e88e5"/>
+<path class="flow" d="M2122,2626 V2682" fill="none" stroke="#1e88e5" stroke-width="3.5" stroke-dasharray="14 8"/>
+<polygon class="ah" points="2122,2682 2113,2665 2131,2665" fill="#1e88e5"/>
+<path class="flow" d="M2122,2780 V2836" fill="none" stroke="#1e88e5" stroke-width="3.5" stroke-dasharray="14 8"/>
+<polygon class="ah" points="2122,2836 2113,2819 2131,2819" fill="#1e88e5"/>
+<g class="num"><circle cx="2122" cy="2501" r="22" fill="#e53935"/><text x="2122" y="2510" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">17</text></g>
 <path class="ctl" d="M1834,382 H1740 V1268 H1640" fill="none" stroke="#9e9e9e" stroke-width="2.2"/>
 <polygon class="ah" points="1640,1268 1653,1262 1653,1274" fill="#9e9e9e"/>
 <text x="760" y="3330" font-size="40" font-weight="bold" fill="#222" text-anchor="middle">곳간(GOTGAN) 아키텍처 구조도</text>
-<text x="760" y="3372" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">sesac-gojigi · 2026-10-14</text>
+<text x="760" y="3372" font-size="28" font-weight="bold" fill="#222" text-anchor="middle">sesac-gojigi · 2026-10-27</text>
 <text x="760" y="3416" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">3티어: 프론트(Vercel) → 백(EKS app 노드 그룹) → DB(EKS db 노드 그룹)</text>
 <text x="760" y="3452" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">AWS 관리형: NLB · SNS/SQS · Lambda · S3 · DynamoDB · SES · ECR · IAM</text>
 <text x="760" y="3488" font-size="24" font-weight="normal" fill="#4a4a4a" text-anchor="middle">GitHub Actions(OIDC) CI · ArgoCD GitOps · 관측: Prometheus · Loki · Zipkin · Grafana</text>
@@ -514,9 +542,9 @@
 <text x="2030" y="3477" font-size="24" font-weight="normal" fill="#222" text-anchor="start">NetworkPolicy</text>
 <rect class="badge" x="1494" y="3536" width="152" height="54" rx="26" fill="#ef6c00"/>
 <text x="1570" y="3573" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">매일 재생성</text>
-<text x="1666" y="3558" font-size="24" font-weight="normal" fill="#222" text-anchor="start">매일 07:00 생성 · 21:00 삭제</text>
+<text x="1666" y="3558" font-size="24" font-weight="normal" fill="#222" text-anchor="start">매일 08:00 생성 · 22:00 삭제</text>
 <text x="1666" y="3594" font-size="24" font-weight="normal" fill="#222" text-anchor="start">(EKS · 노드 · 파드 · EBS), 없으면 상시</text>
-<rect class="explain" x="16" y="3676" width="2348" height="604" rx="14" fill="#fafafa" stroke="#9e9e9e" stroke-width="2"/>
+<rect class="explain" x="16" y="3676" width="2348" height="772" rx="14" fill="#fafafa" stroke="#9e9e9e" stroke-width="2"/>
 <text x="40" y="3726" font-size="30" font-weight="bold" fill="#222" text-anchor="start">흐름 설명</text>
 <text x="40" y="3780" font-size="24" font-weight="normal" fill="#222" text-anchor="start">① 사용자 → Vercel HTTPS (화면)</text>
 <text x="40" y="3822" font-size="24" font-weight="normal" fill="#222" text-anchor="start">② /api/* → Vercel rewrite → https://api.gotgan.click (Route 53 → EIP) → IGW → NLB :443 TLS</text>
@@ -524,12 +552,16 @@
 <text x="40" y="3906" font-size="24" font-weight="normal" fill="#222" text-anchor="start">④ gateway → 업무 서비스 라우팅 · admin → 각 서비스 /internal/**</text>
 <text x="40" y="3948" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑤ 주문 Saga: order → user(포인트) → product(재고) → payment</text>
 <text x="40" y="3990" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · 결제 준비 · 검증 · 동기 REST + Resilience4j</text>
-<text x="40" y="4032" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑥ 백 티어 → DB 티어: MySQL(JDBC 3306 · 서비스별 스키마)</text>
-<text x="40" y="4074" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · Redis(6379 · 장바구니 캐시) · NetworkPolicy: 백 티어 파드만 허용</text>
-<text x="40" y="4116" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑦ store · order · settlement → SNS → SQS(+DLQ)</text>
-<text x="40" y="4158" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    → user · product · review · settlement · Lambda (IRSA)</text>
-<text x="40" y="4200" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑧ payment → NAT → IGW → 포트원 API 검증 · 취소</text>
-<text x="40" y="4242" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · 포트원 웹훅 → NLB → gateway → payment</text>
+<text x="40" y="4032" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑥ 백 티어 → DB 티어: MySQL(JDBC 3306 · 서비스별 스키마 10)</text>
+<text x="40" y="4074" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · Redis(6379 · 장바구니 캐시 · 채팅 중계 chat:room · 접속 중 표시</text>
+<text x="40" y="4116" font-size="24" font-weight="normal" fill="#222" text-anchor="start">      · 알림 Pub/Sub notify · 차단 목록) · NetworkPolicy: 백 티어 파드만 허용</text>
+<text x="40" y="4158" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑦ store · order · settlement → SNS → SQS(+DLQ)</text>
+<text x="40" y="4200" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    → user · product · review · settlement · admin(알림 센터) · Lambda (IRSA)</text>
+<text x="40" y="4242" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑧ payment → NAT → IGW → 포트원 API 검증 · 취소</text>
+<text x="40" y="4284" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · 포트원 웹훅 → NLB → gateway → payment</text>
+<text x="40" y="4326" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑯ 실시간: 브라우저 → api.gotgan.click 직접 연결 (Vercel rewrite 안 거침) → NLB → gateway</text>
+<text x="40" y="4368" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · SSE GET /api/notifications/stream → admin (알림 센터 · Redis notify)</text>
+<text x="40" y="4410" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · WebSocket wss /ws/chat (STOMP) → chat (Redis chat:room)</text>
 <text x="1190" y="3780" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑨ 백엔드(product · store · review)가 presigned URL 발급</text>
 <text x="1190" y="3822" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    → 브라우저가 S3 에 직접 PUT (프론트 → S3 유일한 예외)</text>
 <text x="1190" y="3864" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · settlement → S3 reports presign (리포트 다운로드)</text>
@@ -538,8 +570,10 @@
 <text x="1190" y="3990" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑪ backend push → Actions(테스트 · SonarQube Cloud · 빌드) → OIDC → ECR</text>
 <text x="1190" y="4032" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · gotgan-config values.yaml 이미지 태그 커밋</text>
 <text x="1190" y="4074" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑫ ArgoCD: gotgan-config pull → 롤링 배포(무중단) · 노드 → ECR 이미지 pull</text>
-<text x="1190" y="4116" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑬ infra-schedule 07:00 Terraform apply · 21:00 destroy(cluster/)</text>
+<text x="1190" y="4116" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑬ infra-schedule 08:00 Terraform apply · 22:00 destroy(cluster/)</text>
 <text x="1190" y="4158" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    · bootstrap: k8s 기본 · secrets-sync · 관측성 · ArgoCD</text>
 <text x="1190" y="4200" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑭ 서비스 → Prometheus · Loki · Zipkin → Grafana System Status</text>
 <text x="1190" y="4242" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑮ gotgan-frontend push → Vercel 자동 배포 (PR 미리보기)</text>
+<text x="1190" y="4284" font-size="24" font-weight="normal" fill="#222" text-anchor="start">⑰ 업로드 검사: S3 images · seller-docs Object Created → EventBridge</text>
+<text x="1190" y="4326" font-size="24" font-weight="normal" fill="#222" text-anchor="start">    → Lambda upload-guard(앞부분 매직 바이트) → 위조면 삭제 + SNS 알림</text>
 </svg>
