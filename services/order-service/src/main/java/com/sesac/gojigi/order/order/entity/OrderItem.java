@@ -192,7 +192,16 @@ public class OrderItem extends BaseTimeEntity {
         transition(OrderItemStatus.RETURN_REQUESTED, OrderItemStatus.RETURNED);
     }
 
-    /** 반품 · 교환 거부 — 다시 배송완료 (배송완료 시각은 그대로 → 반품 기간 · 자동 구매확정도 원래 기준) */
+    /**
+     * 구매확정 (DLV-05 구매자 · DLV-06 자동) — 배송완료에서만. 반품 · 교환 진행 중이면 상태가 반품요청 · 교환요청이라 막힌다.
+     * confirmedAt 이 정산 · 리뷰 자격 · 회원등급의 기준
+     */
+    public void confirm(LocalDateTime confirmedAt) {
+        transition(OrderItemStatus.DELIVERED, OrderItemStatus.CONFIRMED);
+        this.confirmedAt = confirmedAt;
+    }
+
+    /** 반품 · 교환 거부 · 구매자 철회 — 다시 배송완료 (배송완료 시각은 그대로 → 반품 기간 · 자동 구매확정도 원래 기준) */
     public void rejectClaim() {
         OrderItemStatus from = status == OrderItemStatus.EXCHANGE_REQUESTED
                 ? OrderItemStatus.EXCHANGE_REQUESTED : OrderItemStatus.RETURN_REQUESTED;

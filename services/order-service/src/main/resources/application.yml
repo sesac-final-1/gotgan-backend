@@ -55,6 +55,9 @@ app:
     auto-deliver:                           # AutoDeliverScheduler — 배송중 → 자동 배송완료 (DLV-04)
       interval: ${AUTO_DELIVER_INTERVAL:60s}
       initial-delay: 30s
+    auto-confirm:                           # AutoConfirmScheduler — 배송완료 → 자동 구매확정 (DLV-06)
+      interval: ${AUTO_CONFIRM_INTERVAL:60s}
+      initial-delay: 30s
     saga-recovery:                          # SagaRecoveryScheduler — 멈춘 Saga · 보상 재시도 (ORD-07)
       interval: ${SAGA_RECOVERY_INTERVAL:60s}
       initial-delay: 30s

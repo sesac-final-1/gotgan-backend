@@ -152,4 +152,23 @@ class ClaimControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].rejectReason").value("사용 흔적"));
     }
+
+    @Test
+    @DisplayName("철회 — 본인 클레임 철회 200, 승인 뒤면 409")
+    void withdraw() throws Exception {
+        given(claimService.withdraw(4L, 789L)).willReturn(new com.sesac.gojigi.order.claim.dto.response.ClaimDetailResponse(
+                789L, ClaimType.RETURN, ClaimStatus.WITHDRAWN, ClaimReasonCode.CHANGE_OF_MIND, null, null, 12_000L, 2_000L,
+                null, null, 456L, "20261023-000001-01", "20261023-000001", "상품", null, null, 1, 20_000L,
+                com.sesac.gojigi.order.order.entity.OrderItemStatus.DELIVERED, "곳간지기", null, null))
+                .willThrow(new ClaimException(ClaimErrorCode.CLAIM_INVALID_STATUS));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/claims/789/withdraw").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("요청을 철회했습니다."))
+                .andExpect(jsonPath("$.data.status").value("WITHDRAWN"));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/api/claims/789/withdraw").header("X-User-Id", "4"))
+                .andExpect(status().isConflict());
+    }
 }

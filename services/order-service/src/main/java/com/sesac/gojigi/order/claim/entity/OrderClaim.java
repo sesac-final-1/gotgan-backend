@@ -102,6 +102,12 @@ public class OrderClaim extends BaseTimeEntity {
         this.rejectReason = reason;
     }
 
+    /** 구매자 철회 — 반품 · 교환을 판매자 승인 전에만 (승인 뒤에는 회수가 시작됨). 취소는 즉시 처리라 철회 없음 */
+    public void withdraw(LocalDateTime now) {
+        requireType(ClaimType.RETURN, ClaimType.EXCHANGE);
+        transition(ClaimStatus.REQUESTED, ClaimStatus.WITHDRAWN, now);
+    }
+
     /** 수거 완료 (반품 · 교환) — 반품은 이어서 환불 Saga */
     public void collect(LocalDateTime now) {
         requireType(ClaimType.RETURN, ClaimType.EXCHANGE);

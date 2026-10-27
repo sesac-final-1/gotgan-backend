@@ -58,6 +58,11 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
             """)
     List<Long> findReshippedIdsBefore(@Param("before") LocalDateTime before, Limit limit);
 
+    /** 자동 구매확정 대상 — 배송완료가 before 보다 이른 배송완료 상품주문 ID (오래된 것부터) */
+    @Query("select i.id from OrderItem i where i.status = :status and i.deliveredAt < :before order by i.id")
+    List<Long> findIdsByStatusAndDeliveredAtBefore(@Param("status") OrderItemStatus status,
+                                                   @Param("before") LocalDateTime before, Limit limit);
+
     /** 스토어의 그 상태 상품주문 수 — idx_order_item_store_status (store_id, status, created_at) */
     long countByStoreIdAndStatus(Long storeId, OrderItemStatus status);
 

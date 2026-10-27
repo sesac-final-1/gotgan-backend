@@ -6,8 +6,10 @@ import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.dto.response.OrderCreateResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderDetailResponse;
+import com.sesac.gojigi.order.order.dto.response.OrderItemResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderListResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderPaymentConfirmResponse;
+import com.sesac.gojigi.order.order.service.DeliveryTxService;
 import com.sesac.gojigi.order.order.service.OrderQueryService;
 import com.sesac.gojigi.order.saga.service.PlaceOrderSaga;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +35,17 @@ public class OrderController {
 
     private final PlaceOrderSaga placeOrderSaga;
     private final OrderQueryService orderQueryService;
+    private final DeliveryTxService deliveryTxService;
+
+    @Operation(summary = "구매확정 (상품주문)", description = """
+            DLV-05: 배송완료 상품주문을 구매확정 — 정산 · 리뷰 작성 자격 · 회원등급의 기준(OrderItemConfirmed). 확정 후에는 반품 · 교환 불가.
+            배송완료 + 7일(데모 2분)이 지나면 자동으로 확정된다(DLV-06). 진행 중 반품 · 교환이 있으면 확정할 수 없다.
+            에러: 404 ORDER_ITEM_NOT_FOUND(없음 · 다른 회원 · 다른 주문) / 409 ORDER_INVALID_STATUS(배송완료가 아님 · 이미 확정 · 클레임 진행 중)""")
+    @PostMapping("/{orderNo}/items/{orderItemId}/confirm")
+    public ApiResponse<OrderItemResponse> confirmPurchase(@Parameter(hidden = true) @CurrentUser AuthUser user,
+                                                          @PathVariable String orderNo, @PathVariable Long orderItemId) {
+        return ApiResponse.success("구매확정했습니다.", deliveryTxService.confirm(user.userId(), orderNo, orderItemId));
+    }
 
     @Operation(summary = "주문 생성 (주문서 제출)", description = """
             주문 Saga 1 ~ 4단계: 주문 PENDING · 상품주문 스냅샷 → 포인트 사용(user) → 재고 예약(product) → 결제 준비(payment).

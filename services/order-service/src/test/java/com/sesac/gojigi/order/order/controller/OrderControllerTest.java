@@ -50,11 +50,14 @@ class OrderControllerTest {
     @Mock
     private OrderQueryService orderQueryService;
 
+    @Mock
+    private com.sesac.gojigi.order.order.service.DeliveryTxService deliveryTxService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(placeOrderSaga, orderQueryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new OrderController(placeOrderSaga, orderQueryService, deliveryTxService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -166,5 +169,25 @@ class OrderControllerTest {
         mockMvc.perform(get("/api/orders/20261022-000999").header("X-User-Id", "4"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("구매확정 — 본인 주문 상품주문을 확정, 200 '구매확정했습니다.' · 상태 전이 위반 409")
+    void confirmPurchase() throws Exception {
+        com.sesac.gojigi.order.order.entity.OrderItem item = com.sesac.gojigi.order.order.entity.OrderFixtures.item(
+                com.sesac.gojigi.order.order.entity.OrderFixtures.order());
+        org.mockito.BDDMockito.given(deliveryTxService.confirm(4L, "20261026-000001", 456L))
+                .willReturn(com.sesac.gojigi.order.order.dto.response.OrderItemResponse.from(item))
+                .willThrow(new com.sesac.gojigi.order.order.exception.OrderException(
+                        com.sesac.gojigi.order.order.exception.OrderErrorCode.ORDER_INVALID_STATUS));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/orders/20261026-000001/items/456/confirm").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("구매확정했습니다."));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/orders/20261026-000001/items/456/confirm").header("X-User-Id", "4"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_INVALID_STATUS"));
     }
 }
