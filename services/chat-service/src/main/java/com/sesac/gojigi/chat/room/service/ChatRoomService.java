@@ -1,5 +1,6 @@
 package com.sesac.gojigi.chat.room.service;
 
+import com.sesac.gojigi.chat.directory.ChatDirectory;
 import com.sesac.gojigi.chat.room.dto.ChatRequests;
 import com.sesac.gojigi.chat.room.dto.ChatResponses.Counterpart;
 import com.sesac.gojigi.chat.room.dto.ChatResponses.Message;
@@ -40,7 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 방 열기 · 목록 · 메시지 · 읽음 · 상담 상태 (chat.md 1~5절) + 실시간 전송(6절, STOMP SEND → send).
  * 저장 · 읽음 · 상태 변경은 ChatEvents 로 알리고, 커밋 뒤 realtime 이 구독자에게 전달 · 알림을 보낸다.
- * 남의 방은 404(있는지 알려 주지 않음). 상대 이름은 user · store 조회 연동 전까지 번호로 표시하고, 관리자 쪽은 "곳간 운영팀" 고정(D-2)
+ * 남의 방은 404(있는지 알려 주지 않음). 상대 이름은 user · store 조회(ChatDirectory, 실패하면 번호), 관리자 쪽은 "곳간 운영팀" 고정(D-2).
+ * 정지 · 폐점 스토어는 새 스토어 톡을 막고 기존 방은 읽기만(D-1)
  */
 @Service
 @RequiredArgsConstructor
@@ -63,6 +65,7 @@ public class ChatRoomService {
     private final ChatMessageRepository messageRepository;
     private final ChatReadRepository readRepository;
     private final ApplicationEventPublisher events;
+    private final ChatDirectory directory;
 
     /** 1절 — 같은 방이 있으면 그 방(문맥 카드만 추가), 없으면 새로 */
     @Transactional
@@ -70,6 +73,9 @@ public class ChatRoomService {
         Opening opening = opening(user, request);
         ChatRoom found = roomRepository.findByTypeAndBuyerIdAndStoreId(request.type(), opening.buyerId(), opening.storeId())
                 .orElse(null);
+        if (found == null && request.type() == ChatRoomType.STORE_INQUIRY && !directory.storeOpen(opening.storeId())) {
+            throw new ChatException(ChatErrorCode.CHAT_STORE_INACTIVE);
+        }
         ChatRoom room = found != null ? found
                 : roomRepository.save(ChatRoom.open(request.type(), opening.buyerId(), opening.storeId()));
         if (request.context() != null) {
@@ -141,6 +147,9 @@ public class ChatRoomService {
         }
         String text = normalize(content);
         ChatRoom room = seated.room();
+        if (room.getType() == ChatRoomType.STORE_INQUIRY && !directory.storeOpen(room.getStoreId())) {
+            throw new ChatException(ChatErrorCode.CHAT_STORE_INACTIVE);   // D-1 — 기존 방은 읽기만
+        }
         if (room.getStatus() == ChatRoomStatus.RESOLVED && seated.seat().role() != SenderRole.ADMIN) {
             room.changeStatus(ChatRoomStatus.OPEN);
             events.publishEvent(new ChatEvents.StatusChanged(roomId, ChatRoomStatus.OPEN));
@@ -210,20 +219,25 @@ public class ChatRoomService {
 
     /** 문맥 카드 — 마지막 카드와 같은 대상이면 생략. CHAT_ROOM 은 고객 상담에만, 내 스토어 톡만 */
     private void appendContext(ChatRoom room, AuthUser user, ChatSeat seat, ChatRequests.Context context) {
+        String title = context.type().fallbackTitle(context.id());
         if (context.type() == ContextType.CHAT_ROOM) {
             if (room.getType() != ChatRoomType.BUYER_SUPPORT) {
                 throw new BusinessException(CommonErrorCode.INVALID_INPUT, "스토어 톡 도움 요청은 고객센터 상담에서만 할 수 있습니다.");
             }
-            roomRepository.findById(context.id())
+            ChatRoom inquiry = roomRepository.findById(context.id())
                     .filter(r -> r.getType() == ChatRoomType.STORE_INQUIRY && r.getBuyerId().equals(user.userId()))
                     .orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+            String storeName = directory.storeName(inquiry.getStoreId());
+            title = storeName == null ? title : title + " (" + storeName + ")";
+        } else if (context.type() == ContextType.STORE) {
+            String storeName = directory.storeName(context.id());
+            title = storeName == null ? title : "스토어 " + storeName;
         }
         boolean same = messageRepository.findFirstByChatRoomIdAndKindOrderByIdDesc(room.getId(), MessageKind.CONTEXT)
                 .filter(last -> last.sameContext(context.type(), context.id()))
                 .isPresent();
         if (!same) {
-            ChatMessage card = ChatMessage.context(room.getId(), user.userId(), seat.role(), context.type(), context.id(),
-                    context.type().fallbackTitle(context.id()));
+            ChatMessage card = ChatMessage.context(room.getId(), user.userId(), seat.role(), context.type(), context.id(), title);
             room.touch(messageRepository.save(card));
             events.publishEvent(new ChatEvents.MessageSaved(room, card));
         }
@@ -283,19 +297,35 @@ public class ChatRoomService {
         return views;
     }
 
-    /** 상대 표시 — 관리자 쪽은 "곳간 운영팀", 그 밖은 번호 (이름 조회는 2단계) */
-    private static Counterpart counterpart(ChatRoom room, SenderRole viewer) {
+    /**
+     * 상대 표시 (1절) — 구매자에겐 스토어명, 판매자에겐 가린 구매자 이름(김*연), 관리자에겐 스토어명 · 회원 이름, 관리자 쪽은 "곳간 운영팀".
+     * 이름을 못 받으면 번호("스토어 #5" · "회원 #10")
+     */
+    private Counterpart counterpart(ChatRoom room, SenderRole viewer) {
         return switch (viewer) {
             case BUYER -> room.getType() == ChatRoomType.STORE_INQUIRY
-                    ? new Counterpart("스토어 #" + room.getStoreId(), SenderRole.SELLER)
+                    ? new Counterpart(storeLabel(room.getStoreId()), SenderRole.SELLER)
                     : new Counterpart(ADMIN_NAME, SenderRole.ADMIN);
             case SELLER -> room.getType() == ChatRoomType.STORE_INQUIRY
-                    ? new Counterpart("회원 #" + room.getBuyerId(), SenderRole.BUYER)
+                    ? new Counterpart(userLabel(room.getBuyerId(), true), SenderRole.BUYER)
                     : new Counterpart(ADMIN_NAME, SenderRole.ADMIN);
             default -> room.getType() == ChatRoomType.SELLER_SUPPORT
-                    ? new Counterpart("스토어 #" + room.getStoreId(), SenderRole.SELLER)
-                    : new Counterpart("회원 #" + room.getBuyerId(), SenderRole.BUYER);
+                    ? new Counterpart(storeLabel(room.getStoreId()), SenderRole.SELLER)
+                    : new Counterpart(userLabel(room.getBuyerId(), false), SenderRole.BUYER);
         };
+    }
+
+    private String storeLabel(Long storeId) {
+        String name = directory.storeName(storeId);
+        return name != null ? name : "스토어 #" + storeId;
+    }
+
+    private String userLabel(Long userId, boolean masked) {
+        String name = directory.userName(userId);
+        if (name == null) {
+            return "회원 #" + userId;
+        }
+        return masked ? ChatDirectory.mask(name) : name;
     }
 
     private static LocalDateTime recentAt(ChatRoom room) {
