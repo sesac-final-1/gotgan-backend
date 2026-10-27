@@ -9,7 +9,9 @@ import com.sesac.gojigi.product.image.service.ImageUrls;
 import com.sesac.gojigi.product.option.entity.ProductOption;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest.OptionItem;
+import com.sesac.gojigi.product.product.dto.request.ProductStatusChangeRequest;
 import com.sesac.gojigi.product.product.dto.response.SellerProductDetailResponse;
+import com.sesac.gojigi.product.product.dto.response.ProductStatusChangeResponse;
 import com.sesac.gojigi.product.product.dto.response.SellerProductResponse;
 import com.sesac.gojigi.product.product.entity.HiddenReason;
 import com.sesac.gojigi.product.product.entity.Product;
@@ -23,6 +25,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 판매자 상품 목록 · 등록 · 수정 · 상세 · 삭제 (PRD-01 · 02 · 03 · 04 · 05, product.md 11 · 12 · 13 · 16절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
+ * 판매자 상품 목록 · 등록 · 수정 · 상세 · 판매중지/재개 · 삭제 (PRD-01 · 02 · 03 · 04 · 05 · 15, product.md 11 · 12 · 13 · 15 · 16절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
  * TODO 박지연: 정지 · 폐점 스토어도 등록되면 바로 노출됨(storeActive=true 로 시작) — StoreStatusChanged 소비 PR 에서 함께 정한다.
  */
 @Slf4j
@@ -160,6 +163,44 @@ public class SellerProductService {
         Product product = getOwnProduct(storeId, productId);
         product.delete(LocalDateTime.now(clock));
         log.info("상품 삭제 - storeId={}, productId={}", storeId, productId);
+    }
+
+    /**
+     * 판매중지 · 재개 (15절) — 건마다 따로: 하나가 실패해도 나머지는 반영(예외 대신 failed 에 담음, 트랜잭션은 하나).
+     * 상품 행을 먼저 잠가 최신 상태를 본다 — 그 사이 관리자가 강제 판매중지했으면 BLOCKED 로 실패 처리(차단이 풀리지 않게).
+     * 이미 그 상태면 성공(멱등), 재고 0 이어도 재개 가능(품절로 보임).
+     */
+    @Transactional
+    public ProductStatusChangeResponse changeStatus(Long storeId, ProductStatusChangeRequest request) {
+        ProductStatus status = request.status();
+        if (status != ProductStatus.ON_SALE && status != ProductStatus.STOPPED) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "판매 상태는 ON_SALE · STOPPED 만 선택할 수 있습니다.");
+        }
+        List<Long> ids = List.copyOf(new LinkedHashSet<>(request.productIds()));   // 같은 ID 는 한 번 · 요청 순서 유지
+
+        // 반드시 트랜잭션의 첫 쿼리 — 이후 판단이 잠금을 얻은 뒤의 최신 상태로
+        Map<Long, Product> products = productRepository.findAllByIdForUpdate(ids).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+        List<Long> success = new ArrayList<>();
+        List<ProductStatusChangeResponse.Failure> failed = new ArrayList<>();
+        for (Long id : ids) {
+            Product product = products.get(id);
+            if (product == null || product.getDeletedAt() != null || !product.getStoreId().equals(storeId)) {
+                failed.add(failure(id, ProductErrorCode.PRODUCT_NOT_FOUND));
+            } else if (product.getStatus() == ProductStatus.BLOCKED) {
+                failed.add(failure(id, ProductErrorCode.PRODUCT_BLOCKED));
+            } else {
+                product.changeSaleStatus(status);
+                success.add(id);
+            }
+        }
+        log.info("판매 상태 변경 - storeId={}, status={}, success={}, failed={}", storeId, status, success,
+                failed.stream().map(ProductStatusChangeResponse.Failure::productId).toList());
+        return new ProductStatusChangeResponse(success, failed);
+    }
+
+    private static ProductStatusChangeResponse.Failure failure(Long productId, ProductErrorCode code) {
+        return new ProductStatusChangeResponse.Failure(productId, code.getCode(), code.getMessage());
     }
 
     /** 내 스토어의 삭제 안 된 상품 — 다른 스토어 상품도 "없음"과 같은 404 (있는지 알려 주지 않음, 12절) */

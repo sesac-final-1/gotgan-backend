@@ -6,6 +6,8 @@ import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
+import com.sesac.gojigi.product.product.dto.request.ProductStatusChangeRequest;
+import com.sesac.gojigi.product.product.dto.response.ProductStatusChangeResponse;
 import com.sesac.gojigi.product.product.dto.response.SellerProductDetailResponse;
 import com.sesac.gojigi.product.product.dto.response.SellerProductResponse;
 import com.sesac.gojigi.product.product.service.SellerProductService;
@@ -20,6 +22,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -104,6 +107,23 @@ public class SellerProductController {
             @Parameter(description = "상품 ID", example = "3") @PathVariable Long productId,
             @Valid @RequestBody ProductCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.success("상품을 수정했습니다.", sellerProductService.update(storeId(user), productId, request)));
+    }
+
+    @Operation(summary = "판매중지 · 재개 (일괄)", description = """
+            인가: SELLER (스토어 = X-Store-Id). 한 개든 여러 개든 같은 API — 건마다 따로 처리해 success · failed 로 나눠 줌(하나가 실패해도 나머지는 반영).
+            ON_SALE ↔ STOPPED, 이미 그 상태면 success(멱등), 재고 0 이어도 재개 가능. 같은 ID 는 한 번만 처리(요청 순서 유지).
+            failed: PRODUCT_BLOCKED(관리자 강제 판매중지 상품) · PRODUCT_NOT_FOUND(없음 · 삭제됨 · 다른 스토어 상품) (product.md 15절).
+            에러(전체 거절 · 아무것도 처리 안 함): 400 INVALID_INPUT(status 가 ON_SALE · STOPPED 아님 · productIds 비었음 · 100개 초과) / 403 FORBIDDEN""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리 — success · failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN")
+    })
+    @PatchMapping("/status")
+    public ResponseEntity<ApiResponse<ProductStatusChangeResponse>> changeStatus(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Valid @RequestBody ProductStatusChangeRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("판매 상태를 변경했습니다.", sellerProductService.changeStatus(storeId(user), request)));
     }
 
     @Operation(summary = "상품 삭제", description = """

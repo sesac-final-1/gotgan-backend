@@ -162,6 +162,14 @@ public class Product extends BaseTimeEntity {
         this.statusReason = reason;
     }
 
+    /** 판매자 판매중지 · 재개 (15절) — ON_SALE · STOPPED 사이만. BLOCKED 확인은 서비스가 잠금을 잡은 뒤에 한다 */
+    public void changeSaleStatus(ProductStatus status) {
+        if (status == ProductStatus.BLOCKED || this.status == ProductStatus.BLOCKED) {
+            throw new IllegalStateException("판매자는 BLOCKED 상태를 바꾸거나 만들 수 없다");
+        }
+        this.status = status;
+    }
+
     /** 강제 판매중지 해제 — 바로 팔리지 않도록 STOPPED 로 돌리고 판매자가 점검 후 재개. BLOCKED 가 아니면 그대로 */
     public void unblock() {
         if (status != ProductStatus.BLOCKED) {
