@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
@@ -81,6 +82,27 @@ class NotificationApiTest {
                 .contains("event:notification")
                 .contains("\"title\":\"새 메시지\"");
         assertThat(streams.connections()).isPositive();
+    }
+
+    @Test
+    @DisplayName("안 읽은 수 · 읽음(남의 알림이면 404) · 모두 읽음 — 판매자는 회원 + 스토어")
+    void unreadAndRead() throws Exception {
+        given(inbox.countUnread("USER#2")).willReturn(1L);
+        given(inbox.countUnread("STORE#1")).willReturn(2L);
+        given(inbox.unreadKeys("STORE#1")).willReturn(List.of("sk-1"));
+        given(inbox.markRead(anyString(), anyString())).willReturn(true);
+
+        mockMvc.perform(get("/api/notifications/unread-count").header("X-User-Id", 2).header("X-User-Roles", "BUYER,SELLER").header("X-Store-Id", 1))
+                .andExpect(jsonPath("$.data.count").value(3));
+        String others = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("USER#9|sk".getBytes(StandardCharsets.UTF_8));
+        mockMvc.perform(patch("/api/notifications/" + others + "/read").header("X-User-Id", 2).header("X-User-Roles", "BUYER"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOTIFICATION_NOT_FOUND"));
+        String mine = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("USER#2|sk".getBytes(StandardCharsets.UTF_8));
+        mockMvc.perform(patch("/api/notifications/" + mine + "/read").header("X-User-Id", 2).header("X-User-Roles", "BUYER"))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/api/notifications/read-all").header("X-User-Id", 2).header("X-User-Roles", "BUYER,SELLER").header("X-Store-Id", 1))
+                .andExpect(jsonPath("$.data.count").value(1));
     }
 
     @Test

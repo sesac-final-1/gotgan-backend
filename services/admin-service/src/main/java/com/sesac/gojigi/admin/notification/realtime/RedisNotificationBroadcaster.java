@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.PatternTopic;
@@ -36,9 +37,14 @@ public class RedisNotificationBroadcaster {
     RedisMessageListenerContainer notificationListener(RedisConnectionFactory connectionFactory, NotificationStreams streams) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
-        container.addMessageListener((message, pattern) -> streams.deliver(
-                new String(message.getChannel(), StandardCharsets.UTF_8).substring(CHANNEL_PREFIX.length()),
-                new String(message.getBody(), StandardCharsets.UTF_8)), new PatternTopic(CHANNEL_PREFIX + "*"));
+        container.addMessageListener(listener(streams), new PatternTopic(CHANNEL_PREFIX + "*"));
         return container;
+    }
+
+    /** 구독 메시지 → 채널 notify:{받는 쪽} 에서 받는 쪽을 꺼내 이 파드 연결로 */
+    static MessageListener listener(NotificationStreams streams) {
+        return (message, pattern) -> streams.deliver(
+                new String(message.getChannel(), StandardCharsets.UTF_8).substring(CHANNEL_PREFIX.length()),
+                new String(message.getBody(), StandardCharsets.UTF_8));
     }
 }
