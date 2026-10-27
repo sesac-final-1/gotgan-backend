@@ -28,7 +28,7 @@
 
 ## 1. 스토어 상세 (내부) — `GET /internal/stores/{storeId}` (STR-14 · 회원 탈퇴)
 
-user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부를 확인할 때, admin-service 스토어 관리가 부릅니다. DB 조회만 하므로 재시도 가능(GET).
+user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부를 확인할 때, admin-service 스토어 관리가 부릅니다. chat-service 도 채팅 상대 표시 이름(`storeName`)과 정지 · 폐점 스토어의 새 스토어 톡 차단(`status` 가 `ACTIVE` 가 아니면 · 404 도 차단, 그 밖의 실패는 막지 않음 — `chat.md` D-1)에 씁니다(1분 캐시). DB 조회만 하므로 재시도 가능(GET).
 
 ```json
 {
@@ -181,6 +181,7 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 - **`Content-Type` · `Content-Length` 가 서명에 들어갑니다.** 발급 때와 다른 형식 · 크기로 PUT 하면 S3 가 **403**(`SignatureDoesNotMatch`) — 10MB 넘는 파일은 버킷에 올라가지 않습니다. 브라우저 `fetch(url, {method: 'PUT', body: file, headers: {'Content-Type': file.type}})` 는 `Content-Length` 를 자동으로 붙이므로 따로 할 일은 없습니다. 만료(10분) 뒤 PUT 도 403 → 다시 발급.
 - **서류 구성(3종 각 1 + 사진 3~10)은 여기서 보지 않고 2절 제출 때 검사합니다.** 폼 단계마다 나눠 불러도 됩니다. 이미 스토어가 있는지 · 진행 중 신청이 있는지도 2절에서 확인합니다.
 - 2절은 S3 `HeadObject` 로 형식 · 크기를 **다시** 확인합니다(같은 기준). 이 API 는 1차 관문입니다.
+- 서명은 `Content-Type` 만 보고 내용은 보지 않으므로, 올라온 파일은 Lambda `upload-guard`(10/27, `serverless/upload-guard`)가 앞부분 바이트로 실제 PDF · JPG · PNG 인지 확인해 아니면 **지웁니다**(알림 메일). 지워진 키로 2절을 제출하면 S3 에 없는 파일로 400 `APPLY_DOCUMENT_INVALID`.
 - 서명은 store 안에서 계산하므로 S3 를 호출하지 않습니다. 버킷 CORS(PUT · HEAD, vercel · `localhost:5173`) · store IRSA `s3:PutObject` 는 설정돼 있습니다.
 - 올리고 신청하지 않은 파일은 버킷에 남습니다(정리 규칙 없음 — 학습 프로젝트라 보류).
 
@@ -319,7 +320,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 승인 · 재제출 · 자동 반려가 동시에 저장됨 | 한쪽만 반영(`@Version`) | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 |
 | 없는 신청 | — | **404** `APPLY_NOT_FOUND` | 목록으로 |
 
-**발행 이벤트 `StoreApproved`** (config `docs/events.md`, 구독 user · settlement · 알림 Lambda)
+**발행 이벤트 `StoreApproved`** (config `docs/events.md`, 구독 user · settlement · 알림 Lambda · admin 알림 센터)
 
 ```json
 { "storeId": 3, "userId": 4, "storeName": "곳간상회", "sellerEmail": "seller@example.com",
@@ -341,7 +342,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 이미 `APPROVED` · `REJECTED` · 동시 저장 | — | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 |
 | 없는 신청 | — | **404** `APPLY_NOT_FOUND` | 목록으로 |
 
-**발행 이벤트 `StoreApplicationRejected`** (구독 알림 Lambda — 반려 메일)
+**발행 이벤트 `StoreApplicationRejected`** (구독 알림 Lambda — 반려 메일 · admin 알림 센터 — 화면 알림)
 `{applicationId, userId, storeName, sellerEmail, reason, decidedAt}` — 이름은 `serverless/order-notification` 이 읽는 그대로.
 
 ## 7. 입점 보완요청 (내부) — `PATCH /internal/applications/{applicationId}/supplement` (STR-09)
@@ -363,7 +364,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 형식 오류 (위 규칙) | — | **400** `INVALID_INPUT` | 입력 안내 |
 | 없는 신청 | — | **404** `APPLY_NOT_FOUND` | 목록으로 |
 
-**발행 이벤트 `StoreApplicationSupplementRequested`** (구독 알림 Lambda — 보완요청 메일)
+**발행 이벤트 `StoreApplicationSupplementRequested`** (구독 알림 Lambda — 보완요청 메일 · admin 알림 센터 — 화면 알림)
 `{applicationId, userId, storeName, sellerEmail, requestedDocs[], message, dueAt}`. 메일에 그대로 찍히므로 `requestedDocs` 는 **한글 이름**(`사업자등록증` · `통신판매업 신고증` · `통장 사본` · `상품 사진`)으로 바꿔 보냅니다. 요청 본문의 enum 과 다릅니다.
 
 ## 8. 스토어 목록 (내부) — `GET /internal/stores?status=` (STR-14)
