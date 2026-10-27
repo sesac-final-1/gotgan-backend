@@ -13,6 +13,10 @@ spring:
       ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
   flyway:
     locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}         # 파드 간 메시지 중계(chat:room:{id}) · 접속 중 표시(chat:presence:{id}) · 탈퇴 차단 목록(blocked:user:{id})
+      timeout: 500ms                        # 늦으면 기다리지 않음 — 중계 · 표시가 빠져도 메시지는 저장된다
 
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
@@ -23,8 +27,15 @@ server:
   shutdown: graceful                        # 롤링 업데이트 때 처리 중인 요청을 마치고 종료
 
 app:
+  admin-uri: ${ADMIN_SERVICE_URI:http://localhost:8088}   # 알림 센터 POST /internal/notifications
+  jwt:                                      # STOMP CONNECT 토큰 검증 — 게이트웨이와 같은 값 (ConfigMap KEYCLOAK_*)
+    issuer: ${KEYCLOAK_ISSUER:${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan}
+    jwk-set-uri: ${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan/protocol/openid-connect/certs
   chat:
-    max-length: 1000                        # 메시지 글자 수 (8절 content VARCHAR(1000))
+    realtime: ${CHAT_REALTIME:redis}        # redis = 파드 간 중계 · local = 이 파드 연결에만(테스트 · 로컬)
+    ws:                                     # 연결 수명 · 자원 (chat.md 6-1절)
+      allowed-origins: https://gotgan-ashy.vercel.app, https://gotgan-*-jihoon-dev.vercel.app, http://localhost:5173
+      max-sessions-per-user: 5              # 넘으면 가장 오래된 연결을 닫는다 — 탭을 많이 열거나 정리 안 된 연결이 쌓이지 않게
     retention:                              # 메시지 90일 보관 삭제 (D-3, chat.md 8-1절)
       days: 90
       cron: "0 10 9 * * *"                  # 하루 한 번 09:10 KST — 클러스터가 08~22시만 떠 있어 새벽 배치는 돌지 못함

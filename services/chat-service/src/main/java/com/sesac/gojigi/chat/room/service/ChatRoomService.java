@@ -29,14 +29,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 방 열기 · 목록 · 메시지 · 읽음 · 상담 상태 (chat.md 1~5절). 실시간 전송(STOMP)은 2단계.
+ * 방 열기 · 목록 · 메시지 · 읽음 · 상담 상태 (chat.md 1~5절) + 실시간 전송(6절, STOMP SEND → send).
+ * 저장 · 읽음 · 상태 변경은 ChatEvents 로 알리고, 커밋 뒤 realtime 이 구독자에게 전달 · 알림을 보낸다.
  * 남의 방은 404(있는지 알려 주지 않음). 상대 이름은 user · store 조회 연동 전까지 번호로 표시하고, 관리자 쪽은 "곳간 운영팀" 고정(D-2)
  */
 @Service
@@ -50,6 +53,8 @@ public class ChatRoomService {
     private static final String SELLER = "SELLER";
     private static final String ADMIN = "ADMIN";
     private static final int MAX_PAGE_SIZE = 100;
+    static final int MAX_CONTENT_LENGTH = 1000;   // chat_message.content VARCHAR(1000)
+    private static final Pattern EXTRA_NEWLINES = Pattern.compile("\\n{3,}");
     private static final List<ChatRoomType> BUYER_TYPES = List.of(ChatRoomType.STORE_INQUIRY, ChatRoomType.BUYER_SUPPORT);
     private static final List<ChatRoomType> SELLER_TYPES = List.of(ChatRoomType.STORE_INQUIRY, ChatRoomType.SELLER_SUPPORT);
     private static final List<ChatRoomType> SUPPORT_TYPES = List.of(ChatRoomType.SELLER_SUPPORT, ChatRoomType.BUYER_SUPPORT);
@@ -57,6 +62,7 @@ public class ChatRoomService {
     private final ChatRoomRepository roomRepository;
     private final ChatMessageRepository messageRepository;
     private final ChatReadRepository readRepository;
+    private final ApplicationEventPublisher events;
 
     /** 1절 — 같은 방이 있으면 그 방(문맥 카드만 추가), 없으면 새로 */
     @Transactional
@@ -118,7 +124,35 @@ public class ChatRoomService {
         if (seated.seat().readOnly() || last == null) {
             return;
         }
-        readRepository.markRead(roomId, seated.seat().readerKey(), Math.min(lastMessageId, last));
+        long readTo = Math.min(lastMessageId, last);
+        readRepository.markRead(roomId, seated.seat().readerKey(), readTo);
+        events.publishEvent(new ChatEvents.ReadMoved(roomId, seated.seat().role(), readTo));
+    }
+
+    /**
+     * 6절 SEND — 앞뒤 공백 제거 · 개행 3줄 이상은 2줄로, 1~1,000자. 읽기 전용 열람이면 CHAT_NOT_ALLOWED.
+     * 닫힌 상담방에 관리자가 아닌 쪽이 보내면 다시 OPEN
+     */
+    @Transactional
+    public void send(AuthUser user, Long roomId, String content) {
+        Seated seated = seated(user, roomId);
+        if (seated.seat().readOnly()) {
+            throw new ChatException(ChatErrorCode.CHAT_NOT_ALLOWED);
+        }
+        String text = normalize(content);
+        ChatRoom room = seated.room();
+        if (room.getStatus() == ChatRoomStatus.RESOLVED && seated.seat().role() != SenderRole.ADMIN) {
+            room.changeStatus(ChatRoomStatus.OPEN);
+            events.publishEvent(new ChatEvents.StatusChanged(roomId, ChatRoomStatus.OPEN));
+        }
+        ChatMessage message = messageRepository.save(ChatMessage.text(roomId, user.userId(), seated.seat().role(), text));
+        room.touch(message);
+        events.publishEvent(new ChatEvents.MessageSaved(room, message));
+    }
+
+    /** 6절 SUBSCRIBE — 방 멤버(관리자 읽기 전용 열람 포함)만. 아니면 404 */
+    public ChatSeat seat(AuthUser user, Long roomId) {
+        return seated(user, roomId).seat();
     }
 
     /** 5절 — 관리자만 · 상담방만. RESOLVED 로 바꾸면 SYSTEM 안내 */
@@ -133,8 +167,11 @@ public class ChatRoomService {
         }
         if (room.getStatus() != status) {
             room.changeStatus(status);
+            events.publishEvent(new ChatEvents.StatusChanged(roomId, status));
             if (status == ChatRoomStatus.RESOLVED) {
-                room.touch(messageRepository.save(ChatMessage.system(room.getId(), RESOLVED_NOTICE)));
+                ChatMessage notice = messageRepository.save(ChatMessage.system(room.getId(), RESOLVED_NOTICE));
+                room.touch(notice);
+                events.publishEvent(new ChatEvents.MessageSaved(room, notice));
             }
         }
         return view(room, ChatSeat.admin(false));
@@ -188,6 +225,7 @@ public class ChatRoomService {
             ChatMessage card = ChatMessage.context(room.getId(), user.userId(), seat.role(), context.type(), context.id(),
                     context.type().fallbackTitle(context.id()));
             room.touch(messageRepository.save(card));
+            events.publishEvent(new ChatEvents.MessageSaved(room, card));
         }
     }
 
@@ -262,6 +300,14 @@ public class ChatRoomService {
 
     private static LocalDateTime recentAt(ChatRoom room) {
         return room.getLastMessageAt() != null ? room.getLastMessageAt() : room.getCreatedAt();
+    }
+
+    private static String normalize(String content) {
+        String text = content == null ? "" : EXTRA_NEWLINES.matcher(content.replace("\r\n", "\n")).replaceAll("\n\n").strip();
+        if (text.isEmpty() || text.length() > MAX_CONTENT_LENGTH) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "메시지는 1~" + MAX_CONTENT_LENGTH + "자로 보내 주세요.");
+        }
+        return text;
     }
 
     private static Long required(Long storeId) {
