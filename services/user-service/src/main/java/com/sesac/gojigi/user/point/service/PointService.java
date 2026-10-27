@@ -28,13 +28,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 포인트 — 내 포인트 조회 · 관리자 회원 포인트 조회 · 주문 사용(Saga) · 사용 취소(Saga 보상) · 취소 · 반품 환원 · 회수. 적립(OrderPaid)은 후속.
+ * 포인트 — 내 포인트 조회 · 관리자 회원 포인트 조회 · 주문 사용(Saga) · 사용 취소(Saga 보상) · 취소 · 반품 환원 · 회수 · 구매확정 적립.
  * 잔액은 users.point_balance 조건부 UPDATE 로만 바꾸고(음수 · 동시 차감 방지), 같은 트랜잭션에서 이력을 남긴다.
  * 멱등: ref_key = sagaId — 같은 sagaId 재요청은 처음 결과를 그대로 돌려준다. 동시에 두 번 오면
  * uk_point_history_type_ref_key 에 걸린 쪽이 롤백되고 먼저 커밋된 결과를 돌려준다.
  * 늦게 도착한 사용 차단: order 가 사용 응답을 못 받고(타임아웃) 보상으로 취소를 먼저 보내면, 사용 기록이 없으니 취소는 0원으로 끝난다.
  * 그때 point_use_saga 에 RELEASED 를 남겨, 뒤늦게 도착한 같은 sagaId 의 사용을 409 POINT_USE_RELEASED 로 거절한다(포인트가 사라지지 않게).
  * 사용도 같은 트랜잭션에서 USED 를 넣어, 사용 · 취소가 겹치면 uk 충돌로 한쪽만 표식을 갖는다 — 어느 순서든 잔액은 원래대로.
+ * 적립은 구매확정(OrderItemConfirmed) 때 — 취소 · 반품은 구매확정 전에만 가능해, 적립한 포인트를 회수할 일이 없다 (먼저 써 버려 못 돌려받는 문제 없음).
  */
 @Slf4j
 @Service
@@ -45,6 +46,25 @@ public class PointService {
     private final PointHistoryRepository pointHistoryRepository;
     private final PointUseSagaRepository pointUseSagaRepository;
     private final TransactionTemplate transactionTemplate;
+
+    /**
+     * 구매확정 적립 (OrderItemConfirmed) — 상품주문 하나의 earnedPoint 를 적립하고 적립한 포인트를 돌려준다(이미 적립했거나 0 이면 0).
+     * 호출하는 쪽(PurchaseConfirmedService)의 트랜잭션 안에서, 회원 행을 잠근 뒤 불러야 한다 — 잔액 · 이력이 누적 구매액과 함께 커밋된다.
+     * 멱등: ref_key earn-{orderItemId} — 다른 eventId 로 다시 와도 상품주문당 한 번.
+     * 구매확정 뒤에는 취소 · 반품이 없어(order 상태 전이) 적립 후 회수할 일이 없다.
+     */
+    public long earnConfirmed(User locked, Long orderItemId, String orderNo, long earnedPoint) {
+        String refKey = PointHistory.earnRefKey(orderItemId);
+        if (earnedPoint <= 0 || pointHistoryRepository.existsByTypeAndRefKey(PointType.EARN, refKey)) {
+            return 0;
+        }
+        userRepository.addPoint(locked.getId(), earnedPoint);
+        long balance = locked.getPointBalance() + earnedPoint;
+        pointHistoryRepository.save(PointHistory.earn(locked, orderItemId, orderNo, earnedPoint, balance, refKey));
+        log.info("포인트 적립 userId={} orderNo={} orderItemId={} earned={} balanceAfter={}",
+                locked.getId(), orderNo, orderItemId, earnedPoint, balance);
+        return earnedPoint;
+    }
 
     /** 사용 결과 — created=false 면 같은 sagaId 재요청 (컨트롤러가 201 / 200 을 나눈다) */
     public record UseResult(PointUseResponse response, boolean created) {
@@ -113,11 +133,13 @@ public class PointService {
     }
 
     private PointReversalResponse doReverse(ReversePointRequest request) {
+        // 잠금이 트랜잭션의 첫 조회여야 한다 — 먼저 일반 조회를 하면 그때 스냅샷(REPEATABLE READ)이 잡혀,
+        // 잠금을 기다리는 동안 커밋된 적립(EARN)을 못 보고 회수를 0 으로 끝낸다
+        Optional<User> locked = userRepository.findByIdForUpdate(request.userId());   // 회수는 현재 잔액으로 계산 — 행 잠금
         Optional<PointReversalResponse> processed = processedReversal(request);
         if (processed.isPresent()) {
             return processed.get();
         }
-        Optional<User> locked = userRepository.findByIdForUpdate(request.userId());   // 회수는 현재 잔액으로 계산 — 행 잠금
         if (locked.isEmpty()) {
             log.warn("포인트 환원 · 회수 — 탈퇴 회원이라 처리하지 않음 userId={} claimId={}", request.userId(), request.claimId());
             return PointReversalResponse.of(request.claimId(), request.orderItemId(), null, null);
