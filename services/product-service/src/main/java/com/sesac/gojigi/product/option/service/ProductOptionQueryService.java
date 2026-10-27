@@ -8,7 +8,6 @@ import com.sesac.gojigi.product.image.service.ImageUrls;
 import com.sesac.gojigi.product.option.dto.response.ProductOptionResponse;
 import com.sesac.gojigi.product.option.entity.ProductOption;
 import com.sesac.gojigi.product.option.repository.ProductOptionRepository;
-import com.sesac.gojigi.product.product.entity.HiddenReason;
 import com.sesac.gojigi.product.product.entity.Product;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
 import java.util.LinkedHashSet;
@@ -65,11 +64,10 @@ public class ProductOptionQueryService {
         Category category = categories.get(p.getCategoryId());
         Category top = category == null ? null : categories.get(category.getParentId());
         boolean categoryActive = category != null && category.isActive() && top != null && top.isActive();
-        boolean purchasable = HiddenReason.of(p, categoryActive) == null && p.getDeletedAt() == null && o.getDeletedAt() == null;
         return new ProductOptionResponse(o.getId(), p.getId(), p.getName(), optionName(o), p.getStoreId(),
                 p.getCategoryId(), top == null ? null : top.getId(),
                 p.getSalePrice(), o.getExtraPrice(), p.getSalePrice() + o.getExtraPrice(), o.getStock(),
-                purchasable, imageUrls.of(imageKey));
+                o.isPurchasable(categoryActive), imageUrls.of(imageKey));
     }
 
     /** "오트밀 / M" · "오트밀" — 옵션 없는 상품(값 둘 다 null)은 null */
