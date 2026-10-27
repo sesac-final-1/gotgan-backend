@@ -27,6 +27,21 @@ public class OrderClientAdapter {
         }
     }
 
+    /** 관리자 대시보드 일별 거래액 차트 — 최근 days 일 */
+    @Retry(name = TARGET)
+    @CircuitBreaker(name = TARGET, fallbackMethod = "dailyStatsFallback")
+    public JsonNode dailyStats(int days) {
+        try {
+            return orderClient.dailyStats(days).data();
+        } catch (HttpClientErrorException e) {
+            throw RemoteCalls.relay(TARGET, e);
+        }
+    }
+
+    JsonNode dailyStatsFallback(int days, Throwable t) {
+        throw RemoteCalls.unavailable(TARGET, t);
+    }
+
     JsonNode platformStatsFallback(Throwable t) {
         throw RemoteCalls.unavailable(TARGET, t);
     }

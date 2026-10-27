@@ -155,7 +155,19 @@ class AdminClientWiringTest {
         assertThat(last()).extracting(Received::method, Received::uri).containsExactly("PUT", "/internal/categories/301");
 
         mockMvc.perform(get("/api/admin/dashboard")).andExpect(status().isOk()).andExpect(jsonPath("$.data.order.path").value("/internal/stats/orders"));
-        assertThat(RECEIVED).extracting(Received::uri).contains("/internal/stats/settlements", "/internal/stats/orders");
+        assertThat(RECEIVED).extracting(Received::uri)
+                .contains("/internal/stats/settlements", "/internal/stats/orders", "/internal/stats/orders/daily?days=30", "/internal/stats/products");
+    }
+
+    @Test
+    @DisplayName("상품 — 스토어 상품 목록 · 강제 판매중지 경로 · 메서드 · 본문을 product 내부 API 그대로 (product.md 6절)")
+    void product_paths() throws Exception {
+        mockMvc.perform(get("/api/admin/stores/7/products")).andExpect(jsonPath("$.data.path").value("/internal/products?storeId=7"));
+
+        mockMvc.perform(patch("/api/admin/products/3/block").contentType(MediaType.APPLICATION_JSON).content("{\"blocked\":false}"))
+                .andExpect(status().isOk());
+        assertThat(last()).extracting(Received::method, Received::uri, Received::body)
+                .containsExactly("PATCH", "/internal/products/3/block", "{\"blocked\":false}");
     }
     @Test
     @DisplayName("입점 심사 · 스토어 — store.md 3~9절 경로 · 메서드 · 본문 그대로 (#97 계약)")
