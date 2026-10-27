@@ -120,11 +120,19 @@
 |---|---|---|---|
 | `OrderPaid` | 구매자 | `ORDER_PAID` 결제가 완료됐어요 — "상품 외 n건 · 금액" | `/mypage/orders/{orderNo}` |
 | `OrderItemShipped` | 구매자 | `ORDER_SHIPPED` 배송이 시작됐어요 — "상품 · 택배사 송장" | 〃 |
-| `OrderItemCancelled` · `OrderItemReturned` | 구매자 | `ORDER_CANCELLED` · `ORDER_RETURNED` — "상품 · 환불 금액" (order 발행 전 — ORD-11) | 〃 |
+| `OrderItemCancelled` · `OrderItemReturned` | 구매자 | `ORDER_CANCELLED` 취소가 완료됐어요 · `ORDER_RETURNED` 반품이 완료됐어요 — "상품 · 환불 금액" | 〃 |
 | `SettlementPaid` | 스토어 | `SETTLEMENT_PAID` 정산금이 지급됐어요 — "주차 · 지급액" | `/seller/settlements` |
 | `StoreApproved` · `StoreApplicationRejected` · `StoreApplicationSupplementRequested` | 신청 회원 | `STORE_APPROVED` · `STORE_REJECTED` · `STORE_SUPPLEMENT` | `/seller` · `/seller/apply` |
 
 같은 이벤트 재전달은 알림함 키(`{발생 시각 ms}#{eventId}`)가 같아 한 번만 쌓입니다.
+
+**다른 서비스 요청 → 알림** (아래 내부 API)
+
+| 호출 서비스 | 받는 쪽 | type | 링크 |
+|---|---|---|---|
+| chat-service — 상대가 그 방을 보고 있지 않을 때 새 채팅 메시지 (`chat.md` 7절, `sourceId = chat-msg-{messageId}`) | 구매자 · 스토어 · 관리자 전원 | `CHAT_MESSAGE` | `/mypage/chats/{roomId}` · `/seller/chats/{roomId}` · `/admin/chats/{roomId}` |
+
+알림 종류(`type`): `ORDER_PAID` · `ORDER_SHIPPED` · `ORDER_CANCELLED` · `ORDER_RETURNED` · `SETTLEMENT_PAID` · `STORE_APPROVED` · `STORE_REJECTED` · `STORE_SUPPLEMENT` · `CHAT_MESSAGE`. 화면은 `CHAT_MESSAGE` 를 받으면 채팅 목록 · 안 읽은 수 배지도 갱신합니다.
 
 ### API (게이트웨이 `/api/notifications/**` → admin, 로그인한 누구나 자기 알림만)
 

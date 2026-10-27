@@ -437,6 +437,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 
 - 버킷 `sesac-gojigi-images-4380` 의 `products/` 는 공개 읽기, 쓰기는 presigned PUT 만. CORS(PUT · HEAD, vercel · `localhost:5173`)는 설정돼 있습니다.
 - 올리고 저장하지 않은 파일은 S3 에 남습니다(삭제 권한 없음 — 학습 프로젝트라 보류).
+- 올라온 파일은 Lambda `upload-guard`(10/27, `serverless/upload-guard`)가 앞부분 바이트로 실제 JPG · PNG · WEBP 인지 확인해 아니면 **지웁니다**(알림 메일, `products/` · `reviews/` · `stores/` 공통). product 는 저장 때 S3 존재를 확인하지 않으므로 지워진 키는 화면에 깨진 이미지로 보입니다.
 - 권장 크기 1000×1250px 이상은 화면 안내만, 서버는 검사하지 않습니다.
 
 ## 18. 오류 코드 (`docs/api/error-codes.md`)
