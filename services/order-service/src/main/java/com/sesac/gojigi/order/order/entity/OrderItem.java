@@ -140,6 +140,14 @@ public class OrderItem extends BaseTimeEntity {
         this.status = OrderItemStatus.ORDERED;
     }
 
+    /**
+     * 취소 · 반품 때 회수할 적립 포인트 — 적립은 구매확정 때(OrderItemConfirmed) 일어나므로 확정 전이면 0.
+     * 취소 · 반품은 구매확정 전에만 되므로 지금은 항상 0 — 구매확정 후 클레임이 생기면 그때 earnedPoint 를 회수한다
+     */
+    public long revocablePoint() {
+        return confirmedAt == null ? 0L : earnedPoint;
+    }
+
     /** 결제 완료 — 주문 PAID 와 같은 트랜잭션 (결제 검증 성공 · 0원 주문). 주문완료 상태에서만 */
     public void markPaymentDone() {
         if (status != OrderItemStatus.ORDERED) {

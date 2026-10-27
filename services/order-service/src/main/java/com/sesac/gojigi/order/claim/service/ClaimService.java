@@ -38,7 +38,7 @@ public class ClaimService {
         };
         return new ClaimPreviewResponse(item.getId(), type, reasonCode, item.getItemAmt(), refund.shippingFee(),
                 ClaimRefundPolicy.sellerFault(reasonCode), refund.refundAmt(), refund.restorePoint(),
-                type == ClaimType.EXCHANGE ? 0L : item.getEarnedPoint());
+                type == ClaimType.EXCHANGE ? 0L : item.revocablePoint());
     }
 
     /** 반품 · 교환 신청 — 먼저 신청 가능 여부를 확인하고 스토어 배송비를 읽은 뒤, 주문을 잠근 트랜잭션에서 다시 확인하고 접수 */

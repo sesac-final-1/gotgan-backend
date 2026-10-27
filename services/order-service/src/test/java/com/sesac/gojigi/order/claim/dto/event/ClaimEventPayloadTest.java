@@ -29,7 +29,7 @@ class ClaimEventPayloadTest {
 
         // then
         assertThat(payload).isEqualTo(new OrderItemCancelledPayload(null, "20261022-000123", 4L, "buyer@example.com",
-                "김구매", "제철 사과 3kg", "특", 62_000L, 2_000L, 3_100L));
+                "김구매", "제철 사과 3kg", "특", 62_000L, 2_000L, 0L));   // 구매확정 전 — 회수할 적립 없음
     }
 
     @Test
@@ -40,6 +40,6 @@ class ClaimEventPayloadTest {
 
         // then
         assertThat(payload).isEqualTo(new OrderItemReturnedPayload(null, "20261022-000123", 4L, "buyer@example.com",
-                "김구매", "제철 사과 3kg", "특", 62_000L, 2_000L, 3_100L));
+                "김구매", "제철 사과 3kg", "특", 62_000L, 2_000L, 0L));   // 구매확정 전 — 회수할 적립 없음
     }
 }
