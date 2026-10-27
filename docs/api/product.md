@@ -90,9 +90,11 @@
 | 같은 `claimId` 재요청 | 없음 | **200** |
 | 옵션 · 상품이 삭제 · 판매중지됨 | 그래도 복원 (재고 수만) | **200** |
 | 없는 옵션 ID | 없음 | **404** `PRODUCT_OPTION_NOT_FOUND` |
-| `quantity < 1` | 없음 | **400** `INVALID_INPUT` |
+| `quantity < 1` · `claimId` · `productOptionId` 없음 | 없음 | **400** `INVALID_INPUT` |
 
 - 복원 수량이 실제 판매 수량을 넘는지는 product 가 알 수 없습니다. **order 가 클레임 수량 그대로** 보냅니다.
+- 응답 `data` 는 `null` 입니다(처음 · 재요청 같음).
+- 구현 메모(product 내부): 예약 · 해제와 같이 **옵션 행을 먼저 잠근 뒤**(`SELECT … FOR UPDATE`) `claim-{claimId}` RESTORE 기록을 확인합니다 — 같은 `claimId` 가 동시에 와도 한 번만 반영됩니다.
 
 ## 4. 가격 · 구매 가능 조회 — `GET /internal/product-options?ids=11,25` (PRD-10)
 
