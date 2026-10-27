@@ -26,6 +26,7 @@ app:
     read-timeout: 3s
   images:
     base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{s3Key} (ConfigMap)
+    bucket: ${IMAGES_BUCKET:}                 # 업로드 presigned PUT 대상 (ConfigMap) — products/{storeId}/… 만 IRSA PutObject
   sqs:
     queue-url: ${PRODUCT_EVENTS_QUEUE_URL:}   # 구독 큐 (sesac-gojigi-product-{도메인}-events)
 
