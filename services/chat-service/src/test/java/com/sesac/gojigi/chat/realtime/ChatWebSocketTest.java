@@ -154,6 +154,30 @@ class ChatWebSocketTest {
     }
 
     @Test
+    @DisplayName("입력 중: 같은 방 구독자에게 TYPING(저장 안 함) — 1초에 한 번만 전달, 읽기 전용 관리자는 무시")
+    void typingIsRelayedAndThrottled() throws Exception {
+        long roomId = storeInquiry();
+        Client buyer = connect("buyer");
+        Client seller = connect("seller");
+        BlockingQueue<String> sellerFrames = seller.subscribe(ChatRelay.DESTINATION_PREFIX + roomId);
+        await().until(() -> presence.isWatching(roomId, "STORE#5"));
+
+        buyer.typing(roomId);
+        buyer.typing(roomId);   // 1초 안의 두 번째는 버림
+
+        JsonNode frame = json.readTree(sellerFrames.poll(5, TimeUnit.SECONDS));
+        assertThat(frame.path("type").asString()).isEqualTo("TYPING");
+        assertThat(frame.path("userRole").asString()).isEqualTo("BUYER");
+        assertThat(sellerFrames.poll(1_500, TimeUnit.MILLISECONDS)).isNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM chat_message", Integer.class)).isZero();
+
+        chatRoomService.open(user(10L, "BUYER"), new ChatRequests.OpenRoom(ChatRoomType.BUYER_SUPPORT, null,
+                new ChatRequests.Context(ContextType.CHAT_ROOM, roomId)));
+        connect("admin").typing(roomId);
+        assertThat(sellerFrames.poll(1_500, TimeUnit.MILLISECONDS)).isNull();
+    }
+
+    @Test
     @DisplayName("토큰 없음 · 잘못된 토큰 · 회원 연결 없는 토큰은 CONNECT 에서 ERROR")
     void connectRequiresValidToken() throws Exception {
         assertThat(connectError(null)).contains("UNAUTHORIZED");
@@ -303,6 +327,12 @@ class ChatWebSocketTest {
             BlockingQueue<String> frames = new LinkedBlockingQueue<>();
             session.subscribe(destination, new Collector(frames));
             return frames;
+        }
+
+        void typing(long roomId) {
+            StompHeaders headers = new StompHeaders();
+            headers.setDestination("/pub/rooms/" + roomId + "/typing");
+            session.send(headers, "{}");
         }
 
         void send(long roomId, String content) {

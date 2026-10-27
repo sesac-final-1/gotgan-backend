@@ -94,6 +94,7 @@
 | `SUBSCRIBE /sub/rooms/{roomId}` | 방 멤버만(관리자 읽기 전용 열람 포함). 아니면 `ERROR` (`CHAT_ROOM_NOT_FOUND`) |
 | `SUBSCRIBE /user/queue/errors` | 내가 보낸 `SEND` 의 업무 오류 `{ code, message }` — 연결은 유지 |
 | `SEND /pub/rooms/{roomId}` `{ content }` (content-type `application/json`) | 1~1,000자 · 개행 3줄 이상은 2줄로 · 앞뒤 공백 제거. 저장 · 커밋 후 구독자에게. 오류는 `/user/queue/errors` — `INVALID_INPUT` · `CHAT_NOT_ALLOWED`(읽기 전용) · `CHAT_TOO_FAST` · `CHAT_ROOM_NOT_FOUND`. 닫힌 상담방에 관리자가 아닌 쪽이 보내면 다시 `OPEN` |
+| `SEND /pub/rooms/{roomId}/typing` | 입력 중 신호 — 저장 · 알림 없이 같은 방 구독자에게 `{ type: TYPING, userRole }`. 연결마다 1초에 1번만 전달(넘치면 버림), 읽기 전용 열람은 무시. 화면은 입력하는 동안 3초마다 보내고, 받으면 5초 동안 "입력 중…" |
 | 서버 → 구독 | 새 메시지 `{ type: MESSAGE, messageId, roomId, senderRole, kind, content, context, createdAt }`(3절 모양에서 `mine` 없음 — 화면이 senderRole 과 자기 자리로 판단) · 읽음 `{ type: READ, userRole, lastMessageId }` · 상태 `{ type: STATUS, status }` |
 
 - 파드 간: 저장한 파드가 Redis `chat:room:{roomId}` 에 발행 → 모든 파드가 자기 구독자에게
@@ -123,7 +124,7 @@ WebSocket 은 항상 열려 있어서, 끊긴 연결이 남지 않게 서버 · 
 | 알림 호출 | 전용 스레드 2 · 대기 500건, 넘치면 버림 · 연결 1초 · 읽기 2초 |
 | 지표 | `chat_ws_sessions` (파드별 연결 수 — Grafana) |
 
-화면(구지훈, 프론트 채팅 PR)은 채팅 화면에서만 연결하고, 화면을 떠나거나 `pagehide` 면 끊고, 탭이 오래 숨겨지면 끊었다가 돌아오면 다시 연결한다. 재연결은 지수 백오프 + 무작위 지연(최대 30초)으로 파드 재시작 때 동시에 몰리지 않게 한다.
+화면(구지훈, 프론트 채팅 PR)은 채팅 화면에서만 연결하고, 화면을 떠나거나 `pagehide` 면 끊는다. 탭이 가려지면 **연결은 두고 방 구독만 해제**(보고 있지 않음 → 알림이 감) · 다시 보이면 재구독 + 빈 곳 채우기 — 잦은 탭 전환에 재연결(핸드셰이크 · 토큰 검증 · 권한 조회) 비용을 들이지 않으려고(10/27). 모바일 백그라운드는 브라우저가 탭을 얼려 하트비트가 멈추므로 서버가 약 30초 안에 닫는다. 재연결은 지수 백오프 + 무작위 지연(최대 30초)으로 파드 재시작 때 동시에 몰리지 않게 한다.
 
 ## 7. 알림 연동
 

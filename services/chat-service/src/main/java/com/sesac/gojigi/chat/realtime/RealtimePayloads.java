@@ -40,6 +40,14 @@ public final class RealtimePayloads {
         }
     }
 
+    /** 입력 중 — 저장하지 않고 구독자에게만. 화면은 몇 초 동안 "입력 중…" 을 보여 준다 */
+    public record Typing(String type, SenderRole userRole) {
+
+        static Typing of(SenderRole role) {
+            return new Typing("TYPING", role);
+        }
+    }
+
     /** /user/queue/errors — 보낸 연결에만. 연결은 유지된다 (토큰 · 권한 오류는 STOMP ERROR 후 끊김) */
     public record Error(String code, String message) {
     }
