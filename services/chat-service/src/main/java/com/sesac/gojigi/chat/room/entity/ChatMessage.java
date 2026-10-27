@@ -66,6 +66,10 @@ public class ChatMessage {
         this.content = content;
     }
 
+    public static ChatMessage text(Long chatRoomId, Long senderId, SenderRole senderRole, String content) {
+        return new ChatMessage(chatRoomId, senderId, senderRole, MessageKind.TEXT, content);
+    }
+
     /** 문맥 카드 — 내용은 카드 제목(목록 미리보기용) */
     public static ChatMessage context(Long chatRoomId, Long senderId, SenderRole senderRole, ContextType type, Long id, String title) {
         ChatMessage message = new ChatMessage(chatRoomId, senderId, senderRole, MessageKind.CONTEXT, title);

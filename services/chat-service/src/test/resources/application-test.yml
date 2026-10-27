@@ -1,5 +1,9 @@
-# 테스트용 설정 — Testcontainers 가 띄운 MySQL 에 연결 (@ServiceConnection). 담당 jihoon-devstu
+# 테스트용 설정 — Testcontainers 가 띄운 MySQL 에 연결 (Redis 없음 — local 모드) (@ServiceConnection). 담당 jihoon-devstu
 spring:
   jpa:
     hibernate:
       ddl-auto: validate
+
+app:
+  chat:
+    realtime: local                         # 테스트에는 Redis 가 없어 이 JVM 연결에만 중계 · 표시 (Redis 동작은 ChatRedisTest 가 컨테이너로)

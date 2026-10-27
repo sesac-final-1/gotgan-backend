@@ -90,15 +90,40 @@
 
 | 프레임 | 내용 |
 |---|---|
-| `CONNECT` | 헤더 `Authorization: Bearer {액세스 토큰}` — chat-service 가 Keycloak JWKS 로 검증(게이트웨이는 WebSocket Upgrade 만 통과). 실패면 `ERROR` 프레임 후 끊음 |
-| `SUBSCRIBE /sub/rooms/{roomId}` | 방 멤버만(관리자 읽기 전용 열람 포함). 아니면 `ERROR` |
-| `SEND /pub/rooms/{roomId}` `{ content }` | 1~1,000자 · 연속 개행 정리 · 앞뒤 공백 제거. 저장 후 구독자에게 3절 메시지 모양으로 전달. 읽기 전용 열람이면 `ERROR` |
-| 서버 → 구독 | 새 메시지 · 상대 읽음 `{ type: READ, userRole, lastMessageId }` · 상태 변경 `{ type: STATUS, status }` |
+| `CONNECT` | 헤더 `Authorization: Bearer {액세스 토큰}` — chat-service 가 Keycloak JWKS 로 검증 + 탈퇴 차단 목록(`blocked:user:{id}`) 확인(게이트웨이는 WebSocket Upgrade 만 통과). 실패면 `ERROR` 프레임, 서버가 1초 뒤 연결을 닫음 |
+| `SUBSCRIBE /sub/rooms/{roomId}` | 방 멤버만(관리자 읽기 전용 열람 포함). 아니면 `ERROR` (`CHAT_ROOM_NOT_FOUND`) |
+| `SUBSCRIBE /user/queue/errors` | 내가 보낸 `SEND` 의 업무 오류 `{ code, message }` — 연결은 유지 |
+| `SEND /pub/rooms/{roomId}` `{ content }` (content-type `application/json`) | 1~1,000자 · 개행 3줄 이상은 2줄로 · 앞뒤 공백 제거. 저장 · 커밋 후 구독자에게. 오류는 `/user/queue/errors` — `INVALID_INPUT` · `CHAT_NOT_ALLOWED`(읽기 전용) · `CHAT_TOO_FAST` · `CHAT_ROOM_NOT_FOUND`. 닫힌 상담방에 관리자가 아닌 쪽이 보내면 다시 `OPEN` |
+| 서버 → 구독 | 새 메시지 `{ type: MESSAGE, messageId, roomId, senderRole, kind, content, context, createdAt }`(3절 모양에서 `mine` 없음 — 화면이 senderRole 과 자기 자리로 판단) · 읽음 `{ type: READ, userRole, lastMessageId }` · 상태 `{ type: STATUS, status }` |
 
-- heartbeat 10초(클라이언트 · 서버) — NLB idle 350초
 - 파드 간: 저장한 파드가 Redis `chat:room:{roomId}` 에 발행 → 모든 파드가 자기 구독자에게
 - 연결이 끊기면 화면이 다시 연결하고 3절 `before` 없이 최신을 다시 받아 빈 곳을 채운다
-- 전송 속도 제한은 게이트웨이 요청 제한(이경석)과 별개로 서비스에서 1초 5건(사용자별) — 넘으면 `ERROR` `CHAT_TOO_FAST`
+- 전송 속도 제한은 게이트웨이 요청 제한(이경석)과 별개로 서비스에서 **연결마다** 1초 5건 — 넘으면 오류 큐 `CHAT_TOO_FAST`(연결은 유지)
+
+### 6-1. 연결 수명 · 자원 (좀비 연결 방지)
+
+WebSocket 은 항상 열려 있어서, 끊긴 연결이 남지 않게 서버 · 화면 양쪽에서 정리한다.
+
+| 경우 | 누가 · 언제 정리 |
+|---|---|
+| 화면을 떠남 · 탭 닫기 · 로그아웃 | 화면이 `DISCONNECT` → 서버가 그 연결의 접속 중 표시 · 속도 제한 상태를 바로 지움(`SessionDisconnectEvent` 하나로 처리) |
+| 닫기 신호 없이 사라짐(모바일 절전 · 네트워크 끊김) | 하트비트 10초(양방향) — 받는 쪽이 약 30초 동안 아무것도 못 받으면 서버 브로커가 닫음. NLB 유휴 350초보다 짧아 중간 장비가 조용히 끊지 않음 |
+| 연결만 열고 `CONNECT` 를 안 보냄 | 첫 프레임 10초 제한 + 30초 정리 주기 |
+| `CONNECT` 거절(토큰 · 차단) | `ERROR` 후 서버가 1초 뒤 닫음 |
+| 토큰 만료(30분) | 30초 주기로 닫음(close 4401) → 화면이 새 토큰으로 다시 연결. 탈퇴 · 정지 회원의 열린 연결도 토큰 수명 안에 끊김 |
+| 한 사용자 연결이 5개 초과 | 가장 오래된 것을 닫음(close 4429) — 탭 여러 개 · 정리 안 된 연결 누적 방지 |
+| 파드 종료 · 장애 | 종료 시 스프링이 연결을 닫고(화면은 다른 파드로 재연결) 접속 중 표시를 지움. 갑자기 죽어 못 지운 표시는 Redis ZSET 만료 시각(60초, 살아 있는 구독은 20초마다 연장)으로 무시 · 정리 |
+
+| 자원 상한 | 값 |
+|---|---|
+| 프레임 크기 | 8KB (1,000자 한글 + 헤더) |
+| 연결별 보내기 버퍼 · 시간 | 256KB · 10초 — 느린 연결 하나가 메모리 · 스레드를 붙잡으면 그 연결만 닫음 |
+| STOMP 채널 스레드 | 들어오는 쪽 4 · 나가는 쪽 4 고정 (연결은 Tomcat NIO 라 연결당 스레드 없음) |
+| Redis | 파드당 구독 연결 1개 · 패턴 `chat:room:*` 하나 — 방이 늘어도 그대로 |
+| 알림 호출 | 전용 스레드 2 · 대기 500건, 넘치면 버림 · 연결 1초 · 읽기 2초 |
+| 지표 | `chat_ws_sessions` (파드별 연결 수 — Grafana) |
+
+화면(구지훈, 프론트 채팅 PR)은 채팅 화면에서만 연결하고, 화면을 떠나거나 `pagehide` 면 끊고, 탭이 오래 숨겨지면 끊었다가 돌아오면 다시 연결한다. 재연결은 지수 백오프 + 무작위 지연(최대 30초)으로 파드 재시작 때 동시에 몰리지 않게 한다.
 
 ## 7. 알림 연동
 
@@ -109,8 +134,10 @@
 | 판매자 · 구매자 → 상담방 | `ADMIN` | "[판매자 상담 · 고객 상담] …" | `/admin/chats/{roomId}` |
 | 관리자 → 상담방 | `STORE#` 또는 `USER#` | "곳간 운영팀: …" | 판매자 · 마이페이지 채팅 |
 
-- 받는 쪽이 그 방을 **구독 중이면 알림을 보내지 않는다**(Redis 에 구독 중인 사용자 목록 — 연결 시 추가 · 끊김 시 제거, TTL 60초 갱신)
-- admin 장애면 알림만 빠지고 메시지는 저장 · 전달된다(Resilience4j 서킷 `admin`)
+- 받는 쪽이 그 방을 **구독 중이면 알림을 보내지 않는다** — Redis ZSET `chat:presence:{roomId}`(6-1절). 확인이 실패하면 보냄(빠지는 것보다 한 번 더)
+- 대화 메시지(`TEXT`)만 — 문맥 카드 · 상담 종료 안내는 알리지 않음
+- 전송 경로를 막지 않게 전용 스레드에서 보내고, admin 장애 · 대기열 초과면 알림만 빠지고 메시지는 저장 · 전달된다(짧은 타임아웃 — 서킷은 두지 않음)
+- 2단계에서 이름은 번호 표시("스토어 #5") — 이름 조회 연동 후 마스킹 이름으로
 
 ## 8. DB (chatdb, Flyway V1)
 
@@ -177,13 +204,13 @@ CREATE TABLE chat_read (
 | `CHAT_NOT_ALLOWED` | 403 | 역할이 열 수 없는 방 종류 · 읽기 전용 방에 전송 |
 | `CHAT_SELF` | 400 | 자기 스토어에 스토어 톡 |
 | `CHAT_INVALID_TYPE` | 400 | 스토어 톡에 상담 상태 변경 |
-| `CHAT_TOO_FAST` | 429(STOMP ERROR) | 1초 5건 초과 |
+| `CHAT_TOO_FAST` | 429(오류 큐 `/user/queue/errors`) | 연결마다 1초 5건 초과 |
 | `CHAT_STORE_INACTIVE` | 409 | 정지 · 폐점 스토어에 새 스토어 톡 (D-1, store 상태 조회 API 배포 후) |
 
 ## 10. 인프라 · 배포 (구지훈)
 
 - config: Terraform `ecr/` 저장소 `sesac-gojigi-chat`, `init-schemas.sh` chatdb · chat 계정, secrets-sync `CHAT_DB_PASSWORD`(값 등록은 사용자 — GitHub Secrets), Helm values `chat-service`(:8089), NetworkPolicy DB 접근 라벨, ConfigMap `CHAT_SERVICE_URI`
-- backend: `services/chat-service`(gradle: websocket · data-jpa · flyway · data-redis · oauth2-resource-server(JWT 검증) · resilience4j), CI 매트릭스에 chat(이경석 리뷰)
+- backend: `services/chat-service`(gradle: websocket · data-jpa · flyway · data-redis · spring-security-oauth2-jose(JWT 검증만)), CI 매트릭스에 chat(이경석 리뷰)
 - 게이트웨이: `/api/chats/**` → chat, `/ws/chat` WebSocket 라우트(Upgrade 통과 · 타임아웃 해제) + 이 경로만 CORS(Origin 확인)
 
 ## 11. 범위 밖
