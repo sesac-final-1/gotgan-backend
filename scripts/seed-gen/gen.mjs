@@ -1,4 +1,4 @@
-// 시연 시드 생성 — node scripts/seed-gen/gen.mjs → 서비스별 db/seed/R__demo_seed.sql (user · store · order · payment · settlement)
+// 시연 시드 생성 — node scripts/seed-gen/gen.mjs → 서비스별 db/seed/R__demo_seed.sql (user · store · product · order · payment · settlement)
 // 직접 고치지 말고 scenario.mjs 를 고친 뒤 다시 생성한다. 담당 구지훈 (각 파일 주인이 리뷰)
 // 금액 · 수수료 · 포인트는 서버 규칙 그대로 계산: 판매수수료(상위 카테고리율) · 결제수수료 2.2% 를 상품주문마다 원 단위 내림,
 // 적립 = (상품주문 금액 − 사용 포인트) × 5% 내림, 배송비는 스토어 정책(무료 기준 이상이면 0)
@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CATEGORY, COMMISSION, EARN_RATE, GRADE, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, STORES, VIEW_BUYERS,
+  CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, STORES, VIEW_BUYERS,
+  combos, salePrice, subCategoryId,
 } from './scenario.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -146,7 +147,7 @@ ${insert('order_item', ['order_item_id', 'order_id', 'store_id', 'product_id', '
   'product_name', 'option_name', 'unit_price', 'quantity', 'item_amt', 'used_point', 'earned_point', 'courier', 'tracking_no', 'status', 'shipped_at', 'delivered_at',
   'confirmed_at', 'created_at'],
 orders.map((o) => [o.id, o.id, o.store.storeId, o.product, o.product * 100 + 1, o.p.category, o.topCategory, `CONCAT(${o.orderNo}, '-01')`, q(o.store.name),
-  q(o.p.name), 'NULL', o.p.price, o.qty, o.itemAmt, 0, o.earned, o.t.shipped ? q(o.store.courier) : 'NULL',
+  q(o.p.name), q(o.p.optionName), o.p.price, o.qty, o.itemAmt, 0, o.earned, o.t.shipped ? q(o.store.courier) : 'NULL',
   o.t.shipped ? q(`6512${String(o.id).padStart(8, '0')}`) : 'NULL', q(o.t.status), o.t.shipped ?? 'NULL', o.t.delivered ?? 'NULL', o.t.confirmed ?? 'NULL', o.t.paid]))}
 ${insert('order_item_history', ['order_item_history_id', 'order_item_id', 'actor_id', 'from_status', 'to_status', 'actor_type', 'reason', 'created_at'], historyRows)}`;
 
@@ -207,8 +208,35 @@ ${insert('payout', ['payout_id', 'settlement_id', 'payout_amt', 'bank_name', 'ac
     paidAt(g)]))}
 ${insert('settlement_history', ['settlement_history_id', 'settlement_id', 'from_status', 'to_status', 'actor_type', 'reason', 'created_at'], settlementHistory)}`;
 
-for (const [service, sql] of [['user', userSql], ['store', storeSql], ['order', orderSql], ['payment', paymentSql], ['settlement', settlementSql]]) {
+// ── product
+const stockOf = (p, i, n) => Math.floor(p.stock / n) + (i < p.stock % n ? 1 : 0);   // 재고를 조합에 고르게 — 나머지는 앞 조합부터
+const inactiveStores = STORES.filter((s) => s.status !== 'ACTIVE').map((s) => s.storeId).join(' · ');
+const productSql = `${header('VoC-100', `-- 카테고리 = product.md "시드 카테고리 ID"(10/20 확정) — 상위 ID 1~6 은 settlement 수수료 · store 신청서와 같은 번호,
+--   하위 ID = 상위 × 100 + 순번. 시드가 603 까지 넣으므로 관리자가 새로 만드는 카테고리는 604 부터
+-- 상품 = 프론트 목업 39개 — product_id = 스토어 × 100 + 순번(order 시드 상품주문과 같은 번호 · 이름 · 판매가), 옵션 = 상품 × 100 + 조합 순번,
+--   이미지 = 상품 × 10 + 순번 · S3 키 products/seed/…(프론트 public/images/p 파일을 images 버킷에 올려 둠). 정지 스토어(${inactiveStores}) 상품은 is_store_active FALSE`)}
+${insert('category', ['category_id', 'parent_id', 'name', 'name_en', 'sort_order', 'is_active'],
+  CATEGORY_TREE.map((c) => [c.id, 'NULL', q(c.name), q(c.en), c.sort, 'TRUE']))}
+${insert('category', ['category_id', 'parent_id', 'name', 'sort_order', 'is_active'],
+  CATEGORY_TREE.flatMap((c) => c.subs.map((s, i) => [c.id * 100 + i + 1, c.id, q(s), i + 1, 'TRUE'])))}
+${insert('product', ['product_id', 'category_id', 'store_id', 'name', 'price', 'discount_rate', 'sale_price', 'description', 'material', 'origin',
+  'option1_name', 'option2_name', 'status', 'is_store_active', 'store_status_changed_at', 'created_at'],
+CATALOG.map((p) => {
+  const store = storeById[Math.floor(p.id / 100)];
+  const inactive = store.status !== 'ACTIVE';
+  return [p.id, subCategoryId(p), store.storeId, q(p.name), p.price, p.discount.toFixed(2), salePrice(p),
+    q(`<p>${p.name}</p><p>소재 · 원재료: ${p.material} / 원산지: ${p.origin}</p>`), q(p.material), q(p.origin),
+    q(p.options[0]?.[0] ?? null), q(p.options[1]?.[0] ?? null), q(p.status ?? 'ON_SALE'), inactive ? 'FALSE' : 'TRUE',
+    inactive ? ago(store.suspendedDaysAgo) : 'NULL', ago(p.created)];
+}))}
+${insert('product_option', ['product_option_id', 'product_id', 'option1_value', 'option2_value', 'extra_price', 'stock', 'created_at'],
+  CATALOG.flatMap((p) => combos(p).map((c, i, all) => [p.id * 100 + i + 1, p.id, q(c[0] ?? null), q(c[1] ?? null), 0, stockOf(p, i, all.length), ago(p.created)])))}
+${insert('product_image', ['product_image_id', 'product_id', 's3_key', 'sort_order', 'created_at'],
+  CATALOG.flatMap((p) => [1, 2, 3].map((n) => [p.id * 10 + n - 1, p.id, q(`products/seed/${p.mock}-${n}.jpg`), n - 1, ago(p.created)])))}`;
+
+for (const [service, sql] of [['user', userSql], ['store', storeSql], ['product', productSql], ['order', orderSql], ['payment', paymentSql],
+  ['settlement', settlementSql]]) {
   console.log(write(service, sql));
 }
-console.log(`회원 ${userRows.length + 3} · 스토어 ${STORES.length} · 주문 ${orders.length}(구매확정 ${confirmed.length}) · 정산서 ${groups.length}`
+console.log(`회원 ${userRows.length + 3} · 스토어 ${STORES.length} · 상품 ${CATALOG.length} · 주문 ${orders.length}(구매확정 ${confirmed.length}) · 정산서 ${groups.length}`
   + ` (${groups.map((g) => `${g.storeId}:W-${g.week}:${g.status}:${g.sum('payout')}`).join(' ')})`);
