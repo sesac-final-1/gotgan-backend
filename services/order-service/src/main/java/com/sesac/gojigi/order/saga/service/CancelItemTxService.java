@@ -24,6 +24,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,7 +42,12 @@ public class CancelItemTxService {
     private final OrderItemHistoryRepository historyRepository;
     private final OrderClaimRepository claimRepository;
     private final SagaInstanceRepository sagaInstanceRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
+
+    /** 취소 · 반품 완료 — 같은 트랜잭션에서 OrderItemCancelled / Returned 를 남긴다 (ClaimEventRecorder) */
+    public record ClaimFinished(Long claimId) {
+    }
 
     /** 취소 Saga 가 단계마다 쓰는 값 — 클레임을 만들 때 정해 두고 재시도해도 같은 값 */
     public record CancelContext(Long sagaInstanceId, String sagaId, Long claimId, ClaimType type, Long orderItemId,
@@ -106,7 +112,7 @@ public class CancelItemTxService {
 
     /**
      * 취소 · 반품 완료 — 상품주문 CANCELLED / RETURNED · 이력 · 클레임 COMPLETED · (모든 상품주문이 취소되면) 주문 CANCELLED · Saga 완료.
-     * TODO(Outbox · ORD-11): OrderItemCancelled · OrderItemReturned 이벤트를 같은 트랜잭션에 기록 (refundAmt · restoredPoint · revokedPoint)
+     * OrderItemCancelled · OrderItemReturned 도 같은 트랜잭션에 남는다 (refundAmt · restoredPoint · revokedPoint — ClaimEventRecorder)
      */
     @Transactional
     public void finish(Long sagaInstanceId) {
@@ -132,6 +138,7 @@ public class CancelItemTxService {
             order.markCancelled();
         }
         saga.complete();
+        eventPublisher.publishEvent(new ClaimFinished(claim.getId()));
     }
 
     private static CancelContext context(SagaInstance saga, OrderClaim claim, OrderItem item, Order order) {

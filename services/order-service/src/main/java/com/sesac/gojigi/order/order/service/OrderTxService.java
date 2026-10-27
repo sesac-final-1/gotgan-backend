@@ -42,8 +42,8 @@ public class OrderTxService {
     public record PendingOrder(Order order, List<OrderItem> items) {
     }
 
-    /** 결제 확정 — 같은 트랜잭션에서 장바구니의 주문한 옵션을 지운다 (CartService#onOrderPaid) */
-    public record Paid(Long buyerId, List<Long> productOptionIds) {
+    /** 결제 확정 — 같은 트랜잭션에서 장바구니의 주문한 옵션을 지우고(CartService#onOrderPaid) OrderPaid 를 남긴다(OrderEventRecorder) */
+    public record Paid(Long buyerId, List<Long> productOptionIds, Long orderId) {
     }
 
     /**
@@ -79,7 +79,8 @@ public class OrderTxService {
         order.markPaid(LocalDateTime.now(clock));
         List<OrderItem> items = orderItemRepository.findByOrderIdOrderByIdAsc(orderId);
         items.forEach(OrderItem::markPaymentDone);
-        eventPublisher.publishEvent(new Paid(order.getBuyerId(), items.stream().map(OrderItem::getProductOptionId).toList()));
+        eventPublisher.publishEvent(new Paid(order.getBuyerId(), items.stream().map(OrderItem::getProductOptionId).toList(),
+                order.getId()));
     }
 
     /** Saga 보상을 마친 주문 — 상품주문은 주문완료(ORDERED) 그대로 */

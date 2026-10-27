@@ -3,6 +3,8 @@ package com.sesac.gojigi.chat.retention;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sesac.gojigi.chat.TestcontainersConfiguration;
+import com.sesac.gojigi.chat.directory.ChatDirectory;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.sesac.gojigi.chat.room.repository.ChatMessageRepository;
 import com.sesac.gojigi.chat.room.repository.ChatReadRepository;
 import com.sesac.gojigi.chat.room.repository.ChatRoomRepository;
@@ -38,6 +40,7 @@ class ChatRetentionJobTest {
     @Autowired ChatMessageRepository messageRepository;
     @Autowired ChatRoomRepository roomRepository;
     @Autowired ChatReadRepository readRepository;
+    @MockitoBean ChatDirectory directory;   // ChatRoomApiTest 와 같은 컨텍스트(컨테이너 1개)를 쓰려고 같은 가짜를 둔다
 
     private ChatRetentionJob job;
 

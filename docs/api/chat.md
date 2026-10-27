@@ -94,6 +94,7 @@
 | `SUBSCRIBE /sub/rooms/{roomId}` | 방 멤버만(관리자 읽기 전용 열람 포함). 아니면 `ERROR` (`CHAT_ROOM_NOT_FOUND`) |
 | `SUBSCRIBE /user/queue/errors` | 내가 보낸 `SEND` 의 업무 오류 `{ code, message }` — 연결은 유지 |
 | `SEND /pub/rooms/{roomId}` `{ content }` (content-type `application/json`) | 1~1,000자 · 개행 3줄 이상은 2줄로 · 앞뒤 공백 제거. 저장 · 커밋 후 구독자에게. 오류는 `/user/queue/errors` — `INVALID_INPUT` · `CHAT_NOT_ALLOWED`(읽기 전용) · `CHAT_TOO_FAST` · `CHAT_ROOM_NOT_FOUND`. 닫힌 상담방에 관리자가 아닌 쪽이 보내면 다시 `OPEN` |
+| `SEND /pub/rooms/{roomId}/typing` | 입력 중 신호 — 저장 · 알림 없이 같은 방 구독자에게 `{ type: TYPING, userRole }`. 연결마다 1초에 1번만 전달(넘치면 버림), 읽기 전용 열람은 무시. 화면은 입력하는 동안 3초마다 보내고, 받으면 5초 동안 "입력 중…" |
 | 서버 → 구독 | 새 메시지 `{ type: MESSAGE, messageId, roomId, senderRole, kind, content, context, createdAt }`(3절 모양에서 `mine` 없음 — 화면이 senderRole 과 자기 자리로 판단) · 읽음 `{ type: READ, userRole, lastMessageId }` · 상태 `{ type: STATUS, status }` |
 
 - 파드 간: 저장한 파드가 Redis `chat:room:{roomId}` 에 발행 → 모든 파드가 자기 구독자에게
@@ -123,7 +124,7 @@ WebSocket 은 항상 열려 있어서, 끊긴 연결이 남지 않게 서버 · 
 | 알림 호출 | 전용 스레드 2 · 대기 500건, 넘치면 버림 · 연결 1초 · 읽기 2초 |
 | 지표 | `chat_ws_sessions` (파드별 연결 수 — Grafana) |
 
-화면(구지훈, 프론트 채팅 PR)은 채팅 화면에서만 연결하고, 화면을 떠나거나 `pagehide` 면 끊고, 탭이 오래 숨겨지면 끊었다가 돌아오면 다시 연결한다. 재연결은 지수 백오프 + 무작위 지연(최대 30초)으로 파드 재시작 때 동시에 몰리지 않게 한다.
+화면(구지훈, 프론트 채팅 PR)은 채팅 화면에서만 연결하고, 화면을 떠나거나 `pagehide` 면 끊는다. 탭이 가려지면 **연결은 두고 방 구독만 해제**(보고 있지 않음 → 알림이 감) · 다시 보이면 재구독 + 빈 곳 채우기 — 잦은 탭 전환에 재연결(핸드셰이크 · 토큰 검증 · 권한 조회) 비용을 들이지 않으려고(10/27). 모바일 백그라운드는 브라우저가 탭을 얼려 하트비트가 멈추므로 서버가 약 30초 안에 닫는다. 재연결은 지수 백오프 + 무작위 지연(최대 30초)으로 파드 재시작 때 동시에 몰리지 않게 한다.
 
 ## 7. 알림 연동
 
@@ -137,7 +138,7 @@ WebSocket 은 항상 열려 있어서, 끊긴 연결이 남지 않게 서버 · 
 - 받는 쪽이 그 방을 **구독 중이면 알림을 보내지 않는다** — Redis ZSET `chat:presence:{roomId}`(6-1절). 확인이 실패하면 보냄(빠지는 것보다 한 번 더)
 - 대화 메시지(`TEXT`)만 — 문맥 카드 · 상담 종료 안내는 알리지 않음
 - 전송 경로를 막지 않게 전용 스레드에서 보내고, admin 장애 · 대기열 초과면 알림만 빠지고 메시지는 저장 · 전달된다(짧은 타임아웃 — 서킷은 두지 않음)
-- 2단계에서 이름은 번호 표시("스토어 #5") — 이름 조회 연동 후 마스킹 이름으로
+- 이름: user `GET /internal/users/{id}` · store `GET /internal/stores/{id}` (캐시 — 이름 10분 · 스토어 1분 · 실패 10초). 못 받으면 번호("스토어 #5" · "회원 #10")
 
 ## 8. DB (chatdb, Flyway V1)
 
@@ -205,7 +206,7 @@ CREATE TABLE chat_read (
 | `CHAT_SELF` | 400 | 자기 스토어에 스토어 톡 |
 | `CHAT_INVALID_TYPE` | 400 | 스토어 톡에 상담 상태 변경 |
 | `CHAT_TOO_FAST` | 429(오류 큐 `/user/queue/errors`) | 연결마다 1초 5건 초과 |
-| `CHAT_STORE_INACTIVE` | 409 | 정지 · 폐점 스토어에 새 스토어 톡 (D-1, store 상태 조회 API 배포 후) |
+| `CHAT_STORE_INACTIVE` | 409 (전송은 오류 큐) | 정지 · 폐점 · 없는 스토어에 새 스토어 톡 · 기존 스토어 톡에 전송 (D-1) |
 
 ## 10. 인프라 · 배포 (구지훈)
 
@@ -221,6 +222,6 @@ CREATE TABLE chat_read (
 
 | # | 질문 | 결정 |
 |---|---|---|
-| D-1 | 정지 · 폐점 스토어의 스토어 톡 | 새 방은 막고(409 `CHAT_STORE_INACTIVE`) 기존 방은 읽기만 — store 상태 조회 API(박지연) 배포 후 적용, 그 전엔 막지 않음 |
+| D-1 | 정지 · 폐점 스토어의 스토어 톡 | 새 방은 막고(409 `CHAT_STORE_INACTIVE`) 기존 방은 읽기만 — store `GET /internal/stores/{id}` 의 `status` 가 ACTIVE 가 아니면. 조회가 실패하면 막지 않음(fail-open), 상태는 1분 캐시 |
 | D-2 | 관리자 쪽 표시 이름 | "곳간 운영팀" 고정 (관리자 개인 이름 노출 안 함) |
 | D-3 | 메시지 보관 기간 | 90일 뒤 자동 삭제 — 하루 한 번 · 나눠 지우기 (8-1절) |

@@ -1,5 +1,6 @@
 package com.sesac.gojigi.chat.realtime;
 
+import com.sesac.gojigi.chat.directory.ChatDirectory;
 import com.sesac.gojigi.chat.room.entity.ChatMessage;
 import com.sesac.gojigi.chat.room.entity.ChatRoom;
 import com.sesac.gojigi.chat.room.entity.ChatRoomType;
@@ -27,28 +28,32 @@ public class ChatNotifier {
     private final RestClient adminClient;
     private final ChatPresence presence;
     private final Executor executor;
+    private final ChatDirectory directory;
 
     public ChatNotifier(@Qualifier("adminRestClient") RestClient adminClient, ChatPresence presence,
-            @Qualifier("chatNotifyExecutor") Executor executor) {
+            @Qualifier("chatNotifyExecutor") Executor executor, ChatDirectory directory) {
         this.adminClient = adminClient;
         this.presence = presence;
         this.executor = executor;
+        this.directory = directory;
     }
 
     void notifyCounterpart(ChatRoom room, ChatMessage message) {
         Target target = target(room, message.getSenderRole());
-        Request request = target.request(room.getId(), title(room, message.getSenderRole()), body(message), "chat-msg-" + message.getId());
         try {
-            executor.execute(() -> send(room.getId(), target, request));
+            executor.execute(() -> send(room, message, target));
         } catch (RejectedExecutionException e) {
             log.warn("채팅 알림 대기열이 가득 차 건너뜀 roomId={}, messageId={}", room.getId(), message.getId());
         }
     }
 
-    private void send(Long roomId, Target target, Request request) {
+    /** 알림 스레드에서 — 보고 있는지 확인 · 이름 조회(ChatDirectory, 캐시)까지 여기서 해 전송 경로를 막지 않는다 */
+    private void send(ChatRoom room, ChatMessage message, Target target) {
+        Long roomId = room.getId();
         if (presence.isWatching(roomId, target.readerKey())) {
             return;
         }
+        Request request = target.request(roomId, title(room, message.getSenderRole()), body(room, message), "chat-msg-" + message.getId());
         try {
             adminClient.post().uri("/internal/notifications").body(request).retrieve().toBodilessEntity();
         } catch (RuntimeException e) {
@@ -65,17 +70,34 @@ public class ChatNotifier {
         };
     }
 
-    private static String title(ChatRoom room, SenderRole sender) {
+    /** 문구 (7절) — 판매자에게 가는 구매자 이름은 가린다. 이름을 못 받으면 번호 */
+    private String title(ChatRoom room, SenderRole sender) {
         return switch (sender) {
-            case BUYER -> room.getType() == ChatRoomType.STORE_INQUIRY ? "새 스토어 톡" : "[고객 상담] 새 메시지";
-            case SELLER -> room.getType() == ChatRoomType.STORE_INQUIRY ? "스토어 #" + room.getStoreId() + " 답변" : "[판매자 상담] 새 메시지";
-            default -> "곳간 운영팀 답변";
+            case BUYER -> room.getType() == ChatRoomType.STORE_INQUIRY ? "새 스토어 톡" : "[고객 상담] " + userLabel(room.getBuyerId());
+            case SELLER -> room.getType() == ChatRoomType.STORE_INQUIRY
+                    ? storeLabel(room.getStoreId()) : "[판매자 상담] " + storeLabel(room.getStoreId());
+            default -> "곳간 운영팀";
         };
     }
 
-    private static String body(ChatMessage message) {
+    private String body(ChatRoom room, ChatMessage message) {
         String content = message.getContent().replace('\n', ' ');
-        return content.length() <= BODY_LENGTH ? content : content.substring(0, BODY_LENGTH) + "…";
+        String text = content.length() <= BODY_LENGTH ? content : content.substring(0, BODY_LENGTH) + "…";
+        if (message.getSenderRole() == SenderRole.BUYER && room.getType() == ChatRoomType.STORE_INQUIRY) {
+            String name = directory.userName(room.getBuyerId());
+            return (name == null ? "구매자" : ChatDirectory.mask(name)) + ": " + text;
+        }
+        return text;
+    }
+
+    private String storeLabel(Long storeId) {
+        String name = directory.storeName(storeId);
+        return name != null ? name : "스토어 #" + storeId;
+    }
+
+    private String userLabel(Long userId) {
+        String name = directory.userName(userId);
+        return name != null ? name : "회원 #" + userId;
     }
 
     /** 알림 받는 쪽 — readerKey 로 접속 중인지 보고, link 는 받는 쪽 화면 */

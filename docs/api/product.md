@@ -50,7 +50,8 @@
 | 없는 옵션 ID | 전체 롤백 | **404** `PRODUCT_OPTION_NOT_FOUND` | 보상 |
 | `items` 비었음 · `quantity < 1` · 같은 옵션 ID 중복 | 없음 | **400** `INVALID_INPUT` | 보상 (order 버그) |
 
-- 데드락을 피하려고 product 는 옵션 ID 오름차순으로 UPDATE 합니다.
+- 처리 순서(product 내부): ① 요청 옵션 행을 **ID 오름차순으로 잠금**(`SELECT … FOR UPDATE`, 데드락 방지) ② 같은 `sagaId` RESERVE 기록이 있으면 처음 응답 ③ 해제 표식이 있으면 409 ④ 없는 옵션 404 · 구매 불가 409 ⑤ 조건부 UPDATE ⑥ RESERVE 기록. 같은 옵션을 건드리는 예약 · 해제 · 같은 `sagaId` 재요청은 ①에서 줄을 섭니다.
+- 응답 `items` 는 옵션 ID 오름차순입니다.
 - 가격은 확인하지 않습니다. 주문 금액은 order 가 Saga 1단계에서 4번 조회로 스냅샷합니다.
 
 ## 2. 재고 해제 — `POST /internal/stock/reservations/{sagaId}/release` (PRD-08)
@@ -70,7 +71,7 @@
 | RESERVE 없음 (예약 전에 실패했거나, 예약이 아직 처리 중) | `items` 의 옵션마다 RELEASE **수량 0** 행(해제 표식)을 남김 — 재고는 그대로 | **200** `{ sagaId, items: [] }` |
 
 - **해제 표식이 필요한 이유**: order 는 예약 응답을 3초(읽기 타임아웃) 기다리다 실패로 보고 해제를 보냅니다. 이때 product 가 예약을 아직 처리 중이면 해제가 먼저 끝나 "되돌릴 게 없음"이 되고, 그 뒤 예약이 커밋돼 **주문은 실패했는데 재고만 줄어든 채로** 남습니다. 표식이 있으면 늦은 예약이 이를 보고 롤백합니다(1절 409 `STOCK_RESERVATION_RELEASED`).
-- 구현 메모(product 내부): 예약은 RESERVE 행을 넣은 뒤 표식을, 해제는 RESERVE 행을 **잠금 읽기(`SELECT … FOR UPDATE`)** 로 확인해 두 요청이 동시에 와도 한쪽만 반영되게 합니다.
+- 구현 메모(product 내부): 예약 · 해제 모두 **맨 먼저 `items` 의 옵션 행을 ID 오름차순으로 잠근 뒤**(`SELECT … FOR UPDATE`) `stock_history` 를 확인합니다. 해제는 예약 때와 같은 `items` 를 받으므로 같은 행을 잠그게 되고, 두 요청이 동시에 와도 하나씩 처리돼 한쪽만 반영됩니다(10/27 — 처음 메모의 "RESERVE 행 잠금 읽기" 대신, 같은 `sagaId` 중복 예약까지 함께 막으려고).
 - 옵션 · 상품이 그 사이 삭제 · 판매중지돼도 해제합니다(재고 수만 돌려놓음).
 
 ## 3. 재고 복원 — `POST /internal/stock/restorations` (PRD-09)
