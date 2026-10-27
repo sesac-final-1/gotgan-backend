@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum ProductErrorCode implements ErrorCode {
+    PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
+    PRODUCT_BLOCK_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "강제 판매중지 사유를 입력해 주세요."),
     PRODUCT_CATEGORY_INVALID(HttpStatus.BAD_REQUEST, "사용 중인 하위 카테고리를 선택해 주세요."),
     PRODUCT_OPTION_INVALID(HttpStatus.BAD_REQUEST, "옵션 구성이 올바르지 않습니다."),
     PRODUCT_IMAGE_INVALID(HttpStatus.BAD_REQUEST, "상품 이미지가 올바르지 않습니다.");

@@ -24,10 +24,10 @@ app:
   client:
     connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
     read-timeout: 3s
+  images:
+    base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{s3Key} (ConfigMap)
   sqs:
     queue-url: ${PRODUCT_EVENTS_QUEUE_URL:}   # 구독 큐 (sesac-gojigi-product-{도메인}-events)
-  images:
-    base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 이미지 URL = base-url/{s3Key} (ConfigMap)
 
 management:
   endpoints:
