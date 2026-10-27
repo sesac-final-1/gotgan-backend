@@ -9,7 +9,9 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.sesac.gojigi.user.common.event.ProcessedEventRepository;
 import com.sesac.gojigi.user.point.dto.request.UsePointRequest;
+import com.sesac.gojigi.user.point.repository.PointEarnBlockRepository;
 import com.sesac.gojigi.user.point.entity.PointHistory;
 import com.sesac.gojigi.user.point.entity.PointType;
 import com.sesac.gojigi.user.point.exception.PointErrorCode;
@@ -41,13 +43,18 @@ class PointServiceTest {
     @Mock
     private PointUseSagaRepository pointUseSagaRepository;
     @Mock
+    private PointEarnBlockRepository pointEarnBlockRepository;
+    @Mock
+    private ProcessedEventRepository processedEventRepository;
+    @Mock
     private TransactionTemplate transactionTemplate;
 
     private PointService pointService;
 
     @BeforeEach
     void setUp() {
-        pointService = new PointService(userRepository, pointHistoryRepository, pointUseSagaRepository, transactionTemplate);
+        pointService = new PointService(userRepository, pointHistoryRepository, pointUseSagaRepository,
+                pointEarnBlockRepository, processedEventRepository, transactionTemplate);
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(new SimpleTransactionStatus()));
     }
