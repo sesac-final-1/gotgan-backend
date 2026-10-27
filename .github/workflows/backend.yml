@@ -37,11 +37,12 @@ jobs:
       review: ${{ steps.filter.outputs.review }}
       settlement: ${{ steps.filter.outputs.settlement }}
       admin: ${{ steps.filter.outputs.admin }}
+      chat: ${{ steps.filter.outputs.chat }}
       sonar-config: ${{ steps.config.outputs.sonar }}   # sonar-project.properties 만 바뀌어도 Sonar 재분석
       lib: ${{ steps.config.outputs.lib }}              # libs/common-web 변경 — 모듈 자체 테스트(lib job)
     steps:
       - uses: actions/checkout@v4
-      # libs/common-web 은 composite build 로 서비스 jar 에 들어가므로, 바뀌면 의존 서비스 8개를 모두 테스트 · 이미지 재빌드 (결정 5번 B-1)
+      # libs/common-web 은 composite build 로 서비스 jar 에 들어가므로, 바뀌면 의존 서비스 9개를 모두 테스트 · 이미지 재빌드 (결정 5번 B-1)
       # gateway 는 WebFlux 라 common-web(Servlet 전용)을 쓰지 않아 제외
       - id: filter
         uses: dorny/paths-filter@v3
@@ -56,6 +57,7 @@ jobs:
             review:     [services/review-service/**, libs/common-web/**]
             settlement: [services/settlement-service/**, libs/common-web/**]
             admin:      [services/admin-service/**, libs/common-web/**]
+            chat:       [services/chat-service/**, libs/common-web/**]
       - id: config                           # 서비스 목록(services)에 섞이지 않게 필터를 따로 둔다
         uses: dorny/paths-filter@v3
         with:
@@ -118,7 +120,7 @@ jobs:
           docker push "$REGISTRY/$REPOSITORY:$TAG"
 
   # 3) SonarQube Cloud — 저장소 전체를 한 번에 스캔하고 PR 에서는 품질 게이트 결과를 기다린다 (실패 시 이 job 실패 → ci-ok 실패 → 머지 차단)
-  #    Java 분석에 컴파일 결과가 필요해 9개 서비스를 모두 컴파일. 테스트 · JaCoCo 는 바뀐 서비스만 (품질 게이트는 새 코드 기준이라 충분)
+  #    Java 분석에 컴파일 결과가 필요해 10개 서비스를 모두 컴파일. 테스트 · JaCoCo 는 바뀐 서비스만 (품질 게이트는 새 코드 기준이라 충분)
   #    build 와 병렬로 돈다 — 바뀐 서비스가 없으면 build 처럼 건너뜀
   sonar:
     needs: changes
@@ -167,7 +169,7 @@ jobs:
           # 품질 게이트는 PR 에서만 기다린다 — main push 는 다음 PR 의 "새 코드" 기준을 갱신하는 분석만 (첫 main 분석은 게이트가 계산되지 않아 실패로 처리됨)
           args: -Dsonar.qualitygate.wait=${{ github.event_name == 'pull_request' }}
 
-  # 3-1) libs/common-web 자체 테스트 — 서비스 build 와 병렬. 모듈이 깨졌으면 서비스 8개보다 먼저 원인이 보이도록 따로 둔다
+  # 3-1) libs/common-web 자체 테스트 — 서비스 build 와 병렬. 모듈이 깨졌으면 서비스 9개보다 먼저 원인이 보이도록 따로 둔다
   lib:
     needs: changes
     if: needs.changes.outputs.lib == 'true'

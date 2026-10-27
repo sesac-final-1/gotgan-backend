@@ -159,7 +159,7 @@ CREATE TABLE chat_read (
 |---|---|---|
 | 대상 | `created_at` 이 90일 전보다 오래된 `chat_message` | 상담 기록 보관과 저장 공간의 균형 (10/27 결정) |
 | 언제 | **하루 한 번, 09:10 KST** (`app.chat.retention.cron`) | 클러스터가 08:00 ~ 22:00 만 떠 있어 새벽 배치는 돌지 못함 — 아침 기동 · 시드가 끝난 뒤 사용자가 적은 시간 |
-| 한 파드만 | ShedLock (`chat_shedlock`) | 파드가 여러 개여도 한 번만 |
+| 한 파드만 | ShedLock (`shedlock` 테이블, V1) | 파드가 여러 개여도 한 번만 |
 | 나눠 지우기 | `DELETE … WHERE created_at < :cutoff ORDER BY chat_message_id LIMIT 1000` 를 반복, 묶음 사이 200ms 쉼 | 한 번에 큰 삭제는 테이블 잠금 · 복제 지연 · 커넥션 점유 — 1,000건씩이면 수십 ms |
 | 한 번에 최대 | 50묶음(5만 건)까지, 남으면 다음 날 이어서 | 실행 시간 상한(수십 초) — 밀린 양이 많아도 하루 몫만 |
 | 인덱스 | `idx_chat_message_created` | 오래된 행만 범위로 찾음(전체 스캔 없음) |

@@ -1,0 +1,5 @@
+# 테스트용 설정 — Testcontainers 가 띄운 MySQL 에 연결 (@ServiceConnection). 담당 jihoon-devstu
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
