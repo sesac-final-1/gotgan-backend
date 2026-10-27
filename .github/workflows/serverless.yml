@@ -22,10 +22,11 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      functions: ${{ github.event_name == 'workflow_dispatch' && '["order-notification","settlement-report","log-archive"]' || steps.filter.outputs.changes }}
+      functions: ${{ github.event_name == 'workflow_dispatch' && '["order-notification","settlement-report","log-archive","upload-guard"]' || steps.filter.outputs.changes }}
       order-notification: ${{ steps.filter.outputs.order-notification }}
       settlement-report: ${{ steps.filter.outputs.settlement-report }}
       log-archive: ${{ steps.filter.outputs.log-archive }}
+      upload-guard: ${{ steps.filter.outputs.upload-guard }}
     steps:
       - uses: actions/checkout@v4
       - id: filter
@@ -36,6 +37,7 @@ jobs:
             order-notification: [serverless/order-notification/**]
             settlement-report:  [serverless/settlement-report/**]
             log-archive:        [serverless/log-archive/**]
+            upload-guard:       [serverless/upload-guard/**]
 
   # 2) 바뀐 함수마다 하나씩 — 테스트 → 배포
   deploy:

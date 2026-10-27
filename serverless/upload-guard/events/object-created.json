@@ -1,0 +1,10 @@
+{
+  "version": "0",
+  "source": "aws.s3",
+  "detail-type": "Object Created",
+  "region": "ap-northeast-2",
+  "detail": {
+    "bucket": { "name": "sesac-gojigi-images-4380" },
+    "object": { "key": "products/seed/p101-1.jpg", "size": 84213 }
+  }
+}
