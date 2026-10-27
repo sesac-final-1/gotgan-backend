@@ -1,14 +1,17 @@
 package com.sesac.gojigi.product.stock.controller;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.product.stock.dto.request.StockReleaseRequest;
 import com.sesac.gojigi.product.stock.dto.request.StockReserveRequest;
 import com.sesac.gojigi.product.stock.dto.response.StockReservationResponse;
 import com.sesac.gojigi.product.stock.service.StockReservationService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,5 +41,21 @@ public class InternalStockController {
     @PostMapping("/reservations")
     public ApiResponse<StockReservationResponse> reserve(@Valid @RequestBody StockReserveRequest request) {
         return ApiResponse.success("재고를 예약했습니다.", stockReservationService.reserve(request));
+    }
+
+    @Operation(summary = "재고 해제", description = """
+            주문 Saga 보상(결제 실패 · 금액 불일치 · 결제 대기 만료). items 는 예약 때 보낸 목록 그대로 — 되돌리는 수량은 product 의 RESERVE 기록 기준.
+            RESERVE 있음 → 그 수량만큼 되돌림 + RELEASE / 이미 RELEASE → 같은 응답 / RESERVE 없음 → 옵션마다 수량 0 해제 표식(늦게 온 예약이 409 로 롤백), items 빈 목록.
+            옵션 · 상품이 삭제 · 판매중지돼도 재고 수는 돌려놓음. 예약과 같은 옵션 행을 먼저 잠가 동시에 와도 한쪽만 반영.
+            에러: 400 INVALID_INPUT(items 비었음 · quantity < 1 · 같은 옵션 중복 · sagaId 64자 초과)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "해제 · 표식 (재요청도 같은 응답)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT")
+    })
+    @PostMapping("/reservations/{sagaId}/release")
+    public ApiResponse<StockReservationResponse> release(
+            @Parameter(description = "order saga_instance.saga_id", example = "6c1f0a6e-2b9d-4c1e-9a1f-0b2c3d4e5f60") @PathVariable String sagaId,
+            @Valid @RequestBody StockReleaseRequest request) {
+        return ApiResponse.success("재고를 해제했습니다.", stockReservationService.release(sagaId, request));
     }
 }

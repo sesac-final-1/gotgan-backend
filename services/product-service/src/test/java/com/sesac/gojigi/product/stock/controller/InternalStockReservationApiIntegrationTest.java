@@ -15,6 +15,7 @@ import com.sesac.gojigi.product.product.entity.Product;
 import com.sesac.gojigi.product.product.entity.ProductStatus;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
 import com.sesac.gojigi.product.stock.dto.request.StockItem;
+import com.sesac.gojigi.product.stock.dto.request.StockReleaseRequest;
 import com.sesac.gojigi.product.stock.dto.request.StockReserveRequest;
 import com.sesac.gojigi.product.stock.service.StockReservationService;
 import java.util.ArrayList;
@@ -40,7 +41,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * 재고 예약 (POST /internal/stock/reservations, product.md 1절) — 실제 MySQL(InnoDB 잠금) · Flyway.
+ * 재고 예약 (POST /internal/stock/reservations, product.md 1절) · 해제 (POST …/{sagaId}/release, 2절) — 실제 MySQL(InnoDB 잠금) · Flyway.
  * 상품은 저장소로 직접 만들고, 재고 · 원장은 JdbcTemplate 으로 읽어 엔티티 캐시와 상관없이 DB 값을 본다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게.
  */
@@ -102,6 +103,21 @@ class InternalStockReservationApiIntegrationTest {
 
     private ResultActions reserve(String json) throws Exception {
         return mockMvc.perform(post("/internal/stock/reservations").contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    private ResultActions release(String sagaId, String itemsJson) throws Exception {
+        return mockMvc.perform(post("/internal/stock/reservations/" + sagaId + "/release")
+                .contentType(MediaType.APPLICATION_JSON).content("{\"items\":" + itemsJson + "}"));
+    }
+
+    private static String items(long... optionIdAndQuantity) {
+        String full = body("x", optionIdAndQuantity);
+        return full.substring(full.indexOf('['), full.lastIndexOf(']') + 1);
+    }
+
+    private int releaseQuantity(String sagaId, long optionId) {
+        return jdbc.queryForObject("SELECT quantity FROM stock_history WHERE type = 'RELEASE' AND ref_key = ? AND product_option_id = ?",
+                Integer.class, sagaId, optionId);
     }
 
     private static String body(String sagaId, long... optionIdAndQuantity) {
@@ -317,6 +333,47 @@ class InternalStockReservationApiIntegrationTest {
         }
 
         @Test
+        @DisplayName("예약과 해제가 동시에 (order 타임아웃 경합) 20번 — 어느 쪽이 먼저든 재고는 처음 그대로, 늦은 예약은 STOCK_RESERVATION_RELEASED")
+        void reserveAndRelease_concurrently_stockNeverLeaks() throws Exception {
+            // given
+            long id = options(ProductStatus.ON_SALE, 100).getFirst();
+
+            for (int i = 0; i < 20; i++) {
+                String sagaId = "race-" + i;
+                Callable<String> reserve = () -> stockReservationService.reserve(
+                        new StockReserveRequest(sagaId, List.of(new StockItem(id, 3)))).sagaId();
+                Callable<String> release = () -> "released:" + stockReservationService.release(sagaId,
+                        new StockReleaseRequest(List.of(new StockItem(id, 3)))).items().size();
+
+                // when
+                List<String> results = runTogether(List.of(reserve, release));
+
+                // then — 예약이 먼저면 (성공, 3개 되돌림), 해제가 먼저면 (409, 표식 0개)
+                assertThat(List.of(List.of(sagaId, "released:1"), List.of("STOCK_RESERVATION_RELEASED", "released:0")))
+                        .as("시도 %d 결과", i).contains(results);
+                assertThat(stock(id)).as("시도 %d 뒤 재고", i).isEqualTo(100);
+            }
+        }
+
+        @Test
+        @DisplayName("같은 sagaId 해제가 동시에 3번 — 재고는 한 번만 돌아옴")
+        void release_sameSagaConcurrently_appliedOnce() throws Exception {
+            // given
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            stockReservationService.reserve(new StockReserveRequest("saga-r", List.of(new StockItem(id, 4))));
+            Callable<String> task = () -> "released:" + stockReservationService.release("saga-r",
+                    new StockReleaseRequest(List.of(new StockItem(id, 4)))).items().size();
+
+            // when
+            List<String> results = runTogether(List.of(task, task, task));
+
+            // then
+            assertThat(results).containsOnly("released:1");
+            assertThat(stock(id)).isEqualTo(10);
+            assertThat(historyCount("RELEASE", "saga-r")).isEqualTo(1);
+        }
+
+        @Test
         @DisplayName("옵션 두 개를 서로 반대 순서로 담은 주문 2건 — 데드락 없이 둘 다 성공 (ID 오름차순 잠금)")
         void reserve_oppositeOrder_noDeadlock() throws Exception {
             // given
@@ -333,6 +390,103 @@ class InternalStockReservationApiIntegrationTest {
             assertThat(results).containsExactly("saga-ab", "saga-ba");
             assertThat(stock(ids.get(0))).isEqualTo(8);
             assertThat(stock(ids.get(1))).isEqualTo(8);
+        }
+    }
+
+    @Nested
+    @DisplayName("해제 (2절)")
+    class Release {
+
+        @Test
+        @DisplayName("예약 뒤 해제 — 200, 예약 수량만큼 되돌림 + RELEASE 기록, 응답은 되돌린 수량")
+        void release_afterReserve_restoresStock() throws Exception {
+            // given
+            List<Long> ids = options(ProductStatus.ON_SALE, 10, 5);
+            reserve(body("saga-1", ids.get(0), 2, ids.get(1), 5)).andExpect(status().isOk());
+
+            // when — 요청 순서는 예약과 달라도 됨
+            release("saga-1", items(ids.get(1), 5, ids.get(0), 2))
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.sagaId").value("saga-1"))
+                    .andExpect(jsonPath("$.data.items[0].productOptionId").value(ids.get(0)))
+                    .andExpect(jsonPath("$.data.items[0].quantity").value(2))
+                    .andExpect(jsonPath("$.data.items[1].quantity").value(5));
+            assertThat(stock(ids.get(0))).isEqualTo(10);
+            assertThat(stock(ids.get(1))).isEqualTo(5);
+            assertThat(releaseQuantity("saga-1", ids.get(0))).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("같은 sagaId 해제 재요청 — 200 같은 응답, 재고는 한 번만 돌아옴")
+        void release_again_returnsSameResponse() throws Exception {
+            // given
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            reserve(body("saga-1", id, 3)).andExpect(status().isOk());
+            release("saga-1", items(id, 3)).andExpect(status().isOk());
+
+            // when · then
+            release("saga-1", items(id, 3))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.items[0].quantity").value(3));
+            assertThat(stock(id)).isEqualTo(10);
+            assertThat(historyCount("RELEASE", "saga-1")).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("예약 없이 해제 — 200 빈 목록, 수량 0 표식만 남고 재고 그대로 → 그 뒤 예약은 409 (재요청해도 빈 목록)")
+        void release_withoutReserve_leavesMarker() throws Exception {
+            // given
+            List<Long> ids = options(ProductStatus.ON_SALE, 10, 10);
+
+            // when
+            release("saga-1", items(ids.get(0), 1, ids.get(1), 1))
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.items.length()").value(0));
+            assertThat(releaseQuantity("saga-1", ids.get(0))).isZero();
+            assertThat(releaseQuantity("saga-1", ids.get(1))).isZero();
+            assertThat(stock(ids.get(0))).isEqualTo(10);
+
+            release("saga-1", items(ids.get(0), 1, ids.get(1), 1)).andExpect(jsonPath("$.data.items.length()").value(0));
+            reserve(body("saga-1", ids.get(0), 1, ids.get(1), 1))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("STOCK_RESERVATION_RELEASED"));
+            assertThat(stock(ids.get(0))).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("예약 뒤 상품 판매중지 · 옵션 삭제돼도 해제는 재고를 돌려놓는다")
+        void release_afterStoppedOrDeleted_stillRestores() throws Exception {
+            // given
+            List<Long> ids = options(ProductStatus.ON_SALE, 10, 10);
+            reserve(body("saga-1", ids.get(0), 4, ids.get(1), 4)).andExpect(status().isOk());
+            jdbc.update("UPDATE product p JOIN product_option o USING (product_id) SET p.status = 'STOPPED' WHERE o.product_option_id = ?", ids.get(0));
+            jdbc.update("UPDATE product_option SET deleted_at = NOW(6) WHERE product_option_id = ?", ids.get(1));
+
+            // when · then
+            release("saga-1", items(ids.get(0), 4, ids.get(1), 4)).andExpect(status().isOk());
+            assertThat(stock(ids.get(0))).isEqualTo(10);
+            assertThat(stock(ids.get(1))).isEqualTo(10);
+        }
+
+        @Test
+        @DisplayName("예약 없이 해제할 때 없는 옵션은 표식을 건너뜀 (FK) — 200")
+        void release_missingOptionWithoutReserve_skipsMarker() throws Exception {
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            release("saga-1", items(id, 1, 999999L, 1)).andExpect(status().isOk());
+            assertThat(historyCount("RELEASE", "saga-1")).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("items 비었음 · 수량 0 · 같은 옵션 중복 · sagaId 65자 — 400 INVALID_INPUT")
+        void release_invalidInput_badRequest() throws Exception {
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            release("saga-1", "[]").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            release("saga-1", items(id, 0)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            release("saga-1", items(id, 1, id, 1)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            release("s".repeat(65), items(id, 1)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            assertThat(historyCount("RELEASE", "saga-1")).isZero();
         }
     }
 }
