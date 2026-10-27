@@ -18,6 +18,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -103,6 +104,23 @@ public class SellerProductController {
             @Parameter(description = "상품 ID", example = "3") @PathVariable Long productId,
             @Valid @RequestBody ProductCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.success("상품을 수정했습니다.", sellerProductService.update(storeId(user), productId, request)));
+    }
+
+    @Operation(summary = "상품 삭제", description = """
+            인가: SELLER (스토어 = X-Store-Id). 상태와 상관없이(BLOCKED 포함) 소프트 삭제 — 옵션 · 재고 이력은 남고 목록 · 상세 · 공개 화면에서 빠짐.
+            지난 주문은 스냅샷이라 영향 없음, 장바구니에 담긴 옵션은 구매 불가가 됨. 화면의 일괄 삭제는 선택한 개수만큼 이 API 를 부름 (product.md 16절).
+            에러: 403 FORBIDDEN(스토어 헤더 없음) / 404 PRODUCT_NOT_FOUND(없음 · 이미 삭제 · 다른 스토어 상품)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "삭제"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PRODUCT_NOT_FOUND")
+    })
+    @DeleteMapping("/{productId}")
+    public ResponseEntity<ApiResponse<Void>> delete(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Parameter(description = "상품 ID", example = "3") @PathVariable Long productId) {
+        sellerProductService.delete(storeId(user), productId);
+        return ResponseEntity.ok(ApiResponse.success("상품을 삭제했습니다."));
     }
 
     /** 판매자 API 공통 — 스토어 헤더가 없으면 403 (product.md 12절 아래 공통 규칙) */
