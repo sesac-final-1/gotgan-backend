@@ -7,7 +7,6 @@ import com.sesac.gojigi.user.point.dto.request.ReversePointRequest;
 import com.sesac.gojigi.user.point.dto.response.PointReversalResponse;
 import com.sesac.gojigi.user.point.entity.PointHistory;
 import com.sesac.gojigi.user.point.entity.PointType;
-import com.sesac.gojigi.user.point.repository.PointEarnBlockRepository;
 import com.sesac.gojigi.user.point.repository.PointHistoryRepository;
 import com.sesac.gojigi.user.point.repository.PointUseSagaRepository;
 import com.sesac.gojigi.user.user.entity.User;
@@ -46,7 +45,6 @@ class PointReversalIntegrationTest {
     @Autowired private UserRepository userRepository;
     @Autowired private PointHistoryRepository pointHistoryRepository;
     @Autowired private PointUseSagaRepository pointUseSagaRepository;
-    @Autowired private PointEarnBlockRepository pointEarnBlockRepository;
     @Autowired private TransactionTemplate transactionTemplate;
     @Autowired private JdbcTemplate jdbc;
 
@@ -54,7 +52,6 @@ class PointReversalIntegrationTest {
     void cleanUp() {
         pointHistoryRepository.deleteAllInBatch();
         pointUseSagaRepository.deleteAllInBatch();
-        pointEarnBlockRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
     }
 

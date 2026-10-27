@@ -1,10 +1,10 @@
 -- 곳간(GOTGAN) 전체 ERD — ERD Cloud 가져오기용 (자동 생성: node docs/erd/build-erd.mjs, 직접 수정 금지)
--- 생성: 2026-10-27 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
+-- 생성: 2026-10-26 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
 -- 서비스마다 DB 가 따로라 서비스 사이 참조(user_id · order_item_id 등 "논리 참조")는 FK 로 그리지 않는다 — 컬럼 COMMENT 참고
 -- 제외: shedlock (스케줄러 잠금). 여러 DB 에 있는 같은 이름 테이블은 {db}_ 접두어
 
 -- ============================================================ userdb (user-service · 담당 이경석)
--- 원본: V1__init.sql · V2__init_userdb.sql · V3__user_suspension.sql · V4__point_use_saga.sql · V5__point_earn_block.sql
+-- 원본: V1__init.sql · V2__init_userdb.sql · V3__user_suspension.sql · V4__point_use_saga.sql
 
 -- 회원 프로필 · 포인트 잔액 · 등급 (계정은 Keycloak)
 CREATE TABLE `users` (
@@ -71,13 +71,6 @@ CREATE TABLE `point_use_saga` (
 	`point_use_saga_id`	BIGINT	NOT NULL,
 	`saga_id`	VARCHAR(64)	NOT NULL	COMMENT 'order 주문 Saga ID — point_history.ref_key(USE · 보상 RESTORE)와 같은 값',
 	`status`	VARCHAR(20)	NOT NULL	COMMENT 'USED(사용 처리됨) / RELEASED(사용 전에 취소됨 — 이후 사용 거절)',
-	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
-);
-
--- 적립 제외 상품주문 (취소 · 반품 뒤 늦게 도착한 적립 차단)
-CREATE TABLE `point_earn_block` (
-	`point_earn_block_id`	BIGINT	NOT NULL,
-	`order_item_id`	BIGINT	NOT NULL	COMMENT 'order 상품주문 ID — 취소 · 반품돼 적립하지 않는다',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
@@ -255,7 +248,7 @@ CREATE TABLE `productdb_processed_event` (
 );
 
 -- ============================================================ orderdb (order-service · 담당 이경석)
--- 원본: V1__init.sql · V2__order_saga_outbox.sql · V3__saga_retry.sql · V4__order_item_ordered.sql · V5__order_claim_restore_point.sql · V6__outbox_attempts.sql
+-- 원본: V1__init.sql · V2__order_saga_outbox.sql · V3__saga_retry.sql · V4__order_item_ordered.sql · V5__order_claim_restore_point.sql
 
 -- 장바구니 항목 (원본, Redis 캐시의 출처)
 CREATE TABLE `cart_item` (
@@ -389,8 +382,6 @@ CREATE TABLE `outbox_event` (
 	`event_type`	VARCHAR(50)	NOT NULL	COMMENT 'OrderPaid / OrderItemShipped / OrderItemConfirmed / OrderItemCancelled / OrderItemReturned',
 	`payload`	JSON	NOT NULL	COMMENT '이벤트 payload (docs/events.md)',
 	`status`	VARCHAR(10)	NOT NULL	DEFAULT 'NEW'	COMMENT 'NEW / SENT',
-	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '발행 시도 횟수 (경보 기준)',
-	`last_error`	VARCHAR(200)	NULL	COMMENT '마지막 발행 실패 사유',
 	`sent_at`	DATETIME(6)	NULL	COMMENT 'SNS 발행 시각',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각'
 );
@@ -554,7 +545,6 @@ ALTER TABLE `address` ADD CONSTRAINT `PK_ADDRESS` PRIMARY KEY (`address_id`);
 ALTER TABLE `point_history` ADD CONSTRAINT `PK_POINT_HISTORY` PRIMARY KEY (`point_history_id`);
 ALTER TABLE `userdb_processed_event` ADD CONSTRAINT `PK_USERDB_PROCESSED_EVENT` PRIMARY KEY (`processed_event_id`);
 ALTER TABLE `point_use_saga` ADD CONSTRAINT `PK_POINT_USE_SAGA` PRIMARY KEY (`point_use_saga_id`);
-ALTER TABLE `point_earn_block` ADD CONSTRAINT `PK_POINT_EARN_BLOCK` PRIMARY KEY (`point_earn_block_id`);
 ALTER TABLE `store_application` ADD CONSTRAINT `PK_STORE_APPLICATION` PRIMARY KEY (`store_application_id`);
 ALTER TABLE `application_document` ADD CONSTRAINT `PK_APPLICATION_DOCUMENT` PRIMARY KEY (`application_document_id`);
 ALTER TABLE `application_history` ADD CONSTRAINT `PK_APPLICATION_HISTORY` PRIMARY KEY (`application_history_id`);

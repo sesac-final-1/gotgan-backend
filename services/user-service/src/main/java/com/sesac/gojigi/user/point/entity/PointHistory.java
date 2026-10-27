@@ -85,7 +85,7 @@ public class PointHistory {
         this.refKey = refKey;
     }
 
-    /** 결제 적립 (OrderPaid) — refKey earnRefKey(orderItemId), 상품주문당 한 번 */
+    /** 구매확정 적립 (OrderItemConfirmed) — refKey earnRefKey(orderItemId), 상품주문당 한 번 */
     public static PointHistory earn(User user, Long orderItemId, String orderNo, long amount, long balanceAfter, String refKey) {
         return new PointHistory(user, orderItemId, orderNo, PointType.EARN, amount, 0L, balanceAfter, refKey);
     }

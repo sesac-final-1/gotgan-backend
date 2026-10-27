@@ -24,7 +24,7 @@ import lombok.NoArgsConstructor;
 /**
  * 상품주문 = 상태 관리 단위 (배송 · 구매확정 · 클레임). 상품 · 카테고리 · 스토어명은 주문 시점 스냅샷.
  * usedPoint 는 주문 사용 포인트를 금액 비율로 배분한 값(취소 · 반품 시 환원액),
- * earnedPoint 는 (itemAmt - usedPoint) 의 5% (취소 · 반품 시 회수액).
+ * earnedPoint 는 (itemAmt - usedPoint) 의 5% — user 가 구매확정 때 적립 (OrderItemConfirmed). 취소 · 반품은 구매확정 전이라 실제 회수는 0.
  */
 @Getter
 @Entity
