@@ -25,6 +25,7 @@ class ChatDirectoryTest {
 
     private MockRestServiceServer users;
     private MockRestServiceServer stores;
+    private MockRestServiceServer settlements;
     private Instant now = Instant.parse("2026-10-27T05:00:00Z");
     private ChatDirectory directory;
 
@@ -34,6 +35,8 @@ class ChatDirectoryTest {
         RestClient.Builder storeBuilder = RestClient.builder().baseUrl("http://store");
         users = MockRestServiceServer.bindTo(userBuilder).build();
         stores = MockRestServiceServer.bindTo(storeBuilder).build();
+        RestClient.Builder settlementBuilder = RestClient.builder().baseUrl("http://settlement");
+        settlements = MockRestServiceServer.bindTo(settlementBuilder).build();
         Clock clock = new Clock() {
             @Override
             public ZoneId getZone() {
@@ -50,7 +53,7 @@ class ChatDirectoryTest {
                 return now;
             }
         };
-        directory = new ChatDirectory(userBuilder.build(), storeBuilder.build(), clock);
+        directory = new ChatDirectory(userBuilder.build(), storeBuilder.build(), settlementBuilder.build(), clock);
     }
 
     @Test
@@ -99,6 +102,19 @@ class ChatDirectoryTest {
         assertThat(directory.userName(2L)).isNull();
         assertThat(directory.userName(3L)).isNull();
         users.verify();
+    }
+
+    @Test
+    @DisplayName("정산 카드 — 상세 응답의 settlement(storeId · week · payoutAmt), 없으면 null")
+    void settlement() {
+        settlements.expect(once(), requestTo("http://settlement/internal/settlements/31")).andRespond(withSuccess(
+                "{\"data\":{\"settlement\":{\"id\":31,\"storeId\":5,\"week\":\"2026-W43\",\"payoutAmt\":1234000},\"items\":[]}}", MediaType.APPLICATION_JSON));
+        settlements.expect(once(), requestTo("http://settlement/internal/settlements/32")).andRespond(withResourceNotFound());
+
+        assertThat(directory.settlement(31L)).isEqualTo(new ChatDirectory.SettlementInfo(5L, "2026-W43", 1_234_000));
+        assertThat(directory.settlement(31L).week()).isEqualTo("2026-W43");   // 캐시
+        assertThat(directory.settlement(32L)).isNull();
+        settlements.verify();
     }
 
     @Test

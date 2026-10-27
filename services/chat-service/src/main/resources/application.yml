@@ -30,6 +30,7 @@ app:
   admin-uri: ${ADMIN_SERVICE_URI:http://localhost:8088}   # 알림 센터 POST /internal/notifications
   user-uri: ${USER_SERVICE_URI:http://localhost:8081}     # 상대 이름 GET /internal/users/{id}
   store-uri: ${STORE_SERVICE_URI:http://localhost:8082}   # 스토어 이름 · 상태 GET /internal/stores/{id} (D-1)
+  settlement-uri: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}   # 정산 카드 제목 GET /internal/settlements/{id}
   jwt:                                      # STOMP CONNECT 토큰 검증 — 게이트웨이와 같은 값 (ConfigMap KEYCLOAK_*)
     issuer: ${KEYCLOAK_ISSUER:${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan}
     jwk-set-uri: ${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan/protocol/openid-connect/certs
