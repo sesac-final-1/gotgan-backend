@@ -17,7 +17,9 @@ import com.sesac.gojigi.product.product.repository.ProductRepository;
 import com.sesac.gojigi.product.stock.dto.request.StockItem;
 import com.sesac.gojigi.product.stock.dto.request.StockReleaseRequest;
 import com.sesac.gojigi.product.stock.dto.request.StockReserveRequest;
+import com.sesac.gojigi.product.stock.dto.request.StockRestoreRequest;
 import com.sesac.gojigi.product.stock.service.StockReservationService;
+import com.sesac.gojigi.product.stock.service.StockRestorationService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -41,7 +43,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * 재고 예약 (POST /internal/stock/reservations, product.md 1절) · 해제 (POST …/{sagaId}/release, 2절) — 실제 MySQL(InnoDB 잠금) · Flyway.
+ * 재고 예약 (POST /internal/stock/reservations, product.md 1절) · 해제 (POST …/{sagaId}/release, 2절)
+ * · 복원 (POST /internal/stock/restorations, 3절) — 실제 MySQL(InnoDB 잠금) · Flyway.
  * 상품은 저장소로 직접 만들고, 재고 · 원장은 JdbcTemplate 으로 읽어 엔티티 캐시와 상관없이 DB 값을 본다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게.
  */
@@ -55,6 +58,7 @@ class InternalStockReservationApiIntegrationTest {
     @Autowired ProductRepository productRepository;
     @Autowired CategoryRepository categoryRepository;
     @Autowired StockReservationService stockReservationService;
+    @Autowired StockRestorationService stockRestorationService;
     @Autowired JdbcTemplate jdbc;
 
     private Category shirt;
@@ -103,6 +107,14 @@ class InternalStockReservationApiIntegrationTest {
 
     private ResultActions reserve(String json) throws Exception {
         return mockMvc.perform(post("/internal/stock/reservations").contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    private ResultActions restore(String json) throws Exception {
+        return mockMvc.perform(post("/internal/stock/restorations").contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    private static String restoreBody(long claimId, long optionId, int quantity) {
+        return "{\"claimId\":" + claimId + ",\"productOptionId\":" + optionId + ",\"quantity\":" + quantity + "}";
     }
 
     private ResultActions release(String sagaId, String itemsJson) throws Exception {
@@ -374,6 +386,25 @@ class InternalStockReservationApiIntegrationTest {
         }
 
         @Test
+        @DisplayName("같은 claimId 복원이 동시에 3번 — 재고는 한 번만 늘어남 (유니크 충돌 없음)")
+        void restore_sameClaimConcurrently_appliedOnce() throws Exception {
+            // given
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            Callable<String> task = () -> {
+                stockRestorationService.restore(new StockRestoreRequest(789L, id, 2));
+                return "ok";
+            };
+
+            // when
+            List<String> results = runTogether(List.of(task, task, task));
+
+            // then
+            assertThat(results).containsOnly("ok");
+            assertThat(stock(id)).isEqualTo(12);
+            assertThat(historyCount("RESTORE", "claim-789")).isEqualTo(1);
+        }
+
+        @Test
         @DisplayName("옵션 두 개를 서로 반대 순서로 담은 주문 2건 — 데드락 없이 둘 다 성공 (ID 오름차순 잠금)")
         void reserve_oppositeOrder_noDeadlock() throws Exception {
             // given
@@ -487,6 +518,90 @@ class InternalStockReservationApiIntegrationTest {
             release("saga-1", items(id, 1, id, 1)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
             release("s".repeat(65), items(id, 1)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
             assertThat(historyCount("RELEASE", "saga-1")).isZero();
+        }
+    }
+
+    @Nested
+    @DisplayName("복원 (3절)")
+    class Restore {
+
+        @Test
+        @DisplayName("처음 — 200, 재고 + 수량, RESTORE 기록(ref_key = claim-{claimId})")
+        void restore_first_increasesStock() throws Exception {
+            // given
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+
+            // when
+            restore(restoreBody(789, id, 2))
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value("SUCCESS"))
+                    .andExpect(jsonPath("$.data").doesNotExist());
+            assertThat(stock(id)).isEqualTo(12);
+            assertThat(jdbc.queryForObject("SELECT quantity FROM stock_history WHERE type = 'RESTORE' AND ref_key = 'claim-789' AND product_option_id = ?",
+                    Integer.class, id)).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("같은 claimId 재요청 — 200, 재고는 한 번만 늘어남")
+        void restore_sameClaimAgain_noChange() throws Exception {
+            // given
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            restore(restoreBody(789, id, 2)).andExpect(status().isOk());
+
+            // when · then
+            restore(restoreBody(789, id, 2)).andExpect(status().isOk());
+            assertThat(stock(id)).isEqualTo(12);
+            assertThat(historyCount("RESTORE", "claim-789")).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("다른 claimId 는 따로 복원 — 같은 옵션이라도 각각 반영")
+        void restore_differentClaims_eachApplied() throws Exception {
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            restore(restoreBody(1, id, 1)).andExpect(status().isOk());
+            restore(restoreBody(2, id, 3)).andExpect(status().isOk());
+            assertThat(stock(id)).isEqualTo(14);
+        }
+
+        @Test
+        @DisplayName("상품 판매중지 · 강제 판매중지 · 옵션 삭제돼도 복원한다")
+        void restore_stoppedBlockedOrDeleted_stillRestores() throws Exception {
+            // given
+            long stopped = options(ProductStatus.STOPPED, 0).getFirst();
+            long blocked = options(ProductStatus.ON_SALE, 0).getFirst();
+            jdbc.update("UPDATE product p JOIN product_option o USING (product_id) SET p.status = 'BLOCKED' WHERE o.product_option_id = ?", blocked);
+            long deleted = options(ProductStatus.ON_SALE, 0).getFirst();
+            jdbc.update("UPDATE product_option SET deleted_at = NOW(6) WHERE product_option_id = ?", deleted);
+
+            // when · then
+            restore(restoreBody(1, stopped, 1)).andExpect(status().isOk());
+            restore(restoreBody(2, blocked, 1)).andExpect(status().isOk());
+            restore(restoreBody(3, deleted, 1)).andExpect(status().isOk());
+            assertThat(stock(stopped)).isEqualTo(1);
+            assertThat(stock(blocked)).isEqualTo(1);
+            assertThat(stock(deleted)).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("없는 옵션 — 404 PRODUCT_OPTION_NOT_FOUND, 기록 없음")
+        void restore_missingOption_notFound() throws Exception {
+            restore(restoreBody(789, 999999L, 1))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("PRODUCT_OPTION_NOT_FOUND"));
+            assertThat(historyCount("RESTORE", "claim-789")).isZero();
+        }
+
+        @Test
+        @DisplayName("수량 0 · claimId 없음 · 옵션 ID 없음 — 400 INVALID_INPUT")
+        void restore_invalidInput_badRequest() throws Exception {
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            restore(restoreBody(789, id, 0)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            restore("{\"productOptionId\":" + id + ",\"quantity\":1}")
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            restore("{\"claimId\":789,\"quantity\":1}")
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            assertThat(stock(id)).isEqualTo(10);
         }
     }
 }
