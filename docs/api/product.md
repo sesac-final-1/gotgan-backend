@@ -121,6 +121,7 @@
 | 없는 ID | **200** 목록에서 빠짐 — order 는 빠진 옵션을 구매 불가로 처리 |
 | `ids` 비었음 · 100개 초과 | **400** `INVALID_INPUT` |
 
+- 순서: 요청한 `ids` 순서대로, 같은 ID 를 여러 번 보내도 한 번만. `ids=11,25` · `ids=11&ids=25` 둘 다 받음(order `ProductClient` 는 뒤 형식).
 - `optionName`: 옵션 값 1 · 2 를 ` / ` 로 이은 표시용 문자열, 옵션 없는 상품은 `null`.
 - `topCategoryId`: order 가 상품주문 스냅샷에 저장 → 구매확정 때 `OrderItemConfirmed.topCategoryId` 로 settlement 에 전달(판매수수료는 상위 카테고리 기준).
 - `stock` 은 표시용(장바구니 수량 상한 안내). 실제 초과 판매 방지는 1번 예약의 조건부 UPDATE.
