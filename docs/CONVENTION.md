@@ -16,7 +16,7 @@
 ### 0-1. 판단 원칙
 
 - **"어떻게 쓰나"는 팀 기존 규칙 우선** — 코드 스타일 · 네이밍 · 응답 형식 · 예외 구조 · DB 규칙
-- **"무엇을 만드나"는 프로젝트 스펙 유지** — 서비스 9개 + Keycloak · 엔드포인트 · 이벤트 · 인프라 구성
+- **"무엇을 만드나"는 프로젝트 스펙 유지** — 서비스 10개(10/27 chat 추가) + Keycloak · 엔드포인트 · 이벤트 · 인프라 구성
 - **MSA 전용 규칙 추가** — 서비스 간 호출 · Resilience4j · 대시보드 조합 · 이벤트 · Saga · 멱등성 · 인프라 네이밍
 - 규칙끼리 충돌하면 이 문서가 우선, 다른 문서는 이 문서에 맞춰 수정
 
@@ -25,7 +25,7 @@
 | 항목 | 기존(따숨) | 곳간 | 이유 |
 |---|---|---|---|
 | 패키지 | 도메인형, 엔티티는 `domain/` | 도메인형, 엔티티는 **`entity/`**, 서비스 호출용 **`client/`** 추가 | 팀 합의(엔티티 패키지명) · 서비스 간 HTTP 호출 |
-| 보안 위치 | 각 앱 `common/security` | **게이트웨이에만** Spring Security, 업무 서비스는 `common/auth`(헤더 → 사용자) | 토큰 발급은 Keycloak, JWT 검증은 게이트웨이 한 곳 |
+| 보안 위치 | 각 앱 `common/security` | **게이트웨이에만** Spring Security, 업무 서비스는 공통 모듈 `libs/common-web`의 `auth`(헤더 → 사용자) | 토큰 발급은 Keycloak, JWT 검증은 게이트웨이 한 곳 |
 | 로그인 사용자 | `SecurityUtil.getMemberId()` | `@CurrentUser AuthUser` (게이트웨이가 넣은 `X-User-*` 헤더) | 업무 서비스에 SecurityContext 없음 |
 | FK 제약 | 참조 컬럼 FK 필수 | **같은 서비스 안에서만 FK 필수**, 다른 서비스 ID는 논리 참조 + 인덱스 | DB per Service |
 | 회원 테이블 · 패키지 | `member` · `member/` | **`users` · `user/`** | 서비스(user-service) · 스키마(userdb) 이름과 일치 |
@@ -50,14 +50,14 @@
 | 5 | 에러 코드 형식 | 의미형 `{도메인}_{상황}` — `ORDER_OUT_OF_STOCK` | 2-5 |
 | 6 | 프론트 언어 | JavaScript (`.js` / `.jsx`) — 목업 그대로 | 4-1 |
 | 7 | 프론트 페이지 위치 | `pages/{shop · mypage · seller · admin}/` — 로직은 `features/` | 4-2 |
-| 8 | Redis 키 이름 | `{용도}:{식별자}` — `cart:{userId}`(캐시, 원본은 `orderdb.cart_item`) · `blacklist:{jti}`(Could) · `blocked:user:{userId}`(탈퇴 회원 토큰 차단, user 쓰기 · gateway 읽기). 리프레시 토큰 키는 폐지(Keycloak이 관리) | 2-2 |
+| 8 | Redis 키 이름 | `{용도}:{식별자}` — `cart:{userId}`(캐시, 원본은 `orderdb.cart_item`) · `blacklist:{jti}`(Could) · `blocked:user:{userId}`(탈퇴 · 정지 회원 토큰 차단) · `chat:room:{roomId}` · `chat:presence:{roomId}` · `notify:{받는 쪽}`(10/27). 리프레시 토큰 키는 폐지(Keycloak이 관리) | 2-2 |
 
 ### 0-4. 10/12 추가 확정
 
 | 항목 | 확정 규칙 | 관련 절 |
 |---|---|---|
-| 서비스 구성 | Spring 9개(gateway · user · store · product · order · payment · review · settlement · admin) + Keycloak | 2-1 · 3-2 |
-| admin-service | DB 없는 조합 계층 — 관리자 API 진입점, 각 서비스 `/internal/**`을 호출해 조합만 | 2-1 · 2-4 · 2-7 |
+| 서비스 구성 | Spring 10개(gateway · user · store · product · order · payment · review · settlement · admin · chat — chat 은 10/27 추가) + Keycloak | 2-1 · 3-2 |
+| admin-service | 조합 계층 — 관리자 API 진입점, 각 서비스 `/internal/**`을 호출해 조합. 자기 DB는 신고 · 조치 이력(admindb, ADR-0001 예외 10/26)만 · 실시간 알림 센터(10/27) | 2-1 · 2-4 · 2-7 |
 | 카테고리 · 수수료 | 카테고리는 product-service, 카테고리별 수수료는 settlement-service | 2-1 · 3-2 |
 | 대시보드 | 판매자는 store, 관리자는 admin 안에서 조합 — 병렬 호출 + 실패 영역만 빼고 부분 응답 | 2-7 |
 | 서비스 간 호출 | Resilience4j 표준 (타임아웃 · 서킷 브레이커 · 멱등 GET만 재시도 · 폴백) | 2-7 |
@@ -66,7 +66,7 @@
 | 코드 품질 | SonarQube Cloud — main 대상 PR에 품질 게이트 | 1-3 |
 | (10/13) 저장소 3개 | `gotgan-backend`(services · serverless · docker-compose · docs/api) · `gotgan-frontend`(React 루트) · `gotgan-config`(deploy · infra/terraform · scripts · docs). 모노레포 폐지. 각 저장소 `docs/CONVENTION.md`는 이 문서의 발췌본(자동 생성) — 이 문서만 고친다 | 1-4 · 5-5 |
 | (10/13) 시크릿 | **GitHub Secrets 단일 소스**(클러스터 · CI) · Vercel 환경 변수(프론트). Secrets Manager · KMS · ESO 없음. `secrets-sync` 워크플로가 K8s Secret 생성 | 1-5 · 5-3 |
-| (10/13) 인프라 일일 스케줄 | `infra/terraform/cluster/`는 `infra-schedule` 워크플로가 매일 KST 07:00 apply(→ `bootstrap`) · 21:00 destroy. 나머지 폴더는 상시. apply/destroy는 워크플로 또는 구지훈 | 5-2 |
+| (10/13) 인프라 일일 스케줄 | `infra/terraform/cluster/`는 `infra-schedule` 워크플로가 매일 KST 08:00 apply(→ `bootstrap`) · 22:00 destroy (10/26 부터 EventBridge Scheduler → Lambda 가 실행). 나머지 폴더는 상시. apply/destroy는 워크플로 또는 구지훈 | 5-2 |
 | (10/13) Redis 폴백 | 장바구니 원본은 MySQL `orderdb.cart_item`, Redis `cart:{userId}`는 캐시. Redis 호출은 서킷 인스턴스 `redisCart` + 폴백(MySQL) | 2-2 · 2-7 · 3-2 |
 | (10/13 3차) 3티어(db 노드 분리 · NetworkPolicy) | 프론트(Vercel) → 백(EKS `app` 노드 그룹 t3.xlarge ×2 — 10/14 t3.large에서 조정) → DB(EKS `db` 노드 그룹 t3.medium ×1, 테인트 `tier=db:NoSchedule`, MySQL · Redis만). `02-networkpolicy.yaml`로 DB 3306 · 6379는 `tier=backend` 파드만. blackbox exporter 없음. 파일 업로드만 presigned URL로 브라우저 → S3 직접(예외) | 5-3 |
 
@@ -81,7 +81,7 @@
 - `main` — 보호 브랜치. 직접 push 금지, PR + 승인 1명 + CI 통과 후 Squash merge
 - 작업 브랜치: `feat/{도메인}-{작업}` (예: `feat/order-payment-verify`, `feat/infra-eks-cluster`)
 - 그 외: `fix/` · `refactor/` · `docs/` · `chore/`(빌드 · 설정)
-- 도메인 값: `auth` `user` `store` `product` `order` `payment` `review` `settlement` `admin` `gateway` `front`(프론트 공통) `infra`(Keycloak 설정 포함, 예: `feat/infra-keycloak-realm`) `cicd` `obs`(관측성) `sls`(서버리스)
+- 도메인 값: `auth` `user` `store` `product` `order` `payment` `review` `settlement` `admin` `chat`(10/27) `gateway` `front`(프론트 공통) `infra`(Keycloak 설정 포함, 예: `feat/infra-keycloak-realm`) `cicd` `obs`(관측성) `sls`(서버리스)
 
 ### 1-2. 커밋 메시지
 
@@ -130,13 +130,10 @@
 도메인형 구조. 최상위를 계층(controller/service …)으로 나누지 않습니다.
 
 ```
-com.sesac.gojigi.{service}            # service = gateway · user · store · product · order · payment · review · settlement · admin
+com.sesac.gojigi.{service}            # service = gateway · user · store · product · order · payment · review · settlement · admin · chat
 ├── {Service}Application.java
-├── common                           # 도메인에 속하지 않는 공통 모듈 (서비스 템플릿에서 복사)
+├── common                           # 이 서비스 안에서만 쓰는 공통 (응답 봉투 · 예외 · 인증은 libs/common-web — 아래)
 │   ├── config                       # @Configuration — Redis · RestClient · Resilience4j · QueryDSL · Scheduling(ShedLock) · WebMvc · Swagger · AWS
-│   ├── dto                          # ApiResponse · PageResponse
-│   ├── exception                    # ErrorCode · CommonErrorCode · BusinessException · GlobalExceptionHandler
-│   ├── auth                         # @CurrentUser · AuthUser · CurrentUserArgumentResolver
 │   ├── event                        # EventEnvelope · SnsEventPublisher · ProcessedEvent (이벤트를 쓰는 서비스만)
 │   ├── entity                       # BaseTimeEntity
 │   └── util                         # 두 도메인 이상이 쓰는 유틸
@@ -154,9 +151,11 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
 ```
 
 - 해당 도메인에 필요 없는 패키지는 만들지 않음 (예: `cart`는 `entity` 없음)
-- **DB가 없는 서비스 두 곳**
+- **공통 모듈 `libs/common-web`**(Gradle composite build) — 응답 봉투(`ApiResponse` · `PageResponse`) · 예외(`ErrorCode` · `CommonErrorCode` · `BusinessException` · `GlobalExceptionHandler`, 404 · 405 포함) · `@CurrentUser` · `AuthUser` · 로그 MDC `userId` 필터 · `/actuator` 트레이스 제외. 서비스마다 복사하지 않고 `com.sesac.gojigi.common.web.*`를 import. 서블릿 전용이라 gateway 제외, 10개 중 8개 적용(review는 아직 미이관, chat은 10/27 처음부터 적용)
+- 도메인 에러 코드는 각 서비스 `{domain}/exception/{Domain}ErrorCode implements ErrorCode`
+- **DB가 없는(거의 없는) 서비스 두 곳**
   - gateway-service: `config` · `filter` · `exception`만
-  - admin-service: 도메인 패키지에 `controller` · `service` · `client` · `dto`만 — **`entity` · `repository` 없음**, 데이터는 각 서비스 `/internal/**` 호출로만 다룸
+  - admin-service: 도메인 패키지에 `controller` · `service` · `client` · `dto`만 — **`entity` · `repository` 없음**, 데이터는 각 서비스 `/internal/**` 호출로만 다룸. 예외는 `report`(신고 · 조치 이력 — admindb entity · repository · Flyway, ADR-0001 예외 10/26) · `notification`(알림함 — DynamoDB `sesac-gojigi-inbox` repository, 10/27)뿐
 
 **서비스별 도메인**
 
@@ -170,7 +169,8 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
 | payment-service | paymentdb | `payment`(포트원 V2 검증 · 취소 · 웹훅) |
 | review-service | reviewdb | `review`(사진 · 별점 · 판매자 답글) · `inquiry`(상품문의 · 답변) · `eligibility`(리뷰 작성 자격) |
 | settlement-service | settlementdb | `settlement`(적재 · 집계 · 지급 · 보류) · `commission`(카테고리별 수수료) |
-| admin-service | 없음 | `application` · `store` · `category` · `settlement` · `user` · `dashboard` — 모두 `/internal/**` 호출 조합 |
+| admin-service | admindb(신고만) | `application` · `store` · `category` · `settlement` · `user` · `dashboard` · `review` — `/internal/**` 호출 조합, `report`(신고 · 조치 이력, 10/26) · `notification`(알림 센터 — SQS 3큐 · 알림함 · SSE, 10/27) |
+| chat-service (10/27) | chatdb | `room`(방 · 메시지 · 읽음 — 스토어 톡 · 판매자 운영 상담 · 고객센터 상담) · `realtime`(STOMP · Redis 중계 · 접속 중 · 입력 중 · 속도 제한) · `directory`(이름 조회 — user · store `/internal/**`) · `retention`(90일 뒤 삭제) |
 
 **도메인 경계 기준**
 
@@ -245,9 +245,12 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
 |---|---|---|
 | `cart:{userId}` | order | 장바구니 Hash — **캐시**, 원본은 MySQL `orderdb.cart_item`. 쓰기는 MySQL 먼저 → Redis 갱신(실패 무시 · WARN), 읽기는 Redis → 미스 · 장애 시 MySQL. 서킷 인스턴스 `redisCart` (Must) |
 | `blacklist:{jti}` | gateway | 로그아웃한 Access Token 즉시 무효화 — Redis 전용, 원본 없음 (Could) |
-| `blocked:user:{userId}` | user(쓰기) · gateway(읽기) | 탈퇴 회원의 남은 Access Token 차단 — 값은 사유(`withdrawn`, 이용정지 시 `suspended` 예정), TTL = Keycloak Access Token 수명(`app.auth.blocked-user-ttl`, realm `accessTokenLifespan` 과 같이 바꿈). Redis 전용, 원본 없음. gateway 는 Redis 장애 시 확인 없이 통과(fail-open, 서킷 `redisBlocklist`), user 는 저장 실패해도 탈퇴 유지(WARN) |
+| `blocked:user:{userId}` | user (쓰기) · gateway · chat (읽기) | 탈퇴 · 이용정지 회원의 남은 토큰 차단 — 게이트웨이 요청 거절, chat 은 WebSocket CONNECT 거절. Redis 장애면 확인 없이 통과(fail-open) |
+| `chat:room:{roomId}` | chat | 1:1 채팅 파드 간 중계 Pub/Sub 채널 — 파드당 패턴 구독 `chat:room:*` 1개 (10/27) |
+| `chat:presence:{roomId}` | chat | 접속 중 표시 ZSET — 점수 = 만료 시각(20초마다 연장 · 60초 TTL), 보고 있는 쪽엔 알림을 보내지 않음 (10/27) |
+| `notify:{받는 쪽}` | admin | 알림 센터 실시간 Pub/Sub 채널(`USER#{id}` · `STORE#{id}` · `ADMIN`) — 모든 파드가 자기 SSE 연결에 전달 (10/27) |
 
-- 한 Redis를 여러 서비스가 공유하므로 **다른 서비스의 키 접두어 사용 금지** — 예외는 표에 쓰기 · 읽기 서비스를 함께 적은 키(`blocked:user:`)만
+- 한 Redis를 여러 서비스가 공유하므로 **다른 서비스의 키 접두어 사용 금지**
 - 리프레시 토큰은 Keycloak이 관리 — Redis에 `refresh:` 키를 만들지 않음. 상품 캐시 키도 없음
 - 새 키가 필요하면 이 표에 먼저 추가 (PR `[영향]`)
 
@@ -306,7 +309,7 @@ if (isAmountMismatch) {
 | 서비스 간 | `/internal/{자원}` | `POST /internal/stock/reservations` · `GET /internal/stats/orders` — 게이트웨이에 라우트 없음 |
 | 본인 | `/me` | `GET /api/users/me` |
 
-- **도메인 서비스는 `/api/admin/**`을 노출하지 않음.** 관리자 기능은 `/internal/**`로 열고 admin-service가 조합 (게이트웨이는 `/api/admin/**` 전부를 admin으로 라우팅)
+- **도메인 서비스는 `/api/admin/**`을 노출하지 않음.** 관리자 기능은 `/internal/**`로 열고 admin-service가 조합 (게이트웨이는 `/api/admin/**` 전부를 admin으로 라우팅). 관리자 상담함(채팅)은 예외로 `/api/chats/**`(chat-service)를 관리자 역할로 호출 — WebSocket 이라 admin 이 중계할 수 없음(10/27)
 - 브라우저는 payment-service를 직접 부르지 않음 — 결제 확인은 order(`POST /api/orders/{orderNo}/payment/confirm`) 경유 (포트원 웹훅 `/api/payments/webhook`만 예외)
 - 자원은 **복수형 명사 · kebab-case**, 행위는 HTTP 메서드
 - 상태 전이처럼 행위 중심 API는 동사 하위 경로 허용 (`/approve` · `/confirm` · `/ship` · `/api/auth/login`)
@@ -376,7 +379,7 @@ public ResponseEntity<ApiResponse<Void>> ship(@CurrentUser AuthUser user,
 
 ```
 RuntimeException
-└── BusinessException (common.exception)          ← 모든 비즈니스 예외의 부모
+└── BusinessException (common.web.exception)      ← 모든 비즈니스 예외의 부모
     ├── AuthException    + AuthErrorCode
     ├── OrderException   + OrderErrorCode
     └── {Domain}Exception + {Domain}ErrorCode      ← 새 도메인은 이 패턴
@@ -403,10 +406,11 @@ RuntimeException
 | `PAYMENT` | payment | `PAYMENT_AMOUNT_MISMATCH` 결제 금액 불일치 |
 | `REVIEW` · `INQUIRY` | review | `REVIEW_NOT_ELIGIBLE` 작성 자격 없음 · `INQUIRY_NOT_FOUND` |
 | `SETTLE` · `COMMISSION` | settlement | `SETTLE_ALREADY_AGGREGATED` 이미 집계된 주차 · `COMMISSION_RATE_INVALID` |
-| (없음 — 그대로 전달) | admin | 하위 서비스가 보낸 `ApiResponse`의 `code` · `message`를 **바꾸지 않고 전달**, 연결 실패 · 타임아웃만 `EXTERNAL_API_ERROR` |
-| 공통 (도메인 접두어 없음) | 전체 | `SUCCESS` · `INVALID_INPUT` · `UNAUTHORIZED` · `FORBIDDEN` · `NOT_FOUND` · `EXTERNAL_API_ERROR` · `GLOBAL_ERROR` |
+| `CHAT` | chat | `CHAT_ROOM_NOT_FOUND` 없거나 남의 방 · `CHAT_STORE_INACTIVE` 정지 · 폐점 스토어 · `CHAT_TOO_FAST` 연결마다 1초 5건 초과(STOMP 오류 큐 `/user/queue/errors`) (10/27) |
+| (조합은 그대로 전달) · `CATEGORY` · `REPORT` · `NOTIFICATION` | admin | 하위 서비스가 보낸 `ApiResponse`의 `code` · `message`를 **바꾸지 않고 전달**, 연결 실패 · 타임아웃만 `EXTERNAL_API_ERROR`. admin 이 판단하는 것만 자체 코드 — `CATEGORY_COMMISSION_REQUIRED` 수수료 없이 활성화 · `REPORT_DUPLICATED` 중복 신고 · `NOTIFICATION_NOT_FOUND` |
+| 공통 (도메인 접두어 없음) | 전체 | `SUCCESS` · `INVALID_INPUT` · `UNAUTHORIZED` · `FORBIDDEN` · `NOT_FOUND` · `METHOD_NOT_ALLOWED` · `EXTERNAL_API_ERROR` · `GLOBAL_ERROR` |
 
-- admin-service는 자체 도메인 에러 코드를 만들지 않습니다. 관리자 화면이 받는 코드는 데이터 주인 서비스의 코드 그대로 (`APPLY_REAPPLY_RESTRICTED` 등)
+- admin-service는 조합 · 전달만 하는 API 에서는 자체 에러 코드를 만들지 않습니다. 관리자 화면이 받는 코드는 데이터 주인 서비스의 코드 그대로 (`APPLY_REAPPLY_RESTRICTED` 등). 예외 — admin 이 판단 · 데이터 주인인 곳: 카테고리 · 수수료 조합 `CATEGORY_*`(10/20), 신고 · 조치 `REPORT_*`(10/26 admindb), 알림 센터 `NOTIFICATION_*`(10/27)
 
 **새 도메인 예외 추가 (3단계)**
 
@@ -461,7 +465,7 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
 - Repository는 Spring Data JPA 쿼리 메서드 네이밍(`findByStoreIdAndStatus`, `existsByEmail`)
 - 동적 조건 검색(카테고리 · 가격 · 키워드 · 정렬 · 페이징)은 **QueryDSL** — `{Entity}RepositoryCustom` + `{Entity}RepositoryImpl`, 조건은 `BooleanExpression` 메서드로 분리 (null이면 조건 생략)
 - **SQL Injection 방지**: JPA · QueryDSL 파라미터 바인딩만 사용. `@Query` · 네이티브 쿼리에 **문자열 이어 붙이기 금지** (`"... WHERE name LIKE '%" + keyword + "%'"` ✗ → `:keyword` 바인딩), 정렬 컬럼은 허용 목록으로 매핑 — SonarQube가 검출
-- **XSS 방지**: 리뷰 · 문의 · 입점 신청 등 사용자가 입력한 HTML은 **OWASP Java HTML Sanitizer**로 **저장 전** 정화 (`common/util`의 정책 하나를 공유). 일반 텍스트 필드는 프론트에서 이스케이프 출력(React 기본), `dangerouslySetInnerHTML`은 정화된 값에만
+- **XSS 방지**: 리뷰 · 문의 · 입점 신청 등 사용자가 입력한 HTML은 **OWASP Java HTML Sanitizer**로 **저장 전** 정화 (`common/util`의 정책 하나를 공유). 일반 텍스트 필드는 프론트에서 이스케이프 출력(React 기본), `dangerouslySetInnerHTML`은 정화된 값에만 — 화면에서 HTML(상품 상세 · 스토어 소개 등)을 그릴 때는 `shared/utils/safeHtml.js`(DOMPurify)를 한 번 더 거침 (10/27)
 - 동시성: 재고처럼 경합하는 값은 **조건부 UPDATE**(`@Modifying @Query`), 엔티티 동시 수정은 `@Version`
 - **서비스 메서드는 `userId` · `storeId` 등 원시값을 파라미터로 받음** — 테스트 · 스레드 안전성
 
@@ -486,6 +490,7 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
 
 - 목표: **서비스 하나가 죽어도 호출한 쪽은 에러 메시지로 1차 처리**하고 나머지 화면 · 기능은 정상
 - Redis 호출(장바구니 캐시)도 같은 표준: 서킷 인스턴스 `redisCart` + 폴백 → MySQL `cart_item` 원본 조회. 쓰기는 MySQL 먼저, Redis 갱신 실패는 WARN 로그만 — Redis가 죽어도 장바구니는 정상(지연만)
+- 예외 (10/27): chat-service 의 알림 전송(admin `/internal/notifications`) · 이름 · 스토어 상태 조회(user · store)는 **빠져도 되는 부가 정보**라 서킷 없이 짧은 타임아웃(연결 1초 · 읽기 2초)과 실패 무시(fail-open)로 처리 — 알림은 전용 스레드 2 · 대기 500건, 이름은 캐시(10분 · 스토어 1분) 후 번호 표시. 채팅 전송 · 저장 경로는 이 호출을 기다리지 않음
 
 **대시보드 조합**
 
@@ -534,16 +539,16 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
   - `warn` — 처리는 됐지만 주의 (재고 부족, 금액 불일치 감지, 재시도)
   - `info` — 상태 변화 (주문 PAID, Saga 보상 완료, 정산 집계 완료)
   - `debug` — 개발 확인용 (운영 미출력)
-- 로그 메시지에 업무 키 포함: `orderNo` · `sagaId` · `paymentId` (MDC 또는 메시지)
+- 로그 메시지에 업무 키 포함: `orderNo` · `sagaId`는 MDC(order · payment), 그 외(`paymentId` 등)는 메시지
+- 예외 로그는 `GlobalExceptionHandler` 한 곳에서 남김
 - **비밀번호 · 토큰 · 포트원 키 · 카드 정보 · 이메일 · 전화 · 주소는 info 이상에 남기지 않음**
-- 형식은 JSON (공통 `logback-spring.xml`), traceId · spanId · userId 자동 포함 — 형식 임의 변경 금지
-  - userId 는 common-web `UserIdMdcFilter` 가 `X-User-Id`(숫자일 때만)를 요청마다 MDC 에 넣음 → 로그에 직접 쓰지 않아도 됨. 콘솔은 `[traceId,spanId,userId]`, Loki JSON 은 `"userId"` 필드(라벨 아님). 비로그인 요청 · `@Async` 등 다른 스레드는 빈 값 (10/21)
+- 형식은 공통 `logback-spring.xml` — 콘솔 `[traceId,spanId,userId]`, k8s는 Loki 전송(본문 JSON · 라벨 `app` · `namespace` · `level` · 배치 10초). 형식 임의 변경 금지
 
 ### 2-9. API 문서 (Swagger)
 
 - springdoc 애노테이션: 클래스 `@Tag`, 메서드 `@Operation` + `@ApiResponses` + `@Parameter`
 - description에 **인가 요건**(공개 / BUYER / SELLER / ADMIN / 내부)과 **비즈니스 에러 코드** 기재
-- 공통 `common.dto.ApiResponse`와 Swagger `ApiResponse`가 동명 — Swagger 쪽은 import하지 않고 **FQN**(`@io.swagger.v3.oas.annotations.responses.ApiResponse`)
+- 공통 `common.web.dto.ApiResponse`와 Swagger `ApiResponse`가 동명 — Swagger 쪽은 import하지 않고 **FQN**(`@io.swagger.v3.oas.annotations.responses.ApiResponse`)
 - 접속: 각 서비스 `http://localhost:{port}/swagger-ui.html` · 명세 파일은 `docs/api/{service}.yaml`로 내보내 PR에 포함
 
 ### 2-10. 테스트
@@ -572,21 +577,22 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
 - **단수형** (엔티티 클래스와 1:1): `store` · `product` · `order_item` · `settlement` — 예외 `orders` · `users`
 - 하위 · 매핑 테이블도 단수형: `product_option` · `review_image`
 - 모든 테이블에 `COMMENT` 필수
-- 서비스별 스키마 8개: `userdb` · `storedb` · `productdb` · `orderdb` · `paymentdb` · `reviewdb` · `settlementdb` · `keycloakdb`
+- 서비스별 스키마 10개: `userdb` · `storedb` · `productdb` · `orderdb` · `paymentdb` · `reviewdb` · `settlementdb` · `admindb`(10/26) · `chatdb`(10/27) · `keycloakdb`
 - `keycloakdb`는 Keycloak이 스스로 관리 — 이 문서의 DB 규칙 · Flyway 대상에서 제외, 직접 쿼리 · 수정 금지
-- gateway-service · admin-service는 스키마 없음
+- gateway-service는 스키마 없음 · admin-service는 admindb 에 신고 · 조치 이력만(ADR-0001 예외)
 
 **서비스별 테이블 이름**
 
 | 스키마 | 테이블 |
 |---|---|
-| userdb | `users`(`point_balance` · `grade` 포함) · `address` · `point_history` · `point_use_saga`(포인트 사용 sagaId 표식 — 늦게 도착한 사용 차단) · `shedlock` |
+| userdb | `users`(`point_balance` · `grade` 포함) · `address` · `point_history` · `point_use_saga` · `shedlock` |
 | storedb | `store_application` · `application_document` · `application_history` · `store` · `store_status_history` · `shedlock` |
 | productdb | `category` · `product` · `product_option` · `product_image` · `stock_history` · `processed_event` |
 | orderdb | `cart_item`(장바구니 원본 — Redis `cart:{userId}`는 캐시) · `orders` · `order_item` · `order_store_shipment` · `order_item_history` · `order_claim` · `saga_instance` · `outbox_event` · `shedlock` |
 | paymentdb | `payment` · `payment_cancel` |
 | reviewdb | `review` · `review_image` · `review_eligibility` · `product_inquiry` · `processed_event` |
 | settlementdb | `category_commission` · `settlement_store`(StoreApproved 스냅샷: 스토어명 · 정산 계좌) · `settlement_item` · `settlement` · `payout` · `processed_event` · `shedlock` |
+| chatdb | `chat_room` · `chat_message` · `chat_read` · `shedlock` (10/27) |
 | keycloakdb | Keycloak 관리 (계정 · 역할 · 세션) |
 
 ### 3-3. 컬럼
@@ -744,7 +750,7 @@ public abstract class BaseTimeEntity {
 - [ ] `@Transactional`이 서비스에만 있고, 원격 호출이 트랜잭션 밖에 있는가?
 - [ ] 다른 서비스 호출에 Resilience4j 표준(타임아웃 · 서킷 브레이커 · 멱등 GET만 재시도 · 폴백)이 적용되고 실패가 도메인 예외로 변환되는가?
 - [ ] 대시보드 조합이 병렬 호출이고, 한 서비스가 실패해도 `unavailable` 부분 응답(200)을 주는가? 연쇄 호출(2홉 이상)이 없는가?
-- [ ] admin-service에 entity · repository · DB 접근이 없고, 도메인 서비스에 `/api/admin/**`이 없는가?
+- [ ] admin-service에 entity · repository · DB 접근이 없고(예외 `report` — admindb · `notification` — DynamoDB inbox), 도메인 서비스에 `/api/admin/**`이 없는가?
 - [ ] 동적 검색이 QueryDSL이고, `@Query` · 네이티브 쿼리에 문자열 이어 붙이기가 없는가?
 - [ ] 사용자 입력 HTML(리뷰 · 문의 · 입점 신청)을 저장 전에 Sanitizer로 정화하는가?
 - [ ] 소유권 검사(storeId · userId)가 있는가?
