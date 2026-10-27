@@ -24,7 +24,8 @@ import org.hibernate.generator.EventType;
 /**
  * 포인트 적립 · 사용 · 환원 · 회수 이력 — INSERT 전용 (수정 · 삭제 없음, created_at 만).
  * 잔액 변경(users.point_balance 조건부 UPDATE)과 같은 트랜잭션에서 저장한다.
- * 멱등: (type, ref_key) 유니크 — USE · 보상 RESTORE: sagaId / 클레임 RESTORE · RECLAIM: claim-{claimId}-{orderItemId} / EARN: {eventId}-{orderItemId}
+ * 멱등: (type, ref_key) 유니크 — USE · 보상 RESTORE: sagaId / 클레임 RESTORE · RECLAIM: claim-{claimId}-{orderItemId} / EARN: earn-{orderItemId}
+ * (EARN 은 V2 컬럼 주석의 {eventId}-{orderItemId} 대신 상품주문 기준 — 다른 eventId 로 다시 발행돼도 한 번만 적립)
  */
 @Getter
 @Entity
@@ -84,9 +85,14 @@ public class PointHistory {
         this.refKey = refKey;
     }
 
-    /** 구매확정 적립 — refKey {eventId}-{orderItemId} */
+    /** 결제 적립 (OrderPaid) — refKey earnRefKey(orderItemId), 상품주문당 한 번 */
     public static PointHistory earn(User user, Long orderItemId, String orderNo, long amount, long balanceAfter, String refKey) {
         return new PointHistory(user, orderItemId, orderNo, PointType.EARN, amount, 0L, balanceAfter, refKey);
+    }
+
+    /** 적립 멱등 키 — eventId 가 아니라 상품주문 기준이라, order 가 다른 eventId 로 다시 발행해도 한 번만 적립 */
+    public static String earnRefKey(Long orderItemId) {
+        return "earn-" + orderItemId;
     }
 
     /** 주문 결제 사용 — 주문 단위라 orderItemId 없음, refKey sagaId */
