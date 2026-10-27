@@ -41,9 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class ClaimTxService {
 
     /** 진행 중 클레임 — 요청됐거나 승인 후 환불 · 재배송 중 */
-    private static final Set<ClaimStatus> OPEN = Set.of(ClaimStatus.REQUESTED, ClaimStatus.APPROVED);
+    private static final Set<ClaimStatus> OPEN = ClaimStatus.OPEN;
     /** 환불했거나 환불 중인 클레임 — 남은 결제 금액 계산에서 빼는 금액 */
-    private static final Set<ClaimStatus> REFUNDING = Set.of(ClaimStatus.APPROVED, ClaimStatus.COMPLETED);
+    private static final Set<ClaimStatus> REFUNDING = Set.of(ClaimStatus.APPROVED, ClaimStatus.COLLECTED,
+            ClaimStatus.COMPLETED);
     /** 스토어 배송이 더 이상 없는 상태 — 이 상품주문이 스토어 마지막인지 볼 때 */
     private static final Set<OrderItemStatus> NOT_SHIPPING = Set.of(OrderItemStatus.CANCEL_REQUESTED,
             OrderItemStatus.CANCELLED);

@@ -18,6 +18,7 @@ import com.sesac.gojigi.order.claim.entity.ClaimStatus;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
 import com.sesac.gojigi.order.claim.exception.ClaimErrorCode;
 import com.sesac.gojigi.order.claim.exception.ClaimException;
+import com.sesac.gojigi.order.claim.service.ClaimQueryService;
 import com.sesac.gojigi.order.claim.service.ClaimService;
 import com.sesac.gojigi.order.saga.service.CancelOrderItemSaga;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,11 +44,14 @@ class ClaimControllerTest {
     @Mock
     private ClaimService claimService;
 
+    @Mock
+    private ClaimQueryService claimQueryService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new ClaimController(cancelOrderItemSaga, claimService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ClaimController(cancelOrderItemSaga, claimService, claimQueryService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -134,5 +138,18 @@ class ClaimControllerTest {
         mockMvc.perform(post(URL).header("X-User-Id", "4").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CLAIM_NOT_CANCELLABLE"));
+    }
+
+    @Test
+    @DisplayName("내 클레임 내역 — X-User-Id 로 조회")
+    void listMine() throws Exception {
+        given(claimQueryService.listMine(4L)).willReturn(java.util.List.of(new com.sesac.gojigi.order.claim.dto.response.ClaimDetailResponse(
+                789L, ClaimType.RETURN, ClaimStatus.REJECTED, ClaimReasonCode.CHANGE_OF_MIND, null, "사용 흔적", 12_000L, 2_000L,
+                null, null, 456L, "20261023-000001-01", "20261023-000001", "상품", null, null, 1, 20_000L,
+                com.sesac.gojigi.order.order.entity.OrderItemStatus.DELIVERED, "곳간지기", null, null)));
+
+        mockMvc.perform(get("/api/claims").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].rejectReason").value("사용 흔적"));
     }
 }

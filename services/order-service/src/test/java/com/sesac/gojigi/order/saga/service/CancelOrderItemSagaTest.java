@@ -59,7 +59,8 @@ class CancelOrderItemSagaTest {
 
     /** 환불 8,000 · 포인트 2,000 환원 · 적립 300 회수 · 옵션 11 × 2 */
     private static CancelContext ctx(long refundAmt) {
-        return new CancelContext(7L, "saga-c1", 789L, 456L, ORDER_NO, 4L, 11L, 2, refundAmt, 2_000L, 300L);
+        return new CancelContext(7L, "saga-c1", 789L, ClaimType.CANCEL, 456L, ORDER_NO, 4L, 11L, 2, refundAmt, 2_000L,
+                300L);
     }
 
     private void givenOpened(long refundAmt) {

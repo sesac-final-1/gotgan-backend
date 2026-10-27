@@ -33,7 +33,7 @@ public class OrderStatsService {
     private static final Set<OrderItemStatus> NOT_SALES = Set.of(OrderItemStatus.ORDERED, OrderItemStatus.CANCELLED,
             OrderItemStatus.RETURNED);
     /** 진행 중 클레임 — 요청됐거나 승인 후 환불 · 재배송 진행 중 */
-    private static final Set<ClaimStatus> OPEN_CLAIMS = Set.of(ClaimStatus.REQUESTED, ClaimStatus.APPROVED);
+    private static final Set<ClaimStatus> OPEN_CLAIMS = ClaimStatus.OPEN;
     /**
      * 진행 중 상품주문 — 결제 완료 ~ 배송 완료(구매확정 전) + 취소 · 반품 · 교환 요청 (store 폐점 조건, 10/20 협업요청).
      * 구매확정 · 취소 완료 · 반품 완료는 끝난 주문. 배송 완료를 넣는 이유: 폐점 뒤 구매확정되면 정산 건이 새로 생긴다.

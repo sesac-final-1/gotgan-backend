@@ -4,17 +4,20 @@ import com.sesac.gojigi.common.web.auth.AuthUser;
 import com.sesac.gojigi.common.web.auth.CurrentUser;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.order.claim.dto.request.ClaimCreateRequest;
+import com.sesac.gojigi.order.claim.dto.response.ClaimDetailResponse;
 import com.sesac.gojigi.order.claim.dto.response.ClaimPreviewResponse;
 import com.sesac.gojigi.order.claim.dto.response.ClaimResponse;
 import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
 import com.sesac.gojigi.order.claim.entity.ClaimStatus;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
+import com.sesac.gojigi.order.claim.service.ClaimQueryService;
 import com.sesac.gojigi.order.claim.service.ClaimService;
 import com.sesac.gojigi.order.saga.service.CancelOrderItemSaga;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +36,15 @@ public class ClaimController {
 
     private final CancelOrderItemSaga cancelOrderItemSaga;
     private final ClaimService claimService;
+    private final ClaimQueryService claimQueryService;
+
+    @Operation(summary = "내 클레임 내역", description = """
+            취소 · 반품 · 교환 신청 전체 — 최신 요청 먼저. status: REQUESTED(판매자 확인 중) · APPROVED(승인 · 수거 요청 / 취소는 환불 중) ·
+            COLLECTED(수거 완료) · RESHIPPED(교환 재배송 중) · COMPLETED · REJECTED(rejectReason 에 판매자 사유).""")
+    @GetMapping("/api/claims")
+    public ApiResponse<List<ClaimDetailResponse>> listMine(@Parameter(hidden = true) @CurrentUser AuthUser user) {
+        return ApiResponse.success("클레임 내역을 조회했습니다.", claimQueryService.listMine(user.userId()));
+    }
 
     @Operation(summary = "클레임 요청 (취소 · 반품 · 교환)", description = """
             CANCEL(CLM-01): 결제완료(PAYMENT_DONE) 상품주문을 판매자 승인 없이 즉시 취소 — 결제 부분 취소 → 재고 복원 → 포인트 환원 · 회수.

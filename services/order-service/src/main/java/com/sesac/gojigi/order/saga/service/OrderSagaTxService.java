@@ -92,11 +92,14 @@ public class OrderSagaTxService {
         return sagas;
     }
 
-    /** 다시 진행할 취소 Saga — 결제 취소 미확정 · 장애로 재시도 시각이 됐거나, 재시도 시각 없이 cutoff 전부터 멈춘 STARTED */
+    /** 다시 진행할 취소 · 반품 Saga — 결제 취소 미확정 · 장애로 재시도 시각이 됐거나, 재시도 시각 없이 cutoff 전부터 멈춘 STARTED */
     @Transactional(readOnly = true)
     public List<SagaInstance> findCancelRetryable(LocalDateTime cutoff, int limit) {
-        return sagaInstanceRepository.findRetryDue(SagaType.CANCEL_ITEM, SagaStatus.STARTED, LocalDateTime.now(clock),
-                cutoff, PageRequest.of(0, limit));
+        List<SagaInstance> sagas = new ArrayList<>(sagaInstanceRepository.findRetryDue(SagaType.CANCEL_ITEM,
+                SagaStatus.STARTED, LocalDateTime.now(clock), cutoff, PageRequest.of(0, limit)));
+        sagas.addAll(sagaInstanceRepository.findRetryDue(SagaType.RETURN_ITEM, SagaStatus.STARTED,
+                LocalDateTime.now(clock), cutoff, PageRequest.of(0, limit)));
+        return sagas;
     }
 
     private SagaInstance get(Long sagaInstanceId) {

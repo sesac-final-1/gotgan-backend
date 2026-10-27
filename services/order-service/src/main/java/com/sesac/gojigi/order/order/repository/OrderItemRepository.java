@@ -50,6 +50,14 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     List<Long> findIdsByStatusAndShippedAtBefore(@Param("status") OrderItemStatus status,
                                                  @Param("before") LocalDateTime before, Limit limit);
 
+    /** 자동 배송완료 대상 — 교환 재배송 중(교환요청 · 재배송 발송이 직전 배송완료보다 뒤)이고 재배송이 before 보다 이른 상품주문 ID */
+    @Query("""
+            select i.id from OrderItem i
+            where i.status = com.sesac.gojigi.order.order.entity.OrderItemStatus.EXCHANGE_REQUESTED
+              and i.shippedAt > i.deliveredAt and i.shippedAt < :before order by i.id
+            """)
+    List<Long> findReshippedIdsBefore(@Param("before") LocalDateTime before, Limit limit);
+
     /** 스토어의 그 상태 상품주문 수 — idx_order_item_store_status (store_id, status, created_at) */
     long countByStoreIdAndStatus(Long storeId, OrderItemStatus status);
 

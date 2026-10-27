@@ -35,6 +35,7 @@ import org.springframework.stereotype.Component;
 public class CancelOrderItemSaga {
 
     private static final String CANCEL_REASON = "구매자 취소";
+    private static final String RETURN_REASON = "반품 환불";
 
     private final CancelItemTxService cancelTx;
     private final OrderSagaTxService sagaTx;
@@ -55,6 +56,16 @@ public class CancelOrderItemSaga {
                 done ? ClaimStatus.COMPLETED : ClaimStatus.APPROVED, ctx.refundAmt(), ctx.restorePoint());
     }
 
+    /**
+     * [판매자] 반품 수거 완료 (CLM-03 · PATCH /api/seller/claims/{id}/collect) — 클레임 COLLECTED 후 취소와 같은 환불 단계.
+     * 끝까지 가면 COMPLETED(상품주문 RETURNED), 막히면 COLLECTED 로 남고 복구 스케줄러가 마저 진행한다.
+     */
+    public ClaimStatus collectReturn(Long storeId, Long claimId) {
+        CancelContext ctx = cancelTx.collectReturn(storeId, claimId);
+        OrderLogContext.put(ctx.orderNo(), ctx.sagaId());
+        return proceed(ctx, SagaStep.PAYMENT_CANCEL_REQUESTED) ? ClaimStatus.COMPLETED : ClaimStatus.COLLECTED;
+    }
+
     /** 복구 (SagaRecoveryScheduler) — 멈춘 단계부터 다시 */
     public void resume(SagaInstance saga) {
         proceed(cancelTx.load(saga.getId()), saga.getCurrentStep());
@@ -70,7 +81,7 @@ public class CancelOrderItemSaga {
             if (step == SagaStep.PAYMENT_CANCEL_REQUESTED) {                                    // ① 결제 부분 취소
                 if (ctx.refundAmt() > 0) {   // 전액 포인트 주문이면 돌려줄 현금이 없다
                     payment.cancel(ctx.orderNo(), PaymentCancelRequest.partial(ctx.sagaId(), ctx.orderItemId(),
-                            ctx.refundAmt(), CANCEL_REASON));
+                            ctx.refundAmt(), ctx.type() == ClaimType.RETURN ? RETURN_REASON : CANCEL_REASON));
                 }
                 step = advance(ctx, SagaStep.PAYMENT_CANCELLED);
             }
@@ -84,8 +95,8 @@ public class CancelOrderItemSaga {
                 step = advance(ctx, SagaStep.POINT_RESTORED);
             }
             if (step == SagaStep.POINT_RESTORED) {
-                cancelTx.finish(ctx.sagaInstanceId());   // 상품주문 CANCELLED · 클레임 COMPLETED
-                log.info("상품주문 취소 완료 - orderItemId={}, refundAmt={}, restorePoint={}",
+                cancelTx.finish(ctx.sagaInstanceId());   // 상품주문 CANCELLED / RETURNED · 클레임 COMPLETED
+                log.info("상품주문 {} 완료 - orderItemId={}, refundAmt={}, restorePoint={}", ctx.type(),
                         ctx.orderItemId(), ctx.refundAmt(), ctx.restorePoint());
             }
             return true;

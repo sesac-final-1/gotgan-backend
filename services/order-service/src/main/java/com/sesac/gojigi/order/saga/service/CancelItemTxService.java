@@ -2,6 +2,8 @@ package com.sesac.gojigi.order.saga.service;
 
 import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
+import com.sesac.gojigi.order.claim.exception.ClaimErrorCode;
+import com.sesac.gojigi.order.claim.exception.ClaimException;
 import com.sesac.gojigi.order.claim.entity.OrderClaim;
 import com.sesac.gojigi.order.claim.repository.OrderClaimRepository;
 import com.sesac.gojigi.order.claim.service.ClaimRefundPolicy;
@@ -42,9 +44,9 @@ public class CancelItemTxService {
     private final Clock clock;
 
     /** 취소 Saga 가 단계마다 쓰는 값 — 클레임을 만들 때 정해 두고 재시도해도 같은 값 */
-    public record CancelContext(Long sagaInstanceId, String sagaId, Long claimId, Long orderItemId, String orderNo,
-                                Long buyerId, Long productOptionId, int quantity, long refundAmt, long restorePoint,
-                                long earnedPoint) {
+    public record CancelContext(Long sagaInstanceId, String sagaId, Long claimId, ClaimType type, Long orderItemId,
+                                String orderNo, Long buyerId, Long productOptionId, int quantity, long refundAmt,
+                                long restorePoint, long earnedPoint) {
     }
 
     /**
@@ -75,6 +77,24 @@ public class CancelItemTxService {
         return context(saga, claim, item, order);
     }
 
+    /**
+     * 반품 수거 완료 (CLM-03 · 판매자) — 클레임 COLLECTED · 반품 환불 Saga 를 한 트랜잭션으로. 환불액 · 돌려줄 포인트는 신청 때 정한 값.
+     * 내 스토어 상품주문의 반품만, 승인(수거 요청) 상태에서만.
+     */
+    @Transactional
+    public CancelContext collectReturn(Long storeId, Long claimId) {
+        OrderClaim claim = claimRepository.findById(claimId)
+                .filter(c -> c.getOrderItem().getStoreId().equals(storeId))
+                .orElseThrow(() -> new ClaimException(ClaimErrorCode.CLAIM_NOT_FOUND));
+        if (claim.getClaimType() != ClaimType.RETURN) {
+            throw new ClaimException(ClaimErrorCode.CLAIM_INVALID_STATUS);
+        }
+        claim.collect(LocalDateTime.now(clock));
+        SagaInstance saga = sagaInstanceRepository.save(SagaInstance.forClaim(claim, UUID.randomUUID().toString(),
+                SagaType.RETURN_ITEM));
+        return context(saga, claim, claim.getOrderItem(), claim.getOrderItem().getOrder());
+    }
+
     /** 재시도 · 복구 때 — 저장해 둔 클레임 값으로 다시 만든다 */
     @Transactional(readOnly = true)
     public CancelContext load(Long sagaInstanceId) {
@@ -85,8 +105,8 @@ public class CancelItemTxService {
     }
 
     /**
-     * 취소 완료 — 상품주문 CANCELLED · 이력 · 클레임 COMPLETED · (모든 상품주문이 취소되면) 주문 CANCELLED · Saga 완료.
-     * TODO(Outbox · ORD-11): OrderItemCancelled 이벤트를 같은 트랜잭션에 기록 (refundAmt · restoredPoint · revokedPoint)
+     * 취소 · 반품 완료 — 상품주문 CANCELLED / RETURNED · 이력 · 클레임 COMPLETED · (모든 상품주문이 취소되면) 주문 CANCELLED · Saga 완료.
+     * TODO(Outbox · ORD-11): OrderItemCancelled · OrderItemReturned 이벤트를 같은 트랜잭션에 기록 (refundAmt · restoredPoint · revokedPoint)
      */
     @Transactional
     public void finish(Long sagaInstanceId) {
@@ -95,9 +115,15 @@ public class CancelItemTxService {
         OrderClaim claim = saga.getOrderClaim();
         OrderItem item = claim.getOrderItem();
         LocalDateTime now = LocalDateTime.now(clock);
-        item.cancelled();
-        historyRepository.save(OrderItemHistory.of(item, ActorType.SYSTEM, null, OrderItemStatus.CANCEL_REQUESTED,
-                OrderItemStatus.CANCELLED, "취소 완료 — 환불 " + claim.getRefundAmt() + "원 · 포인트 " + claim.getRestorePoint()));
+        boolean ret = claim.getClaimType() == ClaimType.RETURN;
+        OrderItemStatus from = item.getStatus();
+        if (ret) {
+            item.returned();
+        } else {
+            item.cancelled();
+        }
+        historyRepository.save(OrderItemHistory.of(item, ActorType.SYSTEM, null, from, item.getStatus(),
+                (ret ? "반품 완료" : "취소 완료") + " — 환불 " + claim.getRefundAmt() + "원 · 포인트 " + claim.getRestorePoint()));
         claim.complete(now);
         Order order = saga.getOrder();
         boolean allCancelled = orderItemRepository.findByOrderIdOrderByIdAsc(order.getId()).stream()
@@ -109,7 +135,8 @@ public class CancelItemTxService {
     }
 
     private static CancelContext context(SagaInstance saga, OrderClaim claim, OrderItem item, Order order) {
-        return new CancelContext(saga.getId(), saga.getSagaId(), claim.getId(), item.getId(), order.getOrderNo(),
+        return new CancelContext(saga.getId(), saga.getSagaId(), claim.getId(), claim.getClaimType(), item.getId(),
+                order.getOrderNo(),
                 order.getBuyerId(), item.getProductOptionId(), item.getQuantity(), claim.getRefundAmt(),
                 claim.getRestorePoint(), item.getEarnedPoint());
     }

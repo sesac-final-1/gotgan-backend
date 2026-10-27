@@ -16,9 +16,11 @@ import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,15 +39,17 @@ public class DeliveryTxService {
     private final OrderItemRepository orderItemRepository;
     private final OrderItemHistoryRepository historyRepository;
     private final EventOutboxService outbox;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final Duration autoConfirmAfter;
 
     public DeliveryTxService(OrderItemRepository orderItemRepository, OrderItemHistoryRepository historyRepository,
-                             EventOutboxService outbox, Clock clock,
+                             EventOutboxService outbox, ApplicationEventPublisher eventPublisher, Clock clock,
                              @Value("${app.order.auto-confirm-after}") Duration autoConfirmAfter) {
         this.orderItemRepository = orderItemRepository;
         this.historyRepository = historyRepository;
         this.outbox = outbox;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
         this.autoConfirmAfter = autoConfirmAfter;
     }
@@ -71,7 +75,11 @@ public class DeliveryTxService {
         return OrderItemResponse.from(item);
     }
 
-    /** 배송완료 (판매자 버튼) — 배송중 → 배송완료 */
+    /** 교환 재배송이 배송완료됨 — 같은 트랜잭션에서 claim 이 교환 클레임을 완료한다 (ClaimEventListener, order → claim 참조를 만들지 않게) */
+    public record ExchangeRedelivered(Long orderItemId) {
+    }
+
+    /** 배송완료 (판매자 버튼) — 배송중 → 배송완료, 교환 재배송 중이면 교환 완료 */
     @Transactional
     public OrderItemResponse deliver(Long storeId, Long sellerId, Long orderItemId) {
         return deliver(mine(storeId, orderItemId), ActorType.SELLER, sellerId, "판매자 배송완료");
@@ -85,15 +93,23 @@ public class DeliveryTxService {
         deliver(item, ActorType.SYSTEM, null, "자동 배송완료");
     }
 
-    /** 자동 배송완료 대상 — 발송 후 before 이전부터 배송중인 상품주문 */
+    /** 자동 배송완료 대상 — 발송(교환은 재배송) 후 before 이전부터 배송 중인 상품주문 */
     @Transactional(readOnly = true)
     public List<Long> findShippedBefore(LocalDateTime before, int limit) {
-        return orderItemRepository.findIdsByStatusAndShippedAtBefore(OrderItemStatus.SHIPPING, before, Limit.of(limit));
+        List<Long> ids = new ArrayList<>(orderItemRepository.findIdsByStatusAndShippedAtBefore(OrderItemStatus.SHIPPING,
+                before, Limit.of(limit)));
+        ids.addAll(orderItemRepository.findReshippedIdsBefore(before, Limit.of(limit)));
+        return ids;
     }
 
     private OrderItemResponse deliver(OrderItem item, ActorType actor, Long actorId, String reason) {
-        item.deliver(LocalDateTime.now(clock));
-        history(item, actor, actorId, OrderItemStatus.SHIPPING, reason);
+        boolean exchange = item.isReshipping();
+        OrderItemStatus from = item.getStatus();
+        item.deliverOrRedeliver(LocalDateTime.now(clock));
+        history(item, actor, actorId, from, exchange ? reason + " (교환 재배송)" : reason);
+        if (exchange) {
+            eventPublisher.publishEvent(new ExchangeRedelivered(item.getId()));
+        }
         outbox.enqueue("OrderItemDelivered", OutboxEvent.AggregateType.ORDER_ITEM, item.getItemNo(),
                 OrderItemDeliveredPayload.from(item, autoConfirmAfter));
         return OrderItemResponse.from(item);
@@ -110,7 +126,7 @@ public class DeliveryTxService {
     }
 
     /** 송장번호 mock — 외부 택배 API 가 없어 택배사 접두 + 상품주문 ID 8자리 (상품주문마다 다르고 다시 만들어도 같다) */
-    static String mockTrackingNo(String courier, Long orderItemId) {
+    public static String mockTrackingNo(String courier, Long orderItemId) {
         return TRACKING_PREFIX.getOrDefault(courier, "7000") + String.format("%08d", orderItemId);
     }
 }

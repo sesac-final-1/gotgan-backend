@@ -187,6 +187,44 @@ public class OrderItem extends BaseTimeEntity {
         transition(OrderItemStatus.CANCEL_REQUESTED, OrderItemStatus.CANCELLED);
     }
 
+    /** 반품 완료 — 수거 후 환불 Saga 가 끝남 */
+    public void returned() {
+        transition(OrderItemStatus.RETURN_REQUESTED, OrderItemStatus.RETURNED);
+    }
+
+    /** 반품 · 교환 거부 — 다시 배송완료 (배송완료 시각은 그대로 → 반품 기간 · 자동 구매확정도 원래 기준) */
+    public void rejectClaim() {
+        OrderItemStatus from = status == OrderItemStatus.EXCHANGE_REQUESTED
+                ? OrderItemStatus.EXCHANGE_REQUESTED : OrderItemStatus.RETURN_REQUESTED;
+        transition(from, OrderItemStatus.DELIVERED);
+    }
+
+    /** 교환 재배송 송장 — 상태는 교환요청 그대로(스펙: 교환은 클레임 상태로만), 택배사 · 송장 · 발송 시각을 재배송 것으로 */
+    public void reshipExchange(String courier, String trackingNo, LocalDateTime shippedAt) {
+        if (status != OrderItemStatus.EXCHANGE_REQUESTED) {
+            throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);
+        }
+        this.courier = courier;
+        this.trackingNo = trackingNo;
+        this.shippedAt = shippedAt;
+    }
+
+    /** 교환 재배송 중 — 교환요청이면서 재배송 송장(발송 시각)이 직전 배송완료보다 뒤 */
+    public boolean isReshipping() {
+        return status == OrderItemStatus.EXCHANGE_REQUESTED && shippedAt != null && deliveredAt != null
+                && shippedAt.isAfter(deliveredAt);
+    }
+
+    /** 배송완료 — 배송중이면 일반 배송완료, 교환 재배송 중이면 교환 완료(다시 배송완료 · 자동 구매확정 기간을 다시 센다) */
+    public void deliverOrRedeliver(LocalDateTime now) {
+        if (isReshipping()) {
+            transition(OrderItemStatus.EXCHANGE_REQUESTED, OrderItemStatus.DELIVERED);
+            this.deliveredAt = now;
+        } else {
+            deliver(now);
+        }
+    }
+
     private void transition(OrderItemStatus from, OrderItemStatus to) {
         if (status != from) {
             throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);
