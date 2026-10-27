@@ -21,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -81,6 +82,27 @@ public class SellerProductController {
     public ResponseEntity<ApiResponse<SellerProductDetailResponse>> get(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @Parameter(description = "상품 ID", example = "3") @PathVariable Long productId) {
         return ResponseEntity.ok(ApiResponse.success("상품을 조회했습니다.", sellerProductService.get(storeId(user), productId)));
+    }
+
+    @Operation(summary = "상품 수정", description = """
+            인가: SELLER (스토어 = X-Store-Id). 등록과 같은 본문을 통째로 — status 는 무시하고 재고 · 판매 상태는 바꾸지 않음(재고 14절 · 상태 15절).
+            옵션은 productOptionId 로 맞춤: 있으면 추가금만(값이 다르면 400) · 없으면 새 조합(stock 으로 시작) · 요청에 없는 기존 조합은 소프트 삭제.
+            이미지는 요청 순서대로 다시 저장 — 이 상품에 이미 붙은 키 또는 presign 으로 받은 내 키. BLOCKED 상품도 수정 가능(상태 그대로).
+            에러: 400 INVALID_INPUT · PRODUCT_CATEGORY_INVALID · PRODUCT_OPTION_INVALID(남의 · 삭제된 옵션 ID 포함) · PRODUCT_IMAGE_INVALID /
+            403 FORBIDDEN(스토어 헤더 없음) / 404 PRODUCT_NOT_FOUND(없거나 삭제됨 · 다른 스토어 상품)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 — 판매자 상품 상세(12절)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "INVALID_INPUT · PRODUCT_CATEGORY_INVALID · PRODUCT_OPTION_INVALID · PRODUCT_IMAGE_INVALID"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PRODUCT_NOT_FOUND")
+    })
+    @PutMapping("/{productId}")
+    public ResponseEntity<ApiResponse<SellerProductDetailResponse>> update(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Parameter(description = "상품 ID", example = "3") @PathVariable Long productId,
+            @Valid @RequestBody ProductCreateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("상품을 수정했습니다.", sellerProductService.update(storeId(user), productId, request)));
     }
 
     /** 판매자 API 공통 — 스토어 헤더가 없으면 403 (product.md 12절 아래 공통 규칙) */

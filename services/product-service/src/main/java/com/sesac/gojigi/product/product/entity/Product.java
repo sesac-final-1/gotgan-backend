@@ -23,14 +23,17 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
 /**
  * 상품 (productdb product). 옵션 조합 · 이미지는 상품이 함께 저장한다 (등록 · 수정이 통째로 오는 13절 계약).
  * 카테고리는 categoryId 로만 들고, 하위 · 사용 중 검증은 서비스가 CategoryRepository 로 한다 (CAT-03).
  * 삭제는 deleted_at 소프트 삭제 — 지난 주문 · 재고 이력이 참조하므로 전역 필터(@SQLRestriction)는 걸지 않고 조회 쿼리에서 거른다.
+ * @DynamicUpdate — 바뀐 컬럼만 UPDATE. 판매자 수정이 그 사이 관리자가 바꾼 status · 이벤트가 바꾼 is_store_active 를 덮어쓰지 않게 (13절 "수정은 상태를 바꾸지 않음").
  */
 @Getter
 @Entity
+@DynamicUpdate
 @Table(name = "product")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Product extends BaseTimeEntity {
@@ -130,6 +133,27 @@ public class Product extends BaseTimeEntity {
     public void addImage(ProductImage image) {
         images.add(image);
         image.assignProduct(this);
+    }
+
+    /** 수정 (13절 PUT) — 판매 상태 · 재고는 건드리지 않는다. 판매가는 다시 계산 */
+    public void update(Long categoryId, String name, long price, int discountRate, String description,
+            String material, String origin, String option1Name, String option2Name) {
+        this.categoryId = categoryId;
+        this.name = name;
+        this.description = description;
+        this.material = material;
+        this.origin = origin;
+        this.option1Name = option1Name;
+        this.option2Name = option2Name;
+        changePrice(price, discountRate);
+    }
+
+    /** 이미지 다시 저장 — 요청 순서가 sortOrder(0 이 대표), 빠진 이미지 행은 orphanRemoval 로 삭제 (S3 객체는 남음) */
+    public void replaceImages(List<String> s3Keys) {
+        images.clear();
+        for (int i = 0; i < s3Keys.size(); i++) {
+            addImage(ProductImage.of(s3Keys.get(i), i));
+        }
     }
 
     /** 관리자 강제 판매중지 (6-2절) — 이미 BLOCKED 면 사유만 바꾼다. 사유 필수 검사는 요청 DTO 몫 */
