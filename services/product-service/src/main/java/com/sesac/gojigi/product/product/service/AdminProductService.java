@@ -6,8 +6,8 @@ import com.sesac.gojigi.product.image.service.ImageUrls;
 import com.sesac.gojigi.product.product.dto.request.ProductBlockRequest;
 import com.sesac.gojigi.product.product.dto.response.ProductBlockResponse;
 import com.sesac.gojigi.product.product.dto.response.SellerProductResponse;
+import com.sesac.gojigi.product.product.entity.HiddenReason;
 import com.sesac.gojigi.product.product.entity.Product;
-import com.sesac.gojigi.product.product.entity.ProductStatus;
 import com.sesac.gojigi.product.product.exception.ProductErrorCode;
 import com.sesac.gojigi.product.product.exception.ProductException;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
@@ -67,23 +67,12 @@ public class AdminProductService {
     private SellerProductResponse toResponse(Product p, long totalStock, String imageKey, Map<Long, Category> categories) {
         Category category = categories.get(p.getCategoryId());
         Category top = category == null || category.isTop() ? category : categories.get(category.getParentId());
-        String hiddenReason = hiddenReason(p, category, top);
+        HiddenReason hiddenReason = HiddenReason.of(p, category != null && category.isActive() && top != null && top.isActive());
         return new SellerProductResponse(p.getId(), p.getName(), p.getCategoryId(),
                 category == null ? null : category.getName(), top == null ? null : top.getName(),
                 p.getPrice(), p.getDiscountRate(), p.getSalePrice(), imageUrls.of(imageKey), totalStock, totalStock == 0,
                 p.getStatus(), p.getStatusReason(), hiddenReason == null, hiddenReason,
                 p.getCreatedAt() == null ? null : p.getCreatedAt().atZone(KST).toOffsetDateTime());
-    }
-
-    /** 쇼핑몰에 안 보이는 이유 — 상태 → 카테고리(하위 · 상위) → 스토어 순으로 먼저 걸린 것. 보이면 null */
-    private static String hiddenReason(Product p, Category category, Category top) {
-        if (p.getStatus() != ProductStatus.ON_SALE) {
-            return p.getStatus().name();
-        }
-        if (category == null || !category.isActive() || top == null || !top.isActive()) {
-            return "CATEGORY_INACTIVE";
-        }
-        return p.isStoreActive() ? null : "STORE_INACTIVE";
     }
 
     private static <V> Map<Long, V> toMap(List<Object[]> rows, Function<Object[], V> value) {

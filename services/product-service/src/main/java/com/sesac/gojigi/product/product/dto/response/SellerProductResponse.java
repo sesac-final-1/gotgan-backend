@@ -1,5 +1,6 @@
 package com.sesac.gojigi.product.product.dto.response;
 
+import com.sesac.gojigi.product.product.entity.HiddenReason;
 import com.sesac.gojigi.product.product.entity.ProductStatus;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -23,6 +24,6 @@ public record SellerProductResponse(
         ProductStatus status,
         String statusReason,
         boolean displayable,
-        String hiddenReason,
+        HiddenReason hiddenReason,
         OffsetDateTime createdAt) {
 }

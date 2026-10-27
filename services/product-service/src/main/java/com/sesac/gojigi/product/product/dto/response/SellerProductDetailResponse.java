@@ -1,7 +1,7 @@
 package com.sesac.gojigi.product.product.dto.response;
 
 import com.sesac.gojigi.product.category.entity.Category;
-import com.sesac.gojigi.product.image.entity.ProductImage;
+import com.sesac.gojigi.product.image.service.ImageUrls;
 import com.sesac.gojigi.product.option.entity.ProductOption;
 import com.sesac.gojigi.product.product.entity.HiddenReason;
 import com.sesac.gojigi.product.product.entity.Product;
@@ -36,8 +36,8 @@ public record SellerProductDetailResponse(
                              long extraPrice, int stock, boolean soldOut) {
     }
 
-    /** category = 하위, top = 그 상위. imagesBaseUrl 은 IMAGES_BASE_URL (끝 / 없음) */
-    public static SellerProductDetailResponse of(Product p, Category category, Category top, String imagesBaseUrl) {
+    /** category = 하위, top = 그 상위 */
+    public static SellerProductDetailResponse of(Product p, Category category, Category top, ImageUrls imageUrls) {
         List<ProductOption> liveOptions = p.getOptions().stream().filter(o -> o.getDeletedAt() == null).toList();
         HiddenReason hiddenReason = HiddenReason.of(p, category.isActive() && top.isActive());
         return new SellerProductDetailResponse(
@@ -45,17 +45,13 @@ public record SellerProductDetailResponse(
                 category.getId(), category.getName(), top.getId(), top.getName(),
                 p.getName(), p.getPrice(), p.getDiscountRate(), p.getSalePrice(),
                 p.getDescription(), p.getMaterial(), p.getOrigin(),
-                p.getImages().stream().map(i -> image(i, imagesBaseUrl)).toList(),
+                p.getImages().stream().map(i -> new ImageItem(i.getS3Key(), imageUrls.of(i.getS3Key()))).toList(),
                 p.getOption1Name(), p.getOption2Name(),
                 liveOptions.stream().map(SellerProductDetailResponse::option).toList(),
                 hiddenReason == null && p.getDeletedAt() == null,
                 liveOptions.stream().allMatch(o -> o.getStock() == 0),
                 p.getStatus(), p.getStatusReason(), hiddenReason,
                 p.getCreatedAt().atZone(KST).toOffsetDateTime());
-    }
-
-    private static ImageItem image(ProductImage image, String imagesBaseUrl) {
-        return new ImageItem(image.getS3Key(), imagesBaseUrl + "/" + image.getS3Key());
     }
 
     private static OptionItem option(ProductOption o) {

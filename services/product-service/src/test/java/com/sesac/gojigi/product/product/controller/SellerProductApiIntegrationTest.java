@@ -1,7 +1,9 @@
 package com.sesac.gojigi.product.product.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,7 +37,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 판매자 상품 등록 (POST /api/seller/products, product.md 13절) — 실제 MySQL · Flyway V1~V2.
+ * 판매자 상품 등록 (POST /api/seller/products, product.md 13절) · 상세 (GET /api/seller/products/{id}, 12절) — 실제 MySQL · Flyway V1~V2.
  * 게이트웨이가 넣는 X-User-* · X-Store-Id 헤더를 직접 붙인다. 상품 → 카테고리 순으로 비워 FK 에 걸리지 않게 한다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게 (CategoryApiIntegrationTest 와 같음).
  */
@@ -106,6 +108,16 @@ class SellerProductApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(body)));
     }
 
+    private long registerOk() throws Exception {
+        String body = register(validRequest()).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        return jsonMapper.readTree(body).path("data").path("productId").asLong();
+    }
+
+    private ResultActions detail(long productId, String storeId) throws Exception {
+        var req = get("/api/seller/products/" + productId).header("X-User-Id", "2").header("X-User-Roles", "SELLER");
+        return mockMvc.perform(storeId == null ? req : req.header("X-Store-Id", storeId));
+    }
+
     private ResultActions register(Consumer<Map<String, Object>> change) throws Exception {
         Map<String, Object> body = validRequest();
         change.accept(body);
@@ -129,6 +141,7 @@ class SellerProductApiIntegrationTest {
                     .andExpect(jsonPath("$.data.topCategoryName").value("패션의류"))
                     .andExpect(jsonPath("$.data.name").value("프렌치 리넨 오버핏 셔츠"))
                     .andExpect(jsonPath("$.data.salePrice").value(75650))
+                    .andExpect(content().string(org.hamcrest.Matchers.containsString("\"discountRate\":15.00"))) // DB 에서 다시 읽은 상세와 같은 자릿수
                     .andExpect(jsonPath("$.data.images[0].key").value("products/1/7f3c9e2a.jpg"))
                     .andExpect(jsonPath("$.data.images[0].url")
                             .value("https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/products/1/7f3c9e2a.jpg"))
@@ -295,6 +308,79 @@ class SellerProductApiIntegrationTest {
             register(change)
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        }
+    }
+
+    @Nested
+    @DisplayName("판매자 상품 상세")
+    class Detail {
+
+        @Test
+        @DisplayName("내 스토어 상품 — 200, 등록한 내용 그대로 (옵션 등록 순서 · 이미지 순서 · 할인율 15.00 · 옵션별 재고)")
+        void get_ownProduct_returnsDetail() throws Exception {
+            // given
+            long productId = registerOk();
+
+            // when
+            detail(productId, String.valueOf(STORE_ID))
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.productId").value(productId))
+                    .andExpect(jsonPath("$.data.categoryName").value("셔츠"))
+                    .andExpect(jsonPath("$.data.topCategoryName").value("패션의류"))
+                    .andExpect(content().string(org.hamcrest.Matchers.containsString("\"discountRate\":15.00")))
+                    .andExpect(jsonPath("$.data.description").value("<p>시원한 리넨</p>"))
+                    .andExpect(jsonPath("$.data.options[0].option2Value").value("M"))
+                    .andExpect(jsonPath("$.data.options[0].stock").value(30))
+                    .andExpect(jsonPath("$.data.options[1].option2Value").value("L"))
+                    .andExpect(jsonPath("$.data.options[1].soldOut").value(true))
+                    .andExpect(jsonPath("$.data.images[0].key").value("products/1/7f3c9e2a.jpg"))
+                    .andExpect(jsonPath("$.data.images[1].url")
+                            .value("https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/products/1/c3d4-e5f6.png"))
+                    .andExpect(jsonPath("$.data.hiddenReason").doesNotExist())
+                    .andExpect(jsonPath("$.data.purchasable").value(true));
+        }
+
+        @Test
+        @DisplayName("등록 뒤 상위 카테고리를 끔 — 200, 상태는 ON_SALE 그대로 · 미노출 이유 CATEGORY_INACTIVE · 구매 불가")
+        void get_topCategoryTurnedOff_hiddenByCategory() throws Exception {
+            // given
+            long productId = registerOk();
+            top.changeActive(false);
+            categoryRepository.save(top);
+
+            // when
+            detail(productId, String.valueOf(STORE_ID))
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.status").value("ON_SALE"))
+                    .andExpect(jsonPath("$.data.hiddenReason").value("CATEGORY_INACTIVE"))
+                    .andExpect(jsonPath("$.data.purchasable").value(false));
+        }
+
+        @Test
+        @DisplayName("다른 스토어 상품 · 삭제된 상품 · 없는 상품 — 모두 404 PRODUCT_NOT_FOUND (구분하지 않음)")
+        void get_notMine_notFound() throws Exception {
+            // given
+            long productId = registerOk();
+            long deletedId = registerOk();
+            transactionTemplate.executeWithoutResult(tx ->
+                    productRepository.findById(deletedId).orElseThrow().delete(java.time.LocalDateTime.now()));
+
+            // when · then
+            detail(productId, "2").andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+            detail(deletedId, String.valueOf(STORE_ID)).andExpect(status().isNotFound());
+            detail(999999L, String.valueOf(STORE_ID)).andExpect(status().isNotFound());
+        }
+
+        @Test
+        @DisplayName("X-Store-Id 없음 — 403 FORBIDDEN")
+        void get_noStoreHeader_forbidden() throws Exception {
+            // given
+            long productId = registerOk();
+
+            // when · then
+            detail(productId, null).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
         }
     }
 }

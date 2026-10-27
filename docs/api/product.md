@@ -1,7 +1,7 @@
 # product-service API 계약 (설계 — 10/20)
 
 담당 박지연. 구매자 화면(공개) · 판매자 센터(`/api/seller/products/**`) · 다른 서비스(order · store · admin)가 부르는 `/internal/**` 의 **계약**입니다. 코드가 나오면 `product.yaml`(springdoc 내보내기)을 함께 올리고, 이 문서는 호출하는 쪽이 지킬 규칙 설명으로 남깁니다.
-근거: 스펙 CAT-01~03 · PRD-01~15 · ORD-04, productdb V1 · V2, 10/20 카테고리 · 판매수수료 결정(노션 "10/19 카테고리_정산 관련 내용 확인 요청" 답변).
+근거: 스펙 CAT-01\~03 · PRD-01\~15 · ORD-04, productdb V1 · V2, 10/20 카테고리 · 판매수수료 결정(노션 "10/19 카테고리_정산 관련 내용 확인 요청" 답변).
 
 ## 공통
 
@@ -304,7 +304,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 
 ## 12. 판매자 상품 상세 — `GET /api/seller/products/{productId}`
 
-수정 화면용. 10절 응답에 판매자만 보는 값을 더합니다: `status` · `statusReason` · `hiddenReason`, 옵션별 `stock`, 이미지 `[{ key, url }]`(13절 수정 때 `imageKeys` 로 그대로 돌려보냄).
+수정 화면용. 10절 응답에 판매자만 보는 값을 더합니다: `status` · `statusReason` · `hiddenReason`, 옵션별 `stock`, 이미지 `[{ key, url }]`(13절 수정 때 `imageKeys` 로 그대로 돌려보냄). 옵션은 등록 순서(삭제된 조합 제외), 이미지는 `sort_order` 순. 13절 등록 응답도 같은 모양입니다.
 
 | 경우 | 응답 |
 |---|---|
@@ -337,10 +337,10 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | 항목 | 규칙 | 어기면 |
 |---|---|---|
 | `categoryId` | 사용 중인 **하위** 카테고리 (상위가 꺼져 있어도 안 됨) — product 자기 DB 로 검증(CAT-03) | **400** `PRODUCT_CATEGORY_INVALID` |
-| `name` · `material` · `origin` | 1~100자 · 1~100자 · 1~50자 | **400** `INVALID_INPUT` |
+| `name` · `material` · `origin` | 1\~100자 · 1\~100자 · 1\~50자 | **400** `INVALID_INPUT` |
 | `price` · `discountRate` | 100원 이상 · 0~90 정수(%) — `salePrice` 는 서버 계산 | **400** `INVALID_INPUT` |
 | `description` | HTML 10,000자 이하(선택). 서버가 sanitizer 로 위험한 태그 · 속성(script · style · on* 등)을 지우고 저장 — 서식 · 문단 · 링크 · 이미지 · 표만 남음 | **400** `INVALID_INPUT` (길이) |
-| 옵션 그룹 | 0~2개(그룹 2 만 있거나 두 이름이 같으면 안 됨). **없으면 `options` 에 값이 `null` 인 1개만**. 그룹 이름 · 옵션 값 1~30자, 앞뒤 공백은 지움 | **400** `PRODUCT_OPTION_INVALID` |
+| 옵션 그룹 | 0\~2개(그룹 2 만 있거나 두 이름이 같으면 안 됨). **없으면 `options` 에 값이 `null` 인 1개만**. 그룹 이름 · 옵션 값 1\~30자, 앞뒤 공백은 지움 | **400** `PRODUCT_OPTION_INVALID` |
 | `options` | 1~100개 · 조합 중복 없음 · 옵션 그룹 수와 값 개수가 맞음 · `extraPrice ≥ 0` · `stock ≥ 0` | **400** `PRODUCT_OPTION_INVALID` |
 | `imageKeys` | 1~5개 · 중복 없음, 순서대로 저장(첫 번째가 대표) · 17절에서 받은 **내 스토어 키** 모양(`products/{storeId}/{UUID}.{jpg\|png\|webp}`)만. S3 에 실제로 있는지는 보지 않음 | **400** `PRODUCT_IMAGE_INVALID` |
 | `status` | 등록 때만 `ON_SALE`(기본) · `STOPPED`(`BLOCKED` 는 거절). 수정 때는 무시 | **400** `INVALID_INPUT` |

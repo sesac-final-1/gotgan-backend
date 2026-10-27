@@ -5,6 +5,7 @@ import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.product.category.entity.Category;
 import com.sesac.gojigi.product.category.repository.CategoryRepository;
 import com.sesac.gojigi.product.image.entity.ProductImage;
+import com.sesac.gojigi.product.image.service.ImageUrls;
 import com.sesac.gojigi.product.option.entity.ProductOption;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest.OptionItem;
@@ -22,20 +23,21 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.owasp.html.PolicyFactory;
 import org.owasp.html.Sanitizers;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 판매자 상품 등록 (PRD-01 · 03, product.md 13절). 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
+ * 판매자 상품 등록 · 상세 (PRD-01 · 03, product.md 12 · 13절). 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
  * TODO 박지연: 정지 · 폐점 스토어도 등록되면 바로 노출됨(storeActive=true 로 시작) — StoreStatusChanged 소비 PR 에서 함께 정한다.
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class SellerProductService {
 
@@ -49,13 +51,16 @@ public class SellerProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
-    private final String imagesBaseUrl;
+    private final ImageUrls imageUrls;
 
-    public SellerProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
-                                @Value("${app.images.base-url}") String imagesBaseUrl) {
-        this.productRepository = productRepository;
-        this.categoryRepository = categoryRepository;
-        this.imagesBaseUrl = imagesBaseUrl;
+    /** 수정 화면용 상세 (12절) — 다른 스토어 상품도 "없음"과 같은 404 (있는지 알려 주지 않음) */
+    public SellerProductDetailResponse get(Long storeId, Long productId) {
+        Product product = productRepository.findByIdAndDeletedAtIsNull(productId)
+                .filter(p -> p.getStoreId().equals(storeId))
+                .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
+        Category category = categoryRepository.findById(product.getCategoryId()).orElseThrow(); // 카테고리는 삭제하지 않는다
+        Category top = categoryRepository.findById(category.getParentId()).orElseThrow();
+        return SellerProductDetailResponse.of(product, category, top, imageUrls);
     }
 
     @Transactional
@@ -88,7 +93,7 @@ public class SellerProductService {
         }
         productRepository.save(product);
         log.info("상품 등록 - storeId={}, productId={}, options={}", storeId, product.getId(), options.size());
-        return SellerProductDetailResponse.of(product, category, top, imagesBaseUrl);
+        return SellerProductDetailResponse.of(product, category, top, imageUrls);
     }
 
     /** 사용 중인 하위만 — 없거나 · 상위이거나 · 꺼진 카테고리는 같은 코드 (CAT-03, product 자기 DB 로 검증) */
