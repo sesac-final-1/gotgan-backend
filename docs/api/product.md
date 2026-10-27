@@ -304,7 +304,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 
 ## 12. 판매자 상품 상세 — `GET /api/seller/products/{productId}`
 
-수정 화면용. 10절 응답에 판매자만 보는 값을 더합니다: `status` · `statusReason` · `hiddenReason`, 옵션별 `stock`, 이미지 `[{ key, url }]`(13절 수정 때 `imageKeys` 로 그대로 돌려보냄).
+수정 화면용. 10절 응답에 판매자만 보는 값을 더합니다: `status` · `statusReason` · `hiddenReason`, 옵션별 `stock`, 이미지 `[{ key, url }]`(13절 수정 때 `imageKeys` 로 그대로 돌려보냄). 옵션은 등록 순서(삭제된 조합 제외), 이미지는 `sort_order` 순. 13절 등록 응답도 같은 모양입니다.
 
 | 경우 | 응답 |
 |---|---|

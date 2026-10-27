@@ -16,6 +16,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,6 +49,22 @@ public class SellerProductController {
             @Valid @RequestBody ProductCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("상품을 등록했습니다.", sellerProductService.create(storeId(user), request)));
+    }
+
+    @Operation(summary = "판매자 상품 상세 (수정 화면)", description = """
+            인가: SELLER (스토어 = X-Store-Id). 공개 상세(10절)에 판매자만 보는 값 — status · statusReason · hiddenReason · 옵션별 stock · 이미지 {key, url}.
+            삭제된 조합은 빠짐. 수정(PUT) 때 images[].key 를 imageKeys 로 그대로 돌려보낸다 (product.md 12절).
+            에러: 403 FORBIDDEN(스토어 헤더 없음) / 404 PRODUCT_NOT_FOUND(없거나 삭제됨 · 다른 스토어 상품 — 구분하지 않음)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "PRODUCT_NOT_FOUND")
+    })
+    @GetMapping("/{productId}")
+    public ResponseEntity<ApiResponse<SellerProductDetailResponse>> get(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Parameter(description = "상품 ID", example = "3") @PathVariable Long productId) {
+        return ResponseEntity.ok(ApiResponse.success("상품을 조회했습니다.", sellerProductService.get(storeId(user), productId)));
     }
 
     /** 판매자 API 공통 — 스토어 헤더가 없으면 403 (product.md 12절 아래 공통 규칙) */

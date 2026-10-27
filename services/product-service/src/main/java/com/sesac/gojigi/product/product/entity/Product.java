@@ -95,8 +95,9 @@ public class Product extends BaseTimeEntity {
     @Column(name = "deleted_at", columnDefinition = "DATETIME(6)")
     private LocalDateTime deletedAt;
 
-    /** 사라진 조합은 소프트 삭제라 컬렉션에서 빼지 않는다 (orphanRemoval 없음) */
+    /** 사라진 조합은 소프트 삭제라 컬렉션에서 빼지 않는다 (orphanRemoval 없음). 등록 순서(ID) — 상세 화면 조합표 순서 */
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
+    @OrderBy("id ASC")
     private List<ProductOption> options = new ArrayList<>();
 
     /** 참조하는 곳이 없어 빠진 이미지는 행 삭제 (orphanRemoval) — sortOrder 0 이 대표 */
@@ -153,7 +154,7 @@ public class Product extends BaseTimeEntity {
 
     private void changePrice(long price, int discountRate) {
         this.price = price;
-        this.discountRate = BigDecimal.valueOf(discountRate);
+        this.discountRate = BigDecimal.valueOf(discountRate).setScale(2); // 컬럼 DECIMAL(5,2) 와 같은 자릿수 — 등록 응답도 다시 읽은 값처럼 15.00
         this.salePrice = calculateSalePrice(price, discountRate);
     }
 
