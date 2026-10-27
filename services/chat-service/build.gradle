@@ -1,0 +1,62 @@
+// chat-service — 1:1 채팅 (스토어 톡 · 판매자 운영 상담 · 고객센터 1:1 상담, CHT-01~05 · 10/27). 계약 docs/api/chat.md
+// 의존성 선택 기준: 가이드라인 15장 4절 "의존성 매트릭스". 버전 변수는 gradle.properties (전 서비스 동일)
+plugins {
+    id 'java'
+    id 'jacoco'                                                 // SonarQube Cloud 커버리지 리포트 (루트 sonar-project.properties 가 XML 경로 참조)
+    id 'org.springframework.boot' version '4.1.1'              // 전 서비스 같은 버전
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.sesac.gojigi'
+version = '0.0.1'
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+repositories { mavenCentral() }
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
+
+dependencies {
+    // 공통 응답 봉투 · 예외 처리 · @CurrentUser · userId MDC · actuator 트레이스 제외 (libs/common-web)
+    implementation 'com.sesac.gojigi:common-web:0.0.1'
+
+    // 웹 · 검증 · API 문서
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+    // 데이터 — chatdb(방 · 메시지 · 읽음). 스키마는 Flyway 만 (컨벤션 3-10)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.flywaydb:flyway-mysql'
+    runtimeOnly    'com.mysql:mysql-connector-j'
+    // 스케줄러 — 메시지 90일 보관 삭제를 한 파드만 (D-3, 가이드라인 10장)
+    implementation "net.javacrumbs.shedlock:shedlock-spring:${shedlockVersion}"
+    implementation "net.javacrumbs.shedlock:shedlock-provider-jdbc-template:${shedlockVersion}"
+    // 관측성 (가이드라인 13장)
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    runtimeOnly    'io.micrometer:micrometer-registry-prometheus'
+    implementation 'org.springframework.boot:spring-boot-starter-zipkin'
+    implementation "com.github.loki4j:loki-logback-appender:${loki4jVersion}"
+    // Lombok — 생성자 주입(@RequiredArgsConstructor) · @Getter · @Slf4j (컨벤션 2-3)
+    compileOnly         'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    // 테스트 (Boot 4는 기술별 테스트 스타터)
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testcontainersVersion}"
+    testImplementation "org.testcontainers:testcontainers-mysql:${testcontainersVersion}"
+    testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('bootJar') { archiveFileName = 'app.jar' }   // Dockerfile 이 파일 이름을 고정해서 참조
+tasks.named('jar')     { enabled = false }                // -plain.jar 를 만들지 않음
+
+tasks.named('test')    { useJUnitPlatform(); finalizedBy jacocoTestReport }
+jacocoTestReport       { reports { xml.required = true } }   // Sonar 가 읽는 XML
