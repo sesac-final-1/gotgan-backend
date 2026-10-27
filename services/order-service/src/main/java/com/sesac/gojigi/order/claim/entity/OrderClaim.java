@@ -16,6 +16,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -95,9 +96,38 @@ public class OrderClaim extends BaseTimeEntity {
         transition(ClaimStatus.REQUESTED, ClaimStatus.APPROVED, now);
     }
 
-    /** 완료 — 환불 Saga(결제 취소 · 재고 · 포인트)가 끝남 */
+    /** 거부 (판매자) — 요청 상태에서만, 사유 필수 */
+    public void reject(String reason, LocalDateTime now) {
+        transition(ClaimStatus.REQUESTED, ClaimStatus.REJECTED, now);
+        this.rejectReason = reason;
+    }
+
+    /** 수거 완료 (반품 · 교환) — 반품은 이어서 환불 Saga */
+    public void collect(LocalDateTime now) {
+        requireType(ClaimType.RETURN, ClaimType.EXCHANGE);
+        transition(ClaimStatus.APPROVED, ClaimStatus.COLLECTED, now);
+    }
+
+    /** 교환 재배송 송장 등록 */
+    public void reship(LocalDateTime now) {
+        requireType(ClaimType.EXCHANGE);
+        transition(ClaimStatus.COLLECTED, ClaimStatus.RESHIPPED, now);
+    }
+
+    /** 완료 — 취소: 환불 Saga 끝(APPROVED 에서), 반품: 수거 후 환불 Saga 끝(COLLECTED), 교환: 재배송 배송완료(RESHIPPED) */
     public void complete(LocalDateTime now) {
-        transition(ClaimStatus.APPROVED, ClaimStatus.COMPLETED, now);
+        ClaimStatus from = switch (claimType) {
+            case CANCEL -> ClaimStatus.APPROVED;
+            case RETURN -> ClaimStatus.COLLECTED;
+            case EXCHANGE -> ClaimStatus.RESHIPPED;
+        };
+        transition(from, ClaimStatus.COMPLETED, now);
+    }
+
+    private void requireType(ClaimType... types) {
+        if (!List.of(types).contains(claimType)) {
+            throw new ClaimException(ClaimErrorCode.CLAIM_INVALID_STATUS);
+        }
     }
 
     private void transition(ClaimStatus from, ClaimStatus to, LocalDateTime now) {

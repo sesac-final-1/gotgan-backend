@@ -11,6 +11,8 @@ import org.springframework.http.HttpStatus;
 public enum ClaimErrorCode implements ErrorCode {
     /** 아직 받지 않는 클레임 유형 — 지금은 결제완료 단계 취소(CANCEL)만 */
     CLAIM_TYPE_NOT_SUPPORTED(HttpStatus.BAD_REQUEST, "아직 지원하지 않는 요청 유형입니다."),
+    /** 없는 클레임 또는 내 스토어 상품주문의 클레임이 아님 (판매자 클레임 처리) */
+    CLAIM_NOT_FOUND(HttpStatus.NOT_FOUND, "요청을 찾을 수 없습니다."),
     /** 없는 상품주문 또는 이 주문의 상품주문이 아님 */
     CLAIM_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "주문 상품을 찾을 수 없습니다."),
     /** 결제완료가 아닌 상품주문 · 결제 완료가 아닌 주문 — 즉시 취소할 수 없음 */
