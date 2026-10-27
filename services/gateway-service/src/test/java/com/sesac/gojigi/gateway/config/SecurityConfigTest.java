@@ -71,6 +71,17 @@ class SecurityConfigTest {
     }
 
     @Test
+    @DisplayName("채팅 WebSocket 핸드셰이크 — 토큰 없이 통과(검증은 STOMP CONNECT), 다른 출처는 403, 채팅 REST 는 토큰 필요")
+    void chatWebSocket_handshake() {
+        client.get().uri(LOCAL + "/ws/chat").header("Origin", "https://gotgan-ashy.vercel.app").exchange()
+                .expectStatus().value(status -> org.assertj.core.api.Assertions.assertThat(status).isNotIn(401, 403));
+        client.get().uri(LOCAL + "/ws/chat").header("Origin", "https://evil.example.com").exchange()
+                .expectStatus().isForbidden();
+        client.get().uri(LOCAL + "/api/chats/rooms").exchange()
+                .expectStatus().isUnauthorized();
+    }
+
+    @Test
     @DisplayName("토큰 없이 인증 필요 경로 → 401 { code: UNAUTHORIZED }")
     void protectedPath_withoutToken_returns401Envelope() {
         client.delete().uri("/api/users/me").exchange()
