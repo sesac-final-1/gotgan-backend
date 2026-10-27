@@ -47,6 +47,26 @@ class DemoSeedTest {
     }
 
     @Test
+    @DisplayName("상품 시드 — 39개 모두 하위 카테고리 · 옵션 ≥ 1 · 이미지 3장(대표 1), 정지 스토어(15) 상품만 비노출, order 시드 상품주문과 같은 번호 · 판매가")
+    void seed_products() {
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product", Integer.class)).isEqualTo(39);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product p JOIN category c ON c.category_id = p.category_id WHERE c.parent_id IS NULL",
+                Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product p WHERE NOT EXISTS (SELECT 1 FROM product_option o WHERE o.product_id = p.product_id)",
+                Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_image WHERE sort_order = 0", Integer.class)).isEqualTo(39);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_image", Integer.class)).isEqualTo(39 * 3);
+        assertThat(jdbc.queryForList("SELECT DISTINCT store_id FROM product WHERE NOT is_store_active", Long.class)).containsExactly(15L);
+        // 판매가 = price × (100 − 할인율) / 100 을 10원 단위 반올림 — 서버 규칙과 같게
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product WHERE sale_price <> ROUND(price * (100 - discount_rate) / 100, -1)",
+                Integer.class)).isZero();
+        // order 시드 상품주문 1001 — 상품 101 · 옵션 10101 · 판매가 26,980원 (서귀포 노지 햇감귤 32,900원 18%)
+        assertThat(jdbc.queryForObject("SELECT CONCAT(p.name, ':', p.sale_price, ':', o.option1_value) FROM product p "
+                + "JOIN product_option o ON o.product_id = p.product_id WHERE o.product_option_id = 10101", String.class))
+                .isEqualTo("서귀포 노지 햇감귤 5kg:26980:로얄과 (S~M)");
+    }
+
+    @Test
     @DisplayName("시드 뒤 새로 만드는 카테고리는 604 부터 — 수수료 시드 번호(1~6)와 겹치지 않는다")
     void seed_nextCategoryId_afterSeed() {
         jdbc.update("INSERT INTO category (parent_id, name, sort_order, is_active) VALUES (NULL, '테스트', 7, FALSE)");
