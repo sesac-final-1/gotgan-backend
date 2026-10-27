@@ -88,7 +88,7 @@ test('알림 대상이 아닌 이벤트(OrderItemConfirmed 등)는 무시 — �
 
 // ── 메일 내용 (NTF-01~04)
 
-test('NTF-01 주문 확인 — 상품 · 수량 · 금액, 결제 금액 · 사용 · 적립 포인트, 주문 상세 링크', () => {
+test('NTF-01 주문 확인 — 상품 · 수량 · 금액, 결제 금액 · 사용 · 적립 예정 포인트(구매확정 시), 주문 상세 링크', () => {
   const { subject, text } = TEMPLATES.OrderPaid.mail(orderPaid, FRONT);
 
   assert.equal(subject, '[곳간] 주문이 완료되었습니다 — 20261021-000123');
@@ -97,7 +97,7 @@ test('NTF-01 주문 확인 — 상품 · 수량 · 금액, 결제 금액 · 사�
   assert.match(text, /· 햇배 5kg × 2 — 32,400원/);
   assert.match(text, /· 결제 금액 64,400원/);
   assert.match(text, /· 사용 포인트 2,000P/);
-  assert.match(text, /· 적립 포인트 3,120P/);
+  assert.match(text, /· 적립 예정 포인트 3,120P \(구매확정 시 적립\)/);
   assert.match(text, /https:\/\/gotgan-ashy\.vercel\.app\/mypage\/orders\/20261021-000123/);
 });
 
@@ -109,7 +109,7 @@ test('NTF-01 필드 추가 전(지금 계약) — 이름 · 상품명 · 사용 
   assert.match(text, /^고객님,/);
   assert.match(text, /· 상품 1건/);
   assert.doesNotMatch(text, /사용 포인트/);
-  assert.match(text, /· 적립 포인트 500P/);
+  assert.match(text, /· 적립 예정 포인트 500P/);
 });
 
 test('NTF-02 배송 시작 — 상품명 · 택배사 · 송장번호, buyerId 없으면 ORDER# 키', () => {
