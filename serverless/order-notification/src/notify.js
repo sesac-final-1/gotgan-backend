@@ -59,7 +59,7 @@ export const TEMPLATES = {
           `주문번호 ${p.orderNo}`, ...lines, '',
           `· 결제 금액 ${won(p.payAmt)}`,
           ...(Number(p.usedPoint ?? 0) > 0 ? [`· 사용 포인트 ${point(p.usedPoint)}`] : []),
-          ...(earned > 0 ? [`· 적립 포인트 ${point(earned)}`] : []),
+          ...(earned > 0 ? [`· 적립 예정 포인트 ${point(earned)} (구매확정 시 적립)`] : []),
           '', orderLink(p, front),
         ].join('\n'),
       };
