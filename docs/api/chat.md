@@ -3,7 +3,7 @@
 - 담당: 구지훈. 새 서비스 `chat-service`(:8089 · chatdb). 게이트웨이 라우트 · CI 매트릭스는 구지훈 PR · 이경석 리뷰
 - 근거: 10/27 회의록 · 작업 계획(`_notion/02_내작업/2026-10-27_추가기능_작업계획_구지훈.md` 2-7절) · gotgan_guide 스펙 CHT 도메인
 - 상품 문의 게시판(review — 공개 Q&A, 미확정)과 **별개인 비공개 1:1 대화**. 텍스트만
-- 표시 ⏳ = 결정 대기 (12절) — 코드는 기본값으로 만들고 결정되면 바꾼다
+- 결정 사항은 12절 (10/27 D-1 · D-2 · D-3 확정)
 
 ## 공통
 
@@ -12,7 +12,7 @@
 | 주소 | 화면: REST `/api/chats/**` 는 Vercel rewrite(같은 출처), 실시간 `wss://api.gotgan.click/ws/chat` 은 직접 연결(게이트웨이가 이 경로만 CORS · Upgrade 허용) |
 | 인가 | 게이트웨이: 로그인한 누구나(BUYER · SELLER · ADMIN). 방 단위 권한은 chat-service 가 `X-User-Id` · `X-User-Roles` · `X-Store-Id` 로 판단 — 남의 방은 **404**(있는지 알려 주지 않음) |
 | 응답 | `ApiResponse<T>` 봉투, 시각은 `+09:00` |
-| 저장 | chatdb `chat_room` · `chat_message` · `chat_read` (8절). 메시지는 지우지 않는다(⏳ 보관 기간) |
+| 저장 | chatdb `chat_room` · `chat_message` · `chat_read` (8절). 메시지는 **90일 뒤 자동 삭제** (8-1절) |
 | 실시간 | STOMP over WebSocket, 파드 간 Redis Pub/Sub `chat:room:{roomId}` (6절) |
 | 알림 | 받는 쪽이 그 방에 접속해 있지 않으면 admin `POST /internal/notifications`(admin.md 5절) — 같은 메시지는 한 번만(`sourceId = chat-msg-{messageId}`) |
 
@@ -25,7 +25,7 @@
 | `BUYER_SUPPORT` | 고객센터 1:1 상담 | 구매자 ↔ 관리자 전원 | 구매자만 | 회원 1개 | `OPEN` · `RESOLVED` |
 
 - 판매자 쪽은 **스토어 단위**(`X-Store-Id`) — 판매자가 바뀌어도 대화가 이어진다
-- 관리자 쪽은 **관리자 전원 공용**(담당자 지정 없음). 화면에 보이는 관리자 이름은 ⏳ "곳간 운영팀" 고정(기본값)
+- 관리자 쪽은 **관리자 전원 공용**(담당자 지정 없음). 화면에 보이는 관리자 이름은 "곳간 운영팀" 고정(D-2)
 - 상담방 상태: 관리자가 `RESOLVED` 로 바꾸고, 상대가 새 메시지를 보내면 자동으로 `OPEN`
 - 관리자는 **스토어 톡을 볼 수 없다** — 구매자가 스토어 톡에서 "운영팀에 도움 요청"(고객 상담을 그 방 문맥 카드로 엶)을 하면 그 스토어 톡만 읽기 전용으로 볼 수 있다
 
@@ -35,7 +35,7 @@
 
 | `context.type` | 어디서 | 카드 제목 (조회 실패 시 번호만) |
 |---|---|---|
-| `PRODUCT` | 상품 상세 '판매자에게 문의' | product `GET /api/products/{id}` 상품명 (⏳ product 10절 구현 전엔 "상품 #id") |
+| `PRODUCT` | 상품 상세 '판매자에게 문의' | product `GET /api/products/{id}` 상품명 (product 10절 구현 전엔 "상품 #id") |
 | `ORDER_ITEM` | 내 주문 상세 '판매자 문의' | order 상품주문 — "주문번호 · 상품명" |
 | `ORDER` | 내 주문 상세 '결제 · 환불 문의' | "주문 {orderNo}" |
 | `SETTLEMENT` | 판매자 정산 상세 '이 정산 문의' | settlement — "정산 {week} · 지급액" |
@@ -141,7 +141,8 @@ CREATE TABLE chat_message (
   context_title   VARCHAR(200),                      -- 카드 만들 때 조회한 제목 스냅샷
   created_at      DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   CONSTRAINT fk_chat_message_room FOREIGN KEY (chat_room_id) REFERENCES chat_room (chat_room_id),
-  INDEX idx_chat_message_room (chat_room_id, chat_message_id)
+  INDEX idx_chat_message_room (chat_room_id, chat_message_id),
+  INDEX idx_chat_message_created (created_at)          -- 90일 보관 삭제 (8-1절)
 );
 CREATE TABLE chat_read (
   chat_room_id         BIGINT NOT NULL,
@@ -152,6 +153,22 @@ CREATE TABLE chat_read (
 );
 ```
 
+### 8-1. 메시지 보관 — 90일 뒤 자동 삭제 (D-3)
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| 대상 | `created_at` 이 90일 전보다 오래된 `chat_message` | 상담 기록 보관과 저장 공간의 균형 (10/27 결정) |
+| 언제 | **하루 한 번, 09:10 KST** (`app.chat.retention.cron`) | 클러스터가 08:00 ~ 22:00 만 떠 있어 새벽 배치는 돌지 못함 — 아침 기동 · 시드가 끝난 뒤 사용자가 적은 시간 |
+| 한 파드만 | ShedLock (`chat_shedlock`) | 파드가 여러 개여도 한 번만 |
+| 나눠 지우기 | `DELETE … WHERE created_at < :cutoff ORDER BY chat_message_id LIMIT 1000` 를 반복, 묶음 사이 200ms 쉼 | 한 번에 큰 삭제는 테이블 잠금 · 복제 지연 · 커넥션 점유 — 1,000건씩이면 수십 ms |
+| 한 번에 최대 | 50묶음(5만 건)까지, 남으면 다음 날 이어서 | 실행 시간 상한(수십 초) — 밀린 양이 많아도 하루 몫만 |
+| 인덱스 | `idx_chat_message_created` | 오래된 행만 범위로 찾음(전체 스캔 없음) |
+| 빈 방 | 마지막 메시지가 90일 전이고 메시지가 하나도 남지 않은 방은 `chat_read` 와 함께 삭제 — 같은 실행 끝에 1회 | 목록에 빈 방이 남지 않게 |
+| 기록 | 실행마다 INFO 한 줄 (지운 메시지 · 방 수 · 걸린 시간) | Grafana 로 확인 |
+
+- 설정: `app.chat.retention.days=90` · `batch-size=1000` · `max-batches=50` · `cron="0 10 9 * * *"` (zone Asia/Seoul)
+- 시연 환경은 DB 가 매일 새로 만들어져 실제로 지울 행이 없다 — 동작은 통합 테스트(시각 고정 Clock)로 확인
+
 ## 9. 오류 코드 (접두어 `CHAT` — error-codes.md)
 
 | 코드 | 상태 | 경우 |
@@ -161,6 +178,7 @@ CREATE TABLE chat_read (
 | `CHAT_SELF` | 400 | 자기 스토어에 스토어 톡 |
 | `CHAT_INVALID_TYPE` | 400 | 스토어 톡에 상담 상태 변경 |
 | `CHAT_TOO_FAST` | 429(STOMP ERROR) | 1초 5건 초과 |
+| `CHAT_STORE_INACTIVE` | 409 | 정지 · 폐점 스토어에 새 스토어 톡 (D-1, store 상태 조회 API 배포 후) |
 
 ## 10. 인프라 · 배포 (구지훈)
 
@@ -172,10 +190,10 @@ CREATE TABLE chat_read (
 
 이미지 · 파일 전송, 단체방, 자동 응답 · 챗봇, 상담원 배정 · 운영 시간, 판매자가 먼저 거는 대화, 메시지 수정 · 삭제, 채팅 메시지 신고(악성 상대는 회원 신고 `USER` 로)
 
-## 12. 결정 대기 (⏳)
+## 12. 결정 사항 (10/27)
 
-| # | 질문 | 기본값(이대로 만듦) |
+| # | 질문 | 결정 |
 |---|---|---|
 | D-1 | 정지 · 폐점 스토어의 스토어 톡 | 새 방은 막고(409 `CHAT_STORE_INACTIVE`) 기존 방은 읽기만 — store 상태 조회 API(박지연) 배포 후 적용, 그 전엔 막지 않음 |
 | D-2 | 관리자 쪽 표시 이름 | "곳간 운영팀" 고정 (관리자 개인 이름 노출 안 함) |
-| D-3 | 메시지 보관 기간 | 무기한 (시연 기간) — 정하면 배치 삭제 추가 |
+| D-3 | 메시지 보관 기간 | 90일 뒤 자동 삭제 — 하루 한 번 · 나눠 지우기 (8-1절) |
