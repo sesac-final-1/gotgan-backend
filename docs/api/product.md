@@ -7,7 +7,7 @@
 
 | 항목 | 값 |
 |---|---|
-| 주소 | 화면: 게이트웨이 `http://gotgan-api.duckdns.org` (HTTPS 전환 예정) — `/api/products/**` · `/api/categories/**` · `/api/seller/products/**`<br>내부: `PRODUCT_SERVICE_URI=http://product-service:8083` (ConfigMap) — `/internal/**` 는 게이트웨이 라우트 없음, 클러스터 내부 전용 |
+| 주소 | 화면: 게이트웨이 `https://api.gotgan.click` — `/api/products/**` · `/api/categories/**` · `/api/seller/products/**`<br>내부: `PRODUCT_SERVICE_URI=http://product-service:8083` (ConfigMap) — `/internal/**` 는 게이트웨이 라우트 없음, 클러스터 내부 전용 |
 | 응답 | `ApiResponse<T>` 봉투 (컨벤션 2-4). 오류는 `code` · `message`, `data: null` |
 | 금액 | `long`, 원 단위 |
 | 시각 | ISO-8601 오프셋 포함 (Asia/Seoul) |
@@ -339,13 +339,13 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | `categoryId` | 사용 중인 **하위** 카테고리 (상위가 꺼져 있어도 안 됨) — product 자기 DB 로 검증(CAT-03) | **400** `PRODUCT_CATEGORY_INVALID` |
 | `name` · `material` · `origin` | 1~100자 · 1~100자 · 1~50자 | **400** `INVALID_INPUT` |
 | `price` · `discountRate` | 100원 이상 · 0~90 정수(%) — `salePrice` 는 서버 계산 | **400** `INVALID_INPUT` |
-| `description` | HTML. 서버가 sanitizer 로 위험한 태그 · 속성(script · on* 등)을 지우고 저장 | — |
-| 옵션 그룹 | 0~2개. **없으면 `options` 에 값이 `null` 인 1개만** | **400** `PRODUCT_OPTION_INVALID` |
+| `description` | HTML 10,000자 이하(선택). 서버가 sanitizer 로 위험한 태그 · 속성(script · style · on* 등)을 지우고 저장 — 서식 · 문단 · 링크 · 이미지 · 표만 남음 | **400** `INVALID_INPUT` (길이) |
+| 옵션 그룹 | 0~2개(그룹 2 만 있거나 두 이름이 같으면 안 됨). **없으면 `options` 에 값이 `null` 인 1개만**. 그룹 이름 · 옵션 값 1~30자, 앞뒤 공백은 지움 | **400** `PRODUCT_OPTION_INVALID` |
 | `options` | 1~100개 · 조합 중복 없음 · 옵션 그룹 수와 값 개수가 맞음 · `extraPrice ≥ 0` · `stock ≥ 0` | **400** `PRODUCT_OPTION_INVALID` |
-| `imageKeys` | 1~5개, 순서대로 저장(첫 번째가 대표) · 17절에서 받은 **내 스토어 키**(`products/{storeId}/`)만 | **400** `PRODUCT_IMAGE_INVALID` |
-| `status` | 등록 때만 `ON_SALE`(기본) · `STOPPED`. 수정 때는 무시 | **400** `INVALID_INPUT` |
+| `imageKeys` | 1~5개 · 중복 없음, 순서대로 저장(첫 번째가 대표) · 17절에서 받은 **내 스토어 키** 모양(`products/{storeId}/{UUID}.{jpg\|png\|webp}`)만. S3 에 실제로 있는지는 보지 않음 | **400** `PRODUCT_IMAGE_INVALID` |
+| `status` | 등록 때만 `ON_SALE`(기본) · `STOPPED`(`BLOCKED` 는 거절). 수정 때는 무시 | **400** `INVALID_INPUT` |
 
-**등록 (POST)** → **201** 12절 응답. 화면의 "상품 복사"는 12절로 읽은 내용을 `status: STOPPED` 로 다시 등록하면 됩니다(이미지 키 재사용 가능).
+**등록 (POST)** → **201** 12절 응답(같은 DTO). 정지 · 폐점 스토어의 등록 처리는 `StoreStatusChanged` 소비 때 정함 — 지금은 운영 중으로 시작. 화면의 "상품 복사"는 12절로 읽은 내용을 `status: STOPPED` 로 다시 등록하면 됩니다(이미지 키 재사용 가능).
 
 **수정 (PUT)** — 옵션은 `productOptionId` 로 맞춥니다.
 
