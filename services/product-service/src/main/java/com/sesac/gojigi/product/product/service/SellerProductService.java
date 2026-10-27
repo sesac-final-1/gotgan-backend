@@ -7,11 +7,14 @@ import com.sesac.gojigi.product.category.repository.CategoryRepository;
 import com.sesac.gojigi.product.image.entity.ProductImage;
 import com.sesac.gojigi.product.image.service.ImageUrls;
 import com.sesac.gojigi.product.option.entity.ProductOption;
+import com.sesac.gojigi.product.option.repository.ProductOptionRepository;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest.OptionItem;
 import com.sesac.gojigi.product.product.dto.request.ProductStatusChangeRequest;
-import com.sesac.gojigi.product.product.dto.response.SellerProductDetailResponse;
+import com.sesac.gojigi.product.product.dto.request.ProductStockUpdateRequest;
 import com.sesac.gojigi.product.product.dto.response.ProductStatusChangeResponse;
+import com.sesac.gojigi.product.product.dto.response.ProductStockUpdateResponse;
+import com.sesac.gojigi.product.product.dto.response.SellerProductDetailResponse;
 import com.sesac.gojigi.product.product.dto.response.SellerProductResponse;
 import com.sesac.gojigi.product.product.entity.HiddenReason;
 import com.sesac.gojigi.product.product.entity.Product;
@@ -19,11 +22,14 @@ import com.sesac.gojigi.product.product.entity.ProductStatus;
 import com.sesac.gojigi.product.product.exception.ProductErrorCode;
 import com.sesac.gojigi.product.product.exception.ProductException;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
+import com.sesac.gojigi.product.stock.exception.StockErrorCode;
+import com.sesac.gojigi.product.stock.exception.StockException;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -43,7 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 판매자 상품 목록 · 등록 · 수정 · 상세 · 판매중지/재개 · 삭제 (PRD-01 · 02 · 03 · 04 · 05 · 15, product.md 11 · 12 · 13 · 15 · 16절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
+ * 판매자 상품 목록 · 등록 · 수정 · 상세 · 재고 수정 · 판매중지/재개 · 삭제 (PRD-01 · 02 · 03 · 04 · 05 · 15, product.md 11 ~ 16절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
  * TODO 박지연: 정지 · 폐점 스토어도 등록되면 바로 노출됨(storeActive=true 로 시작) — StoreStatusChanged 소비 PR 에서 함께 정한다.
  */
 @Slf4j
@@ -63,6 +69,7 @@ public class SellerProductService {
             .and(Sanitizers.LINKS).and(Sanitizers.IMAGES).and(Sanitizers.TABLES);
 
     private final ProductRepository productRepository;
+    private final ProductOptionRepository productOptionRepository;
     private final CategoryRepository categoryRepository;
     private final ImageUrls imageUrls;
     private final Clock clock;
@@ -163,6 +170,38 @@ public class SellerProductService {
         Product product = getOwnProduct(storeId, productId);
         product.delete(LocalDateTime.now(clock));
         log.info("상품 삭제 - storeId={}, productId={}", storeId, productId);
+    }
+
+    /**
+     * 재고 수정 (14절) — 전부 바꾸거나 하나도 안 바꿈. 옵션마다 "지금 재고 = 화면에서 본 재고"일 때만 바꾸고, 하나라도 그 사이 바뀌었으면 409 로 전체 롤백.
+     * 옵션 ID 오름차순으로 UPDATE — 재고 예약과 같은 순서라 데드락이 나지 않는다. status 는 바꾸지 않음(BLOCKED 도 수정 가능), 재고 이력은 남기지 않음.
+     */
+    @Transactional
+    public ProductStockUpdateResponse updateStocks(Long storeId, Long productId, ProductStockUpdateRequest request) {
+        getOwnProduct(storeId, productId);
+        List<ProductStockUpdateRequest.Item> items = request.items().stream()
+                .sorted(Comparator.comparing(ProductStockUpdateRequest.Item::productOptionId))
+                .toList();
+        if (items.stream().map(ProductStockUpdateRequest.Item::productOptionId).distinct().count() != items.size()) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "같은 옵션이 두 번 들어 있습니다.");
+        }
+        Set<Long> liveIds = new HashSet<>(productOptionRepository.findLiveIdsByProductId(productId));
+        List<Long> notOwned = items.stream().map(ProductStockUpdateRequest.Item::productOptionId).filter(id -> !liveIds.contains(id)).toList();
+        if (!notOwned.isEmpty()) {
+            throw new ProductException(ProductErrorCode.PRODUCT_OPTION_NOT_FOUND,
+                    "이 상품의 옵션이 아니거나 삭제된 옵션입니다. (옵션 " + notOwned + ")");
+        }
+        for (ProductStockUpdateRequest.Item item : items) {
+            if (productOptionRepository.updateStockIfUnchanged(item.productOptionId(), item.stock(), item.seenStock()) == 0) {
+                throw new StockException(StockErrorCode.STOCK_CHANGED,
+                        "그 사이 주문이 들어와 재고가 바뀌었어요. 다시 불러온 뒤 입력해 주세요. (옵션 " + item.productOptionId() + ")");
+            }
+        }
+        log.info("재고 수정 - storeId={}, productId={}, options={}", storeId, productId,
+                items.stream().map(ProductStockUpdateRequest.Item::productOptionId).toList());
+        return new ProductStockUpdateResponse(items.stream()
+                .map(item -> new ProductStockUpdateResponse.Option(item.productOptionId(), item.stock()))
+                .toList());
     }
 
     /**

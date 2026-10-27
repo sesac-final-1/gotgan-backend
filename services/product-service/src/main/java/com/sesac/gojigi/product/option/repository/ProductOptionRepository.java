@@ -34,4 +34,16 @@ public interface ProductOptionRepository extends JpaRepository<ProductOption, Lo
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update ProductOption o set o.stock = o.stock + :quantity where o.id = :id")
     int increaseStock(@Param("id") Long id, @Param("quantity") int quantity);
+
+    /** 판매자 재고 수정(14절) 대상 확인 — 이 상품의 삭제 안 된 조합 ID */
+    @Query("select o.id from ProductOption o where o.product.id = :productId and o.deletedAt is null")
+    List<Long> findLiveIdsByProductId(@Param("productId") Long productId);
+
+    /**
+     * 판매자 재고 수정 (14절) — 화면에서 본 재고(seenStock)와 지금 재고가 같을 때만 바꾼다. 0행이면 그 사이 주문이 바꾼 것(STOCK_CHANGED).
+     * 행을 미리 잠그지 않아도 "본 값과 같을 때만" 조건이 덮어쓰기를 막는다. 재고 이력(stock_history)은 남기지 않는다(V1 DDL — Saga 멱등 전용).
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update ProductOption o set o.stock = :stock where o.id = :id and o.stock = :seenStock")
+    int updateStockIfUnchanged(@Param("id") Long id, @Param("stock") int stock, @Param("seenStock") int seenStock);
 }

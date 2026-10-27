@@ -386,10 +386,13 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | 모두 `현재 재고 = seenStock` | `UPDATE … SET stock = :stock WHERE product_option_id = :id AND stock = :seen` | **200** `{ options[{ productOptionId, stock }] }` | 저장 완료 |
 | 하나라도 재고가 그 사이 바뀜 | 전체 롤백 | **409** `STOCK_CHANGED` | "그 사이 주문이 들어와 재고가 바뀌었어요" → 12절 다시 읽고 재입력 |
 | 이 상품의 옵션이 아니거나 삭제된 옵션 | 전체 롤백 | **404** `PRODUCT_OPTION_NOT_FOUND` | |
-| `stock < 0` · `items` 비었음 | 없음 | **400** `INVALID_INPUT` | |
+| `stock` · `seenStock` 없음 · 0 미만 · `items` 비었음 · 같은 옵션 중복 | 없음 | **400** `INVALID_INPUT` | |
+| 없거나 삭제된 상품 · 다른 스토어 상품 | 없음 | **404** `PRODUCT_NOT_FOUND` | |
 
 - 재고 0 이면 자동으로 품절, 다시 채우면 판매 — `status` 는 바꾸지 않습니다.
 - `BLOCKED` 상품도 재고 수정은 가능합니다.
+- 응답 `options` 는 이번에 바꾼 옵션만(옵션 ID 오름차순)입니다. 전체는 12절로 다시 읽습니다.
+- 구현 메모(product 내부): 행을 미리 잠그지 않고 조건부 UPDATE(`stock = :seen`)만으로 덮어쓰기를 막습니다. 옵션 ID 오름차순으로 UPDATE 해 재고 예약(1절)과 데드락이 나지 않고, 판매자 직접 수정은 `stock_history` 에 남기지 않습니다(V1 DDL).
 
 ## 15. 판매중지 · 재개 (일괄) — `PATCH /api/seller/products/status` (PRD-05 · PRD-15)
 
