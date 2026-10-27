@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -11,10 +12,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.order.order.dto.response.OrderItemResponse;
+import com.sesac.gojigi.common.web.dto.PageResponse;
 import com.sesac.gojigi.order.order.dto.response.SellerBulkResponse;
+import com.sesac.gojigi.order.order.dto.response.SellerOrderItemListResponse;
+import com.sesac.gojigi.order.order.dto.response.SellerOrderItemResponse;
+import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.service.SellerDeliveryService;
+import com.sesac.gojigi.order.order.service.SellerOrderQueryService;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,11 +40,14 @@ class SellerOrderItemControllerTest {
     @Mock
     private SellerDeliveryService sellerDeliveryService;
 
+    @Mock
+    private SellerOrderQueryService sellerOrderQueryService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new SellerOrderItemController(sellerDeliveryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new SellerOrderItemController(sellerDeliveryService, sellerOrderQueryService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -92,5 +102,33 @@ class SellerOrderItemControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"items\":[{\"orderItemId\":456}]}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(sellerDeliveryService);
+    }
+
+    @Test
+    @DisplayName("목록 · 상세 — X-Store-Id 스토어로 조회, 페이징 기본값 · 범위 밖은 400")
+    void listAndGet() throws Exception {
+        SellerOrderItemResponse item = SellerOrderItemResponse.from(OrderFixtures.item(OrderFixtures.order()));
+        given(sellerOrderQueryService.list(1L, null, null, 0, 20)).willReturn(new SellerOrderItemListResponse(
+                Map.of(OrderItemStatus.PAYMENT_DONE, 1L), new PageResponse<>(List.of(item), 0, 20, 1, 1, false)));
+        given(sellerOrderQueryService.list(1L, OrderItemStatus.SHIPPING, "사과", 2, 10)).willReturn(new SellerOrderItemListResponse(
+                Map.of(), new PageResponse<>(List.of(), 2, 10, 0, 0, false)));
+        given(sellerOrderQueryService.get(1L, 456L)).willReturn(item);
+
+        mockMvc.perform(get(BASE).header("X-User-Id", "70").header("X-Store-Id", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("주문 목록을 조회했습니다."))
+                .andExpect(jsonPath("$.data.statusCounts.PAYMENT_DONE").value(1))
+                .andExpect(jsonPath("$.data.items.content[0].itemNo").value(item.itemNo()));
+        mockMvc.perform(get(BASE).header("X-User-Id", "70").header("X-Store-Id", "1")
+                        .param("status", "SHIPPING").param("q", "사과").param("page", "2").param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.page").value(2));
+        mockMvc.perform(get(BASE + "/456").header("X-User-Id", "70").header("X-Store-Id", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.productName").value(item.productName()));
+        mockMvc.perform(get(BASE).header("X-User-Id", "70").header("X-Store-Id", "1").param("size", "101"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get(BASE).header("X-User-Id", "70").header("X-Store-Id", "1").param("status", "NOPE"))
+                .andExpect(status().isBadRequest());
     }
 }
