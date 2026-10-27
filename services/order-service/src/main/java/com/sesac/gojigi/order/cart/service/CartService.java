@@ -1,12 +1,14 @@
 package com.sesac.gojigi.order.cart.service;
 
 import com.sesac.gojigi.order.cart.dto.request.CartItemAddRequest;
+import com.sesac.gojigi.order.cart.dto.request.CartItemUpdateRequest;
 import com.sesac.gojigi.order.cart.dto.response.CartItemsResponse;
 import com.sesac.gojigi.order.cart.entity.CartItem;
 import com.sesac.gojigi.order.cart.exception.CartErrorCode;
 import com.sesac.gojigi.order.cart.exception.CartException;
 import com.sesac.gojigi.order.cart.repository.CartItemRepository;
 import com.sesac.gojigi.order.cart.repository.CartRedisRepository;
+import com.sesac.gojigi.order.cart.repository.CartRedisRepository.CachedLine;
 import com.sesac.gojigi.order.order.client.ProductClientAdapter;
 import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
 import com.sesac.gojigi.order.order.service.OrderTxService;
@@ -14,6 +16,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,7 +29,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 장바구니 담기 · 삭제 (ORD-01) — MySQL cart_item 에 먼저 쓰고, 커밋 뒤 Redis cart:{userId} 를 그 회원 장바구니 전체로 갱신 (09장).
+ * 장바구니 담기 · 수량 · 선택 · 삭제 (ORD-01) — MySQL cart_item 에 먼저 쓰고, 커밋 뒤 Redis cart:{userId} 를 그 회원 장바구니 전체로 갱신 (09장).
  * 결제가 확정되면 주문한 옵션을 장바구니에서 지운다 (주문 PAID 와 같은 트랜잭션).
  */
 @Service
@@ -40,8 +43,8 @@ public class CartService {
     private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate tx;
 
-    /** 커밋 뒤 Redis 에 쓸 그 회원 장바구니 (옵션 ID → 수량) */
-    record Changed(Long userId, Map<Long, Integer> quantities) {
+    /** 커밋 뒤 Redis 에 쓸 그 회원 장바구니 (옵션 ID → 수량 · 선택) */
+    record Changed(Long userId, Map<Long, CachedLine> lines) {
     }
 
     public CartService(CartItemRepository cartItemRepository, CartRedisRepository cartRedisRepository,
@@ -80,6 +83,29 @@ public class CartService {
         });
     }
 
+    /** 수량 · 선택 변경 — 보낸 것만. 장바구니에 없는 옵션이면 404 */
+    @Transactional
+    public CartItemsResponse update(Long userId, Long productOptionId, CartItemUpdateRequest request) {
+        CartItem item = cartItemRepository.findByUserIdAndProductOptionId(userId, productOptionId)
+                .orElseThrow(() -> new CartException(CartErrorCode.CART_ITEM_NOT_FOUND));
+        if (request.quantity() != null) {
+            item.changeQuantity(request.quantity());
+        }
+        if (request.checked() != null) {
+            item.check(request.checked());
+        }
+        return changed(userId);
+    }
+
+    /** 선택 한꺼번에 — optionIds 가 없으면 전체 (전체 선택 · 해제), 장바구니에 없는 옵션은 건너뛴다 */
+    @Transactional
+    public CartItemsResponse check(Long userId, List<Long> optionIds, boolean checked) {
+        cartItemRepository.findByUserIdOrderByIdAsc(userId).stream()
+                .filter(i -> optionIds == null || optionIds.contains(i.getProductOptionId()))
+                .forEach(i -> i.check(checked));
+        return changed(userId);
+    }
+
     /** 단건 · 선택 삭제 — 장바구니에 없는 옵션은 건너뛴다 */
     @Transactional
     public CartItemsResponse remove(Long userId, List<Long> optionIds) {
@@ -96,7 +122,7 @@ public class CartService {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCommitted(Changed changed) {
-        cartRedisRepository.replace(changed.userId(), changed.quantities());
+        cartRedisRepository.replace(changed.userId(), changed.lines());
     }
 
     /** 없는 옵션(응답에서 빠짐) · 구매 불가가 하나라도 있으면 전부 거절 */
@@ -110,10 +136,15 @@ public class CartService {
         return options;
     }
 
+    /** MySQL 원본 → 캐시 줄 (CartQueryService 의 읽기 미스 채우기도 같은 모양) */
+    static Map<Long, CachedLine> cached(List<CartItem> cart) {
+        return cart.stream().collect(Collectors.toMap(CartItem::getProductOptionId,
+                i -> new CachedLine(i.getQuantity(), i.isChecked()), (a, b) -> a, TreeMap::new));
+    }
+
     private CartItemsResponse changed(Long userId) {
         List<CartItem> cart = cartItemRepository.findByUserIdOrderByIdAsc(userId);
-        eventPublisher.publishEvent(new Changed(userId, cart.stream()
-                .collect(Collectors.toMap(CartItem::getProductOptionId, CartItem::getQuantity))));
+        eventPublisher.publishEvent(new Changed(userId, cached(cart)));
         return CartItemsResponse.of(cart);
     }
 }

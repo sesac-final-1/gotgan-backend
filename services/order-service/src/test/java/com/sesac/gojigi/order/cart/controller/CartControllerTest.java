@@ -36,11 +36,14 @@ class CartControllerTest {
     @Mock
     private CartService cartService;
 
+    @Mock
+    private com.sesac.gojigi.order.cart.service.CartQueryService cartQueryService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new CartController(cartService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new CartController(cartService, cartQueryService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -88,5 +91,35 @@ class CartControllerTest {
                 .andExpect(jsonPath("$.data.cartCount").value(1));
         mockMvc.perform(delete(URL).header("X-User-Id", "4"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("조회 — 스토어 묶음 · 금액, 수량 · 선택 변경 — 둘 다 없거나 범위 밖이면 400, 선택 한꺼번에")
+    void getUpdateCheck() throws Exception {
+        com.sesac.gojigi.order.cart.dto.response.CartResponse.Line line = new com.sesac.gojigi.order.cart.dto.response.CartResponse.Line(
+                11L, 101L, "사과", "특", null, 10_000L, 2, true, true, 100, 20_000L);
+        given(cartQueryService.get(4L)).willReturn(new com.sesac.gojigi.order.cart.dto.response.CartResponse(
+                List.of(new com.sesac.gojigi.order.cart.dto.response.CartResponse.StoreGroup(1L, "곳간상회", 20_000L, 3_000L,
+                        50_000L, 30_000L, List.of(line))), List.of(), 1, 1, 20_000L, 3_000L, 23_000L));
+        given(cartService.update(eq(4L), eq(11L), any())).willReturn(CART);
+        given(cartService.check(4L, null, false)).willReturn(CART);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/carts").header("X-User-Id", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stores[0].amountToFree").value(30000))
+                .andExpect(jsonPath("$.data.totalAmt").value(23000));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(URL + "/11").header("X-User-Id", "4")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\":3}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("장바구니를 수정했습니다."));
+        for (String body : List.of("{}", "{\"quantity\":0}", "{\"quantity\":1000}")) {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(URL + "/11").header("X-User-Id", "4")
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest());
+        }
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch(URL + "/checked").header("X-User-Id", "4")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"checked\":false}"))
+                .andExpect(status().isOk());
+        org.mockito.Mockito.verify(cartService).check(4L, null, false);
     }
 }
