@@ -3,3 +3,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+
+app:
+  notification:
+    realtime: local                         # 테스트에는 Redis 가 없어 파드 간 전달 대신 이 JVM 연결에만 (구독 컨테이너가 접속 재시도 로그를 남기지 않게)

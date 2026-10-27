@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .hsts(ServerHttpSecurity.HeaderSpec.HstsSpec::disable)   // 기본 HSTS 는 https 요청에만 — NLB 가 TLS 를 끝내 파드엔 http 로 와서 직접 붙인다
                         .writer(StaticServerHttpHeadersWriter.builder().header("Strict-Transport-Security", HSTS).build()))
                 .authorizeExchange(auth -> auth
+                        .pathMatchers(HttpMethod.OPTIONS, "/api/notifications/stream").permitAll()   // 실시간 알림 CORS preflight — 판정은 application.yml globalcors
                         .pathMatchers("/api/auth/**").permitAll()                                   // 가입 · 로그인 · refresh (user-service 가 Keycloak 대리 호출)
                         .pathMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()          // 포트원 웹훅 (서명은 payment 가 검증)
                         .pathMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()

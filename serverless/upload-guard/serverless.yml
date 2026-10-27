@@ -1,0 +1,56 @@
+# upload-guard — S3 images · seller-docs 업로드(EventBridge "Object Created") → 앞 16바이트로 실제 형식 확인 → 위장 파일 삭제 + 알림 메일
+# 담당 jihoon-devstu · 스펙 SYS-24 (10/27 회의 추가 기능). presigned PUT 은 서버를 거치지 않아 내용 검사를 여기서 한다
+# 버킷 알림은 Terraform app/s3.tf 가 EventBridge 로 켠다(버킷 알림 설정을 Serverless 가 건드리지 않게). 이름 · ARN 은 SSM 에서
+service: sesac-gojigi-upload-guard
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  region: ap-northeast-2
+  stage: ${opt:stage, 'dev'}
+  memorySize: 128
+  timeout: 10
+  logRetentionInDays: 14
+  environment:
+    IMAGES_BUCKET: ${ssm:/sesac-gojigi/dev/s3/images-bucket}
+    SELLER_DOCS_BUCKET: ${ssm:/sesac-gojigi/dev/s3/seller-docs-bucket}
+    ALERT_TOPIC_ARN: ${ssm:/sesac-gojigi/dev/sns/alerts-topic-arn}
+  iam:
+    role:
+      statements:
+        # 앞부분 읽기 · 위장 파일 삭제 — 업로드 경로만
+        - Effect: Allow
+          Action: [s3:GetObject, s3:DeleteObject]
+          Resource:
+            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/images-bucket}/products/*
+            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/images-bucket}/reviews/*
+            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/images-bucket}/stores/*
+            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/seller-docs-bucket}/applications/*
+        # 없는 객체를 404(NoSuchKey)로 받으려면 ListBucket 이 있어야 한다(없으면 403) — 재전달 이벤트 건너뛰기용
+        - Effect: Allow
+          Action: [s3:ListBucket]
+          Resource:
+            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/images-bucket}
+            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/seller-docs-bucket}
+        # 삭제 알림 — 알림 토픽은 고객 관리형 KMS 키로 암호화돼 있어 키 사용 권한도 필요
+        - Effect: Allow
+          Action: [sns:Publish]
+          Resource: ${ssm:/sesac-gojigi/dev/sns/alerts-topic-arn}
+        - Effect: Allow
+          Action: [kms:GenerateDataKey, kms:Decrypt]
+          Resource: ${ssm:/sesac-gojigi/dev/kms/alerts-key-arn}
+
+functions:
+  guard:
+    handler: src/guard.handler
+    events:
+      - eventBridge:
+          pattern:
+            source: [aws.s3]
+            detail-type: [Object Created]
+            detail:
+              bucket:
+                name:
+                  - ${ssm:/sesac-gojigi/dev/s3/images-bucket}
+                  - ${ssm:/sesac-gojigi/dev/s3/seller-docs-bucket}

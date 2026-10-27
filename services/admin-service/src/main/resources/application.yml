@@ -14,6 +14,10 @@ spring:
   flyway:
     locations: classpath:db/migration
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}        # 알림 센터 — 파드 간 실시간 전달(Pub/Sub 채널 notify:{받는 쪽})
+
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
 
@@ -33,6 +37,14 @@ app:
     order-url: ${ORDER_SERVICE_URI:http://localhost:8084}
     review-url: ${REVIEW_SERVICE_URI:http://localhost:8087}
     review-mock: ${REVIEW_CLIENT_MOCK:true}  # review 내부 API(GET · PATCH /internal/reviews/{id}) 배포 전 — true 면 MockReviewClient (10/26 확인 요청 4-2)
+  notification:                             # 알림 센터 (NTF-08, 10/27)
+    inbox-table: ${INBOX_TABLE:sesac-gojigi-inbox}
+    realtime: ${NOTIFICATION_REALTIME:redis} # redis = 파드 간 전달 · local = 이 파드에 연결된 화면에만(테스트 · 로컬)
+    heartbeat: 25s                          # SSE 연결 유지 — NLB idle 350초 · 브라우저 · 프록시가 끊지 않게
+    queues:                                 # 이벤트 구독 큐 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
+      store: ${ADMIN_STORE_EVENTS_QUEUE_URL:}
+      order: ${ADMIN_ORDER_EVENTS_QUEUE_URL:}
+      settlement: ${ADMIN_SETTLEMENT_EVENTS_QUEUE_URL:}
 
 resilience4j:
   circuitbreaker:
