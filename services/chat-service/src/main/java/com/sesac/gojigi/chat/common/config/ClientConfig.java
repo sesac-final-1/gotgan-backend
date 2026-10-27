@@ -14,7 +14,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.web.client.RestClient;
 
 /**
- * 밖으로 나가는 호출 — Keycloak 공개키(STOMP CONNECT 토큰 검증) · admin 알림 센터 · user · store(상대 이름 · 스토어 상태).
+ * 밖으로 나가는 호출 — Keycloak 공개키(STOMP CONNECT 토큰 검증) · admin 알림 센터 · user · store(상대 이름 · 스토어 상태) · settlement(정산 카드).
  * 타임아웃은 컨벤션 2-7(연결 2초 · 읽기 3초)보다 짧게 — 알림 · 이름은 빠져도 되는 부가 정보라 오래 기다리지 않는다
  */
 @Configuration
@@ -41,6 +41,11 @@ public class ClientConfig {
     @Bean
     public RestClient storeRestClient(@Value("${app.store-uri}") String storeUri) {
         return shortTimeout(storeUri);
+    }
+
+    @Bean
+    public RestClient settlementRestClient(@Value("${app.settlement-uri}") String settlementUri) {
+        return shortTimeout(settlementUri);
     }
 
     private static RestClient shortTimeout(String baseUrl) {

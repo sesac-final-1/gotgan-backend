@@ -56,6 +56,7 @@ public class ChatRoomService {
     private static final String ADMIN = "ADMIN";
     private static final int MAX_PAGE_SIZE = 100;
     static final int MAX_CONTENT_LENGTH = 1000;   // chat_message.content VARCHAR(1000)
+    private static final int ORDER_NO_DIGITS = 14;  // yyyyMMdd + 일련번호 6자리 (order OrderTxService.nextOrderNo)
     private static final Pattern EXTRA_NEWLINES = Pattern.compile("\\n{3,}");
     private static final List<ChatRoomType> BUYER_TYPES = List.of(ChatRoomType.STORE_INQUIRY, ChatRoomType.BUYER_SUPPORT);
     private static final List<ChatRoomType> SELLER_TYPES = List.of(ChatRoomType.STORE_INQUIRY, ChatRoomType.SELLER_SUPPORT);
@@ -232,6 +233,10 @@ public class ChatRoomService {
         } else if (context.type() == ContextType.STORE) {
             String storeName = directory.storeName(context.id());
             title = storeName == null ? title : "스토어 " + storeName;
+        } else if (context.type() == ContextType.ORDER) {
+            title = "주문 " + orderNo(context.id());
+        } else if (context.type() == ContextType.SETTLEMENT) {
+            title = settlementTitle(room, context.id(), title);
         }
         boolean same = messageRepository.findFirstByChatRoomIdAndKindOrderByIdDesc(room.getId(), MessageKind.CONTEXT)
                 .filter(last -> last.sameContext(context.type(), context.id()))
@@ -330,6 +335,27 @@ public class ChatRoomService {
 
     private static LocalDateTime recentAt(ChatRoom room) {
         return room.getLastMessageAt() != null ? room.getLastMessageAt() : room.getCreatedAt();
+    }
+
+    /** 주문 카드 id = 주문번호의 숫자(20261027-000001 → 20261027000001) — 제목에선 다시 주문번호 모양으로 */
+    static String orderNo(Long id) {
+        String digits = String.valueOf(id);
+        return digits.length() == ORDER_NO_DIGITS ? digits.substring(0, 8) + "-" + digits.substring(8) : "#" + digits;
+    }
+
+    /** 정산 카드 — 판매자 운영 상담에만 · 그 스토어 정산만. 제목 "정산 2026-W43 · 1,234,000원", 조회 실패면 번호 */
+    private String settlementTitle(ChatRoom room, Long settlementId, String fallback) {
+        if (room.getType() != ChatRoomType.SELLER_SUPPORT) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "정산 문의는 판매자 운영 상담에서만 할 수 있습니다.");
+        }
+        ChatDirectory.SettlementInfo info = directory.settlement(settlementId);
+        if (info == null) {
+            return fallback;
+        }
+        if (!info.storeId().equals(room.getStoreId())) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "이 스토어의 정산만 문의할 수 있습니다.");
+        }
+        return "정산 " + info.week() + " · " + String.format("%,d원", info.payoutAmt());
     }
 
     private static String normalize(String content) {

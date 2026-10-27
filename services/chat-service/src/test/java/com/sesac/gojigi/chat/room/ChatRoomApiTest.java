@@ -265,6 +265,28 @@ class ChatRoomApiTest {
                 .hasMessageContaining("운영 중이 아닌");
     }
 
+    @Test
+    @DisplayName("주문 카드는 주문번호 모양으로, 정산 카드는 주차 · 지급액 — 정산은 판매자 상담 · 그 스토어 것만")
+    void orderAndSettlementCards() throws Exception {
+        open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"ORDER\",\"id\":20261027000001}}")
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("주문 20261027-000001"));
+        open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"ORDER_ITEM\",\"id\":7}}")
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("상품주문 #7"));
+
+        given(directory.settlement(31L)).willReturn(new ChatDirectory.SettlementInfo(STORE_ID, "2026-W43", 1_234_000));
+        given(directory.settlement(32L)).willReturn(new ChatDirectory.SettlementInfo(99L, "2026-W43", 10));
+        open(seller(post("/api/chats/rooms")), "{\"type\":\"SELLER_SUPPORT\",\"context\":{\"type\":\"SETTLEMENT\",\"id\":31}}")
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("정산 2026-W43 · 1,234,000원"));
+        open(seller(post("/api/chats/rooms")), "{\"type\":\"SELLER_SUPPORT\",\"context\":{\"type\":\"SETTLEMENT\",\"id\":32}}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        open(seller(post("/api/chats/rooms")), "{\"type\":\"SELLER_SUPPORT\",\"context\":{\"type\":\"SETTLEMENT\",\"id\":33}}")
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("정산 #33"));   // 조회 실패 — 번호
+        open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"SETTLEMENT\",\"id\":31}}")
+                .andExpect(status().isBadRequest());
+        open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"ORDER\",\"id\":123}}")
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("주문 #123"));   // 주문번호 모양이 아니면 번호
+    }
+
     private ResultActions open(MockHttpServletRequestBuilder request, String body) throws Exception {
         return mockMvc.perform(request.contentType(MediaType.APPLICATION_JSON).content(body));
     }
