@@ -33,15 +33,17 @@
 
 다른 화면에서 방을 열면 그 화면의 대상을 **같은 방에 카드 메시지**(`kind: CONTEXT`)로 붙인다. 새 방을 만들지 않는다.
 
-| `context.type` | 어디서 | 카드 제목 (조회 실패 시 번호만) |
+| `context.type` | 어디서 (화면 진입 버튼) | 카드 제목 (`ContextType` — 조회 실패 시 번호만) |
 |---|---|---|
-| `PRODUCT` | 상품 상세 '판매자에게 문의' | product `GET /api/products/{id}` 상품명 (product 10절 구현 전엔 "상품 #id") |
-| `ORDER_ITEM` | 내 주문 상세 '판매자 문의' | order 상품주문 — "주문번호 · 상품명" |
-| `ORDER` | 내 주문 상세 '결제 · 환불 문의' | "주문 {orderNo}" |
-| `SETTLEMENT` | 판매자 정산 상세 '이 정산 문의' | settlement — "정산 {week} · 지급액" |
-| `STORE` | 스토어 정지 배너 · 관리자 스토어 상세 | "스토어 {storeName}" |
-| `REPORT` | 신고 접수 안내 '처리 문의' | "신고 {대상}" |
-| `CHAT_ROOM` | 스토어 톡 '운영팀에 도움 요청' | "스토어 톡 #{roomId} ({storeName})" — 관리자 읽기 전용 열람 허용 |
+| `PRODUCT` | 상품 상세 '판매자에게 문의' | "상품 #{id}" — 공개 상품 상세 API(product 10절)가 나오면 상품명으로 |
+| `ORDER_ITEM` | (화면 버튼 없음 — 서버만 받음) | "상품주문 #{id}" |
+| `ORDER` | (화면 버튼 없음 — 서버만 받음) | "주문 #{id}" |
+| `SETTLEMENT` | (화면 버튼 없음 — 서버만 받음) | "정산 #{id}" |
+| `STORE` | 관리자 스토어 상세 '판매자와 상담' | "스토어 {storeName}" (store `GET /internal/stores/{id}`) |
+| `REPORT` | (화면 버튼 없음 — 서버만 받음) | "신고 #{id}" |
+| `CHAT_ROOM` | 스토어 톡 '운영팀에 도움 요청' — `BUYER_SUPPORT` 방에만, 내 스토어 톡만 | "스토어 톡 #{roomId} ({storeName})" — 관리자 읽기 전용 열람 허용 |
+
+- 문맥 없이 여는 버튼: 고객센터 '운영팀과 채팅'(`BUYER_SUPPORT`) · 판매자센터 채팅 '운영팀에 문의'(`SELLER_SUPPORT`)
 
 ## 1. 방 열기 — `POST /api/chats/rooms`
 
@@ -53,9 +55,11 @@
 |---|---|
 | 처음 | **201** 방 (아래 모양) — 문맥이 있으면 첫 메시지로 카드 |
 | 이미 있는 방 | **200** 같은 방 — 문맥이 있으면 카드만 추가(같은 문맥이 마지막 카드와 같으면 생략) |
-| 판매자가 `STORE_INQUIRY` · 구매자가 `SELLER_SUPPORT` · 관리자가 `BUYER_SUPPORT` | **403** `CHAT_NOT_ALLOWED` |
-| `STORE_INQUIRY` 인데 `storeId` 없음 · 관리자가 `SELLER_SUPPORT` 인데 `storeId` 없음 | **400** `INVALID_INPUT` |
+| 판매자가 `STORE_INQUIRY` · 구매자가 `SELLER_SUPPORT` · 관리자가 `BUYER_SUPPORT` (역할 기준 — `STORE_INQUIRY` · `BUYER_SUPPORT` 는 `BUYER` 역할, `SELLER_SUPPORT` 는 `ADMIN` 또는 스토어가 있는 `SELLER`) | **403** `CHAT_NOT_ALLOWED` |
+| `STORE_INQUIRY` 인데 `storeId` 없음 · 관리자가 `SELLER_SUPPORT` 인데 `storeId` 없음 · `CHAT_ROOM` 문맥을 `BUYER_SUPPORT` 가 아닌 방에 | **400** `INVALID_INPUT` |
 | 자기 스토어에 스토어 톡 | **400** `CHAT_SELF` |
+| 정지 · 폐점 · 없는 스토어에 **새** 스토어 톡 (D-1) | **409** `CHAT_STORE_INACTIVE` — 이미 있는 방은 200 으로 열리고 읽기만 |
+| `CHAT_ROOM` 문맥이 내 스토어 톡이 아님 | **404** `CHAT_ROOM_NOT_FOUND` |
 
 방 응답: `{ roomId, type, status(상담방만), counterpart: { name, role }, storeId, buyerId, lastMessage: { preview, at } | null, unreadCount, createdAt }`
 - `counterpart.name`: 스토어 톡 = 구매자 화면엔 스토어명 · 판매자 화면엔 구매자 이름(마스킹 "김*연"), 상담방 = "곳간 운영팀" / 관리자 화면엔 스토어명 · 회원 이름
@@ -83,6 +87,7 @@
 
 ## 5. 상담 상태 — `PATCH /api/chats/rooms/{roomId}/status` `{ status: OPEN | RESOLVED }` (ADMIN)
 
+- 관리자가 아니면 **403** `CHAT_NOT_ALLOWED`, 없는 방 **404** `CHAT_ROOM_NOT_FOUND`
 - 상담방만 — 스토어 톡은 **400** `CHAT_INVALID_TYPE`
 - `RESOLVED` 로 바꾸면 방에 `SYSTEM` 메시지 "상담이 종료됐어요. 더 궁금한 점이 있으면 다시 메시지를 보내 주세요"
 
@@ -124,16 +129,16 @@ WebSocket 은 항상 열려 있어서, 끊긴 연결이 남지 않게 서버 · 
 | 알림 호출 | 전용 스레드 2 · 대기 500건, 넘치면 버림 · 연결 1초 · 읽기 2초 |
 | 지표 | `chat_ws_sessions` (파드별 연결 수 — Grafana) |
 
-화면(구지훈, 프론트 채팅 PR)은 채팅 화면에서만 연결하고, 화면을 떠나거나 `pagehide` 면 끊는다. 탭이 가려지면 **연결은 두고 방 구독만 해제**(보고 있지 않음 → 알림이 감) · 다시 보이면 재구독 + 빈 곳 채우기 — 잦은 탭 전환에 재연결(핸드셰이크 · 토큰 검증 · 권한 조회) 비용을 들이지 않으려고(10/27). 모바일 백그라운드는 브라우저가 탭을 얼려 하트비트가 멈추므로 서버가 약 30초 안에 닫는다. 재연결은 지수 백오프 + 무작위 지연(최대 30초)으로 파드 재시작 때 동시에 몰리지 않게 한다.
+화면(구지훈, 프론트 채팅 PR)은 채팅 화면에서만 연결하고, 화면을 떠나면 3초 뒤(채팅 화면끼리 이동할 때 다시 연결하지 않게) · `pagehide` 면 바로 끊는다. 탭이 가려지면 **연결은 두고 방 구독만 해제**(보고 있지 않음 → 알림이 감) · 다시 보이면 재구독 + 빈 곳 채우기 — 잦은 탭 전환에 재연결(핸드셰이크 · 토큰 검증 · 권한 조회) 비용을 들이지 않으려고(10/27). 모바일 백그라운드는 브라우저가 탭을 얼려 하트비트가 멈추므로 서버가 약 30초 안에 닫는다. 재연결은 지수 백오프 + 무작위 지연(최대 30초)으로 파드 재시작 때 동시에 몰리지 않게 한다.
 
 ## 7. 알림 연동
 
-| 보낸 쪽 → 받는 쪽 | 알림함 받는 쪽 | 문구 | 링크 |
+| 보낸 쪽 → 받는 쪽 | 알림함 받는 쪽 | 제목 / 본문 (본문 = 내용 앞 40자, 개행은 공백) | 링크 |
 |---|---|---|---|
-| 구매자 → 스토어 톡 | `STORE#{storeId}` | 새 톡 — "{구매자 마스킹}: 내용 앞 40자" | `/seller/chats/{roomId}` |
-| 판매자 → 스토어 톡 | `USER#{buyerId}` | "{스토어명}: …" | `/mypage/chats/{roomId}` |
-| 판매자 · 구매자 → 상담방 | `ADMIN` | "[판매자 상담 · 고객 상담] …" | `/admin/chats/{roomId}` |
-| 관리자 → 상담방 | `STORE#` 또는 `USER#` | "곳간 운영팀: …" | 판매자 · 마이페이지 채팅 |
+| 구매자 → 스토어 톡 | `STORE#{storeId}` | "새 스토어 톡" / "{구매자 마스킹}: …" | `/seller/chats/{roomId}` |
+| 판매자 → 스토어 톡 | `USER#{buyerId}` | "{스토어명}" / "…" | `/mypage/chats/{roomId}` |
+| 판매자 · 구매자 → 상담방 | `ADMIN` | "[판매자 상담] {스토어명}" · "[고객 상담] {회원 이름}" / "…" | `/admin/chats/{roomId}` |
+| 관리자 → 상담방 | `STORE#` 또는 `USER#` | "곳간 운영팀" / "…" | `/seller/chats/{roomId}` · `/mypage/chats/{roomId}` |
 
 - 받는 쪽이 그 방을 **구독 중이면 알림을 보내지 않는다** — Redis ZSET `chat:presence:{roomId}`(6-1절). 확인이 실패하면 보냄(빠지는 것보다 한 번 더)
 - 대화 메시지(`TEXT`)만 — 문맥 카드 · 상담 종료 안내는 알리지 않음
@@ -212,7 +217,7 @@ CREATE TABLE chat_read (
 
 - config: Terraform `ecr/` 저장소 `sesac-gojigi-chat`, `init-schemas.sh` chatdb · chat 계정, secrets-sync `CHAT_DB_PASSWORD`(값 등록은 사용자 — GitHub Secrets), Helm values `chat-service`(:8089), NetworkPolicy DB 접근 라벨, ConfigMap `CHAT_SERVICE_URI`
 - backend: `services/chat-service`(gradle: websocket · data-jpa · flyway · data-redis · spring-security-oauth2-jose(JWT 검증만)), CI 매트릭스에 chat(이경석 리뷰)
-- 게이트웨이: `/api/chats/**` → chat, `/ws/chat` WebSocket 라우트(Upgrade 통과 · 타임아웃 해제) + 이 경로만 CORS(Origin 확인)
+- 게이트웨이: 라우트 하나 `chat-service` = `/api/chats/**` · `/ws/chat`(`Upgrade: websocket` 이면 ws:// 로 그대로 이음 — 응답 타임아웃 설정 없음) + `GET /ws/chat` permitAll(토큰은 CONNECT 에서 chat-service 가 검증) + globalcors 로 이 경로만 Origin 확인
 
 ## 11. 범위 밖
 

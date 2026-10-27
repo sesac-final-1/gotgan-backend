@@ -29,4 +29,9 @@ public interface ProductOptionRepository extends JpaRepository<ProductOption, Lo
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update ProductOption o set o.stock = o.stock - :quantity where o.id = :id and o.stock >= :quantity")
     int decreaseStock(@Param("id") Long id, @Param("quantity") int quantity);
+
+    /** 재고 되돌림 — 해제(2절) · 복원(3절). 옵션이 판매중지 · 삭제돼도 재고 수만 돌려놓는다 */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update ProductOption o set o.stock = o.stock + :quantity where o.id = :id")
+    int increaseStock(@Param("id") Long id, @Param("quantity") int quantity);
 }

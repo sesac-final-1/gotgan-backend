@@ -69,10 +69,12 @@
 | RESERVE 있음 · RELEASE 없음 | 예약 수량만큼 `stock + qty` + `stock_history` RELEASE | **200** `{ sagaId, items }` |
 | 이미 RELEASE | 없음 | **200** (같은 응답) |
 | RESERVE 없음 (예약 전에 실패했거나, 예약이 아직 처리 중) | `items` 의 옵션마다 RELEASE **수량 0** 행(해제 표식)을 남김 — 재고는 그대로 | **200** `{ sagaId, items: [] }` |
+| `items` 비었음 · `quantity < 1` · 같은 옵션 ID 중복 · `sagaId` 64자 초과 | 없음 | **400** `INVALID_INPUT` |
 
 - **해제 표식이 필요한 이유**: order 는 예약 응답을 3초(읽기 타임아웃) 기다리다 실패로 보고 해제를 보냅니다. 이때 product 가 예약을 아직 처리 중이면 해제가 먼저 끝나 "되돌릴 게 없음"이 되고, 그 뒤 예약이 커밋돼 **주문은 실패했는데 재고만 줄어든 채로** 남습니다. 표식이 있으면 늦은 예약이 이를 보고 롤백합니다(1절 409 `STOCK_RESERVATION_RELEASED`).
 - 구현 메모(product 내부): 예약 · 해제 모두 **맨 먼저 `items` 의 옵션 행을 ID 오름차순으로 잠근 뒤**(`SELECT … FOR UPDATE`) `stock_history` 를 확인합니다. 해제는 예약 때와 같은 `items` 를 받으므로 같은 행을 잠그게 되고, 두 요청이 동시에 와도 하나씩 처리돼 한쪽만 반영됩니다(10/27 — 처음 메모의 "RESERVE 행 잠금 읽기" 대신, 같은 `sagaId` 중복 예약까지 함께 막으려고).
 - 옵션 · 상품이 그 사이 삭제 · 판매중지돼도 해제합니다(재고 수만 돌려놓음).
+- 응답 `items` 는 실제로 되돌린 수량(옵션 ID 오름차순)입니다. 예약 없이 표식만 남길 때 `items` 에 없는 옵션 ID 가 섞여 있으면 그 옵션은 건너뜁니다(옵션 FK — 그 예약은 어차피 404).
 
 ## 3. 재고 복원 — `POST /internal/stock/restorations` (PRD-09)
 
@@ -437,6 +439,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 
 - 버킷 `sesac-gojigi-images-4380` 의 `products/` 는 공개 읽기, 쓰기는 presigned PUT 만. CORS(PUT · HEAD, vercel · `localhost:5173`)는 설정돼 있습니다.
 - 올리고 저장하지 않은 파일은 S3 에 남습니다(삭제 권한 없음 — 학습 프로젝트라 보류).
+- 올라온 파일은 Lambda `upload-guard`(10/27, `serverless/upload-guard`)가 앞부분 바이트로 실제 JPG · PNG · WEBP 인지 확인해 아니면 **지웁니다**(알림 메일, `products/` · `reviews/` · `stores/` 공통). product 는 저장 때 S3 존재를 확인하지 않으므로 지워진 키는 화면에 깨진 이미지로 보입니다.
 - 권장 크기 1000×1250px 이상은 화면 안내만, 서버는 검사하지 않습니다.
 
 ## 18. 오류 코드 (`docs/api/error-codes.md`)
