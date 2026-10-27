@@ -19,6 +19,12 @@ spring:
                 allowed-methods: GET
                 allowed-headers: Authorization, Accept, Cache-Control, Last-Event-ID
                 max-age: 3600
+              # 1:1 채팅 실시간(STOMP over WebSocket, 10/27) — 같은 이유로 직접 연결. 핸드셰이크(GET + Upgrade)는 preflight 가 없어 이 설정은 Origin 확인 용도
+              # (프론트 출처가 아니면 403). 토큰은 STOMP CONNECT 프레임에 실어 chat-service 가 검증한다 (브라우저 WebSocket 은 Authorization 헤더를 못 붙임)
+              '[/ws/chat]':
+                allowed-origin-patterns: https://gotgan-ashy.vercel.app, https://gotgan-*-jihoon-dev.vercel.app, http://localhost:5173
+                allowed-methods: GET
+                max-age: 3600
           routes:                           # 경로 규칙: 정리 문서 8-3 · 컨벤션 2-4. /internal/** 은 라우트 없음 (외부에서 닿지 않음)
             - id: user-service
               uri: ${USER_SERVICE_URI:http://localhost:8081}
@@ -56,6 +62,10 @@ spring:
               uri: ${KEYCLOAK_URI:http://localhost:8180}
               predicates:
                 - Path=/realms/gotgan/**,/resources/**
+            - id: chat-service              # 1:1 채팅 (10/27). /ws/chat 은 Upgrade: websocket 이면 게이트웨이가 ws:// 로 바꿔 그대로 잇는다
+              uri: ${CHAT_SERVICE_URI:http://localhost:8089}
+              predicates:
+                - Path=/api/chats/**,/ws/chat
   security:
     oauth2:
       resourceserver:
