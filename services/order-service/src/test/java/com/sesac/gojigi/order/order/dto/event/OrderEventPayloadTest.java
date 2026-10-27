@@ -51,7 +51,7 @@ class OrderEventPayloadTest {
     }
 
     @Test
-    @DisplayName("OrderItemConfirmed — 정산용 스토어 · 카테고리 스냅샷과 구매확정 시각(오프셋 +09:00)을 담는다")
+    @DisplayName("OrderItemConfirmed — 정산용 스토어 · 카테고리 스냅샷 · 적립 포인트(user 구매확정 적립)와 구매확정 시각(오프셋 +09:00)을 담는다")
     void orderItemConfirmed_from_convertsConfirmedAtToKst() {
         // given
         ReflectionTestUtils.setField(item, "confirmedAt", LocalDateTime.of(2026, 10, 29, 9, 0));
@@ -61,7 +61,7 @@ class OrderEventPayloadTest {
 
         // then
         assertThat(payload).isEqualTo(new OrderItemConfirmedPayload(null, "20261022-000123", 4L, 1L, 3L,
-                "제철 사과 3kg", 301L, 3L, 64_000L, OffsetDateTime.parse("2026-10-29T09:00:00+09:00")));
+                "제철 사과 3kg", 301L, 3L, 64_000L, 3_100L, OffsetDateTime.parse("2026-10-29T09:00:00+09:00")));
     }
 
     @Test

@@ -18,24 +18,24 @@ class OrderItemConfirmedListenerTest {
             {"eventId":"0b6f3c1e-3333-4a2b-9c3d-000000000001","eventType":"OrderItemConfirmed",
              "occurredAt":"2026-10-27T10:00:00+09:00","aggregateId":"20261027-000001-01","version":1,
              "payload":{"orderItemId":11,"orderNo":"20261027-000001","buyerId":4,"storeId":1,"productId":77,
-                        "productName":"린넨 셔츠","categoryId":11,"topCategoryId":1,"itemAmt":20000,
+                        "productName":"린넨 셔츠","categoryId":11,"topCategoryId":1,"itemAmt":20000,"earnedPoint":900,
                         "confirmedAt":"2026-10-27T10:00:00+09:00"}}
             """;
 
-    private final ConfirmedAmountService service = mock(ConfirmedAmountService.class);
+    private final PurchaseConfirmedService service = mock(PurchaseConfirmedService.class);
     private final OrderItemConfirmedListener listener = new OrderItemConfirmedListener(JsonMapper.builder().build(), service);
 
     @Test
-    @DisplayName("OrderItemConfirmed 봉투를 읽어 회원 · 상품주문 금액으로 누적을 부른다")
+    @DisplayName("OrderItemConfirmed 봉투를 읽어 회원 · 상품주문 금액 · 적립 포인트로 구매확정 반영을 부른다")
     @SuppressWarnings("unchecked")
     void onMessage_parsesEnvelope() {
         ArgumentCaptor<EventEnvelope<OrderItemConfirmedPayload>> captor = ArgumentCaptor.forClass(EventEnvelope.class);
 
         listener.onMessage(CONFIRMED);
 
-        verify(service).accumulate(captor.capture());
+        verify(service).apply(captor.capture());
         assertThat(listener.eventType()).isEqualTo("OrderItemConfirmed");
         assertThat(captor.getValue().payload())
-                .isEqualTo(new OrderItemConfirmedPayload(11L, "20261027-000001", 4L, 20_000L));
+                .isEqualTo(new OrderItemConfirmedPayload(11L, "20261027-000001", 4L, 20_000L, 900L));
     }
 }
