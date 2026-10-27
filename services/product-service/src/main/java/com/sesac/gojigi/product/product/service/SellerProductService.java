@@ -10,6 +10,8 @@ import com.sesac.gojigi.product.option.entity.ProductOption;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest.OptionItem;
 import com.sesac.gojigi.product.product.dto.response.SellerProductDetailResponse;
+import com.sesac.gojigi.product.product.dto.response.SellerProductResponse;
+import com.sesac.gojigi.product.product.entity.HiddenReason;
 import com.sesac.gojigi.product.product.entity.Product;
 import com.sesac.gojigi.product.product.entity.ProductStatus;
 import com.sesac.gojigi.product.product.exception.ProductErrorCode;
@@ -18,10 +20,14 @@ import com.sesac.gojigi.product.product.repository.ProductRepository;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 판매자 상품 등록 · 상세 (PRD-01 · 03, product.md 12 · 13절). 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
+ * 판매자 상품 목록 · 등록 · 상세 (PRD-01 · 03 · 04, product.md 11 · 12 · 13절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
  * TODO 박지연: 정지 · 폐점 스토어도 등록되면 바로 노출됨(storeActive=true 로 시작) — StoreStatusChanged 소비 PR 에서 함께 정한다.
  */
 @Slf4j
@@ -45,6 +51,8 @@ public class SellerProductService {
     static final int MAX_IMAGES = 5;
     static final int MAX_OPTION_TEXT = 30;
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+
     /** 상세 설명에 허용할 태그 — 글자 서식 · 문단 · 링크 · 이미지 · 표. script · style · on* 속성은 지운다 */
     private static final PolicyFactory DESCRIPTION_POLICY = Sanitizers.FORMATTING.and(Sanitizers.BLOCKS)
             .and(Sanitizers.LINKS).and(Sanitizers.IMAGES).and(Sanitizers.TABLES);
@@ -52,6 +60,25 @@ public class SellerProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ImageUrls imageUrls;
+
+    /**
+     * 스토어 상품 전체 (11절 · 6-1절) — 페이징 · 필터 없음(화면이 셈 · 검색 · 정렬, 프론트 컨벤션 4-7), 삭제된 상품만 빠짐, 등록일 최신 순.
+     * 재고 합계 · 대표 이미지는 상품마다 컬렉션을 읽지 않고 묶음 쿼리 두 번으로.
+     */
+    public List<SellerProductResponse> list(Long storeId) {
+        List<Product> products = productRepository.findByStoreIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(storeId);
+        if (products.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = products.stream().map(Product::getId).toList();
+        Map<Long, Long> stocks = toMap(productRepository.sumStockByProductIds(ids), row -> ((Number) row[1]).longValue());
+        Map<Long, String> imageKeys = toMap(productRepository.findMainImageKeys(ids), row -> (String) row[1]);
+        Map<Long, Category> categories = categoryRepository.findAll().stream()
+                .collect(Collectors.toMap(Category::getId, Function.identity()));
+        return products.stream()
+                .map(p -> toListItem(p, stocks.getOrDefault(p.getId(), 0L), imageKeys.get(p.getId()), categories))
+                .toList();
+    }
 
     /** 수정 화면용 상세 (12절) — 다른 스토어 상품도 "없음"과 같은 404 (있는지 알려 주지 않음) */
     public SellerProductDetailResponse get(Long storeId, Long productId) {
@@ -180,6 +207,21 @@ public class SellerProductService {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT, "판매 상태는 ON_SALE · STOPPED 만 선택할 수 있습니다.");
         }
         return status;
+    }
+
+    private SellerProductResponse toListItem(Product p, long totalStock, String imageKey, Map<Long, Category> categories) {
+        Category category = categories.get(p.getCategoryId());
+        Category top = category == null || category.isTop() ? category : categories.get(category.getParentId());
+        HiddenReason hiddenReason = HiddenReason.of(p, category != null && category.isActive() && top != null && top.isActive());
+        return new SellerProductResponse(p.getId(), p.getName(), p.getCategoryId(),
+                category == null ? null : category.getName(), top == null ? null : top.getName(),
+                p.getPrice(), p.getDiscountRate(), p.getSalePrice(), imageUrls.of(imageKey), totalStock, totalStock == 0,
+                p.getStatus(), p.getStatusReason(), hiddenReason == null, hiddenReason,
+                p.getCreatedAt() == null ? null : p.getCreatedAt().atZone(KST).toOffsetDateTime());
+    }
+
+    private static <V> Map<Long, V> toMap(List<Object[]> rows, Function<Object[], V> value) {
+        return rows.stream().collect(Collectors.toMap(row -> (Long) row[0], value));
     }
 
     private static String sanitizeDescription(String description) {

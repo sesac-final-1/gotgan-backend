@@ -7,12 +7,14 @@ import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.product.product.dto.request.ProductCreateRequest;
 import com.sesac.gojigi.product.product.dto.response.SellerProductDetailResponse;
+import com.sesac.gojigi.product.product.dto.response.SellerProductResponse;
 import com.sesac.gojigi.product.product.service.SellerProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -49,6 +51,20 @@ public class SellerProductController {
             @Valid @RequestBody ProductCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("상품을 등록했습니다.", sellerProductService.create(storeId(user), request)));
+    }
+
+    @Operation(summary = "판매자 상품 목록", description = """
+            인가: SELLER (스토어 = X-Store-Id). 내 스토어 상품 전체 — 페이징 · 필터 없음(상태별 개수 · 검색 · 정렬 · 페이징은 화면), 삭제된 상품만 빠짐, 등록일 최신 순.
+            hiddenReason: 쇼핑몰에 안 보이는 이유 STOPPED · BLOCKED · CATEGORY_INACTIVE · STORE_INACTIVE, 보이면 null (product.md 11절).
+            에러: 403 FORBIDDEN(스토어 헤더 없음)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 (상품 없으면 빈 배열)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN")
+    })
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<SellerProductResponse>>> list(@Parameter(hidden = true) @CurrentUser AuthUser user) {
+        return ResponseEntity.ok(ApiResponse.success("상품 목록을 조회했습니다.", sellerProductService.list(storeId(user))));
     }
 
     @Operation(summary = "판매자 상품 상세 (수정 화면)", description = """

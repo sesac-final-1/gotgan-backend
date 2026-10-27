@@ -7,6 +7,7 @@ import com.sesac.gojigi.product.product.dto.response.ProductStatsResponse;
 import com.sesac.gojigi.product.product.dto.response.SellerProductResponse;
 import com.sesac.gojigi.product.product.service.AdminProductService;
 import com.sesac.gojigi.product.product.service.ProductStatsService;
+import com.sesac.gojigi.product.product.service.SellerProductService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalProductController {
 
     private final AdminProductService adminProductService;
+    private final SellerProductService sellerProductService;
     private final ProductStatsService productStatsService;
 
     @Operation(summary = "스토어 상품 목록 (관리자)", description = """
@@ -35,7 +37,7 @@ public class InternalProductController {
             에러: 400 INVALID_INPUT(storeId 없음)""")
     @GetMapping("/products")
     public ApiResponse<List<SellerProductResponse>> listByStore(@RequestParam Long storeId) {
-        return ApiResponse.success("스토어 상품을 조회했습니다.", adminProductService.listByStore(storeId));
+        return ApiResponse.success("스토어 상품을 조회했습니다.", sellerProductService.list(storeId));
     }
 
     @Operation(summary = "강제 판매중지 · 해제", description = """

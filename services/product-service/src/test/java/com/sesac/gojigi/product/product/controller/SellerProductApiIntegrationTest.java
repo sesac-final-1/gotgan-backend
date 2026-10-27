@@ -37,7 +37,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 판매자 상품 등록 (POST /api/seller/products, product.md 13절) · 상세 (GET /api/seller/products/{id}, 12절) — 실제 MySQL · Flyway V1~V2.
+ * 판매자 상품 목록 (GET /api/seller/products, 11절) · 상세 (GET /api/seller/products/{id}, 12절) · 등록 (POST, 13절) — 실제 MySQL · Flyway V1~V2.
  * 게이트웨이가 넣는 X-User-* · X-Store-Id 헤더를 직접 붙인다. 상품 → 카테고리 순으로 비워 FK 에 걸리지 않게 한다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게 (CategoryApiIntegrationTest 와 같음).
  */
@@ -111,6 +111,11 @@ class SellerProductApiIntegrationTest {
     private long registerOk() throws Exception {
         String body = register(validRequest()).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return jsonMapper.readTree(body).path("data").path("productId").asLong();
+    }
+
+    private ResultActions list(String storeId) throws Exception {
+        var req = get("/api/seller/products").header("X-User-Id", "2").header("X-User-Roles", "SELLER");
+        return mockMvc.perform(storeId == null ? req : req.header("X-Store-Id", storeId));
     }
 
     private ResultActions detail(long productId, String storeId) throws Exception {
@@ -381,6 +386,75 @@ class SellerProductApiIntegrationTest {
 
             // when · then
             detail(productId, null).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+    }
+
+    @Nested
+    @DisplayName("판매자 상품 목록")
+    class SellerList {
+
+        @Test
+        @DisplayName("내 스토어 상품만 · 삭제 제외 · 최신 순 — 재고 합계 · 대표 이미지 URL · 품절 · 미노출 이유")
+        void list_ownStore_returnsNewestFirst() throws Exception {
+            // given — 1: 재고 30 + 0, 2: STOPPED · 옵션 없이 재고 0, 3: 삭제, 4: 다른 스토어
+            long first = registerOk();
+            String second = register(body -> {
+                body.put("name", "판매중지 품절 상품");
+                body.put("status", "STOPPED");
+                body.remove("option1Name");
+                body.remove("option2Name");
+                body.put("options", List.of(option(null, null, 0, 0)));
+                body.put("imageKeys", List.of("products/1/second.webp"));
+            }).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+            long secondId = jsonMapper.readTree(second).path("data").path("productId").asLong();
+            long deleted = registerOk();
+            transactionTemplate.executeWithoutResult(tx ->
+                    productRepository.findById(deleted).orElseThrow().delete(java.time.LocalDateTime.now()));
+            mockMvc.perform(post("/api/seller/products")
+                            .header("X-User-Id", "3").header("X-User-Roles", "SELLER").header("X-Store-Id", "2")
+                            .contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(
+                                    Map.of("categoryId", shirts.getId(), "name", "다른 스토어", "price", 1000, "discountRate", 0,
+                                            "material", "면", "origin", "대한민국",
+                                            "options", List.of(option(null, null, 0, 1)), "imageKeys", List.of("products/2/x.jpg")))))
+                    .andExpect(status().isCreated());
+
+            // when
+            list(String.valueOf(STORE_ID))
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.length()").value(2))
+                    .andExpect(jsonPath("$.data[0].productId").value(secondId))
+                    .andExpect(jsonPath("$.data[0].totalStock").value(0))
+                    .andExpect(jsonPath("$.data[0].soldOut").value(true))
+                    .andExpect(jsonPath("$.data[0].status").value("STOPPED"))
+                    .andExpect(jsonPath("$.data[0].displayable").value(false))
+                    .andExpect(jsonPath("$.data[0].hiddenReason").value("STOPPED"))
+                    .andExpect(jsonPath("$.data[0].imageUrl")
+                            .value("https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/products/1/second.webp"))
+                    .andExpect(jsonPath("$.data[1].productId").value(first))
+                    .andExpect(jsonPath("$.data[1].categoryName").value("셔츠"))
+                    .andExpect(jsonPath("$.data[1].topCategoryName").value("패션의류"))
+                    .andExpect(jsonPath("$.data[1].salePrice").value(75650))
+                    .andExpect(jsonPath("$.data[1].totalStock").value(30))
+                    .andExpect(jsonPath("$.data[1].soldOut").value(false))
+                    .andExpect(jsonPath("$.data[1].displayable").value(true))
+                    .andExpect(jsonPath("$.data[1].hiddenReason").doesNotExist())
+                    .andExpect(jsonPath("$.data[1].imageUrl")
+                            .value("https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/products/1/7f3c9e2a.jpg"));
+        }
+
+        @Test
+        @DisplayName("상품이 없는 스토어 — 200 빈 배열")
+        void list_noProducts_returnsEmpty() throws Exception {
+            list(String.valueOf(STORE_ID))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.length()").value(0));
+        }
+
+        @Test
+        @DisplayName("X-Store-Id 없음 — 403 FORBIDDEN")
+        void list_noStoreHeader_forbidden() throws Exception {
+            list(null).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
         }
     }
 }
