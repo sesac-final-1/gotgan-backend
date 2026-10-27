@@ -9,7 +9,15 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+
 import com.sesac.gojigi.chat.TestcontainersConfiguration;
+import com.sesac.gojigi.chat.directory.ChatDirectory;
+import com.sesac.gojigi.chat.room.service.ChatRoomService;
+import com.sesac.gojigi.common.web.auth.AuthUser;
+import java.util.List;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,12 +52,14 @@ class ChatRoomApiTest {
     @Autowired MockMvc mockMvc;
     @Autowired JsonMapper json;
     @Autowired JdbcTemplate jdbc;
+    @MockitoBean ChatDirectory directory;   // user · store 이름 · 스토어 상태 — 기본은 이름 없음(번호 표시) · 운영 중
 
     @BeforeEach
     void clean() {
         jdbc.update("DELETE FROM chat_read");
         jdbc.update("DELETE FROM chat_message");
         jdbc.update("DELETE FROM chat_room");
+        given(directory.storeOpen(any())).willReturn(true);
     }
 
     @Test
@@ -219,6 +229,40 @@ class ChatRoomApiTest {
                 .andExpect(jsonPath("$.data", hasSize(2)))
                 .andExpect(jsonPath("$.data[0].context.id").value(2))
                 .andExpect(jsonPath("$.data[1].context.id").value(1));
+    }
+
+    @Test
+    @DisplayName("상대 이름: 구매자엔 스토어명 · 판매자엔 가린 구매자 이름 · 관리자엔 스토어명/회원 이름, 스토어 · 도움 요청 카드 제목에 스토어명")
+    void counterpartNamesAndCardTitles() throws Exception {
+        given(directory.storeName(STORE_ID)).willReturn("리넨하우스");
+        given(directory.userName(BUYER_ID)).willReturn("김지연");
+        long storeRoom = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5}")
+                .andExpect(jsonPath("$.data.counterpart.name").value("리넨하우스")));
+        mockMvc.perform(seller(get("/api/chats/rooms")).param("type", "STORE_INQUIRY"))
+                .andExpect(jsonPath("$.data[0].counterpart.name").value("김*연"));
+
+        open(admin(post("/api/chats/rooms")), "{\"type\":\"SELLER_SUPPORT\",\"storeId\":5,\"context\":{\"type\":\"STORE\",\"id\":5}}")
+                .andExpect(jsonPath("$.data.counterpart.name").value("리넨하우스"))
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("스토어 리넨하우스"));
+        open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"CHAT_ROOM\",\"id\":" + storeRoom + "}}")
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("스토어 톡 #" + storeRoom + " (리넨하우스)"));
+        mockMvc.perform(admin(get("/api/chats/rooms")).param("type", "BUYER_SUPPORT"))
+                .andExpect(jsonPath("$.data[0].counterpart.name").value("김지연"));
+    }
+
+    @Test
+    @DisplayName("D-1: 정지 · 폐점 스토어엔 새 스토어 톡 409 CHAT_STORE_INACTIVE, 기존 방은 보기만 되고 보내면 CHAT_STORE_INACTIVE")
+    void inactiveStoreBlocksNewRoomsAndSending(@Autowired ChatRoomService chatRoomService) throws Exception {
+        long existing = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5}"));
+        given(directory.storeOpen(STORE_ID)).willReturn(false);
+
+        open(buyer(OTHER_BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5}")
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CHAT_STORE_INACTIVE"));
+        open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5}").andExpect(status().isOk()); // 기존 방은 열림
+        mockMvc.perform(buyer(BUYER_ID, get("/api/chats/rooms/{id}/messages", existing))).andExpect(status().isOk());
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> chatRoomService.send(new AuthUser(BUYER_ID, List.of("BUYER"), null), existing, "안녕하세요"))
+                .hasMessageContaining("운영 중이 아닌");
     }
 
     private ResultActions open(MockHttpServletRequestBuilder request, String body) throws Exception {

@@ -137,7 +137,7 @@ WebSocket 은 항상 열려 있어서, 끊긴 연결이 남지 않게 서버 · 
 - 받는 쪽이 그 방을 **구독 중이면 알림을 보내지 않는다** — Redis ZSET `chat:presence:{roomId}`(6-1절). 확인이 실패하면 보냄(빠지는 것보다 한 번 더)
 - 대화 메시지(`TEXT`)만 — 문맥 카드 · 상담 종료 안내는 알리지 않음
 - 전송 경로를 막지 않게 전용 스레드에서 보내고, admin 장애 · 대기열 초과면 알림만 빠지고 메시지는 저장 · 전달된다(짧은 타임아웃 — 서킷은 두지 않음)
-- 2단계에서 이름은 번호 표시("스토어 #5") — 이름 조회 연동 후 마스킹 이름으로
+- 이름: user `GET /internal/users/{id}` · store `GET /internal/stores/{id}` (캐시 — 이름 10분 · 스토어 1분 · 실패 10초). 못 받으면 번호("스토어 #5" · "회원 #10")
 
 ## 8. DB (chatdb, Flyway V1)
 
@@ -205,7 +205,7 @@ CREATE TABLE chat_read (
 | `CHAT_SELF` | 400 | 자기 스토어에 스토어 톡 |
 | `CHAT_INVALID_TYPE` | 400 | 스토어 톡에 상담 상태 변경 |
 | `CHAT_TOO_FAST` | 429(오류 큐 `/user/queue/errors`) | 연결마다 1초 5건 초과 |
-| `CHAT_STORE_INACTIVE` | 409 | 정지 · 폐점 스토어에 새 스토어 톡 (D-1, store 상태 조회 API 배포 후) |
+| `CHAT_STORE_INACTIVE` | 409 (전송은 오류 큐) | 정지 · 폐점 · 없는 스토어에 새 스토어 톡 · 기존 스토어 톡에 전송 (D-1) |
 
 ## 10. 인프라 · 배포 (구지훈)
 
@@ -221,6 +221,6 @@ CREATE TABLE chat_read (
 
 | # | 질문 | 결정 |
 |---|---|---|
-| D-1 | 정지 · 폐점 스토어의 스토어 톡 | 새 방은 막고(409 `CHAT_STORE_INACTIVE`) 기존 방은 읽기만 — store 상태 조회 API(박지연) 배포 후 적용, 그 전엔 막지 않음 |
+| D-1 | 정지 · 폐점 스토어의 스토어 톡 | 새 방은 막고(409 `CHAT_STORE_INACTIVE`) 기존 방은 읽기만 — store `GET /internal/stores/{id}` 의 `status` 가 ACTIVE 가 아니면. 조회가 실패하면 막지 않음(fail-open), 상태는 1분 캐시 |
 | D-2 | 관리자 쪽 표시 이름 | "곳간 운영팀" 고정 (관리자 개인 이름 노출 안 함) |
 | D-3 | 메시지 보관 기간 | 90일 뒤 자동 삭제 — 하루 한 번 · 나눠 지우기 (8-1절) |
