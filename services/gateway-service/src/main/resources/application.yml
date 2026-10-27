@@ -9,6 +9,16 @@ spring:
     gateway:
       server:
         webflux:
+          # 실시간 알림(SSE, NTF-08 · 10/27)은 화면이 api.gotgan.click 에 직접 연결한다 — Vercel rewrite 는 장시간 스트리밍 응답에 맞지 않아서.
+          # 그래서 이 경로만 프론트 출처(운영 · Vercel 미리보기 · 로컬 Vite)의 교차 출처 GET 을 허용(Authorization 헤더 → preflight, 보안 설정이 OPTIONS 통과).
+          # 나머지 API 는 지금처럼 Vercel rewrite(같은 출처)라 CORS 를 열지 않는다
+          globalcors:
+            cors-configurations:
+              '[/api/notifications/stream]':
+                allowed-origin-patterns: https://gotgan-ashy.vercel.app, https://gotgan-*-jihoon-dev.vercel.app, http://localhost:5173
+                allowed-methods: GET
+                allowed-headers: Authorization, Accept, Cache-Control, Last-Event-ID
+                max-age: 3600
           routes:                           # 경로 규칙: 정리 문서 8-3 · 컨벤션 2-4. /internal/** 은 라우트 없음 (외부에서 닿지 않음)
             - id: user-service
               uri: ${USER_SERVICE_URI:http://localhost:8081}
@@ -41,7 +51,7 @@ spring:
             - id: admin-service
               uri: ${ADMIN_SERVICE_URI:http://localhost:8088}
               predicates:
-                - Path=/api/admin/**,/api/reports/**       # 신고 접수(구매자 · 판매자)도 admin-service — 신고 · 조치 이력이 admindb (10/26)
+                - Path=/api/admin/**,/api/reports/**,/api/notifications/**   # 신고 접수(구매자 · 판매자) · 알림 센터(로그인한 누구나 — NTF-08, 10/27)도 admin-service
             - id: keycloak                  # 소셜 로그인 — 브라우저가 Keycloak 로그인 · 제공자 복귀(broker) 화면으로 온다. gotgan realm 과 화면 리소스만 (관리 콘솔 · master realm 은 열지 않음)
               uri: ${KEYCLOAK_URI:http://localhost:8180}
               predicates:
