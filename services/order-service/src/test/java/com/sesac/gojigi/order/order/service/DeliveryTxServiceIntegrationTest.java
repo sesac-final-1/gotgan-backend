@@ -215,4 +215,47 @@ class DeliveryTxServiceIntegrationTest {
         assertThat(sent.getLastError()).isNull();
         assertThat(sent.getSentAt()).isNotNull();
     }
+
+    @Test
+    @DisplayName("구매확정 — 구매자 본인 배송완료만 CONFIRMED · confirmedAt · 이력, OrderItemConfirmed 커밋 후 발행, 자동 대상 · 시스템 확정")
+    void confirm() throws Exception {
+        // given — 배송완료 2건
+        OrderItem mine = paidItem();
+        deliveryTx.prepare(STORE, SELLER, mine.getId());
+        deliveryTx.ship(STORE, SELLER, mine.getId(), "CJ대한통운", null);
+        String orderNo = mine.getItemNo().substring(0, mine.getItemNo().lastIndexOf('-'));
+        assertCode(() -> deliveryTx.confirm(4L, orderNo, mine.getId()), OrderErrorCode.ORDER_INVALID_STATUS);   // 배송중
+        deliveryTx.deliver(STORE, SELLER, mine.getId());
+        OrderItem old = paidItem();
+        deliveryTx.prepare(STORE, SELLER, old.getId());
+        deliveryTx.ship(STORE, SELLER, old.getId(), "CJ대한통운", null);
+        deliveryTx.deliver(STORE, SELLER, old.getId());
+        jdbc.update("update order_item set delivered_at = ? where order_item_id = ?",
+                LocalDateTime.of(2026, 10, 18, 12, 0), old.getId());
+
+        // when
+        assertCode(() -> deliveryTx.confirm(5L, orderNo, mine.getId()), OrderErrorCode.ORDER_ITEM_NOT_FOUND);   // 다른 회원
+        assertCode(() -> deliveryTx.confirm(4L, "20260101-000001", mine.getId()), OrderErrorCode.ORDER_ITEM_NOT_FOUND);
+        OrderItemResponse confirmed = deliveryTx.confirm(4L, orderNo, mine.getId());
+        List<Long> due = deliveryTx.findDeliveredBefore(LocalDateTime.of(2026, 10, 19, 12, 0), 1_000);
+        deliveryTx.confirmBySystem(old.getId());
+
+        // then
+        assertThat(confirmed.status()).isEqualTo(OrderItemStatus.CONFIRMED);
+        assertThat(confirmed.confirmedAt()).isEqualTo(LocalDateTime.of(2026, 10, 26, 12, 0));
+        assertCode(() -> deliveryTx.confirm(4L, orderNo, mine.getId()), OrderErrorCode.ORDER_INVALID_STATUS);   // 이미 확정
+        assertThat(due).contains(old.getId()).doesNotContain(mine.getId());
+        assertThat(orderItemRepository.findById(old.getId()).orElseThrow().getStatus()).isEqualTo(OrderItemStatus.CONFIRMED);
+        assertThat(historyRepository.findByOrderItemIdOrderByIdAsc(old.getId())).last()
+                .satisfies(h -> assertThat(h.getActorId()).isNull());
+        assertThat(events(mine)).extracting(OutboxEvent::getEventType).containsExactly("OrderItemShipped",
+                "OrderItemDelivered", "OrderItemConfirmed");
+        ArgumentCaptor<String> envelope = ArgumentCaptor.forClass(String.class);
+        verify(sns).send(eq("OrderItemConfirmed"), eq(mine.getItemNo()), anyString(), envelope.capture());
+        JsonNode payload = jsonMapper.readTree(envelope.getValue()).get("payload");
+        assertThat(payload.get("itemAmt").asLong()).isEqualTo(20_000L);
+        assertThat(payload.get("storeId").asLong()).isEqualTo(STORE);
+        assertThat(payload.get("confirmedAt").asString()).startsWith("2026-10-26T12:00");
+        assertCode(() -> deliveryTx.confirmBySystem(-1L), OrderErrorCode.ORDER_ITEM_NOT_FOUND);
+    }
 }

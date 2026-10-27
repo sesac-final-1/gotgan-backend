@@ -281,4 +281,32 @@ class SellerClaimIntegrationTest {
         assertCode(() -> claimQuery.getSeller(LIST_STORE + 9, ret.claimId()), ClaimErrorCode.CLAIM_NOT_FOUND);
         assertCode(() -> claimQuery.listSeller(null, ClaimStage.OPEN, null, 0, 20), CommonErrorCode.FORBIDDEN);
     }
+
+    @Test
+    @DisplayName("철회 — 판매자 승인 전 반품 · 교환만 WITHDRAWN · 상품주문 다시 배송완료, 승인 뒤 · 다른 회원 · 취소는 거절, 처리완료 탭에 보인다")
+    void withdraw() {
+        // given
+        long buyer = BUYERS.getAndIncrement();
+        OrderItem returning = deliveredItem(buyer, STORE);
+        ClaimResponse ret = open(buyer, returning, ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND);
+        OrderItem exchanging = deliveredItem(buyer, STORE);
+        ClaimResponse exchange = open(buyer, exchanging, ClaimType.EXCHANGE, ClaimReasonCode.CHANGE_OF_MIND);
+        sellerClaimTx.approve(STORE, exchange.claimId());
+
+        // when
+        assertCode(() -> claimTx.withdraw(buyer + 1_000, ret.claimId()), ClaimErrorCode.CLAIM_NOT_FOUND);
+        ClaimDetailResponse withdrawn = claimTx.withdraw(buyer, ret.claimId());
+
+        // then
+        assertThat(withdrawn.status()).isEqualTo(ClaimStatus.WITHDRAWN);
+        assertThat(reload(returning).getStatus()).isEqualTo(OrderItemStatus.DELIVERED);
+        assertThat(reload(returning).getDeliveredAt()).isEqualTo(NOW.minusDays(1));
+        assertCode(() -> claimTx.withdraw(buyer, ret.claimId()), ClaimErrorCode.CLAIM_INVALID_STATUS);        // 이미 철회
+        assertCode(() -> claimTx.withdraw(buyer, exchange.claimId()), ClaimErrorCode.CLAIM_INVALID_STATUS);   // 승인 뒤
+        assertThat(claimQuery.listSeller(STORE, ClaimStage.DONE, ClaimType.RETURN, 0, 100).items().content())
+                .extracting(ClaimDetailResponse::claimId).contains(ret.claimId());
+        // 다시 반품 신청할 수 있다 (진행 중 클레임이 아님)
+        assertThat(open(buyer, returning, ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND).status())
+                .isEqualTo(ClaimStatus.REQUESTED);
+    }
 }

@@ -1,6 +1,7 @@
 package com.sesac.gojigi.order.claim.service;
 
 import com.sesac.gojigi.order.claim.dto.request.ClaimCreateRequest;
+import com.sesac.gojigi.order.claim.dto.response.ClaimDetailResponse;
 import com.sesac.gojigi.order.claim.dto.response.ClaimResponse;
 import com.sesac.gojigi.order.claim.entity.ClaimStatus;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
@@ -116,6 +117,20 @@ public class ClaimTxService {
                 item.getStatus(), request.type() == ClaimType.RETURN ? "구매자 반품 신청" : "구매자 교환 신청"));
         return new ClaimResponse(claim.getId(), item.getId(), request.type(), ClaimStatus.REQUESTED,
                 refund == null ? 0L : refund.refundAmt(), refund == null ? 0L : refund.restorePoint());
+    }
+
+    /** 구매자 철회 — 본인 클레임만(아니면 같은 404), 상품주문은 다시 배송완료 · 이력 */
+    @Transactional
+    public ClaimDetailResponse withdraw(Long buyerId, Long claimId) {
+        OrderClaim claim = claimRepository.findById(claimId).filter(c -> c.getRequesterId().equals(buyerId))
+                .orElseThrow(() -> new ClaimException(ClaimErrorCode.CLAIM_NOT_FOUND));
+        claim.withdraw(LocalDateTime.now(clock));
+        OrderItem item = claim.getOrderItem();
+        OrderItemStatus from = item.getStatus();
+        item.rejectClaim();
+        historyRepository.save(OrderItemHistory.of(item, ActorType.BUYER, buyerId, from, item.getStatus(),
+                claim.getClaimType() == ClaimType.RETURN ? "구매자 반품 철회" : "구매자 교환 철회"));
+        return ClaimDetailResponse.from(claim);
     }
 
     private ClaimTarget load(Optional<Order> found, Long orderItemId) {

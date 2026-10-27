@@ -2,6 +2,7 @@ package com.sesac.gojigi.order.order.service;
 
 import com.sesac.gojigi.order.common.event.EventOutboxService;
 import com.sesac.gojigi.order.common.event.OutboxEvent;
+import com.sesac.gojigi.order.order.dto.event.OrderItemConfirmedPayload;
 import com.sesac.gojigi.order.order.dto.event.OrderItemDeliveredPayload;
 import com.sesac.gojigi.order.order.dto.event.OrderItemShippedPayload;
 import com.sesac.gojigi.order.order.dto.response.OrderItemResponse;
@@ -91,6 +92,40 @@ public class DeliveryTxService {
         OrderItem item = orderItemRepository.findById(orderItemId)
                 .orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_ITEM_NOT_FOUND));
         deliver(item, ActorType.SYSTEM, null, "자동 배송완료");
+    }
+
+    /**
+     * 구매확정 (DLV-05 · 구매자) — 본인 주문의 배송완료 상품주문만. 커밋 후 OrderItemConfirmed (정산 적재 · 리뷰 자격 · 회원등급).
+     * 없는 상품주문 · 다른 회원 · 다른 주문이면 같은 404
+     */
+    @Transactional
+    public OrderItemResponse confirm(Long buyerId, String orderNo, Long orderItemId) {
+        OrderItem item = orderItemRepository.findById(orderItemId)
+                .filter(i -> i.getOrder().getBuyerId().equals(buyerId) && i.getOrder().getOrderNo().equals(orderNo))
+                .orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_ITEM_NOT_FOUND));
+        return confirm(item, ActorType.BUYER, buyerId, "구매자 구매확정");
+    }
+
+    /** 자동 구매확정 (DLV-06 · 스케줄러) — 그 사이 구매자가 먼저 확정했거나 반품 · 교환을 신청했으면 ORDER_INVALID_STATUS */
+    @Transactional
+    public void confirmBySystem(Long orderItemId) {
+        OrderItem item = orderItemRepository.findById(orderItemId)
+                .orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_ITEM_NOT_FOUND));
+        confirm(item, ActorType.SYSTEM, null, "자동 구매확정");
+    }
+
+    /** 자동 구매확정 대상 — before 이전부터 배송완료인 상품주문 (진행 중 반품 · 교환은 상태가 달라 빠진다) */
+    @Transactional(readOnly = true)
+    public List<Long> findDeliveredBefore(LocalDateTime before, int limit) {
+        return orderItemRepository.findIdsByStatusAndDeliveredAtBefore(OrderItemStatus.DELIVERED, before, Limit.of(limit));
+    }
+
+    private OrderItemResponse confirm(OrderItem item, ActorType actor, Long actorId, String reason) {
+        item.confirm(LocalDateTime.now(clock));
+        history(item, actor, actorId, OrderItemStatus.DELIVERED, reason);
+        outbox.enqueue("OrderItemConfirmed", OutboxEvent.AggregateType.ORDER_ITEM, item.getItemNo(),
+                OrderItemConfirmedPayload.from(item));
+        return OrderItemResponse.from(item);
     }
 
     /** 자동 배송완료 대상 — 발송(교환은 재배송) 후 before 이전부터 배송 중인 상품주문 */

@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,6 +38,15 @@ public class ClaimController {
     private final CancelOrderItemSaga cancelOrderItemSaga;
     private final ClaimService claimService;
     private final ClaimQueryService claimQueryService;
+
+    @Operation(summary = "클레임 철회 (반품 · 교환)", description = """
+            판매자 승인 전(REQUESTED)인 반품 · 교환을 거둬들인다 → WITHDRAWN, 상품주문은 다시 배송완료(반품 기간 · 자동 구매확정은 원래 기준).
+            에러: 404 CLAIM_NOT_FOUND(없음 · 다른 회원) / 409 CLAIM_INVALID_STATUS(승인 뒤 · 이미 끝남 · 취소 클레임)""")
+    @PatchMapping("/api/claims/{claimId}/withdraw")
+    public ApiResponse<ClaimDetailResponse> withdraw(@Parameter(hidden = true) @CurrentUser AuthUser user,
+                                                     @PathVariable Long claimId) {
+        return ApiResponse.success("요청을 철회했습니다.", claimService.withdraw(user.userId(), claimId));
+    }
 
     @Operation(summary = "내 클레임 내역", description = """
             취소 · 반품 · 교환 신청 전체 — 최신 요청 먼저. status: REQUESTED(판매자 확인 중) · APPROVED(승인 · 수거 요청 / 취소는 환불 중) ·

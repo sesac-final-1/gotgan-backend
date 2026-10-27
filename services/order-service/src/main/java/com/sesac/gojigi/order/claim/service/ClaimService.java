@@ -1,6 +1,7 @@
 package com.sesac.gojigi.order.claim.service;
 
 import com.sesac.gojigi.order.claim.dto.request.ClaimCreateRequest;
+import com.sesac.gojigi.order.claim.dto.response.ClaimDetailResponse;
 import com.sesac.gojigi.order.claim.dto.response.ClaimPreviewResponse;
 import com.sesac.gojigi.order.claim.dto.response.ClaimResponse;
 import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
@@ -45,6 +46,11 @@ public class ClaimService {
         ClaimTarget target = claimTx.find(buyerId, orderNo, request.orderItemId(), request.type());
         long fee = request.type() == ClaimType.RETURN ? returnShippingFee(target.item(), request.reasonCode()) : 0L;
         return claimTx.openReturnOrExchange(buyerId, orderNo, request, fee);
+    }
+
+    /** 구매자 철회 (반품 · 교환, 판매자 승인 전) */
+    public ClaimDetailResponse withdraw(Long buyerId, Long claimId) {
+        return claimTx.withdraw(buyerId, claimId);
     }
 
     private long returnShippingFee(OrderItem item, ClaimReasonCode reasonCode) {
