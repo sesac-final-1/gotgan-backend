@@ -1,6 +1,7 @@
 package com.sesac.gojigi.product.product.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -43,7 +44,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 판매자 상품 목록 (GET /api/seller/products, 11절) · 상세 (GET /api/seller/products/{id}, 12절) · 등록 (POST, 13절) · 수정 (PUT, 13절) — 실제 MySQL · Flyway V1~V2.
+ * 판매자 상품 목록 (GET /api/seller/products, 11절) · 상세 (GET /api/seller/products/{id}, 12절) · 등록 (POST, 13절) · 수정 (PUT, 13절) · 삭제 (DELETE, 16절) — 실제 MySQL · Flyway V1~V2.
  * 게이트웨이가 넣는 X-User-* · X-Store-Id 헤더를 직접 붙인다. 상품 → 카테고리 순으로 비워 FK 에 걸리지 않게 한다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게 (CategoryApiIntegrationTest 와 같음).
  */
@@ -142,6 +143,11 @@ class SellerProductApiIntegrationTest {
     private ResultActions update(long productId, String storeId, Map<String, Object> body) throws Exception {
         var req = put("/api/seller/products/" + productId).header("X-User-Id", "2").header("X-User-Roles", "SELLER")
                 .contentType(MediaType.APPLICATION_JSON).content(jsonMapper.writeValueAsString(body));
+        return mockMvc.perform(storeId == null ? req : req.header("X-Store-Id", storeId));
+    }
+
+    private ResultActions remove(long productId, String storeId) throws Exception {
+        var req = delete("/api/seller/products/" + productId).header("X-User-Id", "2").header("X-User-Roles", "SELLER");
         return mockMvc.perform(storeId == null ? req : req.header("X-Store-Id", storeId));
     }
 
@@ -667,6 +673,71 @@ class SellerProductApiIntegrationTest {
             assertThat(jdbc.queryForObject("SELECT extra_price FROM product_option WHERE product_option_id = ?", Long.class, m)).isEqualTo(500L);
             assertThat(jdbc.queryForObject("SELECT status FROM product WHERE product_id = ?", String.class, productId)).isEqualTo("BLOCKED");
             assertThat(jdbc.queryForObject("SELECT name FROM product WHERE product_id = ?", String.class, productId)).isEqualTo("동시 수정");
+        }
+    }
+
+    @Nested
+    @DisplayName("상품 삭제")
+    class Delete {
+
+        @Test
+        @DisplayName("내 상품 — 200, 상품만 소프트 삭제(옵션 · 이미지 행은 남음) → 목록에서 빠지고 상세 · 재삭제 404, 옵션은 구매 불가 · 예약 409")
+        void delete_ownProduct_softDeletesAndHides() throws Exception {
+            // given
+            long productId = registerOk();
+            long kept = registerOk();
+            List<Long> optionIds = optionIds(productId);
+
+            // when
+            remove(productId, String.valueOf(STORE_ID))
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value("SUCCESS"))
+                    .andExpect(jsonPath("$.data").doesNotExist());
+            assertThat(jdbc.queryForObject("SELECT deleted_at IS NOT NULL FROM product WHERE product_id = ?", Boolean.class, productId)).isTrue();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_option WHERE product_id = ? AND deleted_at IS NULL",
+                    Integer.class, productId)).isEqualTo(2);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_image WHERE product_id = ?", Integer.class, productId)).isEqualTo(2);
+
+            list(String.valueOf(STORE_ID))
+                    .andExpect(jsonPath("$.data.length()").value(1))
+                    .andExpect(jsonPath("$.data[0].productId").value(kept));
+            detail(productId, String.valueOf(STORE_ID)).andExpect(status().isNotFound());
+            remove(productId, String.valueOf(STORE_ID))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+
+            // order 가 부르는 내부 API — 장바구니에 담겨 있던 옵션
+            mockMvc.perform(get("/internal/product-options?ids=" + optionIds.get(0)))
+                    .andExpect(jsonPath("$.data[0].purchasable").value(false));
+            mockMvc.perform(post("/internal/stock/reservations").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"sagaId\":\"saga-del\",\"items\":[{\"productOptionId\":" + optionIds.get(0) + ",\"quantity\":1}]}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("PRODUCT_NOT_PURCHASABLE"));
+        }
+
+        @Test
+        @DisplayName("강제 판매중지 · 판매중지 상품도 삭제 가능")
+        void delete_blockedOrStopped_allowed() throws Exception {
+            long blocked = registerOk();
+            jdbc.update("UPDATE product SET status = 'BLOCKED', status_reason = '허위 표시' WHERE product_id = ?", blocked);
+            String body = register(b -> b.put("status", "STOPPED")).andReturn().getResponse().getContentAsString();
+            long stopped = jsonMapper.readTree(body).path("data").path("productId").asLong();
+
+            remove(blocked, String.valueOf(STORE_ID)).andExpect(status().isOk());
+            remove(stopped, String.valueOf(STORE_ID)).andExpect(status().isOk());
+            list(String.valueOf(STORE_ID)).andExpect(jsonPath("$.data.length()").value(0));
+        }
+
+        @Test
+        @DisplayName("다른 스토어 상품 · 없는 상품 404 (삭제 안 됨), 스토어 헤더 없음 403")
+        void delete_notMineOrMissing_rejected() throws Exception {
+            long productId = registerOk();
+
+            remove(productId, "2").andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+            remove(999999L, String.valueOf(STORE_ID)).andExpect(status().isNotFound());
+            remove(productId, null).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
+            assertThat(jdbc.queryForObject("SELECT deleted_at IS NULL FROM product WHERE product_id = ?", Boolean.class, productId)).isTrue();
         }
     }
 }

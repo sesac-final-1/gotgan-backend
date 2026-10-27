@@ -40,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 판매자 상품 목록 · 등록 · 수정 · 상세 (PRD-01 · 02 · 03 · 04, product.md 11 · 12 · 13절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
+ * 판매자 상품 목록 · 등록 · 수정 · 상세 · 삭제 (PRD-01 · 02 · 03 · 04 · 05, product.md 11 · 12 · 13 · 16절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
  * TODO 박지연: 정지 · 폐점 스토어도 등록되면 바로 노출됨(storeActive=true 로 시작) — StoreStatusChanged 소비 PR 에서 함께 정한다.
  */
 @Slf4j
@@ -149,6 +149,17 @@ public class SellerProductService {
         productRepository.flush();   // 새 조합 ID · 수정 시각을 응답에 담으려고
         log.info("상품 수정 - storeId={}, productId={}, options={}", storeId, productId, options.size());
         return SellerProductDetailResponse.of(product, category, top, imageUrls);
+    }
+
+    /**
+     * 삭제 (16절) — 상태와 상관없이(BLOCKED 포함) 상품만 소프트 삭제, 옵션 · 재고 이력은 그대로.
+     * 지난 주문은 스냅샷이라 영향 없고, 장바구니에 담긴 옵션은 4절 조회에서 purchasable=false · 예약은 409 가 된다.
+     */
+    @Transactional
+    public void delete(Long storeId, Long productId) {
+        Product product = getOwnProduct(storeId, productId);
+        product.delete(LocalDateTime.now(clock));
+        log.info("상품 삭제 - storeId={}, productId={}", storeId, productId);
     }
 
     /** 내 스토어의 삭제 안 된 상품 — 다른 스토어 상품도 "없음"과 같은 404 (있는지 알려 주지 않음, 12절) */

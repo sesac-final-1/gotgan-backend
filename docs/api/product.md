@@ -418,7 +418,8 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | 내 스토어 상품 (상태 무관, BLOCKED 포함) | **소프트 삭제**(`product.deleted_at`) — 옵션 · 재고 이력은 그대로 | **200** |
 | 없음 · 이미 삭제 · 다른 스토어 상품 | 없음 | **404** `PRODUCT_NOT_FOUND` |
 
-- 지난 주문은 스냅샷이라 영향 없음. 장바구니에 담긴 옵션은 4절에서 `purchasable: false` 가 됩니다.
+- 응답은 `data: null`. 스토어 헤더가 없으면 **403** `FORBIDDEN`(판매자 API 공통).
+- 지난 주문은 스냅샷이라 영향 없음. 장바구니에 담긴 옵션은 4절에서 `purchasable: false` 가 됩니다. 예약(1절)은 409 `PRODUCT_NOT_PURCHASABLE`.
 - 화면의 일괄 삭제는 선택한 개수만큼 이 API 를 부릅니다(데모 규모).
 
 ## 17. 이미지 업로드 주소 발급 — `POST /api/seller/products/images/presign` (PRD-03)
