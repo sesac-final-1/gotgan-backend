@@ -45,6 +45,8 @@ import com.sesac.gojigi.order.saga.entity.SagaType;
 import com.sesac.gojigi.order.saga.repository.SagaInstanceRepository;
 import com.sesac.gojigi.order.saga.service.CancelItemTxService;
 import com.sesac.gojigi.order.saga.service.CancelOrderItemSaga;
+import com.sesac.gojigi.order.saga.service.ClaimEventRecorder;
+import com.sesac.gojigi.order.common.event.OutboxEventRepository;
 import com.sesac.gojigi.order.saga.service.OrderSagaTxService;
 import java.time.Clock;
 import java.time.Instant;
@@ -78,7 +80,8 @@ import tools.jackson.databind.json.JsonMapper;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, ClaimTxService.class, SellerClaimTxService.class,
         ClaimQueryService.class, CancelItemTxService.class, CancelOrderItemSaga.class, OrderSagaTxService.class,
-        DeliveryTxService.class, EventOutboxService.class, SchedulingConfig.class, SellerClaimIntegrationTest.Beans.class })
+        DeliveryTxService.class, EventOutboxService.class, SchedulingConfig.class, ClaimEventRecorder.class,
+        SellerClaimIntegrationTest.Beans.class })
 @ActiveProfiles("test")
 @TestPropertySource(properties = "app.order.auto-confirm-after=7d")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 서비스 메서드마다 실제로 커밋
@@ -114,6 +117,7 @@ class SellerClaimIntegrationTest {
     @Autowired private OrderClaimRepository claimRepository;
     @Autowired private SagaInstanceRepository sagaRepository;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private OutboxEventRepository outboxRepository;
     @MockitoBean private SnsEventPublisher sns;
     @MockitoBean private PaymentClientAdapter payment;
     @MockitoBean private ProductClientAdapter product;
@@ -170,6 +174,8 @@ class SellerClaimIntegrationTest {
         verify(payment).cancel(anyString(), eq(PaymentCancelRequest.partial(sagaIdOf(claim.claimId()), item.getId(),
                 12_000L, "반품 환불")));
         verify(user).reversePoints(any());
+        assertThat(outboxRepository.findAll()).filteredOn(e -> e.getAggregateId().equals(item.getItemNo()))
+                .extracting(e -> e.getEventType()).containsExactly("OrderItemReturned");   // 반품 완료 메일 (같은 트랜잭션)
         assertThat(sagaRepository.findAll()).filteredOn(s -> s.getOrderClaim() != null
                         && s.getOrderClaim().getId().equals(claim.claimId()))
                 .singleElement().satisfies(s -> {
