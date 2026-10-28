@@ -150,11 +150,23 @@ public class StoreApplication extends BaseTimeEntity {
 
     /** 승인 — 심사대기 · 보완요청에서만. 다른 상태면 409 (다른 관리자가 먼저 처리함, store.md 5절) */
     public void approve(LocalDateTime decidedAt) {
-        if (status != ApplicationStatus.PENDING && status != ApplicationStatus.SUPPLEMENT) {
-            throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS);
-        }
+        requireUndecided();
         this.status = ApplicationStatus.APPROVED;
         this.statusReason = null; // 보완요청 사유가 승인 뒤에도 남아 보이지 않게
         this.statusChangedAt = decidedAt;
+    }
+
+    /** 반려 — 승인과 같은 조건. 사유는 신청자 화면 · 메일에 그대로 보이고, 30일 재신청 제한은 이 시각부터 (store.md 6절) */
+    public void reject(String reason, LocalDateTime decidedAt) {
+        requireUndecided();
+        this.status = ApplicationStatus.REJECTED;
+        this.statusReason = reason;
+        this.statusChangedAt = decidedAt;
+    }
+
+    private void requireUndecided() {
+        if (status != ApplicationStatus.PENDING && status != ApplicationStatus.SUPPLEMENT) {
+            throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS);
+        }
     }
 }

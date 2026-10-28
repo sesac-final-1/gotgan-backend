@@ -1,7 +1,9 @@
 package com.sesac.gojigi.store.apply.controller;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.store.apply.dto.request.ApplicationRejectRequest;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationApproveResponse;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationRejectResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationSummaryResponse;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
@@ -11,12 +13,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -77,5 +81,24 @@ public class InternalApplicationController {
     public ResponseEntity<ApiResponse<ApplicationApproveResponse>> approve(
             @Parameter(description = "신청 ID", example = "27") @PathVariable Long applicationId) {
         return ResponseEntity.ok(ApiResponse.success("입점 신청을 승인했습니다.", applicationReviewService.approve(applicationId)));
+    }
+
+    @Operation(summary = "입점 반려",
+            description = "인가: 내부. 본문 {reason}(필수, 255자 이하 — 비거나 길면 400 INVALID_INPUT). 심사대기 · 보완요청 신청을 REJECTED 로, "
+                    + "30일 재신청 제한은 이 시각부터. StoreApplicationRejected 는 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 발행"
+                    + "(실패해도 200 — 발행기가 다시 보냄). 이미 승인 · 반려됐거나 동시 처리에서 지면 409 APPLY_INVALID_STATUS, "
+                    + "없는 신청은 404 APPLY_NOT_FOUND")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "반려 — decidedAt"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT — 사유 누락 · 255자 초과 · applicationId 형식 오류"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "APPLY_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "APPLY_INVALID_STATUS")
+    })
+    @PatchMapping("/{applicationId}/reject")
+    public ResponseEntity<ApiResponse<ApplicationRejectResponse>> reject(
+            @Parameter(description = "신청 ID", example = "27") @PathVariable Long applicationId,
+            @Valid @RequestBody ApplicationRejectRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("입점 신청을 반려했습니다.",
+                applicationReviewService.reject(applicationId, request.reason())));
     }
 }
