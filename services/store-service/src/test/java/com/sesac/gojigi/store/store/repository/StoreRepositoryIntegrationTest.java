@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sesac.gojigi.store.TestcontainersConfiguration;
 import com.sesac.gojigi.store.store.entity.Store;
+import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import jakarta.persistence.EntityManager;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,6 +90,45 @@ class StoreRepositoryIntegrationTest {
         // when · then
         assertThat(storeRepository.findByIdAndDeletedAtIsNull(2L)).isEmpty();
         assertThat(storeRepository.findByIdAndDeletedAtIsNull(999L)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("관리자 목록은 시드 9개를 개설 최신순으로, 대표자 · 사업자번호는 신청서에서, 등급은 DB 값")
+    void findAllForAdmin_withoutStatus_returnsAllNewestFirst() {
+        // when
+        List<StoreWithApplicant> rows = storeRepository.findAllForAdmin(null);
+
+        // then — 시드 개설일: 19(210일 전) · 15(301) · 2(455) · 17(540) · 11(612) · 18(720) · 12(890) · 1(980) · 13(1320)
+        assertThat(rows).extracting(r -> r.store().getId()).containsExactly(19L, 15L, 2L, 17L, 11L, 18L, 12L, 1L, 13L);
+        StoreWithApplicant park = rows.stream().filter(r -> r.store().getId() == 1L).findFirst().orElseThrow();
+        assertThat(park.ownerName()).isEqualTo("박영철");
+        assertThat(park.bizRegNo()).isEqualTo("000-00-00006");
+        assertThat(park.store().getGrade()).isEqualTo(StoreGrade.BIG_POWER);
+        assertThat(park.store().getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("개설 시각이 같으면 스토어 ID 큰 순")
+    void findAllForAdmin_sameCreatedAt_higherIdFirst() {
+        // given — 스토어 13 을 스토어 1 과 같은 시각으로
+        update("UPDATE store SET created_at = (SELECT t.created_at FROM (SELECT created_at FROM store WHERE store_id = 1) t) WHERE store_id = 13");
+
+        // when · then
+        assertThat(storeRepository.findAllForAdmin(null)).extracting(r -> r.store().getId()).endsWith(13L, 1L);
+    }
+
+    @Test
+    @DisplayName("상태 필터는 그 상태만 · 소프트 삭제된 스토어는 빠지고 폐점은 남는다")
+    void findAllForAdmin_withStatus_filtersAndExcludesSoftDeleted() {
+        // given
+        update("UPDATE store SET status = 'CLOSED' WHERE store_id = 2");
+        update("UPDATE store SET deleted_at = NOW(6) WHERE store_id = 17");
+
+        // when · then
+        assertThat(storeRepository.findAllForAdmin(StoreStatus.SUSPENDED)).extracting(r -> r.store().getId()).containsExactly(15L);
+        assertThat(storeRepository.findAllForAdmin(StoreStatus.CLOSED)).extracting(r -> r.store().getId()).containsExactly(2L);
+        assertThat(storeRepository.findAllForAdmin(null)).extracting(r -> r.store().getId())
+                .hasSize(8).doesNotContain(17L).contains(2L);
     }
 
     private void update(String sql) {

@@ -1,16 +1,23 @@
 package com.sesac.gojigi.store.store.controller;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
+import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
+import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
 import com.sesac.gojigi.store.store.exception.StoreException;
 import com.sesac.gojigi.store.store.service.StoreQueryService;
+import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -88,5 +95,48 @@ class InternalStoreControllerTest {
         mockMvc.perform(get("/internal/stores/abc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("관리자 스토어 목록 — 200 배열, 상태 필터를 서비스에 넘기고 시각은 +09:00")
+    void list_withStatus_returns200Array() throws Exception {
+        // given
+        given(storeQueryService.getAdminList(StoreStatus.SUSPENDED)).willReturn(List.of(new InternalStoreSummaryResponse(
+                15L, "볕드는집", "sunny-house", 205L, "윤하늘", "000-00-00005", StoreGrade.SPROUT, StoreStatus.SUSPENDED,
+                "허위 원산지 표기 신고 확인", OffsetDateTime.parse("2025-12-31T10:00:00+09:00"))));
+
+        // when · then
+        mockMvc.perform(get("/internal/stores").param("status", "SUSPENDED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("스토어 목록을 조회했습니다."))
+                .andExpect(jsonPath("$.data[0].storeId").value(15))
+                .andExpect(jsonPath("$.data[0].ownerName").value("윤하늘"))
+                .andExpect(jsonPath("$.data[0].bizRegNo").value("000-00-00005"))
+                .andExpect(jsonPath("$.data[0].grade").value("SPROUT"))
+                .andExpect(jsonPath("$.data[0].status").value("SUSPENDED"))
+                .andExpect(jsonPath("$.data[0].createdAt").value("2025-12-31T10:00:00+09:00"));
+    }
+
+    @Test
+    @DisplayName("관리자 스토어 목록 status 없음 — 전체(null), 없으면 빈 배열")
+    void list_withoutStatus_returnsEmptyArray() throws Exception {
+        // given
+        given(storeQueryService.getAdminList(null)).willReturn(List.of());
+
+        // when · then
+        mockMvc.perform(get("/internal/stores"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    @DisplayName("관리자 스토어 목록 모르는 status(DORMANT) — 400 INVALID_INPUT, 서비스를 부르지 않는다")
+    void list_whenStatusUnknown_returns400() throws Exception {
+        mockMvc.perform(get("/internal/stores").param("status", "DORMANT"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        then(storeQueryService).should(never()).getAdminList(any());
     }
 }
