@@ -16,6 +16,9 @@ public interface StoreApplicationRepository extends JpaRepository<StoreApplicati
 
     List<StoreApplication> findAllByStatusOrderByTermsAgreedAtDescIdDesc(ApplicationStatus status);
 
+    /** 같은 사업자번호의 다른 신청 — 중복 입점 확인 (idx_store_application_biz_reg_no, store.md 4절) */
+    List<StoreApplication> findAllByBizRegNoAndIdNotOrderByTermsAgreedAtDescIdDesc(String bizRegNo, Long id);
+
     /** 진행 중 신청(심사대기 · 보완요청)이 있는지 — idx_store_application_user_id */
     boolean existsByUserIdAndStatusIn(Long userId, Collection<ApplicationStatus> statuses);
 
