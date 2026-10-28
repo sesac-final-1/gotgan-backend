@@ -26,11 +26,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class ProductReviewQueryService {
 
     private final ReviewRepository reviewRepository;
+    private final ReviewImages reviewImages;
 
-    public PageResponse<ProductReviewResponse> list(Long productId, Integer rating, ProductReviewSort sort, int page,
-                                                    int size) {
-        return PageResponse.from(reviewRepository.findForProduct(productId, rating, PageRequest.of(page, size, sort.toSort()))
-                .map(ProductReviewResponse::from));
+    public PageResponse<ProductReviewResponse> list(Long productId, Integer rating, boolean photoOnly,
+                                                    ProductReviewSort sort, int page, int size) {
+        return reviewImages.toPage(reviewRepository.findForProduct(productId, rating, photoOnly,
+                        PageRequest.of(page, size, sort.toSort())),
+                (review, images) -> ProductReviewResponse.from(review, ReviewImages.urls(images)));
     }
 
     public ProductReviewSummaryResponse summarize(Long productId) {

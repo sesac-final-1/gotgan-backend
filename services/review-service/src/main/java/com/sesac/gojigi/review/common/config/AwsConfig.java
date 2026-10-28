@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
 /**
@@ -16,5 +17,11 @@ public class AwsConfig {
     @Bean
     public SqsClient sqsClient(@Value("${AWS_REGION:ap-northeast-2}") String region) {
         return SqsClient.builder().region(Region.of(region)).build();
+    }
+
+    /** 리뷰 사진 업로드 presigned PUT (images 버킷 reviews/*, IRSA s3:PutObject). 서명은 로컬 계산이라 S3 호출 없음 */
+    @Bean
+    public S3Presigner s3Presigner(@Value("${AWS_REGION:ap-northeast-2}") String region) {
+        return S3Presigner.builder().region(Region.of(region)).build();
     }
 }

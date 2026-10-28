@@ -16,6 +16,9 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.concurrent.atomic.AtomicLong;
+import com.sesac.gojigi.review.review.dto.response.ReviewImageResponse;
+import com.sesac.gojigi.review.review.entity.ReviewImage;
+import com.sesac.gojigi.review.review.repository.ReviewImageRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -30,7 +33,7 @@ import org.springframework.test.context.ActiveProfiles;
 /** 마이페이지 리뷰 관리 조회 — 내가 쓴 리뷰 · 작성 가능한 리뷰 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, MyReviewQueryService.class, MyReviewQueryServiceIntegrationTest.FixedClock.class })
+@Import({ TestcontainersConfiguration.class, MyReviewQueryService.class, ReviewImages.class, MyReviewQueryServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")
 class MyReviewQueryServiceIntegrationTest {
 
@@ -164,5 +167,26 @@ class MyReviewQueryServiceIntegrationTest {
         void listWritable_none_returnsEmpty() {
             assertThat(myReviewQueryService.listWritable(BUYER + 30)).isEmpty();
         }
+    }
+
+    @Test
+    @DisplayName("내가 쓴 리뷰에 사진 키 · URL 이 순서대로 붙는다 (사진 없는 리뷰는 빈 목록)")
+    void listMine_includesImages(@Autowired ReviewImageRepository reviewImageRepository) {
+        // given
+        long user = BUYER + 40;
+        Review withPhotos = saveReview(user, 5);
+        reviewImageRepository.save(new ReviewImage(withPhotos, "reviews/7041/b.jpg", 1));
+        reviewImageRepository.save(new ReviewImage(withPhotos, "reviews/7041/a.jpg", 0));
+        Review noPhoto = saveReview(user, 4);
+        reviewImageRepository.flush();
+
+        // when
+        var content = myReviewQueryService.listMine(user, 0, 10).content();
+
+        // then
+        MyReviewResponse photo = content.stream().filter(r -> r.reviewId().equals(withPhotos.getId())).findFirst().orElseThrow();
+        assertThat(photo.images()).extracting(ReviewImageResponse::key).containsExactly("reviews/7041/a.jpg", "reviews/7041/b.jpg");
+        assertThat(photo.images().getFirst().url()).endsWith("/reviews/7041/a.jpg");
+        assertThat(content.stream().filter(r -> r.reviewId().equals(noPhoto.getId())).findFirst().orElseThrow().images()).isEmpty();
     }
 }

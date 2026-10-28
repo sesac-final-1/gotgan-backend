@@ -3,6 +3,7 @@ package com.sesac.gojigi.review.review.dto.response;
 import com.sesac.gojigi.review.review.entity.Review;
 import com.sesac.gojigi.review.review.entity.ReviewFit;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
 
 /** 수정한 리뷰 — 화면이 목록 캐시를 다시 부르지 않고 바로 바꿀 수 있게 수정 가능한 값만 */
 public record ReviewResponse(
@@ -19,9 +20,13 @@ public record ReviewResponse(
         String content,
 
         @Schema(description = "사이즈 체감", example = "LARGE")
-        ReviewFit fit) {
+        ReviewFit fit,
 
-    public static ReviewResponse from(Review review) {
-        return new ReviewResponse(review.getId(), review.getRating(), review.getTitle(), review.getContent(), review.getFit());
+        @Schema(description = "사진 — 순서대로, 없으면 빈 목록. 다시 수정할 때 남길 사진은 key 를 그대로")
+        List<ReviewImageResponse> images) {
+
+    public static ReviewResponse from(Review review, List<ReviewImageResponse> images) {
+        return new ReviewResponse(review.getId(), review.getRating(), review.getTitle(), review.getContent(),
+                review.getFit(), images);
     }
 }

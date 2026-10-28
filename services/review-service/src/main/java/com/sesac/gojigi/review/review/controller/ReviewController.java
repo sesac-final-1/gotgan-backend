@@ -6,18 +6,21 @@ import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.common.web.dto.PageResponse;
 import com.sesac.gojigi.review.review.dto.request.ProductReviewSort;
 import com.sesac.gojigi.review.review.dto.request.ReviewCreateRequest;
+import com.sesac.gojigi.review.review.dto.request.ReviewImagePresignRequest;
 import com.sesac.gojigi.review.review.dto.request.ReviewUpdateRequest;
 import com.sesac.gojigi.review.review.dto.response.MyReviewResponse;
 import com.sesac.gojigi.review.review.dto.response.ProductRatingResponse;
 import com.sesac.gojigi.review.review.dto.response.ProductReviewResponse;
 import com.sesac.gojigi.review.review.dto.response.ProductReviewSummaryResponse;
 import com.sesac.gojigi.review.review.dto.response.ReviewCreateResponse;
+import com.sesac.gojigi.review.review.dto.response.ReviewImagePresignResponse;
 import com.sesac.gojigi.review.review.dto.response.ReviewResponse;
 import com.sesac.gojigi.review.review.dto.response.StoreRatingResponse;
 import com.sesac.gojigi.review.review.dto.response.WritableReviewResponse;
 import com.sesac.gojigi.review.review.service.MyReviewQueryService;
 import com.sesac.gojigi.review.review.service.ProductReviewQueryService;
 import com.sesac.gojigi.review.review.service.RatingQueryService;
+import com.sesac.gojigi.review.review.service.ReviewImagePresignService;
 import com.sesac.gojigi.review.review.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -59,11 +62,13 @@ public class ReviewController {
     private final MyReviewQueryService myReviewQueryService;
     private final ProductReviewQueryService productReviewQueryService;
     private final RatingQueryService ratingQueryService;
+    private final ReviewImagePresignService reviewImagePresignService;
 
     @Operation(summary = "리뷰 작성", description = """
             인가: 로그인 (작성자 = X-User-Id). 구매확정한 내 상품주문당 1개, 구매확정 후 30일 이내.
-            본문은 일반 텍스트 20~2,000자 — 태그는 지우고 저장한다. 사진은 아직 받지 않는다(REV-03).
-            에러: 400 INVALID_INPUT(형식) · 401 UNAUTHORIZED · 403 REVIEW_NOT_ELIGIBLE(자격 없음 · 남의 상품주문) ·
+            본문은 일반 텍스트 20~2,000자 — 태그는 지우고 저장한다. 사진은 imageKeys 0~3개(업로드 주소 발급으로 받은 내 키).
+            에러: 400 INVALID_INPUT(형식) · 400 REVIEW_IMAGE_INVALID(남의 · 형식이 다른 키 · 4장 이상 · 중복) · 401 UNAUTHORIZED ·
+            403 REVIEW_NOT_ELIGIBLE(자격 없음 · 남의 상품주문) ·
             409 REVIEW_ALREADY_WRITTEN(이미 작성 — 삭제한 리뷰 포함) · 409 REVIEW_WRITE_EXPIRED(30일 지남)""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "작성"),
@@ -80,10 +85,23 @@ public class ReviewController {
                 .body(ApiResponse.success("리뷰를 등록했습니다.", reviewService.write(user.userId(), request)));
     }
 
+    @Operation(summary = "리뷰 사진 업로드 주소 발급", description = """
+            인가: 로그인. 사진마다 images 버킷 presigned PUT 주소를 발급한다(10분, 응답은 요청과 같은 순서).
+            1~3개 · image/jpeg · image/png · image/webp · 각 10MB 이하. 키는 reviews/{userId}/{UUID}.{jpg|png|webp}.
+            브라우저가 uploadUrl 로 PUT(Content-Type · 크기를 요청과 같게 — 서명에 포함돼 다르면 S3 403) → 받은 key 를 작성 · 수정 imageKeys 로.
+            에러: 400 INVALID_INPUT · REVIEW_IMAGE_INVALID("n번째 파일: …", 하나만 틀려도 전체 거절) · 401 UNAUTHORIZED ·
+            502 EXTERNAL_API_ERROR(자격 증명)""")
+    @PostMapping("/images/presign")
+    public ApiResponse<List<ReviewImagePresignResponse>> presignImages(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Valid @RequestBody ReviewImagePresignRequest request) {
+        return ApiResponse.success("업로드 주소를 발급했습니다.", reviewImagePresignService.presign(user.userId(), request));
+    }
+
     @Operation(summary = "내 리뷰 수정", description = """
-            인가: 로그인 (작성자 본인). 별점 · 한줄 요약 · 본문 · 사이즈 체감을 통째로 바꾼다 — 작성과 같은 규칙, 기한 없음.
-            응답은 수정된 값(200). 판매자 답글은 그대로 남는다.
-            에러: 400 INVALID_INPUT(형식) · 401 UNAUTHORIZED · 404 REVIEW_NOT_FOUND(없는 · 삭제된 · 다른 회원의 리뷰) ·
+            인가: 로그인 (작성자 본인). 별점 · 한줄 요약 · 본문 · 사이즈 체감 · 사진을 통째로 바꾼다 — 작성과 같은 규칙, 기한 없음.
+            사진은 남길 기존 키 + 새로 발급받은 키를 순서대로(비우면 사진 삭제). 응답은 수정된 값(200). 판매자 답글은 그대로 남는다.
+            에러: 400 INVALID_INPUT(형식) · 400 REVIEW_IMAGE_INVALID · 401 UNAUTHORIZED ·
+            404 REVIEW_NOT_FOUND(없는 · 삭제된 · 다른 회원의 리뷰) ·
             409 REVIEW_BLINDED(관리자 블라인드 — 해제는 관리자만)""")
     @PutMapping("/{reviewId}")
     public ApiResponse<ReviewResponse> edit(@Parameter(hidden = true) @CurrentUser AuthUser user,
@@ -123,16 +141,18 @@ public class ReviewController {
     }
 
     @Operation(summary = "상품 리뷰 목록 (공개)", description = """
-            인가: 없음(공개). 블라인드 · 삭제 제외. rating 으로 별점 하나만(선택), sort: LATEST(기본) · RATING_HIGH · RATING_LOW.
-            page(0부터) · size(1~50, 기본 10). 없는 상품은 빈 목록.
+            인가: 없음(공개). 블라인드 · 삭제 제외. rating 으로 별점 하나만 · photoOnly=true 면 사진 있는 리뷰만(선택),
+            sort: LATEST(기본) · RATING_HIGH · RATING_LOW. page(0부터) · size(1~50, 기본 10). 없는 상품은 빈 목록.
             에러: 400 INVALID_INPUT(productId 없음 · rating 1~5 밖 · sort 모르는 값 · page · size)""")
     @GetMapping
     public ApiResponse<PageResponse<ProductReviewResponse>> listForProduct(@RequestParam Long productId,
             @RequestParam(required = false) @Min(1) @Max(5) Integer rating,
+            @RequestParam(defaultValue = "false") boolean photoOnly,
             @RequestParam(defaultValue = "LATEST") ProductReviewSort sort,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(50) int size) {
-        return ApiResponse.success("리뷰 목록을 조회했습니다.", productReviewQueryService.list(productId, rating, sort, page, size));
+        return ApiResponse.success("리뷰 목록을 조회했습니다.",
+                productReviewQueryService.list(productId, rating, photoOnly, sort, page, size));
     }
 
     @Operation(summary = "상품 리뷰 요약 (공개)", description = """

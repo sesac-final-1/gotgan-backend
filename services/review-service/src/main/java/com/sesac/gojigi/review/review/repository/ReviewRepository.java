@@ -20,7 +20,7 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     /**
      * 판매자 리뷰 관리 목록 — 내 스토어 · 삭제 제외(블라인드 포함), 상품 · 탭 조건은 선택 (idx_review_store_created).
-     * noReply: 답글이 없고 블라인드가 아닌 것(답글을 달 수 있는 것)만, lowRating: 별점 1~2.
+     * noReply: 답글이 없고 블라인드가 아닌 것(답글을 달 수 있는 것)만, lowRating: 별점 1~2, photo: 사진 있는 것.
      */
     @EntityGraph(attributePaths = "eligibility")
     @Query(value = """
@@ -29,6 +29,7 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
               and (:productId is null or r.productId = :productId)
               and (:noReply = false or (r.replyContent is null and r.blinded = false))
               and (:lowRating = false or r.rating <= 2)
+              and (:photo = false or exists (select 1 from ReviewImage i where i.review = r))
             """,
             countQuery = """
             select count(r) from Review r
@@ -36,15 +37,24 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
               and (:productId is null or r.productId = :productId)
               and (:noReply = false or (r.replyContent is null and r.blinded = false))
               and (:lowRating = false or r.rating <= 2)
+              and (:photo = false or exists (select 1 from ReviewImage i where i.review = r))
             """)
-    Page<Review> findForSeller(Long storeId, Long productId, boolean noReply, boolean lowRating, Pageable pageable);
+    Page<Review> findForSeller(Long storeId, Long productId, boolean noReply, boolean lowRating, boolean photo,
+                              Pageable pageable);
 
-    /** 판매자 탭 숫자 — 전체(블라인드 포함) · 답글 미작성 · 1~2점, 목록 조건과 같다 */
+    /** 판매자 탭 숫자 — 전체(블라인드 포함) · 답글 미작성 · 1~2점 · 포토, 목록 조건과 같다 */
     long countByStoreIdAndDeletedAtIsNull(Long storeId);
 
     long countByStoreIdAndDeletedAtIsNullAndReplyContentIsNullAndBlindedFalse(Long storeId);
 
     long countByStoreIdAndDeletedAtIsNullAndRatingLessThanEqual(Long storeId, int rating);
+
+    @Query("""
+            select count(r) from Review r
+            where r.storeId = :storeId and r.deletedAt is null
+              and exists (select 1 from ReviewImage i where i.review = r)
+            """)
+    long countWithPhotoForStore(Long storeId);
 
     /** 스토어 별점 분포 — 블라인드 · 삭제 제외 (구매자에게 보이는 리뷰 기준) → [rating, count] */
     @Query("""
@@ -62,19 +72,21 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
             """)
     List<Object[]> summarizeByProductForStore(Long storeId);
 
-    /** 상품 상세 공개 리뷰 — 블라인드 · 삭제 제외, 별점 하나만(선택), 옵션명은 자격 스냅샷 (idx_review_product_created · rating) */
+    /** 상품 상세 공개 리뷰 — 블라인드 · 삭제 제외, 별점 하나만 · 사진 있는 것만(선택), 옵션명은 자격 스냅샷 (idx_review_product_created · rating) */
     @EntityGraph(attributePaths = "eligibility")
     @Query(value = """
             select r from Review r
             where r.productId = :productId and r.deletedAt is null and r.blinded = false
               and (:rating is null or r.rating = :rating)
+              and (:photoOnly = false or exists (select 1 from ReviewImage i where i.review = r))
             """,
             countQuery = """
             select count(r) from Review r
             where r.productId = :productId and r.deletedAt is null and r.blinded = false
               and (:rating is null or r.rating = :rating)
+              and (:photoOnly = false or exists (select 1 from ReviewImage i where i.review = r))
             """)
-    Page<Review> findForProduct(Long productId, Integer rating, Pageable pageable);
+    Page<Review> findForProduct(Long productId, Integer rating, boolean photoOnly, Pageable pageable);
 
     /** 상품 별점 분포 — 블라인드 · 삭제 제외 → [rating, count] */
     @Query("""
