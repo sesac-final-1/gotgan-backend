@@ -1,0 +1,1019 @@
+openapi: 3.1.0
+info:
+  title: OpenAPI definition
+  version: v0
+servers:
+- url: http://localhost:8082
+  description: Generated server url
+tags:
+- name: 입점 신청
+  description: "구매자가 판매자로 입점 신청 — 인가: BUYER"
+- name: 입점 심사 (내부)
+  description: "admin-service 가 호출 — 인가: 내부 (관리자 확인은 게이트웨이 · admin 이 끝냄)"
+- name: 스토어 (내부)
+  description: "user · admin · chat · order-service 가 호출 — 인가: 내부"
+paths:
+  /api/seller/apply:
+    post:
+      tags:
+      - 입점 신청
+      summary: 입점 신청
+      description: |-
+        인가: BUYER (신청자 = X-User-Id, 승인 때 StoreApproved.userId). 4단계 폼을 한 번에 제출하고 심사대기(PENDING)로 접수한다.
+        서류는 presign 으로 올린 내 키(applications/{userId}/...) — 사업자등록증 · 통신판매업 신고증 · 통장 사본 각 1, 상품 사진 3~10(JPG · PNG).
+        형식 · 크기는 S3 에서 확인한다. 응답 applicationNo(AP-yyMM-id)는 표시 전용, 식별은 applicationId.
+        에러: 400 INVALID_INPUT(형식) · 400 APPLY_DOCUMENT_INVALID(서류) · 401 UNAUTHORIZED ·
+        409 APPLY_STORE_ALREADY_EXISTS(스토어 있음, 폐점 포함) · 409 APPLY_IN_PROGRESS · 409 APPLY_REAPPLY_RESTRICTED(반려 후 30일) ·
+        409 APPLY_SLUG_DUPLICATED · 409 APPLY_STORE_NAME_DUPLICATED · 502 EXTERNAL_API_ERROR(S3)
+      operationId: apply
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SellerApplyRequest"
+        required: true
+      responses:
+        "201":
+          description: 접수
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseSellerApplyResponse"
+        "400":
+          description: INVALID_INPUT · APPLY_DOCUMENT_INVALID
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseSellerApplyResponse"
+        "401":
+          description: UNAUTHORIZED
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseSellerApplyResponse"
+        "409":
+          description: APPLY_STORE_ALREADY_EXISTS · APPLY_IN_PROGRESS · APPLY_REAPPLY_RESTRICTED
+            · APPLY_SLUG_DUPLICATED · APPLY_STORE_NAME_DUPLICATED
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseSellerApplyResponse"
+        "502":
+          description: EXTERNAL_API_ERROR
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseSellerApplyResponse"
+  /api/seller/apply/documents/presign:
+    post:
+      tags:
+      - 입점 신청
+      summary: 입점 서류 업로드 주소 발급
+      description: |-
+        인가: BUYER. 서류마다 seller-docs 버킷 presigned PUT 주소를 발급한다(10분, 응답은 요청과 같은 순서).
+        브라우저가 uploadUrl 로 PUT(Content-Type · 크기를 요청과 같게 — 서명에 포함돼 다르면 S3 403) → 받은 key 를 신청 documents[].key 로.
+        한 번에 1~13개. 서류 3종은 PDF · JPG · PNG, 상품 사진은 JPG · PNG, 각 10MB 이하. 서류 구성은 신청 때 검사한다.
+        에러: 400 INVALID_INPUT(형식) · 400 APPLY_DOCUMENT_INVALID(개수 · 형식 · 크기) · 401 UNAUTHORIZED · 502 EXTERNAL_API_ERROR(자격 증명)
+      operationId: presignDocuments
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DocumentPresignRequest"
+        required: true
+      responses:
+        "200":
+          description: 발급
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListDocumentPresignResponse"
+        "400":
+          description: INVALID_INPUT · APPLY_DOCUMENT_INVALID
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListDocumentPresignResponse"
+        "401":
+          description: UNAUTHORIZED
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListDocumentPresignResponse"
+        "502":
+          description: EXTERNAL_API_ERROR
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListDocumentPresignResponse"
+  /internal/applications/{applicationId}/approve:
+    patch:
+      tags:
+      - 입점 심사 (내부)
+      summary: 입점 승인
+      description: "인가: 내부. 본문 없음. 심사대기 · 보완요청 신청으로 스토어(ACTIVE)를 만들고 신청을 APPROVED\
+        \ 로, StoreApproved 는 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 발행(실패해도 200 — 발행기가 다시 보냄, 최소\
+        \ 1회 전달). 이미 승인 · 반려됐거나 동시 처리에서 지면 409 APPLY_INVALID_STATUS, 신청자에게 스토어가 있으\
+        면 409 APPLY_STORE_ALREADY_EXISTS, 스토어 주소 · 스토어명이 다른 스토어와 겹치면 409 APPLY_SLUG_DUPLICATED\
+        \ · APPLY_STORE_NAME_DUPLICATED, 없는 신청은 404 APPLY_NOT_FOUND. 판매자 권한은 user\
+        \ 가 이벤트를 받은 뒤 다음 토큰부터 반영"
+      operationId: approve
+      parameters:
+      - name: applicationId
+        in: path
+        description: 신청 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 27
+      responses:
+        "200":
+          description: 승인 — storeId · decidedAt
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationApproveResponse"
+        "400":
+          description: INVALID_INPUT — applicationId 형식 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationApproveResponse"
+        "404":
+          description: APPLY_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationApproveResponse"
+        "409":
+          description: APPLY_INVALID_STATUS · APPLY_STORE_ALREADY_EXISTS · APPLY_SLUG_DUPLICATED
+            · APPLY_STORE_NAME_DUPLICATED
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationApproveResponse"
+  /internal/stores/{storeId}:
+    get:
+      tags:
+      - 스토어 (내부)
+      summary: 스토어 상세 (상태 · 배송 정책 포함)
+      description: "인가: 내부. 판매자 탈퇴 전 폐점 확인 · 주문 배송비 계산 등. status = ACTIVE · SUSPENDED\
+        \ · CLOSED. shippingFee 기본 배송비(원), freeShippingThreshold 무료배송 기준(원, null =\
+        \ 무료배송 없음), courier 기본 택배사(null 가능). 없는 스토어는 404 STORE_NOT_FOUND"
+      operationId: get
+      parameters:
+      - name: storeId
+        in: path
+        description: 스토어 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+        "404":
+          description: STORE_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+  /internal/applications:
+    get:
+      tags:
+      - 입점 심사 (내부)
+      summary: 입점 신청 목록
+      description: "인가: 내부. 페이징 없이 전체 배열, 제출 최신순. status 를 생략하면 전체, 모르는 값이면 400 INVALID_INPUT.\
+        \ 카테고리 이름은 내려 주지 않음(categoryId 만)"
+      operationId: list
+      parameters:
+      - name: status
+        in: query
+        description: 신청 상태 필터 (PENDING · SUPPLEMENT · APPROVED · REJECTED)
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+        example: PENDING
+      responses:
+        "200":
+          description: 조회 성공 (없으면 빈 배열)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListInternalApplicationSummaryResponse"
+        "400":
+          description: INVALID_INPUT — status 값 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListInternalApplicationSummaryResponse"
+  /internal/applications/{applicationId}:
+    get:
+      tags:
+      - 입점 심사 (내부)
+      summary: 입점 신청 상세
+      description: "인가: 내부. 상태와 상관없이 신청서 전체 + 서류(이전 제출본 포함) presigned GET 10분 + 상태\
+        \ 이력 + 같은 사업자번호의 다른 신청 · 스토어. 서류 주소 발급이 실패해도 200(url · urlExpiresAt null).\
+        \ 없는 신청은 404 APPLY_NOT_FOUND"
+      operationId: get_1
+      parameters:
+      - name: applicationId
+        in: path
+        description: 신청 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 27
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalApplicationDetailResponse"
+        "400":
+          description: INVALID_INPUT — applicationId 형식 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalApplicationDetailResponse"
+        "404":
+          description: APPLY_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalApplicationDetailResponse"
+components:
+  schemas:
+    Agreements:
+      type: object
+      properties:
+        sellerTerms:
+          type: boolean
+          description: (필수) 판매자 이용약관
+        electronicFinance:
+          type: boolean
+          description: (필수) 전자금융거래 이용약관
+        privacy:
+          type: boolean
+          description: (필수) 개인정보 수집 및 이용 동의
+        marketing:
+          type: boolean
+          description: (선택) 마케팅 소식 수신 — 없으면 false
+    DocumentItem:
+      type: object
+      properties:
+        docType:
+          type: string
+          description: 서류 종류
+          enum:
+          - BUSINESS_REG
+          - ECOMMERCE_REG
+          - BANK_COPY
+          - PRODUCT_PHOTO
+          example: BUSINESS_REG
+        key:
+          type: string
+          description: presign 이 발급한 S3 키
+          example: applications/4/3f2a0c5e-7d1b-4c1e-9a1f-0b2c3d4e5f60.pdf
+          maxLength: 255
+          minLength: 0
+        originalName:
+          type: string
+          description: 원본 파일명 (관리자 화면 표시)
+          example: 사업자등록증.pdf
+          maxLength: 255
+          minLength: 0
+      required:
+      - docType
+      - key
+      - originalName
+    ProductItem:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 상품명
+          example: 리넨 셔츠
+          maxLength: 100
+          minLength: 0
+        subCategory:
+          type: string
+          description: 세부 분류 이름
+          example: 셔츠
+          maxLength: 50
+          minLength: 0
+        price:
+          type: integer
+          format: int64
+          description: 예상 판매가 (원)
+          example: 39000
+          minimum: 1
+      required:
+      - name
+      - price
+      - subCategory
+    SellerApplyRequest:
+      type: object
+      properties:
+        bizType:
+          type: string
+          description: 사업자 구분
+          enum:
+          - INDIVIDUAL
+          - CORPORATE
+          example: INDIVIDUAL
+        companyName:
+          type: string
+          description: 상호
+          example: 곳간상회
+          maxLength: 100
+          minLength: 0
+        ownerName:
+          type: string
+          description: 대표자
+          example: 홍길동
+          maxLength: 50
+          minLength: 0
+        bizRegNo:
+          type: string
+          description: 사업자등록번호
+          example: 000-00-00001
+          minLength: 1
+          pattern: "^\\d{3}-\\d{2}-\\d{5}$"
+        ecommerceRegNo:
+          type: string
+          description: 통신판매업 신고번호
+          example: 2026-서울성동-0000
+          maxLength: 50
+          minLength: 0
+        managerPhone:
+          type: string
+          description: 담당자 휴대폰 — 승인 때 고객 문의 연락처로 복사
+          example: 010-0000-1234
+          minLength: 1
+          pattern: "^01[016789]-\\d{3,4}-\\d{4}$"
+        managerEmail:
+          type: string
+          format: email
+          description: 담당자 이메일 — 심사 결과 메일 수신 (StoreApproved.sellerEmail)
+          example: seller@example.com
+          maxLength: 100
+          minLength: 0
+        businessAddress:
+          type: string
+          description: 사업장 주소
+          example: 서울시 성동구 성수이로 00
+          maxLength: 255
+          minLength: 0
+        storeName:
+          type: string
+          description: 스토어명 — 공백 · 대소문자를 무시하고 중복 검사
+          example: 곳간상회
+          maxLength: 50
+          minLength: 0
+        slug:
+          type: string
+          description: "스토어 주소 gotgan.kr/store/{slug} — 승인 후 변경 불가"
+          example: gotgan-store
+          minLength: 1
+          pattern: "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$"
+        categoryId:
+          type: integer
+          format: int64
+          description: 희망 상위 카테고리 ID — 존재 여부는 store 가 확인하지 않음 (심사 참고용)
+          example: 1
+          exclusiveMinimum: 0
+        intro:
+          type: string
+          description: 스토어 소개 HTML (선택) — 저장 전 정화
+          example: <p>리넨 의류를 만듭니다.</p>
+          maxLength: 5000
+          minLength: 0
+        representativeProducts:
+          type: array
+          description: 판매 예정 대표 상품 2~10개
+          items:
+            $ref: "#/components/schemas/ProductItem"
+          maxItems: 10
+          minItems: 2
+        expectedMonthlySales:
+          type: string
+          description: 월 예상 매출 구간 (선택)
+          enum:
+          - UNDER_5M
+          - FROM_5M_TO_20M
+          - FROM_20M_TO_100M
+          - OVER_100M
+          example: FROM_5M_TO_20M
+        salesChannel:
+          type: string
+          description: 운영 중인 채널 URL (선택)
+          example: https://instagram.com/gotgan.store
+          maxLength: 255
+          minLength: 0
+        documents:
+          type: array
+          description: 입점 서류 — presign 으로 올린 키. 사업자등록증 · 통신판매업 신고증 · 통장 사본 각 1 + 상품
+            사진 3~10
+          items:
+            $ref: "#/components/schemas/DocumentItem"
+        settlementAccount:
+          $ref: "#/components/schemas/SettlementAccount"
+          description: 정산 계좌 — 승인 때 StoreApproved.settlementAccount 로 그대로
+        agreements:
+          $ref: "#/components/schemas/Agreements"
+          description: 약관 동의 — 필수 3개는 true
+      required:
+      - agreements
+      - bizRegNo
+      - bizType
+      - businessAddress
+      - categoryId
+      - companyName
+      - documents
+      - ecommerceRegNo
+      - managerEmail
+      - managerPhone
+      - ownerName
+      - representativeProducts
+      - settlementAccount
+      - slug
+      - storeName
+    SettlementAccount:
+      type: object
+      properties:
+        bank:
+          type: string
+          description: 은행
+          example: 국민
+          maxLength: 30
+          minLength: 0
+        number:
+          type: string
+          description: 계좌번호
+          example: 000000-00-000000
+          maxLength: 30
+          minLength: 0
+        holder:
+          type: string
+          description: 예금주
+          example: 홍길동
+          maxLength: 50
+          minLength: 0
+      required:
+      - bank
+      - holder
+      - number
+    ApiResponseSellerApplyResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/SellerApplyResponse"
+    SellerApplyResponse:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID — API 식별에 쓰는 값
+          example: 27
+        applicationNo:
+          type: string
+          description: 접수번호 — 표시 전용
+          example: AP-2610-027
+        status:
+          type: string
+          description: 신청 상태
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: PENDING
+        submittedAt:
+          type: string
+          format: date-time
+          description: 제출 시각
+          example: 2026-10-22T14:05:11+09:00
+    DocumentPresignRequest:
+      type: object
+      properties:
+        files:
+          type: array
+          description: 올릴 파일 목록 (1~13개) — 응답은 같은 순서
+          items:
+            $ref: "#/components/schemas/FileItem"
+      required:
+      - files
+    FileItem:
+      type: object
+      properties:
+        docType:
+          type: string
+          description: 서류 종류
+          enum:
+          - BUSINESS_REG
+          - ECOMMERCE_REG
+          - BANK_COPY
+          - PRODUCT_PHOTO
+          example: BUSINESS_REG
+        contentType:
+          type: string
+          description: 파일 형식 — 업로드 PUT 의 Content-Type 도 이 값
+          example: application/pdf
+          minLength: 1
+        size:
+          type: integer
+          format: int64
+          description: 파일 크기(바이트) — 서명에 들어가 다른 크기로는 업로드되지 않음
+          example: 482113
+      required:
+      - contentType
+      - docType
+      - size
+    ApiResponseListDocumentPresignResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentPresignResponse"
+    DocumentPresignResponse:
+      type: object
+      properties:
+        key:
+          type: string
+          description: "S3 키 — 신청 때 documents[].key"
+          example: applications/4/3f2a0c5e-7d1b-4c1e-9a1f-0b2c3d4e5f60.pdf
+        uploadUrl:
+          type: string
+          description: presigned PUT 주소 — Content-Type · 크기를 발급 요청과 같게 보내야 함
+        expiresAt:
+          type: string
+          format: date-time
+          description: 주소 만료 시각 (10분)
+          example: 2026-10-26T15:10:00+09:00
+    ApiResponseApplicationApproveResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/ApplicationApproveResponse"
+    ApplicationApproveResponse:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID
+          example: 27
+        status:
+          type: string
+          description: 신청 상태 — 항상 APPROVED
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: APPROVED
+        storeId:
+          type: integer
+          format: int64
+          description: 새로 만든 스토어 ID
+          example: 3
+        decidedAt:
+          type: string
+          format: date-time
+          description: 승인 시각
+          example: 2026-10-28T14:30:00+09:00
+    ApiResponseInternalStoreResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/InternalStoreResponse"
+    InternalStoreResponse:
+      type: object
+      properties:
+        storeId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        storeName:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+        shippingFee:
+          type: integer
+          format: int64
+        freeShippingThreshold:
+          type: integer
+          format: int64
+        courier:
+          type: string
+    ApiResponseListInternalApplicationSummaryResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalApplicationSummaryResponse"
+    InternalApplicationSummaryResponse:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID
+          example: 27
+        applicationNo:
+          type: string
+          description: 접수번호 — 표시 전용
+          example: AP-2610-027
+        storeName:
+          type: string
+          description: 스토어명
+          example: 곳간상회
+        ownerName:
+          type: string
+          description: 대표자명
+          example: 홍길동
+        bizType:
+          type: string
+          description: 사업자 유형
+          enum:
+          - INDIVIDUAL
+          - CORPORATE
+          example: INDIVIDUAL
+        categoryId:
+          type: integer
+          format: int64
+          description: 주 카테고리 ID (상위) — 이름은 호출자가 붙임
+          example: 1
+        expectedMonthlySales:
+          type: string
+          description: 예상 월 매출 구간 (선택 입력이라 null 가능)
+          enum:
+          - UNDER_5M
+          - FROM_5M_TO_20M
+          - FROM_20M_TO_100M
+          - OVER_100M
+          example: FROM_5M_TO_20M
+        status:
+          type: string
+          description: 신청 상태
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: PENDING
+        submittedAt:
+          type: string
+          format: date-time
+          description: 제출 시각
+          example: 2026-10-22T14:05:11+09:00
+        statusChangedAt:
+          type: string
+          format: date-time
+          description: 마지막 상태 변경 시각
+          example: 2026-10-22T14:05:11+09:00
+    ApiResponseInternalApplicationDetailResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/InternalApplicationDetailResponse"
+    Document:
+      type: object
+      properties:
+        documentId:
+          type: integer
+          format: int64
+          description: 서류 ID
+          example: 101
+        docType:
+          type: string
+          description: 서류 종류
+          enum:
+          - BUSINESS_REG
+          - ECOMMERCE_REG
+          - BANK_COPY
+          - PRODUCT_PHOTO
+          example: ECOMMERCE_REG
+        originalName:
+          type: string
+          description: 올린 파일 이름
+          example: 통신판매업신고증.pdf
+        contentType:
+          type: string
+          description: S3 에서 확인한 형식
+          example: application/pdf
+        fileSize:
+          type: integer
+          format: int32
+          description: 바이트
+          example: 482113
+        current:
+          type: boolean
+          description: "지금 서류면 true, 재제출로 바뀐 이전 서류면 false"
+          example: true
+        uploadedAt:
+          type: string
+          format: date-time
+          description: 올린 시각
+          example: 2026-10-22T14:05:11+09:00
+        url:
+          type: string
+          description: presigned GET 열람 주소 (10분) — 발급 실패면 null
+        urlExpiresAt:
+          type: string
+          format: date-time
+          description: 열람 주소 만료 시각 — 발급 실패면 null
+          example: 2026-10-26T15:10:00+09:00
+    History:
+      type: object
+      properties:
+        fromStatus:
+          type: string
+          description: 이전 상태 — 최초 신청은 null
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: PENDING
+        toStatus:
+          type: string
+          description: 바뀐 상태
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: SUPPLEMENT
+        actor:
+          type: string
+          description: 바꾼 쪽 — 관리자 개인은 남기지 않음
+          enum:
+          - APPLICANT
+          - ADMIN
+          - SYSTEM
+          example: ADMIN
+        reason:
+          type: string
+          description: 사유 (없으면 null)
+          example: 통신판매업 신고증 사본이 흐려 확인이 어렵습니다
+        changedAt:
+          type: string
+          format: date-time
+          description: 바뀐 시각
+          example: 2026-10-23T10:00:00+09:00
+    InternalApplicationDetailResponse:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID
+          example: 27
+        applicationNo:
+          type: string
+          description: 접수번호 — 표시 전용
+          example: AP-2610-027
+        status:
+          type: string
+          description: 신청 상태
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: SUPPLEMENT
+        statusReason:
+          type: string
+          description: 반려 · 보완요청 사유 (없으면 null)
+          example: 통신판매업 신고증 사본이 흐려 확인이 어렵습니다
+        submittedAt:
+          type: string
+          format: date-time
+          description: 제출 시각
+          example: 2026-10-22T14:05:11+09:00
+        statusChangedAt:
+          type: string
+          format: date-time
+          description: 마지막 상태 변경 시각
+          example: 2026-10-23T10:00:00+09:00
+        storeId:
+          type: integer
+          format: int64
+          description: "승인으로 만들어진 스토어 ID, 아니면 null"
+          example: 1
+        bizType:
+          type: string
+          description: 사업자 유형
+          enum:
+          - INDIVIDUAL
+          - CORPORATE
+          example: INDIVIDUAL
+        companyName:
+          type: string
+          description: 상호
+          example: 곳간상회
+        ownerName:
+          type: string
+          description: 대표자명
+          example: 홍길동
+        bizRegNo:
+          type: string
+          description: 사업자등록번호
+          example: 000-00-00001
+        ecommerceRegNo:
+          type: string
+          description: 통신판매업 신고번호
+          example: 2026-서울성동-0000
+        managerPhone:
+          type: string
+          description: 담당자 연락처
+          example: 010-0000-1234
+        managerEmail:
+          type: string
+          description: 담당자 이메일
+          example: seller@example.com
+        businessAddress:
+          type: string
+          description: 사업장 주소
+          example: 서울시 성동구 성수이로 00
+        storeName:
+          type: string
+          description: 스토어명
+          example: 곳간상회
+        slug:
+          type: string
+          description: 스토어 주소
+          example: gotgan-store
+        categoryId:
+          type: integer
+          format: int64
+          description: 주 카테고리 ID (상위) — 이름은 호출자가 붙임
+          example: 1
+        intro:
+          type: string
+          description: 스토어 소개 HTML (없으면 null)
+          example: <p>리넨 의류를 만듭니다.</p>
+        representativeProducts:
+          type: array
+          description: 판매 예정 대표 상품 2~10개
+          items:
+            $ref: "#/components/schemas/RepresentativeProduct"
+        expectedMonthlySales:
+          type: string
+          description: 예상 월 매출 구간 (선택 입력이라 null 가능)
+          enum:
+          - UNDER_5M
+          - FROM_5M_TO_20M
+          - FROM_20M_TO_100M
+          - OVER_100M
+          example: FROM_5M_TO_20M
+        salesChannel:
+          type: string
+          description: 기존 판매 채널 (없으면 null)
+          example: https://instagram.com/gotgan.store
+        settlementAccount:
+          $ref: "#/components/schemas/SettlementAccount"
+          description: 정산 계좌
+        marketingAgreed:
+          type: boolean
+          description: 마케팅 수신 동의
+          example: false
+        termsAgreedAt:
+          type: string
+          format: date-time
+          description: 필수 약관 동의 시각
+          example: 2026-10-22T14:05:11+09:00
+        documents:
+          type: array
+          description: "서류 — 지금 서류와 재제출로 바뀐 이전 서류 모두, 종류별 · 올린 순서"
+          items:
+            $ref: "#/components/schemas/Document"
+        history:
+          type: array
+          description: 상태 이력 — 오래된 순
+          items:
+            $ref: "#/components/schemas/History"
+        sameBizRegNo:
+          $ref: "#/components/schemas/SameBizRegNo"
+          description: 같은 사업자등록번호의 이 신청을 뺀 다른 신청 · 스토어 — 중복 입점 확인 근거
+    RepresentativeProduct:
+      type: object
+      properties:
+        name:
+          type: string
+        subCategory:
+          type: string
+        price:
+          type: integer
+          format: int64
+    SameApplication:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID
+          example: 9
+        applicationNo:
+          type: string
+          description: 접수번호
+          example: AP-2609-009
+        storeName:
+          type: string
+          description: 스토어명
+          example: 곳간상점
+        status:
+          type: string
+          description: 신청 상태
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: REJECTED
+        submittedAt:
+          type: string
+          format: date-time
+          description: 제출 시각
+          example: 2026-09-14T11:00:00+09:00
+    SameBizRegNo:
+      type: object
+      properties:
+        applications:
+          type: array
+          description: 다른 신청 — 제출 최신순
+          items:
+            $ref: "#/components/schemas/SameApplication"
+        stores:
+          type: array
+          description: "다른 신청으로 만든 스토어 — 폐점 포함, 소프트 삭제 제외"
+          items:
+            $ref: "#/components/schemas/SameStore"
+    SameStore:
+      type: object
+      properties:
+        storeId:
+          type: integer
+          format: int64
+          description: 스토어 ID
+          example: 1
+        storeName:
+          type: string
+          description: 스토어명
+          example: 곳간상회
+        status:
+          type: string
+          description: 스토어 상태
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          example: CLOSED

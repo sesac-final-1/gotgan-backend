@@ -62,7 +62,7 @@ public class InternalApplicationController {
 
     @Operation(summary = "입점 승인",
             description = "인가: 내부. 본문 없음. 심사대기 · 보완요청 신청으로 스토어(ACTIVE)를 만들고 신청을 APPROVED 로, "
-                    + "커밋 뒤 StoreApproved 발행(실패해도 200 — 로그만). 이미 승인 · 반려됐거나 동시 처리에서 지면 409 APPLY_INVALID_STATUS, "
+                    + "StoreApproved 는 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 발행(실패해도 200 — 발행기가 다시 보냄, 최소 1회 전달). 이미 승인 · 반려됐거나 동시 처리에서 지면 409 APPLY_INVALID_STATUS, "
                     + "신청자에게 스토어가 있으면 409 APPLY_STORE_ALREADY_EXISTS, 스토어 주소 · 스토어명이 다른 스토어와 겹치면 "
                     + "409 APPLY_SLUG_DUPLICATED · APPLY_STORE_NAME_DUPLICATED, 없는 신청은 404 APPLY_NOT_FOUND. "
                     + "판매자 권한은 user 가 이벤트를 받은 뒤 다음 토큰부터 반영")
