@@ -1,5 +1,7 @@
 package com.sesac.gojigi.store.apply.entity;
 
+import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
+import com.sesac.gojigi.store.apply.exception.ApplyException;
 import com.sesac.gojigi.store.common.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -144,5 +146,15 @@ public class StoreApplication extends BaseTimeEntity {
         this.marketingAgreed = marketingAgreed;
         this.termsAgreedAt = submittedAt;
         this.statusChangedAt = submittedAt;
+    }
+
+    /** 승인 — 심사대기 · 보완요청에서만. 다른 상태면 409 (다른 관리자가 먼저 처리함, store.md 5절) */
+    public void approve(LocalDateTime decidedAt) {
+        if (status != ApplicationStatus.PENDING && status != ApplicationStatus.SUPPLEMENT) {
+            throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS);
+        }
+        this.status = ApplicationStatus.APPROVED;
+        this.statusReason = null; // 보완요청 사유가 승인 뒤에도 남아 보이지 않게
+        this.statusChangedAt = decidedAt;
     }
 }

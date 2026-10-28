@@ -211,8 +211,8 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 목록 | **페이징 없이 전체 배열** — 컨벤션 4-7(관리자 입점 심사 · 스토어는 전체 1회 로드 + 화면에서 검색 · 정렬 · 페이징). `status` 는 선택 필터, 생략하면 전체 |
 | 처리자 | 상태를 바꾼 쪽은 `actor` = `APPLICANT`(신청자) · `ADMIN` · `SYSTEM`(7일 자동 반려) / 스토어는 `SELLER` · `ADMIN`. **관리자 개인은 저장하지 않음**(storedb V1) — 화면의 "곳간 운영팀 · 정다은" 같은 이름은 내려 주지 않습니다 |
 | 사유 | 반려 · 보완요청 · 정지 · 해제는 사유 필수, 255자 이하. 비거나 길면 400 `INVALID_INPUT` |
-| 이벤트 | 상태 변경이 커밋된 뒤 발행(`AFTER_COMMIT`). 발행 실패는 API 응답에 영향 없음(로그만) |
-| 구현 시기 | 3주차: 3 · 4 · 5 · 6절 / 4주차: 7 · 8 · 9절 · 1절 확장. 그 전까지 admin 은 이 문서 기준으로 개발 |
+| 이벤트 | 상태 변경과 같은 트랜잭션에서 아웃박스(storedb `outbox_event`)에 남기고 커밋 직후 발행. 발행이 실패해도 API 응답은 그대로이고 발행기가 30초마다 다시 보냄 — **최소 1회 전달**(같은 `eventId` 봉투가 두 번 올 수 있음, 구독자 `processed_event` 로 거름) |
+| 구현 시기 | 구현됨: 3 · 4 · 5절 / 3주차: 6절 / 4주차: 7 · 8 · 9절 · 1절 확장(배송 필드 3개는 구현됨). 그 전까지 admin 은 이 문서 기준으로 개발 |
 
 ### 입점 신청 상태 `status`
 
@@ -343,7 +343,8 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 ```
 
 - `userId` = 신청 때의 `X-User-Id`, `sellerEmail` = 신청서 `managerEmail`.
-- `eventId` 는 신청 ID 로 정해지는 값(`StoreApproved:{applicationId}` 의 이름 기반 UUID)이라 **다시 보내도 같은 `eventId`** — 구독자 `processed_event` 가 중복을 걸러 줍니다(노션 10/23 user 요청).
+- `eventId` 는 신청 ID 로 정해지는 값(`StoreApproved:{applicationId}` 의 이름 기반 UUID)이라 **다시 보내도 같은 `eventId`** — 구독자 `processed_event` 가 중복을 걸러 줍니다(노션 10/23 user 요청). `occurredAt` = 응답의 `decidedAt` 이라 다시 보내도 같습니다(admin 알림함 키).
+- 승인과 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 보냅니다. SNS 가 실패하거나 1초 넘게 걸리면 응답은 그대로 200 이고 발행기가 30초마다 다시 보냅니다(10회 실패 시 store error 로그). 승인 응답이 SNS 때문에 admin read-timeout(3초)을 넘지 않습니다.
 - 판매자 권한은 user 가 이 이벤트를 받아 Keycloak 에 `store_id` · `SELLER` 를 넣은 뒤 **다음 토큰부터** 반영됩니다. 승인 응답 시점에는 아직 판매자센터에 못 들어갈 수 있습니다.
 
 ## 6. 입점 반려 (내부) — `PATCH /internal/applications/{applicationId}/reject` (STR-05)
@@ -502,7 +503,16 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 3 | 서류 열람 | 상세 조회 때 presigned GET 10분. 이전 제출본(`is_current = false`)도 비교용으로 포함 |
 | 4 | 체크리스트 | 서버는 받지도 검사하지도 않음(STR-10). 중복 입점 근거로 같은 사업자번호의 다른 신청 · 스토어를 상세에 포함(`idx_store_application_biz_reg_no`) |
 | 5 | 보완요청 본문 | `{message, requestedDocs[]}`, 기한은 서버가 +7일. 이벤트의 `requestedDocs` 는 메일용 한글 이름. **`requestedDocs` 는 DB 에 저장하지 않음** — 재제출 화면(4주차)에서 필요해지면 그때 V 파일로 컬럼 추가 |
-| 6 | 승인 이벤트 재발행 | `eventId` = `StoreApproved:{applicationId}` 이름 기반 UUID — 아웃박스 없이도 재발행 시 같은 값 |
+| 6 | 승인 이벤트 재발행 | `eventId` = `StoreApproved:{applicationId}` 이름 기반 UUID — 신청 하나에 항상 같은 값. 10/28 부터 아웃박스로 발행(아래 10/28 설계 정리) |
 | 7 | 정지 · 해제 | `SUSPENDED ↔ ACTIVE` 만. 같은 상태면 200 멱등(이벤트 없음 — product 카테고리 `PATCH` 와 같은 방식), `CLOSED` 는 409, 요청에 `CLOSED` 는 400(폐점은 판매자 API) |
 | 8 | 관리자 스토어 상세 | 새 경로 없이 1절 응답에 필드 추가(필드는 추가만 규칙). 상태 이력 조회가 하나 늘지만 user · order 호출 빈도에서 무시할 수준 |
 | 9 | 처리자 | `actor` 종류만, 관리자 ID · 이름 없음(storedb V1 그대로) |
+
+## 10/28 설계 정리 (이벤트 발행)
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | 발행 방식 | 아웃박스(storedb V4 `outbox_event`, backend #165) — order · settlement 와 같은 방식. 커밋 직후 1회 + 발행기(30초, ShedLock `store-event-outbox`)가 실패 · 남은 행을 다시. 커밋 직후 발행만 하면 SNS 장애 때 `StoreApproved` 가 사라져 판매자 권한이 안 붙음 |
+| 2 | SNS 타임아웃 | 호출 1초 · 시도 500ms — admin read-timeout 3초 안에 응답(타임아웃 예산). 늦으면 발행기에 맡김 |
+| 3 | `eventId` · `occurredAt` | 부르는 쪽이 정해 아웃박스 행에 저장 — 승인은 신청 ID 이름 기반 UUID · 승인 시각. 다시 보내도 같은 봉투 |
+| 4 | 실패 로그 | 9회까지 warn, 10회째 error + 스택 한 번, 그 뒤 한 줄 warn(컨벤션 2-8 반복 실패는 첫 회만 스택) |

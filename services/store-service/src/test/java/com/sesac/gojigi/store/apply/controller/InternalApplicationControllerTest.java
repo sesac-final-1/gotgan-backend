@@ -6,10 +6,12 @@ import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationApproveResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.Document;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.History;
@@ -26,6 +28,7 @@ import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.exception.ApplyException;
 import com.sesac.gojigi.store.apply.service.ApplicationQueryService;
+import com.sesac.gojigi.store.apply.service.ApplicationReviewService;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -44,11 +47,14 @@ class InternalApplicationControllerTest {
     @Mock
     private ApplicationQueryService applicationQueryService;
 
+    @Mock
+    private ApplicationReviewService applicationReviewService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new InternalApplicationController(applicationQueryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new InternalApplicationController(applicationQueryService, applicationReviewService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -144,5 +150,56 @@ class InternalApplicationControllerTest {
         mockMvc.perform(get("/internal/applications/abc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("승인 — 200, 상태 APPROVED · 새 storeId · 승인 시각 +09:00")
+    void approve_whenPending_returns200() throws Exception {
+        // given
+        given(applicationReviewService.approve(27L)).willReturn(new ApplicationApproveResponse(27L, ApplicationStatus.APPROVED,
+                3L, OffsetDateTime.parse("2026-10-28T14:30:00+09:00")));
+
+        // when · then
+        mockMvc.perform(patch("/internal/applications/27/approve"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("입점 신청을 승인했습니다."))
+                .andExpect(jsonPath("$.data.applicationId").value(27))
+                .andExpect(jsonPath("$.data.status").value("APPROVED"))
+                .andExpect(jsonPath("$.data.storeId").value(3))
+                .andExpect(jsonPath("$.data.decidedAt").value("2026-10-28T14:30:00+09:00"));
+    }
+
+    @Test
+    @DisplayName("이미 처리된 신청 승인 — 409 APPLY_INVALID_STATUS, data 는 null")
+    void approve_whenAlreadyDecided_returns409() throws Exception {
+        // given
+        given(applicationReviewService.approve(27L)).willThrow(new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS));
+
+        // when · then
+        mockMvc.perform(patch("/internal/applications/27/approve"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("APPLY_INVALID_STATUS"))
+                .andExpect(jsonPath("$.data").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("없는 신청 승인 — 404 APPLY_NOT_FOUND")
+    void approve_whenApplicationMissing_returns404() throws Exception {
+        // given
+        given(applicationReviewService.approve(99L)).willThrow(new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
+
+        // when · then
+        mockMvc.perform(patch("/internal/applications/99/approve"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("APPLY_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("승인 경로의 applicationId 가 숫자가 아니면 400 INVALID_INPUT 이고 서비스를 부르지 않는다")
+    void approve_whenApplicationIdNotNumber_returns400() throws Exception {
+        mockMvc.perform(patch("/internal/applications/abc/approve"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        then(applicationReviewService).should(never()).approve(any());
     }
 }
