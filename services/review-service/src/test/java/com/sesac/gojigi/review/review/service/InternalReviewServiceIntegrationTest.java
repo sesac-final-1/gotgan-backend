@@ -3,12 +3,14 @@ package com.sesac.gojigi.review.review.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sesac.gojigi.common.web.dto.PageResponse;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.review.TestcontainersConfiguration;
 import com.sesac.gojigi.review.eligibility.entity.ReviewEligibility;
 import com.sesac.gojigi.review.eligibility.repository.ReviewEligibilityRepository;
 import com.sesac.gojigi.review.review.dto.request.ReviewBlindRequest;
 import com.sesac.gojigi.review.review.dto.response.InternalReviewResponse;
+import com.sesac.gojigi.review.review.dto.response.InternalUserReviewResponse;
 import com.sesac.gojigi.review.review.entity.Review;
 import com.sesac.gojigi.review.review.exception.ReviewErrorCode;
 import com.sesac.gojigi.review.review.repository.ReviewRepository;
@@ -165,5 +167,45 @@ class InternalReviewServiceIntegrationTest {
                     .hasFieldOrPropertyWithValue("errorCode", CommonErrorCode.INVALID_INPUT);
             assertThat(reviewRepository.findById(review.getId()).orElseThrow().isBlinded()).isFalse();
         }
+    }
+
+    @Test
+    @DisplayName("회원별 리뷰 — 그 회원 것만 · 삭제 제외 · 블라인드 포함 · 최신순, 상품명은 자격 스냅샷, 없는 회원은 빈 목록")
+    void listByUser_ownNotDeletedNewestFirst() {
+        // given
+        long user = 7_301L;
+        Review first = saveReviewOf(user);
+        Review blinded = saveReviewOf(user);
+        Review deleted = saveReviewOf(user);
+        saveReviewOf(user + 1);
+        Review b = reviewRepository.findById(blinded.getId()).orElseThrow();
+        b.blind("욕설 · 비방", NOW);
+        reviewRepository.findById(deleted.getId()).orElseThrow().softDelete(NOW);
+        reviewRepository.flush();
+        em.clear();
+
+        // when
+        PageResponse<InternalUserReviewResponse> page = internalReviewService.listByUser(user, 0, 10);
+
+        // then
+        assertThat(page.content()).extracting(InternalUserReviewResponse::reviewId)
+                .containsExactly(blinded.getId(), first.getId());
+        InternalUserReviewResponse latest = page.content().getFirst();
+        assertThat(latest.blinded()).isTrue();
+        assertThat(latest.blindReason()).isEqualTo("욕설 · 비방");
+        assertThat(latest.productName()).isEqualTo("린넨 셔츠");
+        assertThat(latest.productId()).isEqualTo(101L);
+        assertThat(latest.storeId()).isEqualTo(1L);
+        assertThat(latest.createdAt()).isNotNull();
+        assertThat(internalReviewService.listByUser(9_999_999L, 0, 10).content()).isEmpty();
+        assertThat(internalReviewService.listByUser(user, 0, 1).hasNext()).isTrue();
+    }
+
+    private Review saveReviewOf(long userId) {
+        ReviewEligibility eligibility = eligibilityRepository.save(ReviewEligibility.builder()
+                .orderItemId(ORDER_ITEM_SEQ.incrementAndGet()).userId(userId).productId(101L).storeId(1L)
+                .buyerDisplayName("곳간러버").productName("린넨 셔츠").confirmedAt(NOW.minusDays(1))
+                .build());
+        return reviewRepository.saveAndFlush(Review.write(eligibility, 4, null, CONTENT, null));
     }
 }
