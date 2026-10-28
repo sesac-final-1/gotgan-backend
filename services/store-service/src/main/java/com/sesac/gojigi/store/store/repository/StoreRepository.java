@@ -2,10 +2,12 @@ package com.sesac.gojigi.store.store.repository;
 
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -25,6 +27,14 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
             order by s.createdAt desc, s.id desc
             """)
     List<StoreWithApplicant> findAllForAdmin(@Param("status") StoreStatus status);
+
+    /**
+     * 상태 변경용 — 행을 잠가(SELECT … FOR UPDATE) 정지 · 해제 · 폐점이 동시에 들어와도 차례로 처리한다.
+     * store 테이블에 @Version 컬럼이 없어 비관적 잠금으로 DB 최종 상태와 이벤트 occurredAt 순서를 맞춘다
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select s from Store s where s.id = :id and s.deletedAt is null")
+    Optional<Store> findForUpdate(@Param("id") Long id);
 
     /** 승인된 신청으로 만든 스토어 — uk_store_store_application_id */
     Optional<Store> findByStoreApplicationId(Long storeApplicationId);
