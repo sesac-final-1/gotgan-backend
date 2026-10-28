@@ -43,3 +43,25 @@
 | 구매확정 후 30일이 지남 (`expires_at` 시각까지 작성 가능) | 409 `REVIEW_WRITE_EXPIRED` |
 
 - 작성자 표시 이름(`writerDisplayName`)은 자격의 `buyer_display_name`(닉네임, 없으면 마스킹 실명)을 복사합니다. 이 값은 `OrderItemConfirmed.buyerDisplayName` 으로 받을 예정이라 order payload 추가가 필요합니다.
+
+## 2. 내 리뷰 수정 — `PUT /api/reviews/{reviewId}` (REV-05)
+
+마이페이지 "내가 쓴 리뷰"의 수정 버튼(`MyReviews`)에서 씁니다. 작성 모달을 채운 상태로 다시 열어 같은 값을 보내는 형태라 **통째로 바꿉니다** — 한줄 요약 · 사이즈 체감을 비워 보내면 지워집니다.
+
+```json
+{ "rating": 4, "title": "길이가 조금 길어요",
+  "content": "키 160인데 기장이 살짝 길어서 수선했어요. 그 외에는 만족합니다.", "fit": "LARGE" }
+```
+
+- 필드 규칙은 1절 작성과 같습니다(`orderItemId` 만 없음).
+- **기한 없음** — 작성 기한(30일)이 지나도 수정할 수 있습니다.
+- 판매자 답글은 그대로 남습니다.
+
+응답 **200** `{ "reviewId": 31, "rating": 4, "title": "…", "content": "…(태그를 지운 값)", "fit": "LARGE" }`
+
+| 경우 | 응답 |
+|---|---|
+| 형식 위반 · 태그를 지우니 본문이 빔 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 없는 · 삭제된 · 다른 회원의 리뷰 (구분하지 않음) | 404 `REVIEW_NOT_FOUND` |
+| 관리자가 블라인드한 리뷰 — 사유가 된 내용을 고쳐 노출을 되살리지 못하게, 해제는 관리자만 | 409 `REVIEW_BLINDED` |

@@ -6,7 +6,9 @@ import com.sesac.gojigi.review.common.util.TextSanitizer;
 import com.sesac.gojigi.review.eligibility.entity.ReviewEligibility;
 import com.sesac.gojigi.review.eligibility.repository.ReviewEligibilityRepository;
 import com.sesac.gojigi.review.review.dto.request.ReviewCreateRequest;
+import com.sesac.gojigi.review.review.dto.request.ReviewUpdateRequest;
 import com.sesac.gojigi.review.review.dto.response.ReviewCreateResponse;
+import com.sesac.gojigi.review.review.dto.response.ReviewResponse;
 import com.sesac.gojigi.review.review.entity.Review;
 import com.sesac.gojigi.review.review.exception.ReviewErrorCode;
 import com.sesac.gojigi.review.review.exception.ReviewException;
@@ -20,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 리뷰 작성 (REV-02, docs/api/review.md 1절). 담당 이경석.
+ * 리뷰 작성 · 수정 (REV-02 · 05, docs/api/review.md 1 · 2절). 담당 이경석.
  * 자격은 review_eligibility(OrderItemConfirmed 로 저장)만 본다 — order 를 호출하지 않는다.
  * 검사 순서: 자격(없음 · 남의 상품주문) → 이미 작성 → 기한 30일.
  */
@@ -45,13 +47,8 @@ public class ReviewService {
         if (eligibility.isExpired(LocalDateTime.now(clock))) {
             throw new ReviewException(ReviewErrorCode.REVIEW_WRITE_EXPIRED);
         }
-        String content = TextSanitizer.plainText(request.content());
-        if (content == null) {
-            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "리뷰 내용을 입력해 주세요.");
-        }
-
         Review review = Review.write(eligibility, request.rating(), TextSanitizer.plainText(request.title()),
-                content, request.fit());
+                sanitizeContent(request.content()), request.fit());
         try {
             reviewRepository.saveAndFlush(review);
         } catch (DataIntegrityViolationException e) {
@@ -61,5 +58,33 @@ public class ReviewService {
         log.info("리뷰 작성 reviewId={} userId={} orderItemId={} productId={} rating={}",
                 review.getId(), userId, review.getOrderItemId(), review.getProductId(), review.getRating());
         return new ReviewCreateResponse(review.getId());
+    }
+
+    /**
+     * 내 리뷰 수정 (REV-05, review.md 2절) — 기한 없이 본인만. 없음 · 삭제됨 · 남의 리뷰는 같은 404.
+     * 블라인드된 리뷰는 수정 불가 — 블라인드 사유가 된 내용을 고쳐 노출을 되살리는 것을 막는다(해제는 관리자만).
+     */
+    @Transactional
+    public ReviewResponse edit(Long userId, Long reviewId, ReviewUpdateRequest request) {
+        Review review = reviewRepository.findById(reviewId)
+                .filter(r -> !r.isDeleted() && r.isOwnedBy(userId))
+                .orElseThrow(() -> new ReviewException(ReviewErrorCode.REVIEW_NOT_FOUND));
+        if (review.isBlinded()) {
+            throw new ReviewException(ReviewErrorCode.REVIEW_BLINDED);
+        }
+
+        review.edit(request.rating(), TextSanitizer.plainText(request.title()), sanitizeContent(request.content()),
+                request.fit());
+        log.info("리뷰 수정 reviewId={} userId={} rating={}", review.getId(), userId, review.getRating());
+        return ReviewResponse.from(review);
+    }
+
+    /** 태그를 지운 본문 — 남는 글자가 없으면 형식 오류 */
+    private static String sanitizeContent(String content) {
+        String sanitized = TextSanitizer.plainText(content);
+        if (sanitized == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "리뷰 내용을 입력해 주세요.");
+        }
+        return sanitized;
     }
 }
