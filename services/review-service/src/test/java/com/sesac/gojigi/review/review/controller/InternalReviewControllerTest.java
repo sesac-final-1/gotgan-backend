@@ -8,9 +8,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.sesac.gojigi.common.web.dto.PageResponse;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.review.review.dto.request.ReviewBlindRequest;
 import com.sesac.gojigi.review.review.dto.response.InternalReviewResponse;
+import com.sesac.gojigi.review.review.dto.response.InternalUserReviewResponse;
 import com.sesac.gojigi.review.review.exception.ReviewErrorCode;
 import com.sesac.gojigi.review.review.exception.ReviewException;
 import com.sesac.gojigi.review.review.service.InternalReviewService;
@@ -107,6 +109,31 @@ class InternalReviewControllerTest {
     void changeBlind_invalidBody_returns400(String body) throws Exception {
         mockMvc.perform(patch("/internal/reviews/31/blind").contentType(MediaType.APPLICATION_JSON)
                         .content(body.formatted("가".repeat(256))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        verifyNoInteractions(internalReviewService);
+    }
+
+    @Test
+    @DisplayName("회원별 리뷰 — 200, 기본 page 0 · size 10, 블라인드 포함")
+    void listByUser_returns200() throws Exception {
+        given(internalReviewService.listByUser(4L, 0, 10)).willReturn(new PageResponse<>(List.of(
+                new InternalUserReviewResponse(31L, 101L, "린넨 셔츠", 1L, 1, "본문", true, "욕설 · 비방", BLINDED.createdAt())),
+                0, 10, 1, 1, false));
+
+        mockMvc.perform(get("/internal/reviews").param("userId", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].reviewId").value(31))
+                .andExpect(jsonPath("$.data.content[0].productName").value("린넨 셔츠"))
+                .andExpect(jsonPath("$.data.content[0].blinded").value(true))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "", "?userId=abc", "?userId=4&page=-1", "?userId=4&size=51" })
+    @DisplayName("회원별 리뷰 — userId 없음 · 숫자 아님 · page · size 범위 밖은 400 INVALID_INPUT")
+    void listByUser_invalidParam_returns400(String query) throws Exception {
+        mockMvc.perform(get("/internal/reviews" + query))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         verifyNoInteractions(internalReviewService);

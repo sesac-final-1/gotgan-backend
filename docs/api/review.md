@@ -176,7 +176,7 @@
 
 - "관리자 검토 요청" 버튼은 이 API 가 아니라 admin 신고 API(`POST /api/reports`, `reasonCode: SELLER_REQUEST`) — `admin.md` 참고.
 
-## 8. 내부 — admin 신고 처리 `GET /internal/reviews/{reviewId}` · `PATCH /internal/reviews/{reviewId}/blind`
+## 8. 내부 — admin 신고 처리 · 회원 상세 `GET /internal/reviews/{reviewId}` · `PATCH /internal/reviews/{reviewId}/blind` · `GET /internal/reviews?userId=`
 
 호출자 admin-service(`ReviewClientAdapter`, 서킷 `review` — GET 만 재시도). 노션 확인 요청 「신고 · 리뷰 블라인드 (B안)」 4-2 계약 그대로입니다. 게이트웨이 라우트 없음, 사용자 헤더 없음.
 
@@ -205,6 +205,20 @@
 |---|---|
 | `reviewId` 숫자 아님 · `blinded` 없음 · 형식 오류 · 블라인드인데 사유 없음 · 사유 256자 이상 | 400 `INVALID_INPUT` |
 | 없는 · 삭제된 리뷰 | 404 `REVIEW_NOT_FOUND` |
+
+### 8-3. 회원별 리뷰 `GET /internal/reviews?userId=4&page=0&size=10`
+
+관리자 회원 상세 "작성 리뷰"(`UserDetail`) — admin 이 `/api/admin/users/{id}` 화면에서 부릅니다. 마이페이지 `/api/reviews/me` 는 본인(`X-User-Id`)만 보는 공개 경로라 쓰지 않습니다.
+
+```json
+{ "content": [ { "reviewId": 31, "productId": 101, "productName": "린넨 셔츠", "storeId": 1, "rating": 1,
+    "content": "…", "blinded": true, "blindReason": "욕설 · 비방", "createdAt": "2026-10-20T14:00:00+09:00" } ],
+  "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "hasNext": false }
+```
+
+- 그 회원의 리뷰, **삭제 제외 · 블라인드 포함**, 최신 작성순. `page` 0부터 · `size` 1~50(기본 10) — 화면의 최근 5개는 `size=5`.
+- 없는 회원은 빈 목록 (review 는 회원을 모름). DB 조회만 하므로 재시도 가능.
+- 오류: `userId` 없음 · 숫자 아님 · `page` · `size` 범위 밖 400 `INVALID_INPUT`
 
 ## 9. 상품 상세 리뷰 (공개) — `GET /api/reviews?productId=` · `GET /api/reviews/summary?productId=` (REV-04)
 

@@ -4,13 +4,20 @@ import com.sesac.gojigi.common.web.auth.AuthUser;
 import com.sesac.gojigi.common.web.auth.CurrentUser;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.common.web.dto.PageResponse;
+import com.sesac.gojigi.review.review.dto.request.ProductReviewSort;
 import com.sesac.gojigi.review.review.dto.request.ReviewCreateRequest;
 import com.sesac.gojigi.review.review.dto.request.ReviewUpdateRequest;
 import com.sesac.gojigi.review.review.dto.response.MyReviewResponse;
+import com.sesac.gojigi.review.review.dto.response.ProductRatingResponse;
+import com.sesac.gojigi.review.review.dto.response.ProductReviewResponse;
+import com.sesac.gojigi.review.review.dto.response.ProductReviewSummaryResponse;
 import com.sesac.gojigi.review.review.dto.response.ReviewCreateResponse;
 import com.sesac.gojigi.review.review.dto.response.ReviewResponse;
+import com.sesac.gojigi.review.review.dto.response.StoreRatingResponse;
 import com.sesac.gojigi.review.review.dto.response.WritableReviewResponse;
 import com.sesac.gojigi.review.review.service.MyReviewQueryService;
+import com.sesac.gojigi.review.review.service.ProductReviewQueryService;
+import com.sesac.gojigi.review.review.service.RatingQueryService;
 import com.sesac.gojigi.review.review.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,6 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,15 +41,24 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 리뷰 작성 · 수정 · 삭제 · 마이페이지 조회 — 게이트웨이 /api/reviews/** (GET 공개, 그 외 로그인) → review-service (docs/api/review.md 1 ~ 5절) */
-@Tag(name = "리뷰", description = "구매확정한 상품주문의 리뷰 — 작성 · 수정 · 삭제 · 내 리뷰")
+/**
+ * 구매자 · 공개 리뷰 — 게이트웨이 /api/reviews/** (GET 공개, 그 외 로그인) → review-service.
+ * 작성 · 수정 · 삭제 · 마이페이지(1 ~ 5절), 상품 리뷰 목록 · 요약(9절), 여러 상품 · 스토어 평점(10절) — docs/api/review.md.
+ * 판매자는 SellerReviewController, admin 내부 호출은 InternalReviewController.
+ */
+@Tag(name = "리뷰", description = "구매확정한 상품주문의 리뷰 — 작성 · 수정 · 삭제 · 내 리뷰 · 상품 리뷰 · 평점(공개)")
 @RestController
 @RequestMapping("/api/reviews")
 @RequiredArgsConstructor
 public class ReviewController {
 
+    /** 평점 한 번에 묻는 ID 수 — product 내부 API(product-options) 와 같은 100 */
+    private static final int MAX_IDS = 100;
+
     private final ReviewService reviewService;
     private final MyReviewQueryService myReviewQueryService;
+    private final ProductReviewQueryService productReviewQueryService;
+    private final RatingQueryService ratingQueryService;
 
     @Operation(summary = "리뷰 작성", description = """
             인가: 로그인 (작성자 = X-User-Id). 구매확정한 내 상품주문당 1개, 구매확정 후 30일 이내.
@@ -103,5 +120,42 @@ public class ReviewController {
     @GetMapping("/me/writable")
     public ApiResponse<List<WritableReviewResponse>> listWritable(@Parameter(hidden = true) @CurrentUser AuthUser user) {
         return ApiResponse.success("작성 가능한 리뷰를 조회했습니다.", myReviewQueryService.listWritable(user.userId()));
+    }
+
+    @Operation(summary = "상품 리뷰 목록 (공개)", description = """
+            인가: 없음(공개). 블라인드 · 삭제 제외. rating 으로 별점 하나만(선택), sort: LATEST(기본) · RATING_HIGH · RATING_LOW.
+            page(0부터) · size(1~50, 기본 10). 없는 상품은 빈 목록.
+            에러: 400 INVALID_INPUT(productId 없음 · rating 1~5 밖 · sort 모르는 값 · page · size)""")
+    @GetMapping
+    public ApiResponse<PageResponse<ProductReviewResponse>> listForProduct(@RequestParam Long productId,
+            @RequestParam(required = false) @Min(1) @Max(5) Integer rating,
+            @RequestParam(defaultValue = "LATEST") ProductReviewSort sort,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(50) int size) {
+        return ApiResponse.success("리뷰 목록을 조회했습니다.", productReviewQueryService.list(productId, rating, sort, page, size));
+    }
+
+    @Operation(summary = "상품 리뷰 요약 (공개)", description = """
+            인가: 없음(공개). 평균 · 리뷰 수 · 별점 분포(5→1) · 사이즈 체감 분포(SMALL · TRUE_TO_SIZE · LARGE) — 블라인드 · 삭제 제외.
+            없는 상품은 0. 에러: 400 INVALID_INPUT(productId 없음 · 숫자 아님)""")
+    @GetMapping("/summary")
+    public ApiResponse<ProductReviewSummaryResponse> summarizeForProduct(@RequestParam Long productId) {
+        return ApiResponse.success("리뷰 요약을 조회했습니다.", productReviewQueryService.summarize(productId));
+    }
+
+    @Operation(summary = "여러 상품 평점 (공개)", description = """
+            인가: 없음(공개). ids=101,102 또는 ids=101&ids=102, 1~100개. 요청한 순서대로(중복은 한 번), 리뷰 없는 상품은 0 · 0.
+            블라인드 · 삭제 제외. 에러: 400 INVALID_INPUT(ids 없음 · 숫자 아님 · 100개 초과)""")
+    @GetMapping("/ratings/products")
+    public ApiResponse<List<ProductRatingResponse>> rateProducts(@RequestParam @Size(min = 1, max = MAX_IDS) List<Long> ids) {
+        return ApiResponse.success("상품 평점을 조회했습니다.", ratingQueryService.rateProducts(ids));
+    }
+
+    @Operation(summary = "여러 스토어 평점 (공개)", description = """
+            인가: 없음(공개). ids 1~100개, 요청한 순서대로, 리뷰 없는 스토어는 0 · 0. 블라인드 · 삭제 제외.
+            에러: 400 INVALID_INPUT(ids 없음 · 숫자 아님 · 100개 초과)""")
+    @GetMapping("/ratings/stores")
+    public ApiResponse<List<StoreRatingResponse>> rateStores(@RequestParam @Size(min = 1, max = MAX_IDS) List<Long> ids) {
+        return ApiResponse.success("스토어 평점을 조회했습니다.", ratingQueryService.rateStores(ids));
     }
 }
