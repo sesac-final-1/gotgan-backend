@@ -67,9 +67,6 @@ public class Review extends BaseTimeEntity {
     @Column(name = "fit", length = 20)
     private ReviewFit fit;
 
-    @Column(name = "helpful_count", nullable = false, columnDefinition = "INT UNSIGNED")
-    private int helpfulCount;
-
     @Column(name = "reply_content", columnDefinition = "TEXT")
     private String replyContent;
 
