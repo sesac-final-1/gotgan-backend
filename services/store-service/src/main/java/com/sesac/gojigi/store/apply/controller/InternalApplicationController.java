@@ -1,10 +1,12 @@
 package com.sesac.gojigi.store.apply.controller;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationApproveResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationSummaryResponse;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.service.ApplicationQueryService;
+import com.sesac.gojigi.store.apply.service.ApplicationReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -13,6 +15,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalApplicationController {
 
     private final ApplicationQueryService applicationQueryService;
+    private final ApplicationReviewService applicationReviewService;
 
     @Operation(summary = "입점 신청 목록",
             description = "인가: 내부. 페이징 없이 전체 배열, 제출 최신순. status 를 생략하면 전체, "
@@ -54,5 +58,24 @@ public class InternalApplicationController {
     public ResponseEntity<ApiResponse<InternalApplicationDetailResponse>> get(
             @Parameter(description = "신청 ID", example = "27") @PathVariable Long applicationId) {
         return ResponseEntity.ok(ApiResponse.success("입점 신청을 조회했습니다.", applicationQueryService.getDetail(applicationId)));
+    }
+
+    @Operation(summary = "입점 승인",
+            description = "인가: 내부. 본문 없음. 심사대기 · 보완요청 신청으로 스토어(ACTIVE)를 만들고 신청을 APPROVED 로, "
+                    + "커밋 뒤 StoreApproved 발행(실패해도 200 — 로그만). 이미 승인 · 반려됐거나 동시 처리에서 지면 409 APPLY_INVALID_STATUS, "
+                    + "신청자에게 스토어가 있으면 409 APPLY_STORE_ALREADY_EXISTS, 스토어 주소 · 스토어명이 다른 스토어와 겹치면 "
+                    + "409 APPLY_SLUG_DUPLICATED · APPLY_STORE_NAME_DUPLICATED, 없는 신청은 404 APPLY_NOT_FOUND. "
+                    + "판매자 권한은 user 가 이벤트를 받은 뒤 다음 토큰부터 반영")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "승인 — storeId · decidedAt"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT — applicationId 형식 오류"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "APPLY_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "APPLY_INVALID_STATUS · APPLY_STORE_ALREADY_EXISTS · APPLY_SLUG_DUPLICATED · APPLY_STORE_NAME_DUPLICATED")
+    })
+    @PatchMapping("/{applicationId}/approve")
+    public ResponseEntity<ApiResponse<ApplicationApproveResponse>> approve(
+            @Parameter(description = "신청 ID", example = "27") @PathVariable Long applicationId) {
+        return ResponseEntity.ok(ApiResponse.success("입점 신청을 승인했습니다.", applicationReviewService.approve(applicationId)));
     }
 }
