@@ -1,6 +1,7 @@
 package com.sesac.gojigi.store.apply.controller;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationSummaryResponse;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.service.ApplicationQueryService;
@@ -12,6 +13,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -37,5 +39,20 @@ public class InternalApplicationController {
             @Parameter(description = "신청 상태 필터 (PENDING · SUPPLEMENT · APPROVED · REJECTED)", example = "PENDING")
             @RequestParam(required = false) ApplicationStatus status) {
         return ResponseEntity.ok(ApiResponse.success("입점 신청 목록을 조회했습니다.", applicationQueryService.getList(status)));
+    }
+
+    @Operation(summary = "입점 신청 상세",
+            description = "인가: 내부. 상태와 상관없이 신청서 전체 + 서류(이전 제출본 포함) presigned GET 10분 + 상태 이력 + "
+                    + "같은 사업자번호의 다른 신청 · 스토어. 서류 주소 발급이 실패해도 200(url · urlExpiresAt null). "
+                    + "없는 신청은 404 APPLY_NOT_FOUND")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT — applicationId 형식 오류"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "APPLY_NOT_FOUND")
+    })
+    @GetMapping("/{applicationId}")
+    public ResponseEntity<ApiResponse<InternalApplicationDetailResponse>> get(
+            @Parameter(description = "신청 ID", example = "27") @PathVariable Long applicationId) {
+        return ResponseEntity.ok(ApiResponse.success("입점 신청을 조회했습니다.", applicationQueryService.getDetail(applicationId)));
     }
 }

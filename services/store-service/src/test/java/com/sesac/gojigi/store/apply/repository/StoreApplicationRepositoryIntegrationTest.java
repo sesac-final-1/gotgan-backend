@@ -8,6 +8,7 @@ import com.sesac.gojigi.store.apply.entity.BizType;
 import com.sesac.gojigi.store.apply.entity.ExpectedMonthlySales;
 import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
@@ -121,6 +122,27 @@ class StoreApplicationRepositoryIntegrationTest {
         // then
         assertThat(pendings).extracting(StoreApplication::getId).containsExactly(pending);
         assertThat(approved).isNotEmpty().allMatch(a -> a.getStatus() == ApplicationStatus.APPROVED);
+    }
+
+    @Test
+    @DisplayName("같은 사업자번호 조회는 이 신청을 빼고, 그 신청으로 만든 스토어는 소프트 삭제만 뺀다")
+    void sameBizRegNo_excludesSelfAndSoftDeletedStore() {
+        // given — 시드 신청 1(000-00-00006, 스토어 1) · 2(000-00-00004, 스토어 2) 와 같은 번호로 새 신청
+        Long mine = storeApplicationRepository.saveAndFlush(application(4L, "새 스토어", "new-store", LocalDateTime.now())).getId();
+        update("UPDATE store_application SET biz_reg_no = '000-00-00006' WHERE store_application_id IN (" + mine + ", 2)");
+        update("UPDATE store SET status = 'CLOSED' WHERE store_id = 1");
+        update("UPDATE store SET deleted_at = NOW(6) WHERE store_id = 2");
+
+        // when
+        List<StoreApplication> others = storeApplicationRepository.findAllByBizRegNoAndIdNotOrderByTermsAgreedAtDescIdDesc("000-00-00006", mine);
+        List<Long> storeIds = storeRepository.findAllByStoreApplicationIdInAndDeletedAtIsNullOrderByIdAsc(
+                others.stream().map(StoreApplication::getId).toList()).stream().map(Store::getId).toList();
+
+        // then — 신청 2 가 1 보다 최근 제출
+        assertThat(others).extracting(StoreApplication::getId).containsExactly(2L, 1L);
+        assertThat(storeIds).containsExactly(1L);
+        assertThat(storeRepository.findByStoreApplicationId(1L)).get().extracting(Store::getId).isEqualTo(1L);
+        assertThat(storeRepository.findByStoreApplicationId(mine)).isEmpty();
     }
 
     @Test

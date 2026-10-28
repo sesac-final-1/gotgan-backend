@@ -14,10 +14,11 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 /**
- * 입점 서류 버킷(비공개 seller-docs) — 업로드 주소 발급(presigned PUT)과,
+ * 입점 서류 버킷(비공개 seller-docs) — 업로드 주소 발급(presigned PUT) · 심사 열람 주소 발급(presigned GET)과,
  * 업로드된 파일의 형식 · 크기를 S3 에서 직접 확인(HeadObject)한다 (클라이언트 값을 믿지 않음).
  */
 @Slf4j
@@ -25,6 +26,7 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 public class SellerDocumentClient {
 
     static final Duration UPLOAD_TTL = Duration.ofMinutes(10);
+    static final Duration DOWNLOAD_TTL = Duration.ofMinutes(10);
 
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
@@ -51,6 +53,21 @@ public class SellerDocumentClient {
         }
     }
 
+    /**
+     * 심사 화면 서류 열람용 presigned GET (10분). 상세 조회는 서류 링크 없이도 보여야 하므로 실패를 예외로 올리지 않고 empty
+     * — 서명은 로컬 계산이라 실패 원인은 자격 증명뿐 (docs/api/store.md 4절)
+     */
+    public Optional<PresignedDownload> presignDownload(String key) {
+        try {
+            PresignedGetObjectRequest presigned = s3Presigner.presignGetObject(b -> b.signatureDuration(DOWNLOAD_TTL)
+                    .getObjectRequest(g -> g.bucket(bucket).key(key)));
+            return Optional.of(new PresignedDownload(presigned.url().toString(), presigned.expiration()));
+        } catch (SdkException e) {
+            log.warn("입점 서류 열람 주소 발급 실패 - key={}", key, e);
+            return Optional.empty();
+        }
+    }
+
     /** 파일이 없으면 empty, S3 장애 · 권한 오류는 EXTERNAL_API_ERROR(502) */
     public Optional<FileMeta> head(String key) {
         try {
@@ -74,5 +91,8 @@ public class SellerDocumentClient {
     }
 
     public record PresignedUpload(String url, Instant expiresAt) {
+    }
+
+    public record PresignedDownload(String url, Instant expiresAt) {
     }
 }

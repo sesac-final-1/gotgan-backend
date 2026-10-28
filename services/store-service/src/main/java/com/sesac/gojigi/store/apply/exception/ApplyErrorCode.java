@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum ApplyErrorCode implements ErrorCode {
+    APPLY_NOT_FOUND(HttpStatus.NOT_FOUND, "입점 신청을 찾을 수 없습니다."),
     APPLY_STORE_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 스토어가 있는 회원은 입점 신청을 할 수 없습니다."),
     APPLY_IN_PROGRESS(HttpStatus.CONFLICT, "심사 중인 입점 신청이 있습니다."),
     APPLY_REAPPLY_RESTRICTED(HttpStatus.CONFLICT, "반려 후 30일이 지나야 다시 신청할 수 있습니다."),

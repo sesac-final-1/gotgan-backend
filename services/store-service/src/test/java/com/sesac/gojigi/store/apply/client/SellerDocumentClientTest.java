@@ -7,9 +7,11 @@ import static org.mockito.BDDMockito.given;
 
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient.FileMeta;
+import com.sesac.gojigi.store.apply.client.SellerDocumentClient.PresignedDownload;
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient.PresignedUpload;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -116,6 +118,35 @@ class SellerDocumentClientTest {
         // when · then
         assertThatThrownBy(() -> client.presignUpload("applications/4/a.pdf", "application/pdf", 1L))
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+    }
+
+    @Test
+    @DisplayName("presigned GET — 버킷 · 키 주소, 10분 만료")
+    void presignDownload_signsGetWithTenMinutes() {
+        // given
+        Instant before = Instant.now();
+
+        // when
+        Optional<PresignedDownload> download = sellerDocumentClient.presignDownload("applications/4/a.pdf");
+
+        // then
+        assertThat(download).hasValueSatisfying(d -> {
+            assertThat(d.url()).contains(BUCKET).contains("/applications/4/a.pdf").contains("X-Amz-Expires=600");
+            assertThat(d.expiresAt()).isBetween(before.plus(Duration.ofMinutes(10)).minusSeconds(5),
+                    Instant.now().plus(Duration.ofMinutes(10)).plusSeconds(5));
+        });
+    }
+
+    @Test
+    @DisplayName("열람 주소 발급 중 자격 증명 실패는 예외 대신 empty — 상세 조회를 막지 않는다")
+    @SuppressWarnings("unchecked")
+    void presignDownload_credentialFailure_returnsEmpty() {
+        // given
+        given(failingPresigner.presignGetObject(any(Consumer.class))).willThrow(SdkClientException.create("no credentials"));
+        SellerDocumentClient client = new SellerDocumentClient(s3Client, failingPresigner, BUCKET);
+
+        // when · then
+        assertThat(client.presignDownload("applications/4/a.pdf")).isEmpty();
     }
 
     @SuppressWarnings("unchecked")
