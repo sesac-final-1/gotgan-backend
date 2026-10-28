@@ -1,7 +1,6 @@
 package com.sesac.gojigi.order.order.client;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
@@ -28,9 +27,7 @@ public class OrderClientConfig {
         return create(restClientBuilder, baseUrl, StoreClient.class);
     }
 
-    /** product 내부 API 가 생기면 app.client.product-mock=false 로 켠다 (그 전에는 MockProductClient) */
     @Bean
-    @ConditionalOnProperty(name = "app.client.product-mock", havingValue = "false")
     public ProductClient productClient(RestClient.Builder restClientBuilder,
             @Value("${app.client.product-url}") String baseUrl) {
         return create(restClientBuilder, baseUrl, ProductClient.class);
