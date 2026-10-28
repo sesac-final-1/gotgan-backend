@@ -20,6 +20,7 @@ public final class OrderFixtures {
         return OrderItem.builder()
                 .order(order).storeId(1L).productId(3L).productOptionId(11L).categoryId(301L).topCategoryId(3L)
                 .itemNo("20261022-000123-01").storeName("곳간상회").productName("제철 사과 3kg").optionName("특")
+                .thumbnailUrl("https://cdn.gotgan.click/products/1/apple.jpg")
                 .unitPrice(32_000L).quantity(2).itemAmt(64_000L).usedPoint(2_000L).earnedPoint(3_100L)
                 .build();
     }
