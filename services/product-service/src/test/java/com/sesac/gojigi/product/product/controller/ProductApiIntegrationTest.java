@@ -12,6 +12,9 @@ import com.sesac.gojigi.product.option.entity.ProductOption;
 import com.sesac.gojigi.product.product.entity.Product;
 import com.sesac.gojigi.product.product.entity.ProductStatus;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,9 +28,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * 공개 상품 조회 (GET /api/products/{id}, product.md 10절) — 실제 MySQL · Flyway, 헤더 없이(로그인 없음) 부른다.
+ * 공개 상품 조회 — 목록 · 검색 (GET /api/products, 9절) · 상세 (GET /api/products/{id}, 10절) — 실제 MySQL · Flyway, 헤더 없이(로그인 없음) 부른다.
  * 상품은 저장소로 직접 만들고, 판매중지 · 삭제 · 스토어 비활성은 JdbcTemplate 으로 바꾼다 (InternalProductApiIntegrationTest 와 같음).
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게.
  */
@@ -81,6 +85,32 @@ class ProductApiIntegrationTest {
         product.addImage(ProductImage.of("products/1/main.jpg", 0));
         product.addImage(ProductImage.of("products/1/second.jpg", 1));
         return productRepository.save(product);
+    }
+
+    /** 목록용 상품 — 이름 · 스토어 · 카테고리 · 정가(할인 없음 → 판매가 = 정가) · 상태 · 옵션 재고를 정해 저장 */
+    private Product listed(String name, long storeId, Category category, long price, ProductStatus status, int... stocks) {
+        Product product = Product.builder()
+                .storeId(storeId).categoryId(category.getId()).name(name)
+                .price(price).discountRate(0).material("면").origin("대한민국")
+                .option1Name(stocks.length > 1 ? "사이즈" : null).status(status)
+                .build();
+        for (int i = 0; i < stocks.length; i++) {
+            product.addOption(ProductOption.of(stocks.length > 1 ? "S" + i : null, null, 0, stocks[i]));
+        }
+        product.addImage(ProductImage.of("products/" + storeId + "/" + name.hashCode() + ".jpg", 0));
+        return productRepository.save(product);
+    }
+
+    /** "a=1&q=%25" 모양을 받아 값마다 디코딩해 .param 으로 — get("…?q=%EB…") 는 % 를 다시 인코딩해 서버에 글자 그대로 감 */
+    private ResultActions search(String query) throws Exception {
+        MockHttpServletRequestBuilder req = get("/api/products");
+        if (!query.isEmpty()) {
+            for (String pair : query.split("&")) {
+                String[] kv = pair.split("=", 2);
+                req.param(kv[0], URLDecoder.decode(kv[1], StandardCharsets.UTF_8));
+            }
+        }
+        return mockMvc.perform(req);
     }
 
     private ResultActions detail(long productId) throws Exception {
@@ -180,6 +210,144 @@ class ProductApiIntegrationTest {
 
             detail(deleted).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
             detail(999999L).andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
+        }
+    }
+
+    @Nested
+    @DisplayName("상품 목록 · 검색")
+    class Search {
+
+        private Category foodTop;
+        private Category fruit;
+        private Product shirtA;   // 스토어 1 · 셔츠 · 30,000 · 재고 있음
+        private Product shirtB;   // 스토어 2 · 셔츠 · 10,000 · 품절
+        private Product mandarin; // 스토어 1 · 과일 · 20,000 · 재고 있음 (옵션 2개 중 하나만 재고)
+
+        @BeforeEach
+        void products() {
+            foodTop = Category.top("식품", "Food", 2);
+            foodTop.changeActive(true);
+            foodTop = categoryRepository.save(foodTop);
+            fruit = categoryRepository.save(Category.child(foodTop.getId(), "과일", null, 1));
+            shirtA = listed("리넨 셔츠", 1L, shirt, 30_000, ProductStatus.ON_SALE, 5);
+            shirtB = listed("옥스퍼드 셔츠", 2L, shirt, 10_000, ProductStatus.ON_SALE, 0);
+            mandarin = listed("제주 감귤 5kg", 1L, fruit, 20_000, ProductStatus.ON_SALE, 0, 3);
+        }
+
+        @Test
+        @DisplayName("기본 — 쇼핑몰에 보이는 상품만, 신상품 순 · 카드 필드(대표 이미지 · 품절 · 상위 카테고리) · 페이지 정보")
+        void search_default_onlyDisplayableNewestFirst() throws Exception {
+            // given — 보이면 안 되는 상품들
+            listed("판매중지", 1L, shirt, 1_000, ProductStatus.STOPPED, 1);
+            long blocked = listed("강제중지", 1L, shirt, 1_000, ProductStatus.ON_SALE, 1).getId();
+            jdbc.update("UPDATE product SET status = 'BLOCKED' WHERE product_id = ?", blocked);
+            long deleted = listed("삭제됨", 1L, shirt, 1_000, ProductStatus.ON_SALE, 1).getId();
+            jdbc.update("UPDATE product SET deleted_at = NOW(6) WHERE product_id = ?", deleted);
+            long storeOff = listed("정지 스토어", 3L, shirt, 1_000, ProductStatus.ON_SALE, 1).getId();
+            jdbc.update("UPDATE product SET is_store_active = FALSE WHERE product_id = ?", storeOff);
+            Category offChild = Category.child(top.getId(), "꺼진 하위", null, 9);
+            offChild.changeActive(false);
+            listed("꺼진 카테고리", 1L, categoryRepository.save(offChild), 1_000, ProductStatus.ON_SALE, 1);
+
+            // when
+            search("")
+                    // then
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.totalElements").value(3))
+                    .andExpect(jsonPath("$.data.page").value(0))
+                    .andExpect(jsonPath("$.data.size").value(20))
+                    .andExpect(jsonPath("$.data.hasNext").value(false))
+                    .andExpect(jsonPath("$.data.content[0].productId").value(mandarin.getId()))
+                    .andExpect(jsonPath("$.data.content[0].topCategoryId").value(foodTop.getId()))
+                    .andExpect(jsonPath("$.data.content[0].soldOut").value(false))
+                    .andExpect(jsonPath("$.data.content[0].imageUrl").value(org.hamcrest.Matchers.startsWith("https://img.test/products/1/")))
+                    .andExpect(jsonPath("$.data.content[1].productId").value(shirtB.getId()))
+                    .andExpect(jsonPath("$.data.content[1].soldOut").value(true))
+                    .andExpect(jsonPath("$.data.content[2].productId").value(shirtA.getId()))
+                    .andExpect(jsonPath("$.data.content[2].createdAt").value(org.hamcrest.Matchers.endsWith("+09:00")));
+
+            // 상위 카테고리를 끄면 그 아래 상품도 빠짐
+            foodTop.changeActive(false);
+            categoryRepository.save(foodTop);
+            search("").andExpect(jsonPath("$.data.totalElements").value(2));
+        }
+
+        @Test
+        @DisplayName("카테고리 — 상위 ID 면 아래 하위 전부, 하위 ID 면 그 하위만, 없는 카테고리는 빈 페이지 / 스토어 홈")
+        void search_categoryAndStore_filters() throws Exception {
+            search("categoryId=" + top.getId()).andExpect(jsonPath("$.data.totalElements").value(2));
+            search("categoryId=" + shirt.getId()).andExpect(jsonPath("$.data.totalElements").value(2));
+            search("categoryId=" + foodTop.getId())
+                    .andExpect(jsonPath("$.data.totalElements").value(1))
+                    .andExpect(jsonPath("$.data.content[0].productId").value(mandarin.getId()));
+            search("categoryId=999999").andExpect(status().isOk()).andExpect(jsonPath("$.data.totalElements").value(0));
+            search("storeId=1").andExpect(jsonPath("$.data.totalElements").value(2));
+            search("storeId=2&categoryId=" + shirt.getId())
+                    .andExpect(jsonPath("$.data.totalElements").value(1))
+                    .andExpect(jsonPath("$.data.content[0].productId").value(shirtB.getId()));
+        }
+
+        @Test
+        @DisplayName("검색어 — 상품명 · 하위 카테고리 이름 포함, 앞뒤 공백 제거, 비면 조건 없음, % · _ 는 글자 그대로")
+        void search_keyword_matchesNameOrCategory() throws Exception {
+            listed("100% 순면 티", 1L, shirt, 5_000, ProductStatus.ON_SALE, 1);
+
+            search("q=%EB%A6%AC%EB%84%A8").andExpect(jsonPath("$.data.totalElements").value(1));             // "리넨" — 상품명
+            search("q=%EA%B3%BC%EC%9D%BC").andExpect(jsonPath("$.data.totalElements").value(1))              // "과일" — 하위 카테고리 이름
+                    .andExpect(jsonPath("$.data.content[0].productId").value(mandarin.getId()));
+            search("q=%20%20%EC%85%94%EC%B8%A0%20").andExpect(jsonPath("$.data.totalElements").value(3));   // "  셔츠 " — 이름 2 + 카테고리 이름 셔츠 1
+            search("q=%20%20").andExpect(jsonPath("$.data.totalElements").value(4));                          // 공백뿐 — 조건 없음
+            search("q=%25").andExpect(jsonPath("$.data.totalElements").value(1));                             // "%" — 모두가 아니라 글자 % 만
+            search("q=_").andExpect(jsonPath("$.data.totalElements").value(0));                               // "_" — 아무 한 글자가 아님
+        }
+
+        @Test
+        @DisplayName("가격대 — minPrice ≤ 판매가 < maxPrice, 품절 제외")
+        void search_priceRangeAndSoldOut_filters() throws Exception {
+            search("minPrice=10000&maxPrice=20000")
+                    .andExpect(jsonPath("$.data.totalElements").value(1))
+                    .andExpect(jsonPath("$.data.content[0].productId").value(shirtB.getId()));   // 20,000 은 미포함
+            search("minPrice=20000").andExpect(jsonPath("$.data.totalElements").value(2));
+            search("maxPrice=20000").andExpect(jsonPath("$.data.totalElements").value(1));
+            search("minPrice=20000&maxPrice=20000").andExpect(jsonPath("$.data.totalElements").value(0));
+            search("excludeSoldOut=true")
+                    .andExpect(jsonPath("$.data.totalElements").value(2))
+                    .andExpect(jsonPath("$.data.content[?(@.productId == " + shirtB.getId() + ")]").isEmpty());
+        }
+
+        @Test
+        @DisplayName("정렬 · 페이지 — 가격 오름 · 내림, 같은 가격은 productId 큰 순, 페이지를 넘겨도 순서 유지")
+        void search_sortAndPaging_stableOrder() throws Exception {
+            Product sameA = listed("같은 가격 A", 1L, shirt, 10_000, ProductStatus.ON_SALE, 1);
+            Product sameB = listed("같은 가격 B", 1L, shirt, 10_000, ProductStatus.ON_SALE, 1);
+
+            search("sort=PRICE_ASC")
+                    .andExpect(jsonPath("$.data.content[0].productId").value(sameB.getId()))   // 10,000 셋 중 ID 큰 순
+                    .andExpect(jsonPath("$.data.content[1].productId").value(sameA.getId()))
+                    .andExpect(jsonPath("$.data.content[2].productId").value(shirtB.getId()))
+                    .andExpect(jsonPath("$.data.content[4].productId").value(shirtA.getId()));
+            search("sort=PRICE_DESC")
+                    .andExpect(jsonPath("$.data.content[0].productId").value(shirtA.getId()))
+                    .andExpect(jsonPath("$.data.content[1].productId").value(mandarin.getId()));
+            search("sort=PRICE_ASC&size=2&page=1")
+                    .andExpect(jsonPath("$.data.content.length()").value(2))
+                    .andExpect(jsonPath("$.data.content[0].productId").value(shirtB.getId()))
+                    .andExpect(jsonPath("$.data.totalElements").value(5))
+                    .andExpect(jsonPath("$.data.totalPages").value(3))
+                    .andExpect(jsonPath("$.data.hasNext").value(true));
+            search("size=2&page=5").andExpect(jsonPath("$.data.content.length()").value(0)).andExpect(jsonPath("$.data.totalElements").value(5));
+        }
+
+        @Test
+        @DisplayName("min > max · 음수 · 모르는 정렬 · 숫자 아닌 ID · size 101 · size 0 · page 음수 · 검색어 51자 — 400 INVALID_INPUT (자바 내부 문구는 안 나감)")
+        void search_invalidParams_badRequest() throws Exception {
+            for (String query : List.of("minPrice=20000&maxPrice=10000", "minPrice=-1", "sort=POPULAR", "categoryId=abc", "size=101", "size=0",
+                    "page=-1", "q=" + "a".repeat(51))) {
+                search(query).andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("INVALID_INPUT"))
+                        .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Failed to convert"))));
+            }
+            search("q=" + "a".repeat(50)).andExpect(status().isOk());
         }
     }
 }
