@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 서비스 간 호출 전용 — /internal/** 는 게이트웨이 라우트가 없어 외부에서 닿지 않는다 (docs/api/store.md) */
-@Tag(name = "스토어 (내부)", description = "user-service · admin-service 가 호출 — 인가: 내부")
+@Tag(name = "스토어 (내부)", description = "user · admin · chat · order-service 가 호출 — 인가: 내부")
 @RestController
 @RequestMapping("/internal/stores")
 @RequiredArgsConstructor
@@ -23,9 +23,10 @@ public class InternalStoreController {
 
     private final StoreQueryService storeQueryService;
 
-    @Operation(summary = "스토어 상세 (상태 포함)",
-            description = "인가: 내부. 판매자 탈퇴 전 폐점 확인 등. status = ACTIVE · SUSPENDED · CLOSED. "
-                    + "없는 스토어는 404 STORE_NOT_FOUND")
+    @Operation(summary = "스토어 상세 (상태 · 배송 정책 포함)",
+            description = "인가: 내부. 판매자 탈퇴 전 폐점 확인 · 주문 배송비 계산 등. status = ACTIVE · SUSPENDED · CLOSED. "
+                    + "shippingFee 기본 배송비(원), freeShippingThreshold 무료배송 기준(원, null = 무료배송 없음), "
+                    + "courier 기본 택배사(null 가능). 없는 스토어는 404 STORE_NOT_FOUND")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "STORE_NOT_FOUND")
