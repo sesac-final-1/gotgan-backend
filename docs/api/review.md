@@ -205,3 +205,16 @@
 |---|---|
 | `reviewId` 숫자 아님 · `blinded` 없음 · 형식 오류 · 블라인드인데 사유 없음 · 사유 256자 이상 | 400 `INVALID_INPUT` |
 | 없는 · 삭제된 리뷰 | 404 `REVIEW_NOT_FOUND` |
+
+## 11. 작성 자격 저장 — `OrderItemConfirmed` 수신 (REV-01)
+
+API 가 아니라 이벤트 소비입니다. 구매확정(구매자 버튼 · 자동 구매확정 스케줄러) → order 가 `OrderItemConfirmed` 발행(SNS `order-events`) → SQS `sesac-gojigi-review-order-events`(필터: `OrderItemConfirmed` 만) → review 폴러 → `review_eligibility` 저장. 저장되면 4 · 5절 마이페이지와 1절 작성이 열립니다(비동기라 몇 초 늦을 수 있음).
+
+| 항목 | 내용 |
+|---|---|
+| 큐 주소 | 환경 변수 `REVIEW_ORDER_EVENTS_QUEUE_URL`(ConfigMap) — 비어 있으면(로컬 · 테스트) 폴러를 띄우지 않음 |
+| 저장 값 | orderItemId · buyerId → user_id · productId · storeId · productName · **buyerDisplayName · optionName · thumbnailUrl**(10/28 order payload 추가) · confirmedAt(KST) · 기한 = confirmedAt + 30일 |
+| 멱등 | `processed_event` 와 자격을 한 트랜잭션에 — 같은 eventId 재전달은 건너뜀, 다른 eventId 로 다시 발행돼도 상품주문당 1개(uk) |
+| 10/28 이전 이벤트 | `buyerDisplayName` 이 없으면 "구매자", `confirmedAt` 이 없으면 봉투 `occurredAt`, 옵션명 · 사진은 `null` |
+| 실패 | DB 일시 장애는 1 → 5 → 15분 뒤 재시도, 그 밖의 오류는 기본 재전달 3회 뒤 DLQ (user · settlement 와 같은 폴러) |
+| 취소 · 반품 | 구매확정 뒤에는 없으므로 자격을 지우는 이벤트는 받지 않음 |
