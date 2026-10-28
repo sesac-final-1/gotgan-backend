@@ -16,7 +16,6 @@ import org.springframework.web.service.annotation.PostExchange;
 
 /**
  * product-service 내부 API (docs/api/product.md 1 · 2 · 4절) — 직접 쓰지 않고 ProductClientAdapter(서킷 브레이커 "product")를 거친다.
- * TODO(product 내부 API 구현 시): app.client.product-mock=false 로 바꾸고 MockProductClient 를 지운다.
  */
 @HttpExchange("/internal")
 public interface ProductClient {

@@ -33,7 +33,6 @@ app:
     store-url: ${STORE_SERVICE_URI:http://localhost:8082}
     product-url: ${PRODUCT_SERVICE_URI:http://localhost:8083}
     payment-url: ${PAYMENT_SERVICE_URI:http://localhost:8086}
-    product-mock: ${PRODUCT_CLIENT_MOCK:true}   # TODO(product 내부 API 구현 시 false): 그 전에는 MockProductClient
   order:
     auto-confirm-after: ${AUTO_CONFIRM_AFTER:7d}   # 데모에서는 ConfigMap 으로 2m
     payment-timeout: ${PAYMENT_TIMEOUT:15m}         # 결제 대기 만료 기준 — 데모에서는 ConfigMap 으로 1m
