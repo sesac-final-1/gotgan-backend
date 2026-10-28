@@ -117,3 +117,61 @@
 | 경우 | 응답 |
 |---|---|
 | `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+
+## 6. 판매자 리뷰 관리 — `GET /api/seller/reviews` · `GET /api/seller/reviews/summary` (REV-06)
+
+판매자 센터 리뷰 관리(`/seller/reviews`, `SellerReviewList`). 인가 SELLER, 스토어는 게이트웨이가 넣는 `X-Store-Id` — 헤더가 없으면 403 `FORBIDDEN`(order 판매자 API 와 같음).
+
+### 6-1. 목록 `GET /api/seller/reviews?tab=ALL&productId=&page=0&size=10`
+
+- 내 스토어 리뷰, 삭제 제외 · **블라인드 포함**(`blinded: true` → "블라인드됨", 답글 · 관리자 검토 요청 버튼 숨김), 최신 작성순.
+- `tab`: `ALL`(기본) · `NO_REPLY`(답글 없고 블라인드 아님 = 답글을 달 수 있는 것) · `LOW_RATING`(1~2점). 포토 탭은 사진 PR 에서 추가.
+- `productId`: 상품 하나만 (선택). `page` 0부터 · `size` 1~50(기본 10).
+- 작성자는 `writerDisplayName`(닉네임, 없으면 마스킹 실명) — 화면의 회원 목록 조회(`useSellerBuyersQuery`)는 필요 없어집니다.
+
+```json
+{ "content": [ { "reviewId": 31, "productId": 101, "productName": "린넨 셔츠", "optionName": "오트밀 / M",
+    "writerDisplayName": "곳간러버", "rating": 2, "title": null, "content": "…", "fit": "LARGE", "blinded": false,
+    "replyContent": null, "repliedAt": null, "createdAt": "2026-10-20T14:00:00+09:00" } ],
+  "page": 0, "size": 10, "totalElements": 39, "totalPages": 4, "hasNext": true }
+```
+
+### 6-2. 평점 요약 `GET /api/seller/reviews/summary`
+
+화면 상단(스토어 평균 · 별점 분포 · 상품별 평균)과 탭 숫자. 평균 · 분포 · 상품별은 **블라인드 · 삭제 제외**(구매자에게 보이는 리뷰 기준), 탭 숫자는 6-1 목록 조건과 같습니다.
+
+```json
+{ "averageRating": 4.62, "ratedCount": 37,
+  "distribution": [ { "rating": 5, "count": 23 }, { "rating": 4, "count": 10 }, { "rating": 3, "count": 2 },
+                    { "rating": 2, "count": 1 }, { "rating": 1, "count": 1 } ],
+  "products": [ { "productId": 101, "productName": "린넨 셔츠", "averageRating": 4.8, "count": 12 } ],
+  "tabCounts": { "all": 39, "noReply": 8, "lowRating": 3 } }
+```
+
+- 평균은 소수 둘째 자리 반올림, 리뷰가 없으면 0. 분포는 항상 5 → 1점 5개. 상품별은 평균 높은순.
+
+| 경우 (6-1 · 6-2) | 응답 |
+|---|---|
+| `tab` 모르는 값 · `page` · `size` 범위 밖 · `productId` 숫자 아님 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| `X-Store-Id` 없음 | 403 `FORBIDDEN` |
+
+## 7. 판매자 답글 작성 · 수정 — `PUT /api/seller/reviews/{reviewId}/reply` (REV-06)
+
+리뷰당 답글 1개 — 없으면 작성, 있으면 덮어씁니다(삭제 없음). 일반 텍스트 1,000자 이하, 태그는 지우고 저장.
+
+```json
+{ "content": "소중한 후기 감사합니다! 다음에도 만족하실 수 있도록 준비하겠습니다." }
+```
+
+응답 **200** `{ "reviewId": 31, "replyContent": "…(태그를 지운 값)", "repliedAt": "2026-10-28T10:00:00+09:00" }`
+
+| 경우 | 응답 |
+|---|---|
+| 빈 답글 · 1,000자 초과 · 태그만 있음 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| `X-Store-Id` 없음 | 403 `FORBIDDEN` |
+| 없는 · 삭제된 · 다른 스토어의 리뷰 (구분하지 않음) | 404 `REVIEW_NOT_FOUND` |
+| 관리자가 블라인드한 리뷰 | 409 `REVIEW_BLINDED` |
+
+- "관리자 검토 요청" 버튼은 이 API 가 아니라 admin 신고 API(`POST /api/reports`, `reasonCode: SELLER_REQUEST`) — `admin.md` 참고.
