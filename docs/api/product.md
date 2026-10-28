@@ -233,7 +233,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 |---|---|---|
 | `categoryId` | — | 상위 ID 면 그 아래 하위 전부, 하위 ID 면 그 하위만 |
 | `storeId` | — | 스토어 홈 |
-| `q` | — | 상품명 · 하위 카테고리 이름에 포함(LIKE). 앞뒤 공백 제거 후 1~50자 |
+| `q` | — | 상품명 · 하위 카테고리 이름에 포함(LIKE). 앞뒤 공백 제거 후 1~50자 — **비었거나 공백뿐이면 조건 없음**(400 아님), `%` · `_` 는 글자 그대로 찾음 |
 | `minPrice` · `maxPrice` | — | `salePrice` 기준, `minPrice ≤ salePrice < maxPrice` (화면 가격대 버튼과 같은 경계) |
 | `excludeSoldOut` | `false` | `true` 면 품절 상품 제외 |
 | `sort` | `NEW` | `NEW`(신상품) · `PRICE_ASC`(낮은 가격) · `PRICE_DESC`(높은 가격). 같으면 `productId` 큰 순 — 페이지가 바뀌어도 순서가 흔들리지 않게 |
@@ -250,11 +250,13 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 | 경우 | 응답 |
 |---|---|
 | 조건에 맞는 상품 없음 · 없거나 꺼진 카테고리 · 운영 안 하는 스토어 | **200** 빈 페이지 |
-| `minPrice > maxPrice` · 음수 · 모르는 `sort` · `size > 100` · `q` 50자 초과 | **400** `INVALID_INPUT` |
+| `minPrice > maxPrice` · 음수 · 모르는 `sort` · `size > 100` · `size < 1` · `page < 0` · 숫자 아닌 ID · `q` 50자 초과 | **400** `INVALID_INPUT` |
 
 - `soldOut`: 삭제 안 된 옵션의 재고가 모두 0.
 - **메인 화면(PRD-14)**: 카테고리마다 `?categoryId={상위}&sort=NEW&size=8`. 판매량 랭킹 · 리뷰순 · 평점순은 범위 밖입니다(판매량은 order, 리뷰는 review 데이터 — product 는 다른 서비스를 부르지 않음).
 - 카드에 별점 · 리뷰 수는 없습니다. 스토어 이름은 화면이 스토어 목록(`GET /api/stores`)으로 붙입니다.
+- `minPrice = maxPrice` 는 범위가 비어 빈 페이지입니다.
+- 구현 메모(product 내부): QueryDSL 로 상품 ↔ 하위 · 상위 카테고리를 ID 로 조인해 쇼핑몰에 보이는 조건과 검색 조건을 한 쿼리에, 카드의 대표 이미지 · 품절은 판매자 목록과 같은 묶음 쿼리로 붙입니다. 검색은 `LIKE '%q%'` 라 인덱스를 타지 않습니다(데모 규모).
 
 ## 10. 상품 상세 — `GET /api/products/{productId}` (PRD-07)
 
