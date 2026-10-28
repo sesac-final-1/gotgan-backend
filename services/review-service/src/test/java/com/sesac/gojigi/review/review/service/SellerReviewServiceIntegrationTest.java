@@ -14,7 +14,7 @@ import com.sesac.gojigi.review.review.dto.response.ReviewReplyResponse;
 import com.sesac.gojigi.review.review.dto.response.SellerReviewResponse;
 import com.sesac.gojigi.review.review.dto.response.SellerReviewSummaryResponse;
 import com.sesac.gojigi.review.review.dto.response.SellerReviewSummaryResponse.ProductRating;
-import com.sesac.gojigi.review.review.dto.response.SellerReviewSummaryResponse.RatingCount;
+import com.sesac.gojigi.review.review.dto.response.RatingCount;
 import com.sesac.gojigi.review.review.dto.response.SellerReviewSummaryResponse.TabCounts;
 import com.sesac.gojigi.review.review.entity.Review;
 import com.sesac.gojigi.review.review.exception.ReviewErrorCode;
