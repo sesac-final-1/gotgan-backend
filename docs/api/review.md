@@ -242,3 +242,31 @@
 | 경우 (9-1 · 9-2) | 응답 |
 |---|---|
 | `productId` 없음 · 숫자 아님 · `rating` 1~5 밖 · `sort` 모르는 값 · `page` · `size` 범위 밖 | 400 `INVALID_INPUT` |
+
+## 10. 여러 상품 · 스토어 평점 (공개) — `GET /api/reviews/ratings/products?ids=` · `GET /api/reviews/ratings/stores?ids=`
+
+product · store 는 다른 서비스를 부르지 않으므로(`product.md` 9 · 10절 "별점 · 리뷰는 review API") 화면이 받은 ID 묶음으로 평점을 한 번에 묻습니다. 로그인 없이 부릅니다.
+
+| 화면 | 부를 API |
+|---|---|
+| 상품 카드 · 상품 목록(`ProductCard` · `ShopProductList`) · 판매자 상품 목록 · 메인 | `/ratings/products?ids=` — 받은 상품 페이지의 ID 들 |
+| 상품 상세 상단 · 리뷰 탭 | 9-2 `/summary?productId=` (분포까지 필요해서) |
+| 스토어 홈(`ShopStoreHome`) · 관리자 스토어 목록 · 상세 | `/ratings/stores?ids=` |
+| 판매자 대시보드 · 리뷰 관리 | 6-2 `/api/seller/reviews/summary` |
+
+```json
+// GET /api/reviews/ratings/products?ids=101,102
+[ { "productId": 101, "averageRating": 4.62, "reviewCount": 37 },
+  { "productId": 102, "averageRating": 0, "reviewCount": 0 } ]
+// GET /api/reviews/ratings/stores?ids=1
+[ { "storeId": 1, "averageRating": 4.71, "reviewCount": 128 } ]
+```
+
+- `ids=101,102` · `ids=101&ids=102` 둘 다 받습니다. 1~100개 (product `product-options` 내부 API 와 같은 상한).
+- **요청한 순서대로**, 같은 ID 는 한 번만. **리뷰가 없으면 `0 · 0`** 으로 채워 항상 요청한 ID 수만큼 돌려줍니다.
+- 블라인드 · 삭제 제외, 평균은 소수 둘째 자리 반올림 — 6-2 · 9-2 와 같은 기준.
+- **평점순 · 리뷰 많은순 정렬은 이 API 로 할 수 없습니다** — 상품 목록 페이징 · 정렬은 product 가 하고 평점은 review 에 있어서입니다. `product.md` 결정(정렬은 신상품 · 가격 2종, 리뷰 · 평점 정렬은 범위 밖) 그대로이고, 화면의 "리뷰 많은순 · 평점 높은순" 메뉴는 빼야 합니다.
+
+| 경우 | 응답 |
+|---|---|
+| `ids` 없음 · 숫자 아님 · 100개 초과 | 400 `INVALID_INPUT` |
