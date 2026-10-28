@@ -208,6 +208,71 @@ class ApplicationReviewServiceIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("반려하면 신청 상태 · 사유 · 이력이 저장되고, 30일 재신청 제한 조회가 이 신청을 가장 최근 반려로 찾는다")
+    void reject_whenPending_persistsStatusReasonAndHistory() {
+        // given
+        StoreApplication application = storeApplicationRepository.saveAndFlush(application(4L, "곳간상회", "gotgan"));
+        long versionBefore = application.getVersion();
+
+        // when
+        service.reject(application.getId(), "사업자등록증 정보가 신청서와 다릅니다");
+        entityManager.clear();
+
+        // then
+        StoreApplication rejected = storeApplicationRepository.findById(application.getId()).orElseThrow();
+        assertThat(rejected.getStatus()).isEqualTo(ApplicationStatus.REJECTED);
+        assertThat(rejected.getStatusReason()).isEqualTo("사업자등록증 정보가 신청서와 다릅니다");
+        assertThat(rejected.getStatusChangedAt()).isEqualTo(NOW);
+        assertThat(rejected.getVersion()).isEqualTo(versionBefore + 1);
+        assertThat(applicationHistoryRepository.findAllByStoreApplicationIdOrderByIdAsc(application.getId()))
+                .singleElement().satisfies(h -> {
+                    assertThat(h.getFromStatus()).isEqualTo(ApplicationStatus.PENDING);
+                    assertThat(h.getToStatus()).isEqualTo(ApplicationStatus.REJECTED);
+                    assertThat(h.getActorType()).isEqualTo(ActorType.ADMIN);
+                    assertThat(h.getReason()).isEqualTo("사업자등록증 정보가 신청서와 다릅니다");
+                });
+        assertThat(storeApplicationRepository.findFirstByUserIdAndStatusOrderByStatusChangedAtDesc(4L, ApplicationStatus.REJECTED))
+                .get().extracting(StoreApplication::getId).isEqualTo(application.getId());
+    }
+
+    @Test
+    @DisplayName("반려가 커밋되면 직후 StoreApplicationRejected 봉투를 한 번 보낸다 — aggregateId = 신청 ID, decidedAt 은 +09:00 문자열")
+    void reject_whenCommitted_publishesEnvelopeOnce() {
+        // given
+        StoreApplication application = storeApplicationRepository.saveAndFlush(application(9L, "반려상회", "reject-store"));
+        service.reject(application.getId(), "통신판매업 신고번호를 확인할 수 없습니다");
+        verify(snsEventPublisher, never()).send(anyString(), anyString(), anyString(), anyString());
+
+        // when
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        // then
+        try {
+            String eventId = ApplicationReviewService.applicationEventId("StoreApplicationRejected", application.getId());
+            ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+            verify(snsEventPublisher).send(eq("StoreApplicationRejected"), eq(String.valueOf(application.getId())),
+                    eq(eventId), json.capture());
+            JsonNode envelope = JsonMapper.builder().build().readTree(json.getValue());
+            assertThat(envelope.get("occurredAt").asString()).isEqualTo("2026-10-28T14:30:00+09:00");
+            JsonNode payload = envelope.get("payload");
+            assertThat(payload.get("applicationId").asLong()).isEqualTo(application.getId());
+            assertThat(payload.get("userId").asLong()).isEqualTo(9L);
+            assertThat(payload.get("storeName").asString()).isEqualTo("반려상회");
+            assertThat(payload.get("sellerEmail").asString()).isEqualTo("seller@example.com");
+            assertThat(payload.get("reason").asString()).isEqualTo("통신판매업 신고번호를 확인할 수 없습니다");
+            // 알림 Lambda plusDays 가 앞 10자리(YYYY-MM-DD)를 읽는다
+            assertThat(payload.get("decidedAt").asString()).isEqualTo("2026-10-28T14:30:00+09:00");
+            assertThat(outboxEventRepository.findAll()).singleElement()
+                    .satisfies(row -> assertThat(row.getStatus()).isEqualTo(OutboxEvent.Status.SENT));
+        } finally { // 커밋된 행은 다른 테스트에 남지 않게 지운다 (FK 역순)
+            jdbcTemplate.update("DELETE FROM outbox_event");
+            jdbcTemplate.update("DELETE FROM application_history WHERE store_application_id = ?", application.getId());
+            jdbcTemplate.update("DELETE FROM store_application WHERE store_application_id = ?", application.getId());
+        }
+    }
+
     private static StoreApplication application(Long userId, String storeName, String slug) {
         return StoreApplication.builder()
                 .userId(userId).categoryId(1L).bizType(BizType.INDIVIDUAL)

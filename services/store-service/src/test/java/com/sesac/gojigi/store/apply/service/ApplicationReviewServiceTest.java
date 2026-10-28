@@ -10,8 +10,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.store.apply.dto.event.StoreApplicationRejectedPayload;
 import com.sesac.gojigi.store.apply.dto.event.StoreApprovedPayload;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationApproveResponse;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationRejectResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
@@ -223,6 +225,88 @@ class ApplicationReviewServiceTest {
 
         // when · then
         assertThatThrownBy(() -> ApplicationReviewService.duplicateCode(e)).isSameAs(e);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"PENDING", "SUPPLEMENT"})
+    @DisplayName("반려하면 신청을 REJECTED · 사유 저장 · 이력(사유 포함)을 남기고 StoreApplicationRejected 를 아웃박스에 남긴다")
+    void reject_whenPendingOrSupplement_rejectsAndEnqueuesEvent(ApplicationStatus from) {
+        // given
+        StoreApplication application = application(27L, from);
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+
+        // when
+        ApplicationRejectResponse response = service.reject(27L, "사업자등록증 정보가 신청서와 다릅니다");
+
+        // then
+        assertThat(response).isEqualTo(new ApplicationRejectResponse(27L, ApplicationStatus.REJECTED,
+                OffsetDateTime.parse("2026-10-28T14:30:00+09:00")));
+        assertThat(application.getStatus()).isEqualTo(ApplicationStatus.REJECTED);
+        assertThat(application.getStatusReason()).isEqualTo("사업자등록증 정보가 신청서와 다릅니다");
+        assertThat(application.getStatusChangedAt()).isEqualTo(NOW); // 30일 재신청 제한 기준
+        verify(storeApplicationRepository).saveAndFlush(application);
+
+        ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
+        verify(applicationHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getFromStatus()).isEqualTo(from);
+        assertThat(history.getValue().getToStatus()).isEqualTo(ApplicationStatus.REJECTED);
+        assertThat(history.getValue().getActorType()).isEqualTo(ActorType.ADMIN);
+        assertThat(history.getValue().getReason()).isEqualTo("사업자등록증 정보가 신청서와 다릅니다");
+
+        verify(eventOutboxService).enqueue("StoreApplicationRejected", "27",
+                ApplicationReviewService.applicationEventId("StoreApplicationRejected", 27L), NOW,
+                new StoreApplicationRejectedPayload(27L, 4L, "곳간상회", "seller@example.com",
+                        "사업자등록증 정보가 신청서와 다릅니다", OffsetDateTime.parse("2026-10-28T14:30:00+09:00")));
+        verify(storeRepository, never()).saveAndFlush(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"APPROVED", "REJECTED"})
+    @DisplayName("이미 승인 · 반려된 신청을 반려하면 409 APPLY_INVALID_STATUS 이고 이력 · 이벤트를 남기지 않는다")
+    void reject_whenAlreadyDecided_throwsInvalidStatus(ApplicationStatus from) {
+        // given
+        StoreApplication application = application(27L, from);
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+
+        // when · then
+        assertErrorCode(() -> service.reject(27L, "사유"), ApplyErrorCode.APPLY_INVALID_STATUS);
+        assertThat(application.getStatus()).isEqualTo(from);
+        verify(applicationHistoryRepository, never()).save(any());
+        verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("반려 저장 순간 다른 관리자가 먼저 처리해 버전이 달라지면 409 APPLY_INVALID_STATUS 이고 이력 · 이벤트를 남기지 않는다")
+    void reject_whenVersionConflict_throwsInvalidStatus() {
+        // given
+        StoreApplication application = application(27L, ApplicationStatus.PENDING);
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        willThrow(new ObjectOptimisticLockingFailureException(StoreApplication.class, 27L))
+                .given(storeApplicationRepository).saveAndFlush(application);
+
+        // when · then
+        assertErrorCode(() -> service.reject(27L, "사유"), ApplyErrorCode.APPLY_INVALID_STATUS);
+        verify(applicationHistoryRepository, never()).save(any());
+        verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("없는 신청 반려는 404 APPLY_NOT_FOUND")
+    void reject_whenApplicationMissing_throwsNotFound() {
+        // given
+        given(storeApplicationRepository.findById(99L)).willReturn(Optional.empty());
+
+        // when · then
+        assertErrorCode(() -> service.reject(99L, "사유"), ApplyErrorCode.APPLY_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("반려 eventId 는 신청 ID 로 정해지고 같은 신청의 승인 eventId 와 다르다")
+    void applicationEventId_whenRejected_differsFromApproved() {
+        // when · then
+        assertThat(ApplicationReviewService.applicationEventId("StoreApplicationRejected", 27L))
+                .isEqualTo(ApplicationReviewService.applicationEventId("StoreApplicationRejected", 27L))
+                .isNotEqualTo(ApplicationReviewService.storeApprovedEventId(27L));
     }
 
     @Test
