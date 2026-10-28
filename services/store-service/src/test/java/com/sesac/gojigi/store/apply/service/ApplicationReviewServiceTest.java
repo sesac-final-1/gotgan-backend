@@ -3,6 +3,7 @@ package com.sesac.gojigi.store.apply.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -17,10 +18,10 @@ import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.BizType;
 import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
-import com.sesac.gojigi.store.apply.event.StoreApprovedEvent;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.repository.ApplicationHistoryRepository;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
+import com.sesac.gojigi.store.common.event.EventOutboxService;
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
@@ -34,6 +35,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,7 +45,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -63,7 +64,7 @@ class ApplicationReviewServiceTest {
     @Mock
     private StoreStatusHistoryRepository storeStatusHistoryRepository;
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private EventOutboxService eventOutboxService;
 
     private ApplicationReviewService service;
 
@@ -71,7 +72,7 @@ class ApplicationReviewServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW.atZone(KST).toInstant(), KST);
         service = new ApplicationReviewService(storeApplicationRepository, applicationHistoryRepository,
-                storeRepository, storeStatusHistoryRepository, eventPublisher, clock);
+                storeRepository, storeStatusHistoryRepository, eventOutboxService, clock);
     }
 
     @ParameterizedTest
@@ -119,12 +120,9 @@ class ApplicationReviewServiceTest {
         assertThat(applicationHistory.getValue().getToStatus()).isEqualTo(ApplicationStatus.APPROVED);
         assertThat(applicationHistory.getValue().getActorType()).isEqualTo(ActorType.ADMIN);
 
-        ArgumentCaptor<StoreApprovedEvent> event = ArgumentCaptor.forClass(StoreApprovedEvent.class);
-        verify(eventPublisher).publishEvent(event.capture());
-        assertThat(event.getValue().applicationId()).isEqualTo(27L);
-        assertThat(event.getValue().decidedAt()).isEqualTo(NOW);
-        assertThat(event.getValue().payload()).isEqualTo(new StoreApprovedPayload(3L, 4L, "곳간상회", "seller@example.com",
-                new StoreApprovedPayload.SettlementAccount("국민", "000000-00-000000", "홍길동")));
+        verify(eventOutboxService).enqueue("StoreApproved", "3", ApplicationReviewService.storeApprovedEventId(27L), NOW,
+                new StoreApprovedPayload(3L, 4L, "곳간상회", "seller@example.com",
+                        new StoreApprovedPayload.SettlementAccount("국민", "000000-00-000000", "홍길동")));
     }
 
     @Test
@@ -194,7 +192,7 @@ class ApplicationReviewServiceTest {
         // when · then
         assertErrorCode(() -> service.approve(27L), ApplyErrorCode.APPLY_INVALID_STATUS);
         verify(storeRepository, never()).saveAndFlush(any());
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
     }
 
     @ParameterizedTest
@@ -214,7 +212,7 @@ class ApplicationReviewServiceTest {
         assertErrorCode(() -> service.approve(27L), expected);
         verify(storeStatusHistoryRepository, never()).save(any());
         verify(applicationHistoryRepository, never()).save(any());
-        verify(eventPublisher, never()).publishEvent(any());
+        verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -225,6 +223,16 @@ class ApplicationReviewServiceTest {
 
         // when · then
         assertThatThrownBy(() -> ApplicationReviewService.duplicateCode(e)).isSameAs(e);
+    }
+
+    @Test
+    @DisplayName("StoreApproved eventId 는 신청 ID 로 정해지는 UUID — 같은 신청은 항상 같은 값, 다른 신청은 다른 값")
+    void storeApprovedEventId_whenSameApplication_isStable() {
+        // when · then
+        assertThat(ApplicationReviewService.storeApprovedEventId(27L))
+                .isEqualTo(ApplicationReviewService.storeApprovedEventId(27L))
+                .isNotEqualTo(ApplicationReviewService.storeApprovedEventId(28L));
+        assertThat(UUID.fromString(ApplicationReviewService.storeApprovedEventId(27L)).version()).isEqualTo(3);
     }
 
     private static DataIntegrityViolationException duplicate(String key) {

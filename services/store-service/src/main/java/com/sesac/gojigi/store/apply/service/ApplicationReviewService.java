@@ -6,22 +6,23 @@ import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
-import com.sesac.gojigi.store.apply.event.StoreApprovedEvent;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.exception.ApplyException;
 import com.sesac.gojigi.store.apply.repository.ApplicationHistoryRepository;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
+import com.sesac.gojigi.store.common.event.EventOutboxService;
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.entity.StoreStatusHistory;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
 import com.sesac.gojigi.store.store.repository.StoreStatusHistoryRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -30,20 +31,23 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 관리자 입점 심사 — 승인 (docs/api/store.md 5절). 반려 · 보완요청도 이 서비스에 붙인다.
  * 동시 처리는 미리 검사한 뒤에도 저장 순간에 다시 걸릴 수 있어, saveAndFlush 로 그 자리에서 실행해 보고 409 로 바꾼다.
+ * 이벤트는 같은 트랜잭션에서 아웃박스에 남기고 커밋 뒤 발행한다 — 발행이 실패해도 승인은 그대로, 발행기가 다시 보낸다.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ApplicationReviewService {
 
+    static final String STORE_APPROVED = "StoreApproved";
+
     private final StoreApplicationRepository storeApplicationRepository;
     private final ApplicationHistoryRepository applicationHistoryRepository;
     private final StoreRepository storeRepository;
     private final StoreStatusHistoryRepository storeStatusHistoryRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final EventOutboxService eventOutboxService;
     private final Clock clock;
 
-    /** 신청서로 스토어(ACTIVE)를 만들고 신청을 APPROVED 로 — 스토어 · 두 이력 · 신청 상태를 한 트랜잭션으로, StoreApproved 는 커밋 뒤 발행 */
+    /** 신청서로 스토어(ACTIVE)를 만들고 신청을 APPROVED 로 — 스토어 · 두 이력 · 신청 상태 · StoreApproved 아웃박스 행을 한 트랜잭션으로 */
     @Transactional
     public ApplicationApproveResponse approve(Long applicationId) {
         StoreApplication application = storeApplicationRepository.findById(applicationId)
@@ -60,10 +64,16 @@ public class ApplicationReviewService {
                 StoreStatusHistory.of(store.getId(), null, StoreStatus.ACTIVE, StoreActorType.ADMIN, null));
         applicationHistoryRepository.save(
                 ApplicationHistory.of(applicationId, fromStatus, ApplicationStatus.APPROVED, ActorType.ADMIN, null));
-        eventPublisher.publishEvent(new StoreApprovedEvent(applicationId, now, payload(application, store)));
+        eventOutboxService.enqueue(STORE_APPROVED, String.valueOf(store.getId()), storeApprovedEventId(applicationId), now,
+                payload(application, store));
 
         log.info("입점 승인 - applicationId={}, storeId={}, userId={}", applicationId, store.getId(), application.getUserId());
         return ApplicationApproveResponse.of(applicationId, application.getStatus(), store.getId(), now);
+    }
+
+    /** StoreApproved:{applicationId} 의 이름 기반 UUID (v3) — 신청 하나에 항상 같은 값 (store.md 5절, 노션 10/23 user 요청) */
+    static String storeApprovedEventId(Long applicationId) {
+        return UUID.nameUUIDFromBytes((STORE_APPROVED + ":" + applicationId).getBytes(StandardCharsets.UTF_8)).toString();
     }
 
     private static StoreApprovedPayload payload(StoreApplication application, Store store) {
