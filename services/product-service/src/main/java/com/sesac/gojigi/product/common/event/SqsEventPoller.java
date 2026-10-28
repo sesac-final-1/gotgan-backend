@@ -43,13 +43,13 @@ public class SqsEventPoller implements SmartLifecycle {
     private List<Thread> workers = List.of();
 
     public SqsEventPoller(SqsClient sqsClient, JsonMapper jsonMapper, List<SqsEventListener> listeners,
-            @Value("${app.sqs.queue-url:}") String queueUrl,
+            @Value("${app.sqs.store-events-queue-url:}") String storeEventsQueueUrl,
             @Value("${app.sqs.wait-seconds:20}") int waitSeconds,
             @Value("${app.sqs.max-messages:10}") int maxMessages) {
         this.sqsClient = sqsClient;
         this.jsonMapper = jsonMapper;
         this.listeners = listeners.stream().collect(Collectors.toMap(SqsEventListener::eventType, Function.identity()));
-        this.queueUrls = Stream.of(queueUrl).filter(u -> !u.isBlank()).toList();
+        this.queueUrls = Stream.of(storeEventsQueueUrl).filter(u -> !u.isBlank()).toList();
         this.waitSeconds = waitSeconds;
         this.maxMessages = maxMessages;
     }
