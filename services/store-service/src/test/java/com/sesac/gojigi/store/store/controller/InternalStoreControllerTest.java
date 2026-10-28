@@ -36,11 +36,11 @@ class InternalStoreControllerTest {
     }
 
     @Test
-    @DisplayName("스토어 상세 조회 — 200, 봉투 data 에 storeId · userId · storeName · status")
+    @DisplayName("스토어 상세 조회 — 200, 봉투 data 에 storeId · userId · storeName · status · 배송 정책")
     void get_whenStoreExists_returns200() throws Exception {
         // given
-        given(storeQueryService.getInternal(1L))
-                .willReturn(new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.ACTIVE));
+        given(storeQueryService.getInternal(1L)).willReturn(
+                new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.ACTIVE, 3000L, 30000L, "우체국택배"));
 
         // when · then
         mockMvc.perform(get("/internal/stores/1"))
@@ -48,7 +48,25 @@ class InternalStoreControllerTest {
                 .andExpect(jsonPath("$.data.storeId").value(1))
                 .andExpect(jsonPath("$.data.userId").value(2))
                 .andExpect(jsonPath("$.data.storeName").value("곳간상회"))
-                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.shippingFee").value(3000))
+                .andExpect(jsonPath("$.data.freeShippingThreshold").value(30000))
+                .andExpect(jsonPath("$.data.courier").value("우체국택배"));
+    }
+
+    @Test
+    @DisplayName("무료배송 기준 · 택배사가 없으면 키는 남고 값이 null — 호출자가 null 을 \"무료배송 없음\"으로 읽는다")
+    void get_whenNoFreeShippingAndCourier_returnsNullFields() throws Exception {
+        // given
+        given(storeQueryService.getInternal(3L)).willReturn(
+                new InternalStoreResponse(3L, 6L, "새 스토어", StoreStatus.ACTIVE, 3000L, null, null));
+
+        // when · then
+        mockMvc.perform(get("/internal/stores/3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.shippingFee").value(3000))
+                .andExpect(jsonPath("$.data.freeShippingThreshold").isEmpty())
+                .andExpect(jsonPath("$.data.courier").isEmpty());
     }
 
     @Test

@@ -29,7 +29,7 @@ class StoreQueryServiceTest {
     private StoreQueryService storeQueryService;
 
     @Test
-    @DisplayName("내부 상세는 스토어 ID · 판매자 ID · 스토어명 · 상태를 돌려준다")
+    @DisplayName("내부 상세는 스토어 ID · 판매자 ID · 스토어명 · 상태 · 배송 정책을 돌려준다")
     void getInternal_whenStoreExists_returnsStatus() {
         // given
         Store store = mock(Store.class);
@@ -37,13 +37,16 @@ class StoreQueryServiceTest {
         given(store.getUserId()).willReturn(2L);
         given(store.getStoreName()).willReturn("곳간상회");
         given(store.getStatus()).willReturn(StoreStatus.CLOSED);
+        given(store.getShippingFee()).willReturn(3000L);
+        given(store.getFreeShippingThreshold()).willReturn(null);
+        given(store.getCourier()).willReturn("CJ대한통운");
         given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store));
 
         // when
         InternalStoreResponse response = storeQueryService.getInternal(1L);
 
         // then
-        assertThat(response).isEqualTo(new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.CLOSED));
+        assertThat(response).isEqualTo(new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.CLOSED, 3000L, null, "CJ대한통운"));
     }
 
     @Test
