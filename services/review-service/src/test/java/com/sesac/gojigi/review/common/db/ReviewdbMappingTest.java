@@ -28,7 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * reviewdb 마이그레이션(V2 · V3) ↔ 엔티티 매핑 검증 — 실제 MySQL 8.4(Testcontainers) + Flyway, ddl-auto: validate 로 컨텍스트가 뜨면 컬럼 · 타입 일치.
+ * reviewdb 마이그레이션(V2 ~ V4) ↔ 엔티티 매핑 검증 — 실제 MySQL 8.4(Testcontainers) + Flyway, ddl-auto: validate 로 컨텍스트가 뜨면 컬럼 · 타입 일치.
  * 마이그레이션을 추가하면 버전 기대값을 함께 고칠 것.
  */
 @DataJpaTest
@@ -62,11 +62,11 @@ class ReviewdbMappingTest {
     }
 
     @Test
-    @DisplayName("V3 까지 적용되고 helpful_count 는 없다 (도움돼요 범위 제외)")
-    void migrate_upToV3_dropsHelpfulCount() {
+    @DisplayName("V4 까지 적용되고 helpful_count 는 없다 (도움돼요 범위 제외)")
+    void migrate_upToV4_dropsHelpfulCount() {
         assertThat(jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1", Integer.class))
-                .isEqualTo(3);
+                .isEqualTo(4);
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'review' AND COLUMN_NAME = 'helpful_count'",
                 Integer.class)).isZero();
