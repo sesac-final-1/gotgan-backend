@@ -29,6 +29,11 @@ app:
     settlement-url: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}
   events:
     topic-arn: ${STORE_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-store-events
+    outbox:                                  # 이벤트 아웃박스 (EventOutboxService · V4) — 커밋 후 바로 발행, 실패분은 발행기가 다시
+      publish-interval: 30s
+      initial-delay: 20s
+      retry-after: 10s                       # 커밋 직후 발행과 겹치지 않게 이만큼 지난 NEW 만
+      max-attempts: 10                       # 넘으면 ERROR 로그 (수동 확인)
   seller-docs:
     bucket: ${SELLER_DOCS_BUCKET:}          # 입점 서류 (비공개) — 신청 때 HeadObject 로 확인
   scheduler:

@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.sns.SnsClient;
 
 /**
  * AWS SDK v2 클라이언트 — 자격 증명은 기본 체인(클러스터: IRSA 웹 아이덴티티 토큰, 로컬: ~/.aws 프로필).
@@ -27,5 +28,16 @@ public class AwsConfig {
     @Bean
     public S3Presigner s3Presigner(@Value("${AWS_REGION:ap-northeast-2}") String region) {
         return S3Presigner.builder().region(Region.of(region)).build();
+    }
+
+    /**
+     * 이벤트 발행 (store-events, IRSA sns:Publish). 커밋 직후 발행은 요청 스레드라 호출 전체 1초 · 시도 500ms 로 끊는다 —
+     * 호출자 admin 의 read-timeout 3초 안에 응답이 들어가게(타임아웃 예산). 늦으면 행이 NEW 로 남아 발행기가 다시 보낸다
+     */
+    @Bean
+    public SnsClient snsClient(@Value("${AWS_REGION:ap-northeast-2}") String region) {
+        return SnsClient.builder().region(Region.of(region))
+                .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(1)).apiCallAttemptTimeout(Duration.ofMillis(500)))
+                .build();
     }
 }
