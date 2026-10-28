@@ -184,7 +184,7 @@ CREATE TABLE `storedb_outbox_event` (
 );
 
 -- ============================================================ productdb (product-service · 담당 박지연)
--- 원본: V1__init_product_ddl.sql · V2__product_info_columns.sql
+-- 원본: V1__init_product_ddl.sql · V2__product_info_columns.sql · V3__store_status.sql
 
 -- 상품 카테고리 (상위/하위 2단계)
 CREATE TABLE `category` (
@@ -260,6 +260,15 @@ CREATE TABLE `productdb_processed_event` (
 	`event_id`	VARCHAR(36)	NOT NULL	COMMENT '이벤트 봉투 eventId (UUID)',
 	`event_type`	VARCHAR(50)	NOT NULL	COMMENT 'StoreStatusChanged',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '처리 시각'
+);
+
+-- 스토어 운영 상태 스냅샷 — StoreStatusChanged 로 갱신, 상품 등록 때 is_store_active 초기값
+CREATE TABLE `store_status` (
+	`store_id`	BIGINT	NOT NULL	COMMENT '스토어 ID (storedb store.store_id, 논리 참조)',
+	`status`	VARCHAR(20)	NOT NULL	COMMENT '마지막으로 반영한 StoreStatusChanged.status — ACTIVE 만 운영 중, 그 밖의 값(SUSPENDED · CLOSED …)은 상품 숨김',
+	`status_changed_at`	DATETIME(6)	NOT NULL	COMMENT '마지막으로 반영한 이벤트 occurredAt — 이보다 오래된 이벤트는 무시 (SQS 순서 미보장)',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
+	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
 -- ============================================================ orderdb (order-service · 담당 이경석)
@@ -652,6 +661,7 @@ ALTER TABLE `product_option` ADD CONSTRAINT `PK_PRODUCT_OPTION` PRIMARY KEY (`pr
 ALTER TABLE `product_image` ADD CONSTRAINT `PK_PRODUCT_IMAGE` PRIMARY KEY (`product_image_id`);
 ALTER TABLE `stock_history` ADD CONSTRAINT `PK_STOCK_HISTORY` PRIMARY KEY (`stock_history_id`);
 ALTER TABLE `productdb_processed_event` ADD CONSTRAINT `PK_PRODUCTDB_PROCESSED_EVENT` PRIMARY KEY (`processed_event_id`);
+ALTER TABLE `store_status` ADD CONSTRAINT `PK_STORE_STATUS` PRIMARY KEY (`store_id`);
 ALTER TABLE `cart_item` ADD CONSTRAINT `PK_CART_ITEM` PRIMARY KEY (`cart_item_id`);
 ALTER TABLE `orders` ADD CONSTRAINT `PK_ORDERS` PRIMARY KEY (`order_id`);
 ALTER TABLE `order_store_shipment` ADD CONSTRAINT `PK_ORDER_STORE_SHIPMENT` PRIMARY KEY (`order_store_shipment_id`);
