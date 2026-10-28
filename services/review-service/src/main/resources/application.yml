@@ -25,8 +25,10 @@ app:
   client:
     connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
     read-timeout: 3s
-  sqs:
-    queue-url: ${REVIEW_EVENTS_QUEUE_URL:}   # 구독 큐 (sesac-gojigi-review-{도메인}-events)
+  sqs:                                      # 구독 큐 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
+    order-events-queue-url: ${REVIEW_ORDER_EVENTS_QUEUE_URL:}   # OrderItemConfirmed (리뷰 작성 자격) — ConfigMap 이름과 같게
+    wait-seconds: 20                        # 롱폴링 (비어 있어도 20초 기다렸다 돌아옴 — 빈 요청 비용 절감)
+    max-messages: 10
 
 management:
   endpoints:
