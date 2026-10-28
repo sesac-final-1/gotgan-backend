@@ -281,4 +281,63 @@ class ReviewServiceIntegrationTest {
             assertThat(reviewRepository.findById(reviewId).orElseThrow().getContent()).isEqualTo(CONTENT);
         }
     }
+
+    @Nested
+    @DisplayName("내 리뷰 삭제")
+    class Delete {
+
+        private Long writeReview() {
+            return reviewService.write(BUYER, request(saveEligibility(NOW.minusDays(1)), CONTENT)).reviewId();
+        }
+
+        @Test
+        @DisplayName("지우면 삭제 시각이 남고(물리 삭제 없음), 같은 상품주문에 다시 쓸 수 없다")
+        void delete_own_softDeletesAndBlocksRewrite() {
+            // given
+            Long reviewId = writeReview();
+            long orderItemId = reviewRepository.findById(reviewId).orElseThrow().getOrderItemId();
+
+            // when
+            reviewService.delete(BUYER, reviewId);
+
+            // then
+            assertThat(reviewRepository.findById(reviewId).orElseThrow().getDeletedAt()).isEqualTo(NOW);
+            assertThatThrownBy(() -> reviewService.write(BUYER, request(orderItemId, CONTENT)))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_ALREADY_WRITTEN);
+        }
+
+        @Test
+        @DisplayName("블라인드된 리뷰도 지울 수 있다")
+        void delete_blinded_isAllowed() {
+            // given
+            Long reviewId = writeReview();
+            Review review = reviewRepository.findById(reviewId).orElseThrow();
+            review.blind("욕설 · 비방", NOW);
+            reviewRepository.save(review);
+
+            // when
+            reviewService.delete(BUYER, reviewId);
+
+            // then
+            assertThat(reviewRepository.findById(reviewId).orElseThrow().isDeleted()).isTrue();
+        }
+
+        @Test
+        @DisplayName("없는 · 이미 삭제된 · 다른 회원의 리뷰는 같은 404 REVIEW_NOT_FOUND, 남의 리뷰는 그대로")
+        void delete_notFoundDeletedOrOthers_throwsNotFound() {
+            // given
+            Long reviewId = writeReview();
+            reviewService.delete(BUYER, reviewId);
+            Long othersReviewId = writeReview();
+
+            // when · then
+            assertThatThrownBy(() -> reviewService.delete(BUYER, -1L))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
+            assertThatThrownBy(() -> reviewService.delete(BUYER, reviewId))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
+            assertThatThrownBy(() -> reviewService.delete(99L, othersReviewId))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
+            assertThat(reviewRepository.findById(othersReviewId).orElseThrow().isDeleted()).isFalse();
+        }
+    }
 }

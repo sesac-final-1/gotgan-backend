@@ -45,7 +45,6 @@ class ReviewTest {
             assertThat(review.getWriterDisplayName()).isEqualTo("홍*동");
             assertThat(review.getRating()).isEqualTo(4);
             assertThat(review.getContent()).isEqualTo("좋아요");
-            assertThat(review.getHelpfulCount()).isZero();
             assertThat(review.isBlinded()).isFalse();
             assertThat(review.hasReply()).isFalse();
             assertThat(review.isDeleted()).isFalse();

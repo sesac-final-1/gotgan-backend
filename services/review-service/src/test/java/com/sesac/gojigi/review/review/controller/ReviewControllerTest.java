@@ -3,7 +3,10 @@ package com.sesac.gojigi.review.review.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -190,6 +193,39 @@ class ReviewControllerTest {
             return mockMvc.perform(put("/api/reviews/31")
                     .header("X-User-Id", "4").header("X-User-Roles", "BUYER")
                     .contentType(MediaType.APPLICATION_JSON).content(body));
+        }
+    }
+
+    @Nested
+    @DisplayName("내 리뷰 삭제 DELETE /api/reviews/{reviewId}")
+    class Delete {
+
+        @Test
+        @DisplayName("삭제 — 200, 봉투 data 없음")
+        void delete_own_returns200() throws Exception {
+            mockMvc.perform(delete("/api/reviews/31").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value("SUCCESS"))
+                    .andExpect(jsonPath("$.message").value("리뷰를 삭제했습니다."));
+            verify(reviewService).delete(4L, 31L);
+        }
+
+        @Test
+        @DisplayName("서비스가 던진 404 는 코드 그대로")
+        void delete_notFound_returns404() throws Exception {
+            willThrow(new ReviewException(ReviewErrorCode.REVIEW_NOT_FOUND)).given(reviewService).delete(4L, 31L);
+
+            mockMvc.perform(delete("/api/reviews/31").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("REVIEW_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("X-User-Id 없음 — 401 UNAUTHORIZED, 서비스를 부르지 않는다")
+        void delete_withoutUserHeader_returns401() throws Exception {
+            mockMvc.perform(delete("/api/reviews/31"))
+                    .andExpect(status().isUnauthorized());
+            verifyNoInteractions(reviewService);
         }
     }
 

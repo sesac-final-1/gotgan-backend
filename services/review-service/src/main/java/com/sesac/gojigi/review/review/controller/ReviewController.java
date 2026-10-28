@@ -16,6 +16,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -61,5 +62,15 @@ public class ReviewController {
     public ApiResponse<ReviewResponse> edit(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @PathVariable Long reviewId, @Valid @RequestBody ReviewUpdateRequest request) {
         return ApiResponse.success("리뷰를 수정했습니다.", reviewService.edit(user.userId(), reviewId, request));
+    }
+
+    @Operation(summary = "내 리뷰 삭제", description = """
+            인가: 로그인 (작성자 본인). 소프트 삭제 — 상품 리뷰 목록 · 평균 별점 · 리뷰 수에서 빠진다. 블라인드된 리뷰도 지울 수 있다.
+            지운 뒤 같은 상품주문에 다시 쓸 수 없다(작성은 409 REVIEW_ALREADY_WRITTEN).
+            에러: 401 UNAUTHORIZED · 404 REVIEW_NOT_FOUND(없는 · 이미 삭제된 · 다른 회원의 리뷰)""")
+    @DeleteMapping("/{reviewId}")
+    public ApiResponse<Void> delete(@Parameter(hidden = true) @CurrentUser AuthUser user, @PathVariable Long reviewId) {
+        reviewService.delete(user.userId(), reviewId);
+        return ApiResponse.success("리뷰를 삭제했습니다.");
     }
 }

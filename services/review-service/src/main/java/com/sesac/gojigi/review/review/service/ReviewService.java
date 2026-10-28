@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 리뷰 작성 · 수정 (REV-02 · 05, docs/api/review.md 1 · 2절). 담당 이경석.
+ * 리뷰 작성 · 수정 · 삭제 (REV-02 · 05, docs/api/review.md 1 ~ 3절). 담당 이경석.
  * 자격은 review_eligibility(OrderItemConfirmed 로 저장)만 본다 — order 를 호출하지 않는다.
  * 검사 순서: 자격(없음 · 남의 상품주문) → 이미 작성 → 기한 30일.
  */
@@ -66,9 +66,7 @@ public class ReviewService {
      */
     @Transactional
     public ReviewResponse edit(Long userId, Long reviewId, ReviewUpdateRequest request) {
-        Review review = reviewRepository.findById(reviewId)
-                .filter(r -> !r.isDeleted() && r.isOwnedBy(userId))
-                .orElseThrow(() -> new ReviewException(ReviewErrorCode.REVIEW_NOT_FOUND));
+        Review review = findOwnReview(userId, reviewId);
         if (review.isBlinded()) {
             throw new ReviewException(ReviewErrorCode.REVIEW_BLINDED);
         }
@@ -77,6 +75,24 @@ public class ReviewService {
                 request.fit());
         log.info("리뷰 수정 reviewId={} userId={} rating={}", review.getId(), userId, review.getRating());
         return ReviewResponse.from(review);
+    }
+
+    /**
+     * 내 리뷰 삭제 (REV-05, review.md 3절) — soft delete, 평균 · 리뷰 수에서 빠진다. 블라인드된 리뷰도 지울 수 있다.
+     * 상품주문당 1개(uk)라 지운 뒤 같은 상품주문에 다시 쓸 수 없다.
+     */
+    @Transactional
+    public void delete(Long userId, Long reviewId) {
+        Review review = findOwnReview(userId, reviewId);
+        review.softDelete(LocalDateTime.now(clock));
+        log.info("리뷰 삭제 reviewId={} userId={} orderItemId={}", review.getId(), userId, review.getOrderItemId());
+    }
+
+    /** 없음 · 삭제됨 · 남의 리뷰는 같은 404 — 다른 회원 리뷰의 존재를 드러내지 않는다 */
+    private Review findOwnReview(Long userId, Long reviewId) {
+        return reviewRepository.findById(reviewId)
+                .filter(r -> !r.isDeleted() && r.isOwnedBy(userId))
+                .orElseThrow(() -> new ReviewException(ReviewErrorCode.REVIEW_NOT_FOUND));
     }
 
     /** 태그를 지운 본문 — 남는 글자가 없으면 형식 오류 */
