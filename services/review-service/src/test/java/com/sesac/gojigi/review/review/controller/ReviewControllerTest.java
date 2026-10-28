@@ -5,18 +5,23 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.review.review.dto.request.ReviewCreateRequest;
+import com.sesac.gojigi.review.review.dto.request.ReviewUpdateRequest;
 import com.sesac.gojigi.review.review.dto.response.ReviewCreateResponse;
+import com.sesac.gojigi.review.review.dto.response.ReviewResponse;
+import com.sesac.gojigi.review.review.entity.ReviewFit;
 import com.sesac.gojigi.review.review.exception.ReviewErrorCode;
 import com.sesac.gojigi.review.review.exception.ReviewException;
 import com.sesac.gojigi.review.review.service.ReviewService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -127,6 +132,65 @@ class ReviewControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("REVIEW_WRITE_EXPIRED"))
                 .andExpect(jsonPath("$.message").value("리뷰 작성 기한(구매확정 후 30일)이 지났습니다."));
+    }
+
+    @Nested
+    @DisplayName("내 리뷰 수정 PUT /api/reviews/{reviewId}")
+    class Edit {
+
+        private static final String EDIT_BODY = """
+                { "rating": 4, "title": "길이가 조금 길어요",
+                  "content": "키 160인데 기장이 살짝 길어서 수선했어요. 그 외에는 만족합니다.", "fit": "LARGE" }
+                """;
+
+        @Test
+        @DisplayName("수정 — 200, 봉투 data 에 수정된 값")
+        void edit_validRequest_returns200() throws Exception {
+            // given
+            given(reviewService.edit(eq(4L), eq(31L), any(ReviewUpdateRequest.class)))
+                    .willReturn(new ReviewResponse(31L, 4, "길이가 조금 길어요", "키 160인데 기장이 살짝 길어서 수선했어요.", ReviewFit.LARGE));
+
+            // when · then
+            performEdit(EDIT_BODY)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value("SUCCESS"))
+                    .andExpect(jsonPath("$.data.reviewId").value(31))
+                    .andExpect(jsonPath("$.data.rating").value(4))
+                    .andExpect(jsonPath("$.data.fit").value("LARGE"));
+        }
+
+        @Test
+        @DisplayName("별점 6 · 본문 20자 미만 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
+        void edit_invalidField_returns400() throws Exception {
+            performEdit(EDIT_BODY.replace("\"rating\": 4", "\"rating\": 6"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            performEdit(EDIT_BODY.replace("키 160인데 기장이 살짝 길어서 수선했어요. 그 외에는 만족합니다.", "짧아요"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            verifyNoInteractions(reviewService);
+        }
+
+        @Test
+        @DisplayName("서비스가 던진 404 · 409 는 코드 그대로")
+        void edit_serviceError_returnsCode() throws Exception {
+            given(reviewService.edit(eq(4L), eq(31L), any(ReviewUpdateRequest.class)))
+                    .willThrow(new ReviewException(ReviewErrorCode.REVIEW_NOT_FOUND))
+                    .willThrow(new ReviewException(ReviewErrorCode.REVIEW_BLINDED));
+
+            performEdit(EDIT_BODY)
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.code").value("REVIEW_NOT_FOUND"));
+            performEdit(EDIT_BODY)
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("REVIEW_BLINDED"));
+        }
+
+        private ResultActions performEdit(String body) throws Exception {
+            return mockMvc.perform(put("/api/reviews/31")
+                    .header("X-User-Id", "4").header("X-User-Roles", "BUYER")
+                    .contentType(MediaType.APPLICATION_JSON).content(body));
+        }
     }
 
     private ResultActions perform(String body) throws Exception {

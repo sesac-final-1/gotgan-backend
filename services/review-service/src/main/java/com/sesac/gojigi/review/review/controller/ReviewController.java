@@ -4,7 +4,9 @@ import com.sesac.gojigi.common.web.auth.AuthUser;
 import com.sesac.gojigi.common.web.auth.CurrentUser;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.review.review.dto.request.ReviewCreateRequest;
+import com.sesac.gojigi.review.review.dto.request.ReviewUpdateRequest;
 import com.sesac.gojigi.review.review.dto.response.ReviewCreateResponse;
+import com.sesac.gojigi.review.review.dto.response.ReviewResponse;
 import com.sesac.gojigi.review.review.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -14,7 +16,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,5 +50,16 @@ public class ReviewController {
             @Valid @RequestBody ReviewCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("리뷰를 등록했습니다.", reviewService.write(user.userId(), request)));
+    }
+
+    @Operation(summary = "내 리뷰 수정", description = """
+            인가: 로그인 (작성자 본인). 별점 · 한줄 요약 · 본문 · 사이즈 체감을 통째로 바꾼다 — 작성과 같은 규칙, 기한 없음.
+            응답은 수정된 값(200). 판매자 답글은 그대로 남는다.
+            에러: 400 INVALID_INPUT(형식) · 401 UNAUTHORIZED · 404 REVIEW_NOT_FOUND(없는 · 삭제된 · 다른 회원의 리뷰) ·
+            409 REVIEW_BLINDED(관리자 블라인드 — 해제는 관리자만)""")
+    @PutMapping("/{reviewId}")
+    public ApiResponse<ReviewResponse> edit(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @PathVariable Long reviewId, @Valid @RequestBody ReviewUpdateRequest request) {
+        return ApiResponse.success("리뷰를 수정했습니다.", reviewService.edit(user.userId(), reviewId, request));
     }
 }

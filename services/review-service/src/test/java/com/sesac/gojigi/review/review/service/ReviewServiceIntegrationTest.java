@@ -9,6 +9,8 @@ import com.sesac.gojigi.review.TestcontainersConfiguration;
 import com.sesac.gojigi.review.eligibility.entity.ReviewEligibility;
 import com.sesac.gojigi.review.eligibility.repository.ReviewEligibilityRepository;
 import com.sesac.gojigi.review.review.dto.request.ReviewCreateRequest;
+import com.sesac.gojigi.review.review.dto.request.ReviewUpdateRequest;
+import com.sesac.gojigi.review.review.dto.response.ReviewResponse;
 import com.sesac.gojigi.review.review.entity.Review;
 import com.sesac.gojigi.review.review.entity.ReviewFit;
 import com.sesac.gojigi.review.review.exception.ReviewErrorCode;
@@ -24,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -182,5 +185,100 @@ class ReviewServiceIntegrationTest {
         // then
         assertThat(results).filteredOn(r -> r == ReviewErrorCode.REVIEW_ALREADY_WRITTEN).hasSize(threads - 1);
         assertThat(reviewRepository.findAll()).filteredOn(r -> r.getOrderItemId() == orderItemId).hasSize(1);
+    }
+
+    @Nested
+    @DisplayName("내 리뷰 수정")
+    class Edit {
+
+        private static final String NEW_CONTENT = "키 160인데 기장이 살짝 길어서 수선했어요. 그 외에는 만족합니다.";
+
+        private Long writeReview(LocalDateTime confirmedAt) {
+            return reviewService.write(BUYER, request(saveEligibility(confirmedAt), CONTENT)).reviewId();
+        }
+
+        private static ReviewUpdateRequest update(String content) {
+            return new ReviewUpdateRequest(2, null, content, null);
+        }
+
+        @Test
+        @DisplayName("통째로 바꾼다 — 비운 요약 · 사이즈 체감은 지워지고, 본문은 태그를 지우고, 판매자 답글은 남는다")
+        void edit_own_replacesFieldsAndKeepsReply() {
+            // given
+            Long reviewId = writeReview(NOW.minusDays(1));
+            Review review = reviewRepository.findById(reviewId).orElseThrow();
+            review.reply("감사합니다", NOW);
+            reviewRepository.save(review);
+
+            // when
+            ReviewResponse response = reviewService.edit(BUYER, reviewId, update("<p>" + NEW_CONTENT + "</p>"));
+
+            // then
+            assertThat(response).isEqualTo(new ReviewResponse(reviewId, 2, null, NEW_CONTENT, null));
+            Review found = reviewRepository.findById(reviewId).orElseThrow();
+            assertThat(found.getRating()).isEqualTo(2);
+            assertThat(found.getTitle()).isNull();
+            assertThat(found.getContent()).isEqualTo(NEW_CONTENT);
+            assertThat(found.getFit()).isNull();
+            assertThat(found.getReplyContent()).isEqualTo("감사합니다");
+        }
+
+        @Test
+        @DisplayName("작성 기한(30일)이 지나도 수정할 수 있다")
+        void edit_afterWritePeriod_isAllowed() {
+            // given — 40일 전 구매확정(지금은 작성 기한이 지남)한 상품주문에 기한 안에 써 둔 리뷰
+            ReviewEligibility expired = eligibilityRepository.findByOrderItemId(saveEligibility(NOW.minusDays(40)))
+                    .orElseThrow();
+            Long reviewId = reviewRepository.save(Review.write(expired, 5, null, CONTENT, null)).getId();
+
+            // when · then
+            assertThat(reviewService.edit(BUYER, reviewId, update(NEW_CONTENT)).rating()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("없는 · 삭제된 · 다른 회원의 리뷰는 같은 404 REVIEW_NOT_FOUND")
+        void edit_notFoundDeletedOrOthers_throwsNotFound() {
+            // given
+            Long othersReviewId = writeReview(NOW.minusDays(1));
+            Long deletedReviewId = writeReview(NOW.minusDays(1));
+            Review deleted = reviewRepository.findById(deletedReviewId).orElseThrow();
+            deleted.softDelete(NOW);
+            reviewRepository.save(deleted);
+
+            // when · then
+            assertThatThrownBy(() -> reviewService.edit(BUYER, -1L, update(NEW_CONTENT)))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
+            assertThatThrownBy(() -> reviewService.edit(99L, othersReviewId, update(NEW_CONTENT)))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
+            assertThatThrownBy(() -> reviewService.edit(BUYER, deletedReviewId, update(NEW_CONTENT)))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("블라인드된 리뷰는 409 REVIEW_BLINDED, 내용이 바뀌지 않는다")
+        void edit_blinded_throwsBlindedAndKeepsContent() {
+            // given
+            Long reviewId = writeReview(NOW.minusDays(1));
+            Review review = reviewRepository.findById(reviewId).orElseThrow();
+            review.blind("욕설 · 비방", NOW);
+            reviewRepository.save(review);
+
+            // when · then
+            assertThatThrownBy(() -> reviewService.edit(BUYER, reviewId, update(NEW_CONTENT)))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_BLINDED);
+            assertThat(reviewRepository.findById(reviewId).orElseThrow().getContent()).isEqualTo(CONTENT);
+        }
+
+        @Test
+        @DisplayName("태그를 지우면 본문이 비는 경우 400 INVALID_INPUT, 내용이 바뀌지 않는다")
+        void edit_onlyTagsContent_throwsInvalidInput() {
+            // given
+            Long reviewId = writeReview(NOW.minusDays(1));
+
+            // when · then
+            assertThatThrownBy(() -> reviewService.edit(BUYER, reviewId, update("<script>alert('xss-xss-xss')</script>")))
+                    .hasFieldOrPropertyWithValue("errorCode", CommonErrorCode.INVALID_INPUT);
+            assertThat(reviewRepository.findById(reviewId).orElseThrow().getContent()).isEqualTo(CONTENT);
+        }
     }
 }
