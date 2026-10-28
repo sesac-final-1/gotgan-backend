@@ -1,6 +1,7 @@
 package com.sesac.gojigi.review.review.repository;
 
 import com.sesac.gojigi.review.review.entity.Review;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -90,4 +91,20 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
             group by r.fit
             """)
     List<Object[]> countByFitForProduct(Long productId);
+
+    /** 여러 상품 평균 별점 · 리뷰 수 — 블라인드 · 삭제 제외, 리뷰 없는 상품은 행이 없다 → [productId, avg, count] */
+    @Query("""
+            select r.productId, avg(r.rating), count(r) from Review r
+            where r.productId in :productIds and r.deletedAt is null and r.blinded = false
+            group by r.productId
+            """)
+    List<Object[]> summarizeByProductIds(Collection<Long> productIds);
+
+    /** 여러 스토어 평균 별점 · 리뷰 수 — 블라인드 · 삭제 제외, 리뷰 없는 스토어는 행이 없다 → [storeId, avg, count] */
+    @Query("""
+            select r.storeId, avg(r.rating), count(r) from Review r
+            where r.storeId in :storeIds and r.deletedAt is null and r.blinded = false
+            group by r.storeId
+            """)
+    List<Object[]> summarizeByStoreIds(Collection<Long> storeIds);
 }
