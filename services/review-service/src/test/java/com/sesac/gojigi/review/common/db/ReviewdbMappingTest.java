@@ -28,7 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * reviewdb V2 마이그레이션 ↔ 엔티티 매핑 검증 — 실제 MySQL 8.4(Testcontainers) + Flyway, ddl-auto: validate 로 컨텍스트가 뜨면 컬럼 · 타입 일치.
+ * reviewdb 마이그레이션(V2 · V3) ↔ 엔티티 매핑 검증 — 실제 MySQL 8.4(Testcontainers) + Flyway, ddl-auto: validate 로 컨텍스트가 뜨면 컬럼 · 타입 일치.
  * 마이그레이션을 추가하면 버전 기대값을 함께 고칠 것.
  */
 @DataJpaTest
@@ -62,15 +62,18 @@ class ReviewdbMappingTest {
     }
 
     @Test
-    @DisplayName("V2 까지 적용된다")
-    void migrate_upToV2() {
+    @DisplayName("V3 까지 적용되고 helpful_count 는 없다 (도움돼요 범위 제외)")
+    void migrate_upToV3_dropsHelpfulCount() {
         assertThat(jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1", Integer.class))
-                .isEqualTo(2);
+                .isEqualTo(3);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'review' AND COLUMN_NAME = 'helpful_count'",
+                Integer.class)).isZero();
     }
 
     @Test
-    @DisplayName("리뷰 · 사진을 저장하고 다시 읽으면 값과 DB 기본값(시각 · 블라인드 · 도움돼요)이 들어 있다")
+    @DisplayName("리뷰 · 사진을 저장하고 다시 읽으면 값과 DB 기본값(시각 · 블라인드)이 들어 있다")
     void saveReviewWithImage_roundTrip() {
         // given
         Review review = Review.write(saveEligibility(11L), 5, "핏이 예뻐요", "<p>오버핏</p>", ReviewFit.TRUE_TO_SIZE);
@@ -93,7 +96,6 @@ class ReviewdbMappingTest {
         assertThat(found.isBlinded()).isTrue();
         assertThat(found.getBlindReason()).isEqualTo("욕설 · 비방");
         assertThat(found.getReplyContent()).isEqualTo("감사합니다");
-        assertThat(found.getHelpfulCount()).isZero();
         assertThat(found.getCreatedAt()).isNotNull();
         assertThat(found.getUpdatedAt()).isNotNull();
         assertThat(image.getReview().getId()).isEqualTo(review.getId());
