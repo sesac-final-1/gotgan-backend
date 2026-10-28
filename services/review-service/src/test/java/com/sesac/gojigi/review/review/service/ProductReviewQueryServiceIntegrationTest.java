@@ -16,6 +16,8 @@ import com.sesac.gojigi.review.review.entity.ReviewFit;
 import com.sesac.gojigi.review.review.repository.ReviewRepository;
 import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicLong;
+import com.sesac.gojigi.review.review.entity.ReviewImage;
+import com.sesac.gojigi.review.review.repository.ReviewImageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -29,7 +31,7 @@ import org.springframework.test.context.ActiveProfiles;
 /** 상품 상세 공개 리뷰 — 목록 필터 · 정렬 · 요약 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, ProductReviewQueryService.class })
+@Import({ TestcontainersConfiguration.class, ProductReviewQueryService.class, ReviewImages.class })
 @ActiveProfiles("test")
 class ProductReviewQueryServiceIntegrationTest {
 
@@ -79,7 +81,7 @@ class ProductReviewQueryServiceIntegrationTest {
         @Test
         @DisplayName("최신순 — 이 상품만 · 블라인드 · 삭제 제외, 작성자 표시 이름 · 옵션명 · 답글")
         void list_latest_excludesBlindedAndDeleted() {
-            PageResponse<ProductReviewResponse> page = productReviewQueryService.list(PRODUCT, null, ProductReviewSort.LATEST, 0, 10);
+            PageResponse<ProductReviewResponse> page = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 10);
 
             assertThat(page.content()).extracting(ProductReviewResponse::reviewId)
                     .containsExactly(r5Replied.getId(), r3Small.getId(), r5Fit.getId());
@@ -93,10 +95,10 @@ class ProductReviewQueryServiceIntegrationTest {
         @Test
         @DisplayName("평점 높은순 · 낮은순 — 같은 별점이면 최신 먼저")
         void list_ratingSorts() {
-            assertThat(productReviewQueryService.list(PRODUCT, null, ProductReviewSort.RATING_HIGH, 0, 10).content())
+            assertThat(productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.RATING_HIGH, 0, 10).content())
                     .extracting(ProductReviewResponse::reviewId)
                     .containsExactly(r5Replied.getId(), r5Fit.getId(), r3Small.getId());
-            assertThat(productReviewQueryService.list(PRODUCT, null, ProductReviewSort.RATING_LOW, 0, 10).content())
+            assertThat(productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.RATING_LOW, 0, 10).content())
                     .extracting(ProductReviewResponse::reviewId)
                     .containsExactly(r3Small.getId(), r5Replied.getId(), r5Fit.getId());
         }
@@ -104,16 +106,16 @@ class ProductReviewQueryServiceIntegrationTest {
         @Test
         @DisplayName("별점 하나만 · 페이지 나눔 · 없는 상품은 빈 목록")
         void list_ratingFilterPagingAndUnknownProduct() {
-            assertThat(productReviewQueryService.list(PRODUCT, 5, ProductReviewSort.LATEST, 0, 10).content())
+            assertThat(productReviewQueryService.list(PRODUCT, 5, false, ProductReviewSort.LATEST, 0, 10).content())
                     .extracting(ProductReviewResponse::reviewId).containsExactly(r5Replied.getId(), r5Fit.getId());
-            assertThat(productReviewQueryService.list(PRODUCT, 1, ProductReviewSort.LATEST, 0, 10).content()).isEmpty();
+            assertThat(productReviewQueryService.list(PRODUCT, 1, false, ProductReviewSort.LATEST, 0, 10).content()).isEmpty();
 
-            PageResponse<ProductReviewResponse> first = productReviewQueryService.list(PRODUCT, null, ProductReviewSort.LATEST, 0, 2);
+            PageResponse<ProductReviewResponse> first = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 2);
             assertThat(first.content()).hasSize(2);
             assertThat(first.totalElements()).isEqualTo(3);
             assertThat(first.hasNext()).isTrue();
 
-            assertThat(productReviewQueryService.list(9999L, null, ProductReviewSort.LATEST, 0, 10).content()).isEmpty();
+            assertThat(productReviewQueryService.list(9999L, null, false, ProductReviewSort.LATEST, 0, 10).content()).isEmpty();
         }
     }
 
@@ -139,5 +141,23 @@ class ProductReviewQueryServiceIntegrationTest {
         assertThat(summary.averageRating()).isZero();
         assertThat(summary.distribution()).hasSize(5).extracting(RatingCount::count).containsOnly(0L);
         assertThat(summary.fits()).hasSize(3).extracting(FitCount::count).containsOnly(0L);
+    }
+
+    @Test
+    @DisplayName("포토 리뷰만 — 사진 있는 리뷰만, 응답에 사진 URL 순서대로")
+    void list_photoOnly_returnsReviewsWithImages(@Autowired ReviewImageRepository reviewImageRepository) {
+        // given
+        reviewImageRepository.save(new ReviewImage(r3Small, "reviews/4/x.jpg", 0));
+        reviewImageRepository.flush();
+
+        // when
+        var photos = productReviewQueryService.list(PRODUCT, null, true, ProductReviewSort.LATEST, 0, 10).content();
+        var all = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 10).content();
+
+        // then
+        assertThat(photos).extracting(ProductReviewResponse::reviewId).containsExactly(r3Small.getId());
+        assertThat(photos.getFirst().imageUrls()).singleElement().asString().endsWith("/reviews/4/x.jpg");
+        assertThat(all).hasSize(3);
+        assertThat(all.getFirst().imageUrls()).isEmpty();
     }
 }

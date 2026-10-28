@@ -65,7 +65,7 @@ class SellerReviewControllerTest {
     void list_defaults_returns200() throws Exception {
         // given
         SellerReviewResponse review = new SellerReviewResponse(31L, 101L, "린넨 셔츠", "오트밀 / M", "곳간러버", 2, null,
-                "길어요", null, false, null, null, CREATED);
+                "길어요", null, false, null, null, CREATED, List.of());
         given(sellerReviewService.list(1L, SellerReviewTab.ALL, null, 0, 10))
                 .willReturn(new PageResponse<>(List.of(review), 0, 10, 1, 1, false));
 
@@ -90,7 +90,7 @@ class SellerReviewControllerTest {
     }
 
     @ParameterizedTest(name = "{0}={1}")
-    @CsvSource({ "tab, PHOTO", "page, -1", "size, 51", "productId, abc" })
+    @CsvSource({ "tab, VIDEO", "page, -1", "size, 51", "productId, abc" })
     @DisplayName("목록 — 모르는 tab · 범위 밖 page · size · 숫자 아닌 productId 는 400 INVALID_INPUT")
     void list_invalidParam_returns400(String name, String value) throws Exception {
         mockMvc.perform(seller(get("/api/seller/reviews")).param(name, value))
@@ -104,7 +104,7 @@ class SellerReviewControllerTest {
     void summarize_returns200() throws Exception {
         given(sellerReviewService.summarize(1L)).willReturn(new SellerReviewSummaryResponse(4.5, 2,
                 List.of(new RatingCount(5, 1), new RatingCount(4, 1), new RatingCount(3, 0), new RatingCount(2, 0),
-                        new RatingCount(1, 0)), List.of(), new TabCounts(3, 1, 0)));
+                        new RatingCount(1, 0)), List.of(), new TabCounts(3, 1, 0, 0)));
 
         mockMvc.perform(seller(get("/api/seller/reviews/summary")))
                 .andExpect(status().isOk())

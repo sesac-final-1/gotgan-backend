@@ -19,6 +19,8 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.concurrent.atomic.AtomicLong;
+import com.sesac.gojigi.review.review.entity.ReviewImage;
+import com.sesac.gojigi.review.review.repository.ReviewImageRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -33,7 +35,7 @@ import org.springframework.test.context.ActiveProfiles;
 /** admin 신고 처리 내부 API — 조회 · 블라인드 · 해제 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, InternalReviewService.class, InternalReviewServiceIntegrationTest.FixedClock.class })
+@Import({ TestcontainersConfiguration.class, InternalReviewService.class, ReviewImages.class, InternalReviewServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")
 class InternalReviewServiceIntegrationTest {
 
@@ -207,5 +209,18 @@ class InternalReviewServiceIntegrationTest {
                 .buyerDisplayName("곳간러버").productName("린넨 셔츠").confirmedAt(NOW.minusDays(1))
                 .build());
         return reviewRepository.saveAndFlush(Review.write(eligibility, 4, null, CONTENT, null));
+    }
+
+    @Test
+    @DisplayName("조회 응답에 사진 URL 이 순서대로")
+    void get_includesImageUrls(@Autowired ReviewImageRepository reviewImageRepository) {
+        // given
+        Review review = saveReview();
+        Review managed = reviewRepository.findById(review.getId()).orElseThrow();
+        reviewImageRepository.save(new ReviewImage(managed, "reviews/4/z.jpg", 0));
+        reviewImageRepository.flush();
+
+        // when · then
+        assertThat(internalReviewService.get(review.getId()).imageUrls()).singleElement().asString().endsWith("/reviews/4/z.jpg");
     }
 }

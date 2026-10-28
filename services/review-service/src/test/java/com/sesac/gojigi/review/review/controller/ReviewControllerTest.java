@@ -19,6 +19,8 @@ import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.review.review.dto.request.ProductReviewSort;
 import com.sesac.gojigi.review.review.dto.request.ReviewCreateRequest;
 import com.sesac.gojigi.review.review.dto.request.ReviewUpdateRequest;
+import com.sesac.gojigi.review.review.dto.request.ReviewImagePresignRequest;
+import com.sesac.gojigi.review.review.dto.response.ReviewImagePresignResponse;
 import com.sesac.gojigi.review.review.dto.response.MyReviewResponse;
 import com.sesac.gojigi.review.review.dto.response.ProductRatingResponse;
 import com.sesac.gojigi.review.review.dto.response.ProductReviewResponse;
@@ -35,6 +37,7 @@ import com.sesac.gojigi.review.review.exception.ReviewException;
 import com.sesac.gojigi.review.review.service.MyReviewQueryService;
 import com.sesac.gojigi.review.review.service.ProductReviewQueryService;
 import com.sesac.gojigi.review.review.service.RatingQueryService;
+import com.sesac.gojigi.review.review.service.ReviewImagePresignService;
 import com.sesac.gojigi.review.review.service.ReviewService;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -75,11 +78,15 @@ class ReviewControllerTest {
     @Mock
     private RatingQueryService ratingQueryService;
 
+    @Mock
+    private ReviewImagePresignService reviewImagePresignService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new ReviewController(reviewService, myReviewQueryService, productReviewQueryService, ratingQueryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new ReviewController(reviewService, myReviewQueryService, productReviewQueryService, ratingQueryService,
+                        reviewImagePresignService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -179,7 +186,7 @@ class ReviewControllerTest {
         void edit_validRequest_returns200() throws Exception {
             // given
             given(reviewService.edit(eq(4L), eq(31L), any(ReviewUpdateRequest.class)))
-                    .willReturn(new ReviewResponse(31L, 4, "길이가 조금 길어요", "키 160인데 기장이 살짝 길어서 수선했어요.", ReviewFit.LARGE));
+                    .willReturn(new ReviewResponse(31L, 4, "길이가 조금 길어요", "키 160인데 기장이 살짝 길어서 수선했어요.", ReviewFit.LARGE, List.of()));
 
             // when · then
             performEdit(EDIT_BODY)
@@ -269,7 +276,7 @@ class ReviewControllerTest {
             // given
             MyReviewResponse review = new MyReviewResponse(31L, 11L, 101L, "린넨 오버핏 셔츠", "오트밀 / M",
                     "https://cdn.gotgan.click/products/1/a1b2.jpg", 5, null, "오버핏이에요", ReviewFit.TRUE_TO_SIZE, true,
-                    null, null, CREATED);
+                    null, null, CREATED, List.of());
             given(myReviewQueryService.listMine(4L, 0, 10)).willReturn(new PageResponse<>(List.of(review), 0, 10, 1, 1, false));
 
             // when · then
@@ -326,8 +333,8 @@ class ReviewControllerTest {
         @DisplayName("목록 — 로그인 없이 200, 기본 sort LATEST · page 0 · size 10")
         void list_defaults_returns200() throws Exception {
             ProductReviewResponse review = new ProductReviewResponse(31L, "곳간러버", 5, null, "오버핏이에요", "오트밀 / M",
-                    ReviewFit.TRUE_TO_SIZE, null, null, OffsetDateTime.parse("2026-10-20T14:00:00+09:00"));
-            given(productReviewQueryService.list(101L, null, ProductReviewSort.LATEST, 0, 10))
+                    ReviewFit.TRUE_TO_SIZE, null, null, OffsetDateTime.parse("2026-10-20T14:00:00+09:00"), List.of());
+            given(productReviewQueryService.list(101L, null, false, ProductReviewSort.LATEST, 0, 10))
                     .willReturn(new PageResponse<>(List.of(review), 0, 10, 1, 1, false));
 
             mockMvc.perform(get("/api/reviews").param("productId", "101"))
@@ -341,7 +348,7 @@ class ReviewControllerTest {
         @Test
         @DisplayName("목록 — rating · sort · page · size 를 그대로 넘긴다")
         void list_withParams_passesThrough() throws Exception {
-            given(productReviewQueryService.list(101L, 5, ProductReviewSort.RATING_LOW, 1, 20))
+            given(productReviewQueryService.list(101L, 5, false, ProductReviewSort.RATING_LOW, 1, 20))
                     .willReturn(new PageResponse<>(List.of(), 1, 20, 0, 0, false));
 
             mockMvc.perform(get("/api/reviews").param("productId", "101").param("rating", "5")
@@ -427,6 +434,50 @@ class ReviewControllerTest {
             mockMvc.perform(get(path).param("ids", "abc")).andExpect(status().isBadRequest());
             mockMvc.perform(get(path).param("ids", ids101)).andExpect(status().isBadRequest());
             verifyNoInteractions(ratingQueryService);
+        }
+    }
+
+    @Nested
+    @DisplayName("사진 업로드 주소 POST /api/reviews/images/presign")
+    class Presign {
+
+        @Test
+        @DisplayName("발급 — 200, 봉투 data 에 키 · 주소 · 만료 시각")
+        void presign_returns200() throws Exception {
+            given(reviewImagePresignService.presign(eq(4L), any(ReviewImagePresignRequest.class))).willReturn(List.of(
+                    new ReviewImagePresignResponse("reviews/4/a.jpg", "https://s3/put", OffsetDateTime.parse("2026-10-28T15:10:00+09:00"))));
+
+            mockMvc.perform(post("/api/reviews/images/presign").header("X-User-Id", "4").header("X-User-Roles", "BUYER")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{ \"files\": [ { \"contentType\": \"image/jpeg\", \"size\": 834512 } ] }"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data[0].key").value("reviews/4/a.jpg"))
+                    .andExpect(jsonPath("$.data[0].uploadUrl").value("https://s3/put"))
+                    .andExpect(jsonPath("$.data[0].expiresAt").value("2026-10-28T15:10:00+09:00"));
+        }
+
+        @Test
+        @DisplayName("files 없음 · 크기 없음 400 INVALID_INPUT, 서비스 400 REVIEW_IMAGE_INVALID 는 메시지 그대로, 헤더 없음 401")
+        void presign_errors() throws Exception {
+            mockMvc.perform(post("/api/reviews/images/presign").header("X-User-Id", "4")
+                            .contentType(MediaType.APPLICATION_JSON).content("{ }"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            mockMvc.perform(post("/api/reviews/images/presign").header("X-User-Id", "4")
+                            .contentType(MediaType.APPLICATION_JSON).content("{ \"files\": [ { \"contentType\": \"image/jpeg\" } ] }"))
+                    .andExpect(status().isBadRequest());
+            mockMvc.perform(post("/api/reviews/images/presign")
+                            .contentType(MediaType.APPLICATION_JSON).content("{ \"files\": [] }"))
+                    .andExpect(status().isUnauthorized());
+
+            given(reviewImagePresignService.presign(eq(4L), any(ReviewImagePresignRequest.class)))
+                    .willThrow(new ReviewException(ReviewErrorCode.REVIEW_IMAGE_INVALID, "1번째 파일: 사진은 10MB 이하만 올릴 수 있습니다."));
+            mockMvc.perform(post("/api/reviews/images/presign").header("X-User-Id", "4")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{ \"files\": [ { \"contentType\": \"image/jpeg\", \"size\": 99999999 } ] }"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("REVIEW_IMAGE_INVALID"))
+                    .andExpect(jsonPath("$.message").value("1번째 파일: 사진은 10MB 이하만 올릴 수 있습니다."));
         }
     }
 
