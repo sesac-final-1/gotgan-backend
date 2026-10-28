@@ -288,6 +288,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 - `options`: 삭제된 조합은 빠집니다. **옵션 없는 상품도 옵션 1개**(`option1Value · option2Value = null`)가 있어서, 장바구니는 언제나 `productOptionId` 로 담습니다.
 - 재고 수는 공개하지 않고 `soldOut` 만 줍니다. 담을 때 재고를 넘으면 주문 단계(1절)에서 `STOCK_INSUFFICIENT`.
 - 스토어 정보(이름 · 배송비)는 화면이 `GET /api/stores/{storeId}` 를, 별점 · 리뷰는 review API 를 따로 부릅니다.
+- 공개 GET 이라 다른 서비스(예: chat 의 상품 카드 상품명)도 내부 API 를 따로 두지 않고 클러스터 안에서 이 경로(`http://product-service:8083/api/products/{productId}`)를 그대로 부르면 됩니다. 판매자용 값(상태 · 사유 · 재고 수 · 이미지 key)은 이 응답에 없습니다.
 
 ## 11. 판매자 상품 목록 — `GET /api/seller/products` (PRD-04)
 
