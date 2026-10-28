@@ -31,6 +31,9 @@ import org.hibernate.type.SqlTypes;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class StoreApplication extends BaseTimeEntity {
 
+    /** 보완요청 후 재제출 기한 (store.md 7절, STR-09) */
+    public static final int SUPPLEMENT_DUE_DAYS = 7;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "store_application_id")
@@ -162,6 +165,24 @@ public class StoreApplication extends BaseTimeEntity {
         this.status = ApplicationStatus.REJECTED;
         this.statusReason = reason;
         this.statusChangedAt = decidedAt;
+    }
+
+    /**
+     * 보완요청 — 심사대기에서만(보완요청 중이면 재제출을 기다림, 409). 메시지는 신청자 화면 · 메일에 보인다 (store.md 7절).
+     * 기한은 저장하지 않고 상태 변경 시각 + 7일로 계산 — 7일 자동 반려도 같은 기준
+     */
+    public void requestSupplement(String message, LocalDateTime requestedAt) {
+        if (status != ApplicationStatus.PENDING) {
+            throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS);
+        }
+        this.status = ApplicationStatus.SUPPLEMENT;
+        this.statusReason = message;
+        this.statusChangedAt = requestedAt;
+    }
+
+    /** 보완 기한 — 보완요청 중일 때만 의미 있음 */
+    public LocalDateTime supplementDueAt() {
+        return statusChangedAt.plusDays(SUPPLEMENT_DUE_DAYS);
     }
 
     private void requireUndecided() {

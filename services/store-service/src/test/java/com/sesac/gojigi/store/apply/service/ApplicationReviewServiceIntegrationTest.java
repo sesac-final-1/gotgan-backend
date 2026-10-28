@@ -12,6 +12,7 @@ import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.BizType;
+import com.sesac.gojigi.store.apply.entity.DocType;
 import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
@@ -266,6 +267,50 @@ class ApplicationReviewServiceIntegrationTest {
             assertThat(payload.get("decidedAt").asString()).isEqualTo("2026-10-28T14:30:00+09:00");
             assertThat(outboxEventRepository.findAll()).singleElement()
                     .satisfies(row -> assertThat(row.getStatus()).isEqualTo(OutboxEvent.Status.SENT));
+        } finally { // 커밋된 행은 다른 테스트에 남지 않게 지운다 (FK 역순)
+            jdbcTemplate.update("DELETE FROM outbox_event");
+            jdbcTemplate.update("DELETE FROM application_history WHERE store_application_id = ?", application.getId());
+            jdbcTemplate.update("DELETE FROM store_application WHERE store_application_id = ?", application.getId());
+        }
+    }
+
+    @Test
+    @DisplayName("보완요청이 커밋되면 신청 SUPPLEMENT · 이력이 저장되고 봉투를 한 번 보낸다 — 서류는 한글 이름, dueAt 은 +7일 +09:00 문자열")
+    void requestSupplement_whenCommitted_persistsAndPublishesEnvelope() {
+        // given
+        StoreApplication application = storeApplicationRepository.saveAndFlush(application(9L, "보완상회", "supplement-store"));
+        service.requestSupplement(application.getId(), "사본이 흐려 확인이 어렵습니다",
+                List.of(DocType.BUSINESS_REG, DocType.BANK_COPY));
+        verify(snsEventPublisher, never()).send(anyString(), anyString(), anyString(), anyString());
+
+        // when
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        // then
+        try {
+            StoreApplication supplemented = storeApplicationRepository.findById(application.getId()).orElseThrow();
+            assertThat(supplemented.getStatus()).isEqualTo(ApplicationStatus.SUPPLEMENT);
+            assertThat(supplemented.getStatusReason()).isEqualTo("사본이 흐려 확인이 어렵습니다");
+            assertThat(supplemented.getStatusChangedAt()).isEqualTo(NOW);
+            assertThat(applicationHistoryRepository.findAllByStoreApplicationIdOrderByIdAsc(application.getId()))
+                    .singleElement().satisfies(h -> {
+                        assertThat(h.getToStatus()).isEqualTo(ApplicationStatus.SUPPLEMENT);
+                        assertThat(h.getReason()).isEqualTo("사본이 흐려 확인이 어렵습니다");
+                    });
+
+            ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+            verify(snsEventPublisher).send(eq("StoreApplicationSupplementRequested"), eq(String.valueOf(application.getId())),
+                    anyString(), json.capture());
+            JsonNode payload = JsonMapper.builder().build().readTree(json.getValue()).get("payload");
+            assertThat(payload.get("applicationId").asLong()).isEqualTo(application.getId());
+            assertThat(payload.get("userId").asLong()).isEqualTo(9L);
+            assertThat(payload.get("storeName").asString()).isEqualTo("보완상회");
+            assertThat(payload.get("sellerEmail").asString()).isEqualTo("seller@example.com");
+            assertThat(payload.get("requestedDocs").get(0).asString()).isEqualTo("사업자등록증");
+            assertThat(payload.get("requestedDocs").get(1).asString()).isEqualTo("통장 사본");
+            assertThat(payload.get("message").asString()).isEqualTo("사본이 흐려 확인이 어렵습니다");
+            assertThat(payload.get("dueAt").asString()).isEqualTo("2026-11-04T14:30:00+09:00");
         } finally { // 커밋된 행은 다른 테스트에 남지 않게 지운다 (FK 역순)
             jdbcTemplate.update("DELETE FROM outbox_event");
             jdbcTemplate.update("DELETE FROM application_history WHERE store_application_id = ?", application.getId());

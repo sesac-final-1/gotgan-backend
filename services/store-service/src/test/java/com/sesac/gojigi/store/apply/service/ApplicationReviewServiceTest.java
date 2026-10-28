@@ -4,20 +4,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.store.apply.dto.event.StoreApplicationRejectedPayload;
+import com.sesac.gojigi.store.apply.dto.event.StoreApplicationSupplementRequestedPayload;
 import com.sesac.gojigi.store.apply.dto.event.StoreApprovedPayload;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationApproveResponse;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationRejectResponse;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationSupplementResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.BizType;
+import com.sesac.gojigi.store.apply.entity.DocType;
 import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
@@ -298,6 +304,116 @@ class ApplicationReviewServiceTest {
 
         // when · then
         assertErrorCode(() -> service.reject(99L, "사유"), ApplyErrorCode.APPLY_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("보완요청하면 신청을 SUPPLEMENT · 메시지 저장 · 이력을 남기고, 기한 +7일 · 서류 한글 이름으로 이벤트를 아웃박스에 남긴다")
+    void requestSupplement_whenPending_supplementsAndEnqueuesEvent() {
+        // given
+        StoreApplication application = application(27L, ApplicationStatus.PENDING);
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+
+        // when
+        ApplicationSupplementResponse response = service.requestSupplement(27L, "사본이 흐려 확인이 어렵습니다",
+                List.of(DocType.ECOMMERCE_REG, DocType.PRODUCT_PHOTO));
+
+        // then
+        assertThat(response).isEqualTo(new ApplicationSupplementResponse(27L, ApplicationStatus.SUPPLEMENT,
+                OffsetDateTime.parse("2026-11-04T14:30:00+09:00")));
+        assertThat(application.getStatus()).isEqualTo(ApplicationStatus.SUPPLEMENT);
+        assertThat(application.getStatusReason()).isEqualTo("사본이 흐려 확인이 어렵습니다");
+        assertThat(application.getStatusChangedAt()).isEqualTo(NOW);
+        verify(storeApplicationRepository).saveAndFlush(application);
+
+        ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
+        verify(applicationHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getFromStatus()).isEqualTo(ApplicationStatus.PENDING);
+        assertThat(history.getValue().getToStatus()).isEqualTo(ApplicationStatus.SUPPLEMENT);
+        assertThat(history.getValue().getActorType()).isEqualTo(ActorType.ADMIN);
+        assertThat(history.getValue().getReason()).isEqualTo("사본이 흐려 확인이 어렵습니다");
+
+        ArgumentCaptor<String> eventId = ArgumentCaptor.forClass(String.class);
+        verify(eventOutboxService).enqueue(eq("StoreApplicationSupplementRequested"), eq("27"), eventId.capture(), eq(NOW),
+                eq(new StoreApplicationSupplementRequestedPayload(27L, 4L, "곳간상회", "seller@example.com",
+                        List.of("통신판매업 신고증", "상품 사진"), "사본이 흐려 확인이 어렵습니다",
+                        OffsetDateTime.parse("2026-11-04T14:30:00+09:00"))));
+        assertThat(UUID.fromString(eventId.getValue())).isNotNull();
+    }
+
+    @Test
+    @DisplayName("서류가 아닌 내용 보완은 requestedDocs 빈 목록으로 — 이벤트도 빈 목록")
+    void requestSupplement_whenNoDocs_enqueuesEmptyList() {
+        // given
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application(27L, ApplicationStatus.PENDING)));
+
+        // when
+        service.requestSupplement(27L, "판매 예정 상품 설명을 보완해 주세요", List.of());
+
+        // then
+        ArgumentCaptor<StoreApplicationSupplementRequestedPayload> payload =
+                ArgumentCaptor.forClass(StoreApplicationSupplementRequestedPayload.class);
+        verify(eventOutboxService).enqueue(anyString(), anyString(), anyString(), any(), payload.capture());
+        assertThat(payload.getValue().requestedDocs()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("보완요청 eventId 는 매번 새 값 — 한 신청에 보완요청이 여러 번 생길 수 있어서")
+    void requestSupplement_twice_usesDifferentEventIds() {
+        // given — 보완 → (재제출로) 다시 심사대기 → 다시 보완
+        StoreApplication application = application(27L, ApplicationStatus.PENDING);
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        service.requestSupplement(27L, "첫 보완", List.of());
+        ReflectionTestUtils.setField(application, "status", ApplicationStatus.PENDING);
+
+        // when
+        service.requestSupplement(27L, "두 번째 보완", List.of());
+
+        // then
+        ArgumentCaptor<String> eventId = ArgumentCaptor.forClass(String.class);
+        verify(eventOutboxService, times(2)).enqueue(anyString(), anyString(), eventId.capture(), any(), any());
+        assertThat(eventId.getAllValues().get(0)).isNotEqualTo(eventId.getAllValues().get(1));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"SUPPLEMENT", "APPROVED", "REJECTED"})
+    @DisplayName("심사대기가 아닌 신청(보완요청 중 · 승인 · 반려)에 보완요청하면 409 APPLY_INVALID_STATUS 이고 이력 · 이벤트를 남기지 않는다")
+    void requestSupplement_whenNotPending_throwsInvalidStatus(ApplicationStatus from) {
+        // given
+        StoreApplication application = application(27L, from);
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+
+        // when · then
+        assertErrorCode(() -> service.requestSupplement(27L, "보완", List.of()), ApplyErrorCode.APPLY_INVALID_STATUS);
+        assertThat(application.getStatus()).isEqualTo(from);
+        verify(applicationHistoryRepository, never()).save(any());
+        verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("보완 서류가 중복되면 400 INVALID_INPUT — 신청을 조회하지 않는다")
+    void requestSupplement_whenDocsDuplicated_throwsInvalidInput() {
+        // when · then
+        assertThatThrownBy(() -> service.requestSupplement(27L, "보완", List.of(DocType.BANK_COPY, DocType.BANK_COPY)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(CommonErrorCode.INVALID_INPUT);
+        verify(storeApplicationRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("보완요청 저장 순간 버전이 달라지면 409 APPLY_INVALID_STATUS / 없는 신청은 404 APPLY_NOT_FOUND")
+    void requestSupplement_whenConflictOrMissing_throws() {
+        // given
+        StoreApplication application = application(27L, ApplicationStatus.PENDING);
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        given(storeApplicationRepository.findById(99L)).willReturn(Optional.empty());
+        willThrow(new ObjectOptimisticLockingFailureException(StoreApplication.class, 27L))
+                .given(storeApplicationRepository).saveAndFlush(application);
+
+        // when · then
+        assertErrorCode(() -> service.requestSupplement(27L, "보완", List.of()), ApplyErrorCode.APPLY_INVALID_STATUS);
+        assertErrorCode(() -> service.requestSupplement(99L, "보완", List.of()), ApplyErrorCode.APPLY_NOT_FOUND);
+        verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
     }
 
     @Test
