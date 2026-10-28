@@ -65,3 +65,17 @@
 | `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
 | 없는 · 삭제된 · 다른 회원의 리뷰 (구분하지 않음) | 404 `REVIEW_NOT_FOUND` |
 | 관리자가 블라인드한 리뷰 — 사유가 된 내용을 고쳐 노출을 되살리지 못하게, 해제는 관리자만 | 409 `REVIEW_BLINDED` |
+
+## 3. 내 리뷰 삭제 — `DELETE /api/reviews/{reviewId}` (REV-05)
+
+마이페이지 "내가 쓴 리뷰"의 삭제 버튼(`MyReviews`)에서 씁니다. **소프트 삭제**(`deleted_at`)라 상품 리뷰 목록 · 평균 별점 · 리뷰 수 · admin 내부 조회(404)에서 빠집니다.
+
+- 블라인드된 리뷰도 지울 수 있습니다.
+- 상품주문당 1개라 **지운 뒤 같은 상품주문에 다시 쓸 수 없습니다** (작성 409 `REVIEW_ALREADY_WRITTEN`). 화면 확인 문구에 안내해 주세요.
+
+응답 **200** `{ "code": "SUCCESS", "message": "리뷰를 삭제했습니다.", "data": null }`
+
+| 경우 | 응답 |
+|---|---|
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 없는 · 이미 삭제된 · 다른 회원의 리뷰 (구분하지 않음) | 404 `REVIEW_NOT_FOUND` |
