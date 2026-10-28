@@ -1,6 +1,7 @@
 package com.sesac.gojigi.review.review.repository;
 
 import com.sesac.gojigi.review.review.entity.Review;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -60,4 +61,50 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
             group by r.productId
             """)
     List<Object[]> summarizeByProductForStore(Long storeId);
+
+    /** 상품 상세 공개 리뷰 — 블라인드 · 삭제 제외, 별점 하나만(선택), 옵션명은 자격 스냅샷 (idx_review_product_created · rating) */
+    @EntityGraph(attributePaths = "eligibility")
+    @Query(value = """
+            select r from Review r
+            where r.productId = :productId and r.deletedAt is null and r.blinded = false
+              and (:rating is null or r.rating = :rating)
+            """,
+            countQuery = """
+            select count(r) from Review r
+            where r.productId = :productId and r.deletedAt is null and r.blinded = false
+              and (:rating is null or r.rating = :rating)
+            """)
+    Page<Review> findForProduct(Long productId, Integer rating, Pageable pageable);
+
+    /** 상품 별점 분포 — 블라인드 · 삭제 제외 → [rating, count] */
+    @Query("""
+            select r.rating, count(r) from Review r
+            where r.productId = :productId and r.deletedAt is null and r.blinded = false
+            group by r.rating
+            """)
+    List<Object[]> countByRatingForProduct(Long productId);
+
+    /** 상품 사이즈 체감 분포 — 블라인드 · 삭제 · 체감 없음 제외 → [fit, count] */
+    @Query("""
+            select r.fit, count(r) from Review r
+            where r.productId = :productId and r.deletedAt is null and r.blinded = false and r.fit is not null
+            group by r.fit
+            """)
+    List<Object[]> countByFitForProduct(Long productId);
+
+    /** 여러 상품 평균 별점 · 리뷰 수 — 블라인드 · 삭제 제외, 리뷰 없는 상품은 행이 없다 → [productId, avg, count] */
+    @Query("""
+            select r.productId, avg(r.rating), count(r) from Review r
+            where r.productId in :productIds and r.deletedAt is null and r.blinded = false
+            group by r.productId
+            """)
+    List<Object[]> summarizeByProductIds(Collection<Long> productIds);
+
+    /** 여러 스토어 평균 별점 · 리뷰 수 — 블라인드 · 삭제 제외, 리뷰 없는 스토어는 행이 없다 → [storeId, avg, count] */
+    @Query("""
+            select r.storeId, avg(r.rating), count(r) from Review r
+            where r.storeId in :storeIds and r.deletedAt is null and r.blinded = false
+            group by r.storeId
+            """)
+    List<Object[]> summarizeByStoreIds(Collection<Long> storeIds);
 }

@@ -10,7 +10,6 @@ import com.sesac.gojigi.review.review.dto.response.ReviewReplyResponse;
 import com.sesac.gojigi.review.review.dto.response.SellerReviewResponse;
 import com.sesac.gojigi.review.review.dto.response.SellerReviewSummaryResponse;
 import com.sesac.gojigi.review.review.dto.response.SellerReviewSummaryResponse.ProductRating;
-import com.sesac.gojigi.review.review.dto.response.SellerReviewSummaryResponse.RatingCount;
 import com.sesac.gojigi.review.review.dto.response.SellerReviewSummaryResponse.TabCounts;
 import com.sesac.gojigi.review.review.entity.Review;
 import com.sesac.gojigi.review.review.exception.ReviewErrorCode;
@@ -19,10 +18,7 @@ import com.sesac.gojigi.review.review.repository.ReviewRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -57,18 +53,10 @@ public class SellerReviewService {
 
     public SellerReviewSummaryResponse summarize(Long storeId) {
         requireStore(storeId);
-        Map<Integer, Long> countByRating = new HashMap<>();
-        for (Object[] row : reviewRepository.countByRatingForStore(storeId)) {
-            countByRating.put(((Number) row[0]).intValue(), (Long) row[1]);
-        }
-        List<RatingCount> distribution = IntStream.iterate(5, rating -> rating >= 1, rating -> rating - 1)
-                .mapToObj(rating -> new RatingCount(rating, countByRating.getOrDefault(rating, 0L)))
-                .toList();
-        long ratedCount = distribution.stream().mapToLong(RatingCount::count).sum();
-        long ratingSum = distribution.stream().mapToLong(d -> d.rating() * d.count()).sum();
-
+        RatingDistribution ratings = RatingDistribution.of(reviewRepository.countByRatingForStore(storeId));
         List<ProductRating> products = reviewRepository.summarizeByProductForStore(storeId).stream()
-                .map(row -> new ProductRating((Long) row[0], (String) row[1], round2((Double) row[2]), (Long) row[3]))
+                .map(row -> new ProductRating((Long) row[0], (String) row[1], RatingDistribution.round2((Double) row[2]),
+                        (Long) row[3]))
                 .sorted(Comparator.comparingDouble(ProductRating::averageRating).reversed()
                         .thenComparing(ProductRating::productId))
                 .toList();
@@ -76,8 +64,8 @@ public class SellerReviewService {
                 reviewRepository.countByStoreIdAndDeletedAtIsNullAndReplyContentIsNullAndBlindedFalse(storeId),
                 reviewRepository.countByStoreIdAndDeletedAtIsNullAndRatingLessThanEqual(storeId, LOW_RATING_MAX));
 
-        return new SellerReviewSummaryResponse(ratedCount == 0 ? 0 : round2((double) ratingSum / ratedCount),
-                ratedCount, distribution, products, tabCounts);
+        return new SellerReviewSummaryResponse(ratings.average(), ratings.count(), ratings.distribution(), products,
+                tabCounts);
     }
 
     /** 답글 작성 · 수정 — 리뷰당 1개라 덮어쓴다. 블라인드된 리뷰에는 달 수 없다(B안 요청서) */
@@ -106,9 +94,5 @@ public class SellerReviewService {
         if (storeId == null) {
             throw new BusinessException(CommonErrorCode.FORBIDDEN, "스토어 정보가 없습니다.");
         }
-    }
-
-    private static double round2(double value) {
-        return Math.round(value * 100) / 100.0;
     }
 }

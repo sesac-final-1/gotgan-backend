@@ -20,11 +20,6 @@ public record SellerReviewSummaryResponse(
         @Schema(description = "탭 숫자 — 전체(블라인드 포함) · 답글 미작성 · 1~2점")
         TabCounts tabCounts) {
 
-    public record RatingCount(
-            @Schema(description = "별점", example = "5") int rating,
-            @Schema(description = "리뷰 수", example = "23") long count) {
-    }
-
     public record ProductRating(
             @Schema(description = "상품 ID", example = "101") Long productId,
             @Schema(description = "상품명 (구매확정 시점 스냅샷)", example = "린넨 오버핏 셔츠") String productName,
