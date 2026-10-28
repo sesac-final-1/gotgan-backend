@@ -3,15 +3,29 @@ package com.sesac.gojigi.product.product.repository;
 import com.sesac.gojigi.product.product.entity.Product;
 import com.sesac.gojigi.product.product.entity.ProductStatus;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
+
+    /**
+     * StoreStatusChanged 를 그 스토어 상품에 — 이보다 새 이벤트를 이미 반영한 상품은 그대로 (events.md A안).
+     * 삭제된 상품도 같이 바꾼다(노출되지 않지만 값이 어긋나지 않게)
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update Product p set p.storeActive = :active, p.storeStatusChangedAt = :changedAt
+            where p.storeId = :storeId and (p.storeStatusChangedAt is null or p.storeStatusChangedAt < :changedAt)
+            """)
+    int applyStoreStatus(@Param("storeId") Long storeId, @Param("active") boolean active,
+            @Param("changedAt") LocalDateTime changedAt);
 
     /** "없거나 삭제된 상품 → 404 PRODUCT_NOT_FOUND" 공통 조회 (6-2 · 13 · 15 · 16절). findById 는 삭제된 상품도 읽는다 — 재고 복원 · 지난 주문용 */
     Optional<Product> findByIdAndDeletedAtIsNull(Long id);
