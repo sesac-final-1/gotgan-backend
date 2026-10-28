@@ -25,6 +25,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
+import com.sesac.gojigi.review.review.dto.response.ReviewImageResponse;
+import com.sesac.gojigi.review.review.entity.ReviewImage;
+import com.sesac.gojigi.review.review.repository.ReviewImageRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -41,7 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** 리뷰 작성 — 자격 · 이미 작성 · 기한 · 본문 정화 · 동시 제출 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, ReviewService.class, ReviewServiceIntegrationTest.FixedClock.class })
+@Import({ TestcontainersConfiguration.class, ReviewService.class, ReviewImages.class, ReviewServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 서비스 메서드마다 실제로 커밋 (동시 제출 확인)
 class ReviewServiceIntegrationTest {
@@ -78,7 +81,7 @@ class ReviewServiceIntegrationTest {
     }
 
     private static ReviewCreateRequest request(long orderItemId, String content) {
-        return new ReviewCreateRequest(orderItemId, 5, "<b>핏이 예뻐요</b>", content, ReviewFit.TRUE_TO_SIZE);
+        return new ReviewCreateRequest(orderItemId, 5, "<b>핏이 예뻐요</b>", content, ReviewFit.TRUE_TO_SIZE, null);
     }
 
     @Test
@@ -198,7 +201,7 @@ class ReviewServiceIntegrationTest {
         }
 
         private static ReviewUpdateRequest update(String content) {
-            return new ReviewUpdateRequest(2, null, content, null);
+            return new ReviewUpdateRequest(2, null, content, null, null);
         }
 
         @Test
@@ -214,7 +217,7 @@ class ReviewServiceIntegrationTest {
             ReviewResponse response = reviewService.edit(BUYER, reviewId, update("<p>" + NEW_CONTENT + "</p>"));
 
             // then
-            assertThat(response).isEqualTo(new ReviewResponse(reviewId, 2, null, NEW_CONTENT, null));
+            assertThat(response).isEqualTo(new ReviewResponse(reviewId, 2, null, NEW_CONTENT, null, List.of()));
             Review found = reviewRepository.findById(reviewId).orElseThrow();
             assertThat(found.getRating()).isEqualTo(2);
             assertThat(found.getTitle()).isNull();
@@ -338,6 +341,70 @@ class ReviewServiceIntegrationTest {
             assertThatThrownBy(() -> reviewService.delete(99L, othersReviewId))
                     .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
             assertThat(reviewRepository.findById(othersReviewId).orElseThrow().isDeleted()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("사진")
+    class Images {
+
+        @Autowired
+        private ReviewImageRepository reviewImageRepository;
+
+        private List<String> keysOf(Long reviewId) {
+            return reviewImageRepository.findByReviewIdsOrdered(List.of(reviewId)).stream()
+                    .map(ReviewImage::getImageKey).toList();
+        }
+
+        @Test
+        @DisplayName("작성 때 내 키 사진을 순서대로 저장한다")
+        void write_withImages_savesInOrder() {
+            // given
+            long orderItemId = saveEligibility(NOW.minusDays(1));
+
+            // when
+            Long reviewId = reviewService.write(BUYER, new ReviewCreateRequest(orderItemId, 5, null, CONTENT, null,
+                    List.of("reviews/4/b.png", "reviews/4/a.jpg"))).reviewId();
+
+            // then
+            assertThat(keysOf(reviewId)).containsExactly("reviews/4/b.png", "reviews/4/a.jpg");
+        }
+
+        @Test
+        @DisplayName("남의 키로 작성하면 400 REVIEW_IMAGE_INVALID, 리뷰도 저장하지 않는다")
+        void write_othersKey_rejectsWholeReview() {
+            // given
+            long orderItemId = saveEligibility(NOW.minusDays(1));
+
+            // when · then
+            assertThatThrownBy(() -> reviewService.write(BUYER, new ReviewCreateRequest(orderItemId, 5, null, CONTENT, null,
+                    List.of("reviews/5/a.jpg"))))
+                    .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_IMAGE_INVALID);
+            assertThat(reviewRepository.existsByOrderItemId(orderItemId)).isFalse();
+        }
+
+        @Test
+        @DisplayName("수정은 사진을 통째로 바꾼다 — 남긴 기존 키 + 새 키 순서대로, 빈 목록이면 전부 삭제, 응답에 키 · URL")
+        void edit_replacesImages() {
+            // given
+            long orderItemId = saveEligibility(NOW.minusDays(1));
+            Long reviewId = reviewService.write(BUYER, new ReviewCreateRequest(orderItemId, 5, null, CONTENT, null,
+                    List.of("reviews/4/a.jpg", "reviews/4/b.jpg"))).reviewId();
+
+            // when
+            ReviewResponse edited = reviewService.edit(BUYER, reviewId, new ReviewUpdateRequest(4, null, CONTENT, null,
+                    List.of("reviews/4/c.webp", "reviews/4/a.jpg")));
+
+            // then
+            assertThat(keysOf(reviewId)).containsExactly("reviews/4/c.webp", "reviews/4/a.jpg");
+            assertThat(edited.images()).extracting(ReviewImageResponse::key).containsExactly("reviews/4/c.webp", "reviews/4/a.jpg");
+            assertThat(edited.images().getFirst().url()).endsWith("/reviews/4/c.webp");
+
+            // when — 사진 모두 빼기
+            reviewService.edit(BUYER, reviewId, new ReviewUpdateRequest(4, null, CONTENT, null, List.of()));
+
+            // then
+            assertThat(keysOf(reviewId)).isEmpty();
         }
     }
 }

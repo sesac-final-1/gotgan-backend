@@ -19,9 +19,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * storedb 마이그레이션 검증 — 실제 MySQL(Testcontainers)에 Flyway V1 ~ V3 적용 (담당 박지연).
+ * storedb 마이그레이션 검증 — 실제 MySQL(Testcontainers)에 Flyway V1 ~ V4 적용 (담당 박지연).
  * V2: 스토어 주소(slug) · 표시 색 · 등급 · 택배사 · 출고 안내 · 월 예상 매출 · 운영 채널, slug · 스토어명 UNIQUE.
  * V3: 컬럼 주석만 — 대표 상품 2~10개 · 휴면(DORMANT) 제거 · CLOSED 추가.
+ * V4: 이벤트 아웃박스 outbox_event.
  * 마이그레이션을 추가하면 컬럼 순서 기대값을 함께 고칠 것.
  */
 @JdbcTest
@@ -41,11 +42,11 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("V3 까지 적용되고 V2 컬럼이 컨벤션 3-9 순서 자리에 들어간다")
-    void migrate_upToV3_addsColumnsInConventionOrder() {
+    @DisplayName("V4 까지 적용되고 V2 컬럼이 컨벤션 3-9 순서 자리에 들어간다")
+    void migrate_upToV4_addsColumnsInConventionOrder() {
         assertThat(jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1", Integer.class))
-                .isEqualTo(3);
+                .isEqualTo(4);
         assertThat(columns("store")).containsExactly(
                 "store_id", "store_application_id", "user_id", "store_name", "slug", "intro", "image_key", "color",
                 "cs_phone", "shipping_fee", "free_shipping_threshold", "courier", "dispatch_note", "grade",
@@ -53,6 +54,28 @@ class FlywayMigrationTest {
         assertThat(columns("store_application")).containsSubsequence(
                 "store_name", "slug", "intro", "representative_products", "expected_monthly_sales", "sales_channel",
                 "bank_name");
+    }
+
+    @Test
+    @DisplayName("V4 아웃박스는 NEW · 시도 0회로 시작하고 같은 eventId 는 두 번 들어가지 않는다")
+    void migrate_v4_createsOutboxWithDefaultsAndUniqueEventId() {
+        // given
+        String insert = "INSERT INTO outbox_event (event_id, event_type, aggregate_id, payload, occurred_at) "
+                + "VALUES ('evt-1', 'StoreApproved', '3', '{}', NOW(6))";
+
+        // when
+        jdbc.update(insert);
+
+        // then
+        assertThat(columns("outbox_event")).containsExactly(
+                "outbox_event_id", "event_id", "event_type", "aggregate_id", "payload", "occurred_at", "status",
+                "attempt_count", "last_error", "sent_at", "created_at");
+        Map<String, Object> row = jdbc.queryForMap("SELECT status, attempt_count, sent_at FROM outbox_event");
+        assertThat(row).containsEntry("status", "NEW").containsEntry("attempt_count", 0);
+        assertThat(row.get("sent_at")).isNull();
+        assertThatThrownBy(() -> jdbc.update(insert))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uk_outbox_event_event_id");
     }
 
     @Test

@@ -75,7 +75,7 @@ CREATE TABLE `point_use_saga` (
 );
 
 -- ============================================================ storedb (store-service · 담당 박지연)
--- 원본: V1__init_store_ddl.sql · V2__store_display_columns.sql · V3__store_comment_cleanup.sql
+-- 원본: V1__init_store_ddl.sql · V2__store_display_columns.sql · V3__store_comment_cleanup.sql · V4__event_outbox.sql
 
 -- 입점 신청서 (진행 중 신청 1건은 서비스 검증)
 CREATE TABLE `store_application` (
@@ -166,6 +166,21 @@ CREATE TABLE `store_status_history` (
 	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'SELLER(폐점) / ADMIN(정지 · 해제)',
 	`reason`	VARCHAR(255)	NULL	COMMENT '사유 — 관리자 정지 · 해제는 필수',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '상태가 바뀐 시각'
+);
+
+-- 이벤트 아웃박스 (Transactional Outbox)
+CREATE TABLE `storedb_outbox_event` (
+	`outbox_event_id`	BIGINT	NOT NULL,
+	`event_id`	VARCHAR(36)	NOT NULL	COMMENT '봉투 eventId (UUID) — 소비자 processed_event 멱등 키, 같은 이벤트 두 번 저장 방지',
+	`event_type`	VARCHAR(50)	NOT NULL	COMMENT 'StoreApproved / StoreApplicationRejected / StoreApplicationSupplementRequested / StoreStatusChanged',
+	`aggregate_id`	VARCHAR(40)	NOT NULL	COMMENT '봉투 aggregateId — 스토어 ID 또는 입점 신청 ID',
+	`payload`	JSON	NOT NULL	COMMENT '이벤트 payload (config docs/events.md)',
+	`occurred_at`	DATETIME(6)	NOT NULL	COMMENT '봉투 occurredAt — 업무 시각(앱 Clock). 다시 보내도 같은 값',
+	`status`	VARCHAR(10)	NOT NULL	DEFAULT 'NEW'	COMMENT 'NEW / SENT',
+	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '발행 시도 횟수 — 한도를 넘으면 ERROR 로그(수동 확인)',
+	`last_error`	VARCHAR(200)	NULL	COMMENT '마지막 발행 실패 사유',
+	`sent_at`	DATETIME(6)	NULL	COMMENT 'SNS 발행 시각',
+	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
 -- ============================================================ productdb (product-service · 담당 박지연)
@@ -374,7 +389,7 @@ CREATE TABLE `saga_instance` (
 );
 
 -- Transactional Outbox
-CREATE TABLE `outbox_event` (
+CREATE TABLE `orderdb_outbox_event` (
 	`outbox_event_id`	BIGINT	NOT NULL	COMMENT 'Outbox PK',
 	`event_id`	VARCHAR(36)	NOT NULL	COMMENT '이벤트 봉투 eventId (UUID) — 소비자 processed_event 멱등 키',
 	`aggregate_type`	VARCHAR(30)	NOT NULL	COMMENT 'ORDER / ORDER_ITEM',
@@ -428,7 +443,7 @@ CREATE TABLE `payment_cancel` (
 );
 
 -- ============================================================ reviewdb (review-service · 담당 이경석)
--- 원본: V1__init.sql · V2__init_reviewdb.sql
+-- 원본: V1__init.sql · V2__init_reviewdb.sql · V3__drop_review_helpful_count.sql · V4__review_eligibility_option_thumbnail.sql · V5__drop_review_image_file_size.sql
 
 -- 리뷰 작성 자격 (상품주문당 1개)
 CREATE TABLE `review_eligibility` (
@@ -439,6 +454,8 @@ CREATE TABLE `review_eligibility` (
 	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service store.store_id (논리 참조)',
 	`buyer_display_name`	VARCHAR(50)	NOT NULL	COMMENT '구매자 공개 표시용 이름 스냅샷 (payload buyerDisplayName = order 의 orderer_display_name) — nick 또는 마스킹된 실명, 가공 없이 그대로 표시',
 	`product_name`	VARCHAR(200)	NOT NULL	COMMENT '구매확정 시점 상품명 스냅샷 (payload productName) — 작성 가능 목록 표시용',
+	`option_name`	VARCHAR(200)	NULL	COMMENT '구매확정 시점 옵션명 스냅샷 (payload optionName, 예: 오트밀 / M) — 옵션 없는 상품은 NULL',
+	`thumbnail_url`	VARCHAR(500)	NULL	COMMENT '구매확정 시점 상품 대표 사진 URL 스냅샷 (payload thumbnailUrl)',
 	`confirmed_at`	DATETIME(6)	NOT NULL	COMMENT '구매확정 시각 (payload confirmedAt)',
 	`expires_at`	DATETIME(6)	NOT NULL	COMMENT '작성 기한 = confirmed_at + 30일',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
@@ -628,6 +645,7 @@ ALTER TABLE `application_document` ADD CONSTRAINT `PK_APPLICATION_DOCUMENT` PRIM
 ALTER TABLE `application_history` ADD CONSTRAINT `PK_APPLICATION_HISTORY` PRIMARY KEY (`application_history_id`);
 ALTER TABLE `store` ADD CONSTRAINT `PK_STORE` PRIMARY KEY (`store_id`);
 ALTER TABLE `store_status_history` ADD CONSTRAINT `PK_STORE_STATUS_HISTORY` PRIMARY KEY (`store_status_history_id`);
+ALTER TABLE `storedb_outbox_event` ADD CONSTRAINT `PK_STOREDB_OUTBOX_EVENT` PRIMARY KEY (`outbox_event_id`);
 ALTER TABLE `category` ADD CONSTRAINT `PK_CATEGORY` PRIMARY KEY (`category_id`);
 ALTER TABLE `product` ADD CONSTRAINT `PK_PRODUCT` PRIMARY KEY (`product_id`);
 ALTER TABLE `product_option` ADD CONSTRAINT `PK_PRODUCT_OPTION` PRIMARY KEY (`product_option_id`);
@@ -641,7 +659,7 @@ ALTER TABLE `order_item` ADD CONSTRAINT `PK_ORDER_ITEM` PRIMARY KEY (`order_item
 ALTER TABLE `order_item_history` ADD CONSTRAINT `PK_ORDER_ITEM_HISTORY` PRIMARY KEY (`order_item_history_id`);
 ALTER TABLE `order_claim` ADD CONSTRAINT `PK_ORDER_CLAIM` PRIMARY KEY (`order_claim_id`);
 ALTER TABLE `saga_instance` ADD CONSTRAINT `PK_SAGA_INSTANCE` PRIMARY KEY (`saga_instance_id`);
-ALTER TABLE `outbox_event` ADD CONSTRAINT `PK_OUTBOX_EVENT` PRIMARY KEY (`outbox_event_id`);
+ALTER TABLE `orderdb_outbox_event` ADD CONSTRAINT `PK_ORDERDB_OUTBOX_EVENT` PRIMARY KEY (`outbox_event_id`);
 ALTER TABLE `payment` ADD CONSTRAINT `PK_PAYMENT` PRIMARY KEY (`payment_id`);
 ALTER TABLE `payment_cancel` ADD CONSTRAINT `PK_PAYMENT_CANCEL` PRIMARY KEY (`payment_cancel_id`);
 ALTER TABLE `review_eligibility` ADD CONSTRAINT `PK_REVIEW_ELIGIBILITY` PRIMARY KEY (`review_eligibility_id`);

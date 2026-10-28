@@ -18,11 +18,12 @@
 
 ## 1. 리뷰 작성 — `POST /api/reviews` (REV-02)
 
-마이페이지 "작성 가능한 리뷰"(`MyReviewModal`)에서 등록합니다. 작성자는 게이트웨이가 넣는 `X-User-Id` 입니다. 사진은 아직 받지 않습니다 — 업로드 주소 발급(REV-03)과 함께 `imageKeys`(최대 3장)를 추가할 예정입니다.
+마이페이지 "작성 가능한 리뷰"(`MyReviewModal`)에서 등록합니다. 작성자는 게이트웨이가 넣는 `X-User-Id` 입니다. 사진은 먼저 12절 업로드 주소로 S3 에 올리고 받은 키를 `imageKeys` 로 보냅니다(0~3장).
 
 ```json
 { "orderItemId": 11, "rating": 5, "title": "핏이 진짜 예뻐요",
-  "content": "평소 M 입는데 M 주문했고 어깨가 살짝 내려오는 오버핏이에요.", "fit": "TRUE_TO_SIZE" }
+  "content": "평소 M 입는데 M 주문했고 어깨가 살짝 내려오는 오버핏이에요.", "fit": "TRUE_TO_SIZE",
+  "imageKeys": ["reviews/4/7f3c9e2a-1b2c-4d5e-8f90-a1b2c3d4e5f6.jpg"] }
 ```
 
 | 필드 | 규칙 |
@@ -32,12 +33,14 @@
 | `title` | 선택, 100자 이하 (화면에 입력칸은 아직 없음) |
 | `content` | 필수, 20~2,000자 |
 | `fit` | 선택 — `SMALL`(작아요) · `TRUE_TO_SIZE`(정사이즈) · `LARGE`(커요). 패션 · 신발가방만 보내고 그 외 생략 |
+| `imageKeys` | 선택, 0~3개 — 12절로 받은 **내 키**(`reviews/{내 userId}/{UUID}.jpg·png·webp`)만, 중복 없이. 순서대로 표시 |
 
 응답 **201** `{ "reviewId": 31 }`
 
 | 경우 (검사 순서) | 응답 |
 |---|---|
 | 형식 위반 · 태그를 지우니 본문이 빔 | 400 `INVALID_INPUT` |
+| 남의 · 형식이 다른 사진 키 · 4장 이상 · 중복 | 400 `REVIEW_IMAGE_INVALID` |
 | `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
 | 작성 자격 없음 · 다른 회원의 상품주문 (구분하지 않음) | 403 `REVIEW_NOT_ELIGIBLE` |
 | 이미 리뷰를 쓴 상품주문 — **삭제한 리뷰 포함**, 동시 제출도 1건만 | 409 `REVIEW_ALREADY_WRITTEN` |
@@ -54,11 +57,11 @@
   "content": "키 160인데 기장이 살짝 길어서 수선했어요. 그 외에는 만족합니다.", "fit": "LARGE" }
 ```
 
-- 필드 규칙은 1절 작성과 같습니다(`orderItemId` 만 없음).
+- 필드 규칙은 1절 작성과 같습니다(`orderItemId` 만 없음). `imageKeys` 는 **남길 기존 사진의 키 + 새로 발급받은 키**를 순서대로 — 비우거나 생략하면 사진을 모두 지웁니다. 기존 키는 4절 `images[].key` 에 있습니다.
 - **기한 없음** — 작성 기한(30일)이 지나도 수정할 수 있습니다.
 - 판매자 답글은 그대로 남습니다.
 
-응답 **200** `{ "reviewId": 31, "rating": 4, "title": "…", "content": "…(태그를 지운 값)", "fit": "LARGE" }`
+응답 **200** `{ "reviewId": 31, "rating": 4, "title": "…", "content": "…(태그를 지운 값)", "fit": "LARGE", "images": [ { "key": "reviews/4/….jpg", "url": "https://…/reviews/4/….jpg" } ] }`
 
 | 경우 | 응답 |
 |---|---|
@@ -92,7 +95,8 @@
 { "content": [ { "reviewId": 31, "orderItemId": 11, "productId": 101, "productName": "린넨 오버핏 셔츠",
     "optionName": "오트밀 / M", "thumbnailUrl": "https://…/products/1/a1b2.jpg", "rating": 5, "title": null,
     "content": "…", "fit": "TRUE_TO_SIZE", "blinded": false, "replyContent": "소중한 후기 감사합니다.",
-    "repliedAt": "2026-10-21T09:30:00+09:00", "createdAt": "2026-10-20T14:00:00+09:00" } ],
+    "repliedAt": "2026-10-21T09:30:00+09:00", "createdAt": "2026-10-20T14:00:00+09:00",
+    "images": [ { "key": "reviews/4/….jpg", "url": "https://…/reviews/4/….jpg" } ] } ],
   "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "hasNext": false }
 ```
 
@@ -125,7 +129,7 @@
 ### 6-1. 목록 `GET /api/seller/reviews?tab=ALL&productId=&page=0&size=10`
 
 - 내 스토어 리뷰, 삭제 제외 · **블라인드 포함**(`blinded: true` → "블라인드됨", 답글 · 관리자 검토 요청 버튼 숨김), 최신 작성순.
-- `tab`: `ALL`(기본) · `NO_REPLY`(답글 없고 블라인드 아님 = 답글을 달 수 있는 것) · `LOW_RATING`(1~2점). 포토 탭은 사진 PR 에서 추가.
+- `tab`: `ALL`(기본) · `NO_REPLY`(답글 없고 블라인드 아님 = 답글을 달 수 있는 것) · `LOW_RATING`(1~2점) · `PHOTO`(사진 있는 것). 응답 `imageUrls` 는 사진 URL 순서대로, 6-2 `tabCounts.photo` 는 포토 탭 숫자.
 - `productId`: 상품 하나만 (선택). `page` 0부터 · `size` 1~50(기본 10).
 - 작성자는 `writerDisplayName`(닉네임, 없으면 마스킹 실명) — 화면의 회원 목록 조회(`useSellerBuyersQuery`)는 필요 없어집니다.
 
@@ -188,7 +192,7 @@
   "createdAt": "2026-10-20T14:00:00+09:00" }
 ```
 
-- 블라인드된 리뷰도 그대로 보입니다. `imageUrls` 는 사진 업로드(REV-03) 전이라 지금은 항상 `[]`.
+- 블라인드된 리뷰도 그대로 보입니다. `imageUrls` 는 사진 URL 순서대로(없으면 `[]`).
 - `storeId` · `userId` 는 admin 이 판매자 검토 요청의 내 스토어 여부 · 본인 신고 여부를 확인하는 데 씁니다.
 
 ### 8-2. 블라인드 · 해제
@@ -230,7 +234,7 @@
 - `sort`: `LATEST`(기본, 최신순) · `RATING_HIGH` · `RATING_LOW` — 같은 별점이면 최신 먼저. **도움순은 범위 제외**(10/28)라 없습니다.
 - `page` 0부터 · `size` 1~50(기본 10).
 - 작성자는 `writerDisplayName`(닉네임, 없으면 마스킹 실명)만 — **회원 ID · 아바타 · 등급은 주지 않습니다.** 화면은 기본 아바타, 등급 배지 생략.
-- 포토 리뷰만 · 사진은 사진 PR(REV-03)에서 추가합니다.
+- `photoOnly=true` 면 사진 있는 리뷰만("포토 리뷰만"). 응답 `imageUrls` 는 사진 URL 순서대로.
 
 ```json
 { "content": [ { "reviewId": 31, "writerDisplayName": "곳간러버", "rating": 5, "title": null,
@@ -297,3 +301,38 @@ API 가 아니라 이벤트 소비입니다. 구매확정(구매자 버튼 · �
 | 10/28 이전 이벤트 | `buyerDisplayName` 이 없으면 "구매자", `confirmedAt` 이 없으면 봉투 `occurredAt`, 옵션명 · 사진은 `null` |
 | 실패 | DB 일시 장애는 1 → 5 → 15분 뒤 재시도, 그 밖의 오류는 기본 재전달 3회 뒤 DLQ (user · settlement 와 같은 폴러) |
 | 취소 · 반품 | 구매확정 뒤에는 없으므로 자격을 지우는 이벤트는 받지 않음 |
+
+## 12. 리뷰 사진 업로드 주소 — `POST /api/reviews/images/presign` (REV-03)
+
+작성 · 수정 모달에서 사진을 고르면 먼저 부릅니다. 브라우저가 S3 에 직접 올리고(presigned PUT), 받은 `key` 를 1 · 2절 `imageKeys` 로 보냅니다. product 상품 이미지 presign 과 같은 방식입니다.
+
+```json
+{ "files": [ { "contentType": "image/jpeg", "size": 834512 } ] }
+```
+
+응답 **200** (요청과 같은 순서)
+
+```json
+[ { "key": "reviews/4/7f3c9e2a-1b2c-4d5e-8f90-a1b2c3d4e5f6.jpg",
+    "uploadUrl": "https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/reviews/4/…?X-Amz-…",
+    "expiresAt": "2026-10-28T15:10:00+09:00" } ]
+```
+
+| 항목 | 규칙 |
+|---|---|
+| 개수 · 형식 · 크기 | 1~3개 · `image/jpeg` · `image/png` · `image/webp` · 각 10MB 이하 — 하나만 틀려도 전체 거절, 메시지에 "n번째 파일" |
+| 업로드 | `uploadUrl` 로 **PUT**, `Content-Type` · 크기를 요청과 같게 (서명에 들어가 다르면 S3 403). 10분 안에 |
+| 키 | `reviews/{userId}/{UUID}.{jpg·png·webp}` — 작성 · 수정은 이 모양의 **내 키**만 받습니다 |
+| 확인 | 작성 · 수정 때 S3 에 실제로 올라갔는지는 보지 않습니다(product 와 같음, 10/28 결정). 이미지가 아닌 파일은 Lambda `upload-guard` 가 지웁니다 |
+| 조회 URL | `IMAGES_BASE_URL/{key}` (ConfigMap) — 응답의 `imageUrls` · `images[].url` |
+
+| 경우 | 응답 |
+|---|---|
+| `files` 없음 · 항목의 형식 · 크기 없음 | 400 `INVALID_INPUT` |
+| 0개 · 4개 이상 · 형식 · 크기 위반 | 400 `REVIEW_IMAGE_INVALID` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 자격 증명(IRSA) 문제로 서명 실패 | 502 `EXTERNAL_API_ERROR` |
+
+- 리뷰 사진 크기는 저장하지 않습니다 (V5 에서 `review_image.file_size` 삭제 — 제한은 presign 서명이 막음).
+- 리뷰를 지워도 S3 파일은 남습니다 (공개 URL 이지만 화면에서 더는 보이지 않음).
+

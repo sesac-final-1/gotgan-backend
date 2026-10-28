@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
 
 /** 마이페이지 내가 쓴 리뷰 한 건 (review.md 4절) — 프론트 MyReviews "내가 쓴 리뷰" 탭 */
 public record MyReviewResponse(
@@ -50,16 +51,19 @@ public record MyReviewResponse(
         OffsetDateTime repliedAt,
 
         @Schema(description = "작성 시각", example = "2026-10-20T14:00:00+09:00")
-        OffsetDateTime createdAt) {
+        OffsetDateTime createdAt,
+
+        @Schema(description = "리뷰 사진 — 순서대로, 없으면 빈 목록. 수정 때 남길 사진은 key 를 imageKeys 에 그대로")
+        List<ReviewImageResponse> images) {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    public static MyReviewResponse from(Review review) {
+    public static MyReviewResponse from(Review review, List<ReviewImageResponse> images) {
         ReviewEligibility eligibility = review.getEligibility();
         return new MyReviewResponse(review.getId(), review.getOrderItemId(), review.getProductId(),
                 eligibility.getProductName(), eligibility.getOptionName(), eligibility.getThumbnailUrl(),
                 review.getRating(), review.getTitle(), review.getContent(), review.getFit(), review.isBlinded(),
-                review.getReplyContent(), kst(review.getRepliedAt()), kst(review.getCreatedAt()));
+                review.getReplyContent(), kst(review.getRepliedAt()), kst(review.getCreatedAt()), images);
     }
 
     private static OffsetDateTime kst(LocalDateTime time) {

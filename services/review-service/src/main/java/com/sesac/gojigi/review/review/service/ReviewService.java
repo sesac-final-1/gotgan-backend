@@ -8,6 +8,7 @@ import com.sesac.gojigi.review.eligibility.repository.ReviewEligibilityRepositor
 import com.sesac.gojigi.review.review.dto.request.ReviewCreateRequest;
 import com.sesac.gojigi.review.review.dto.request.ReviewUpdateRequest;
 import com.sesac.gojigi.review.review.dto.response.ReviewCreateResponse;
+import com.sesac.gojigi.review.review.dto.response.ReviewImageResponse;
 import com.sesac.gojigi.review.review.dto.response.ReviewResponse;
 import com.sesac.gojigi.review.review.entity.Review;
 import com.sesac.gojigi.review.review.exception.ReviewErrorCode;
@@ -15,6 +16,9 @@ import com.sesac.gojigi.review.review.exception.ReviewException;
 import com.sesac.gojigi.review.review.repository.ReviewRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -33,6 +37,7 @@ public class ReviewService {
 
     private final ReviewEligibilityRepository eligibilityRepository;
     private final ReviewRepository reviewRepository;
+    private final ReviewImages reviewImages;
     private final Clock clock;
 
     @Transactional
@@ -47,6 +52,7 @@ public class ReviewService {
         if (eligibility.isExpired(LocalDateTime.now(clock))) {
             throw new ReviewException(ReviewErrorCode.REVIEW_WRITE_EXPIRED);
         }
+        List<String> imageKeys = ReviewImageKeys.check(userId, request.imageKeys(), Set.of());
         Review review = Review.write(eligibility, request.rating(), TextSanitizer.plainText(request.title()),
                 sanitizeContent(request.content()), request.fit());
         try {
@@ -55,8 +61,9 @@ public class ReviewService {
             // 같은 상품주문을 동시에 두 번 제출 — uk_review_order_item 이 한쪽만 남긴다
             throw new ReviewException(ReviewErrorCode.REVIEW_ALREADY_WRITTEN);
         }
-        log.info("리뷰 작성 reviewId={} userId={} orderItemId={} productId={} rating={}",
-                review.getId(), userId, review.getOrderItemId(), review.getProductId(), review.getRating());
+        reviewImages.replace(review, imageKeys);
+        log.info("리뷰 작성 reviewId={} userId={} orderItemId={} productId={} rating={} images={}",
+                review.getId(), userId, review.getOrderItemId(), review.getProductId(), review.getRating(), imageKeys.size());
         return new ReviewCreateResponse(review.getId());
     }
 
@@ -71,10 +78,15 @@ public class ReviewService {
             throw new ReviewException(ReviewErrorCode.REVIEW_BLINDED);
         }
 
+        Set<String> currentKeys = reviewImages.of(review.getId()).stream().map(ReviewImageResponse::key)
+                .collect(Collectors.toSet());
+        List<String> imageKeys = ReviewImageKeys.check(userId, request.imageKeys(), currentKeys);
         review.edit(request.rating(), TextSanitizer.plainText(request.title()), sanitizeContent(request.content()),
                 request.fit());
-        log.info("리뷰 수정 reviewId={} userId={} rating={}", review.getId(), userId, review.getRating());
-        return ReviewResponse.from(review);
+        reviewImages.replace(review, imageKeys);
+        log.info("리뷰 수정 reviewId={} userId={} rating={} images={}", review.getId(), userId, review.getRating(),
+                imageKeys.size());
+        return ReviewResponse.from(review, reviewImages.of(review.getId()));
     }
 
     /**

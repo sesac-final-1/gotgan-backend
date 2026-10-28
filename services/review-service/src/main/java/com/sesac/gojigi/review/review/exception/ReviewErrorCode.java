@@ -13,7 +13,8 @@ public enum ReviewErrorCode implements ErrorCode {
     REVIEW_ALREADY_WRITTEN(HttpStatus.CONFLICT, "이미 리뷰를 작성한 상품주문입니다."),
     REVIEW_WRITE_EXPIRED(HttpStatus.CONFLICT, "리뷰 작성 기한(구매확정 후 30일)이 지났습니다."),
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
-    REVIEW_BLINDED(HttpStatus.CONFLICT, "관리자에 의해 블라인드된 리뷰입니다."); // 작성자 수정 · 판매자 답글 모두 막음
+    REVIEW_BLINDED(HttpStatus.CONFLICT, "관리자에 의해 블라인드된 리뷰입니다."), // 작성자 수정 · 판매자 답글 모두 막음
+    REVIEW_IMAGE_INVALID(HttpStatus.BAD_REQUEST, "리뷰 사진이 올바르지 않습니다.");   // presign 개수 · 형식 · 크기, 작성 · 수정 imageKeys
 
     private final HttpStatus status;
     private final String message;

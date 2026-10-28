@@ -49,10 +49,14 @@ class SnsEventPublisherTest {
     }
 
     @Test
-    @DisplayName("AwsConfig 는 설정한 리전의 SNS 클라이언트를 만든다")
-    void snsClient_whenRegionGiven_usesRegion() {
+    @DisplayName("AwsConfig 는 설정한 리전의 SNS 클라이언트를 호출 1초 · 시도 500ms 상한으로 만든다")
+    void snsClient_whenRegionGiven_usesRegionAndShortTimeouts() {
         try (SnsClient client = new AwsConfig().snsClient("ap-northeast-2")) {
             assertThat(client.serviceClientConfiguration().region().id()).isEqualTo("ap-northeast-2");
+            assertThat(client.serviceClientConfiguration().overrideConfiguration().apiCallTimeout())
+                    .hasValue(java.time.Duration.ofSeconds(1));
+            assertThat(client.serviceClientConfiguration().overrideConfiguration().apiCallAttemptTimeout())
+                    .hasValue(java.time.Duration.ofMillis(500));
         }
     }
 }

@@ -25,11 +25,12 @@ public class MyReviewQueryService {
 
     private final ReviewRepository reviewRepository;
     private final ReviewEligibilityRepository eligibilityRepository;
+    private final ReviewImages reviewImages;
     private final Clock clock;
 
     public PageResponse<MyReviewResponse> listMine(Long userId, int page, int size) {
-        return PageResponse.from(reviewRepository.findByUserIdAndDeletedAtIsNull(userId, PageRequest.of(page, size, NEWEST))
-                .map(MyReviewResponse::from));
+        return reviewImages.toPage(reviewRepository.findByUserIdAndDeletedAtIsNull(userId, PageRequest.of(page, size, NEWEST)),
+                MyReviewResponse::from);
     }
 
     public List<WritableReviewResponse> listWritable(Long userId) {

@@ -23,6 +23,8 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.concurrent.atomic.AtomicLong;
+import com.sesac.gojigi.review.review.entity.ReviewImage;
+import com.sesac.gojigi.review.review.repository.ReviewImageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -38,7 +40,7 @@ import org.springframework.test.context.ActiveProfiles;
 /** 판매자 리뷰 관리 — 목록 탭 · 평점 요약 · 답글 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, SellerReviewService.class, SellerReviewServiceIntegrationTest.FixedClock.class })
+@Import({ TestcontainersConfiguration.class, SellerReviewService.class, ReviewImages.class, SellerReviewServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")
 class SellerReviewServiceIntegrationTest {
 
@@ -149,7 +151,7 @@ class SellerReviewServiceIntegrationTest {
         assertThat(summary.products()).containsExactly(
                 new ProductRating(SHIRT, "린넨 셔츠", 5.0, 1),
                 new ProductRating(PANTS, "와이드 팬츠", 3.0, 2));
-        assertThat(summary.tabCounts()).isEqualTo(new TabCounts(4, 2, 2));
+        assertThat(summary.tabCounts()).isEqualTo(new TabCounts(4, 2, 2, 0));
     }
 
     @Test
@@ -160,7 +162,7 @@ class SellerReviewServiceIntegrationTest {
         assertThat(summary.averageRating()).isZero();
         assertThat(summary.distribution()).extracting(RatingCount::count).containsOnly(0L);
         assertThat(summary.products()).isEmpty();
-        assertThat(summary.tabCounts()).isEqualTo(new TabCounts(0, 0, 0));
+        assertThat(summary.tabCounts()).isEqualTo(new TabCounts(0, 0, 0, 0));
     }
 
     @Nested
@@ -210,5 +212,22 @@ class SellerReviewServiceIntegrationTest {
                 .hasFieldOrPropertyWithValue("errorCode", CommonErrorCode.FORBIDDEN);
         assertThatThrownBy(() -> sellerReviewService.reply(null, shirt5.getId(), new ReviewReplyRequest("답글")))
                 .hasFieldOrPropertyWithValue("errorCode", CommonErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("포토 탭 — 사진 있는 리뷰만(블라인드 포함), 탭 숫자 photo 도 같다, 응답에 사진 URL")
+    void photoTab_listsReviewsWithImages(@Autowired ReviewImageRepository reviewImageRepository) {
+        // given
+        reviewImageRepository.save(new ReviewImage(shirt1Blinded, "reviews/4/p.jpg", 0));
+        reviewImageRepository.save(new ReviewImage(pants2, "reviews/4/q.jpg", 0));
+        reviewImageRepository.flush();
+
+        // when
+        var photos = sellerReviewService.list(STORE, SellerReviewTab.PHOTO, null, 0, 10).content();
+
+        // then
+        assertThat(photos).extracting(SellerReviewResponse::reviewId).containsExactly(pants2.getId(), shirt1Blinded.getId());
+        assertThat(photos.getFirst().imageUrls()).singleElement().asString().endsWith("/reviews/4/q.jpg");
+        assertThat(sellerReviewService.summarize(STORE).tabCounts().photo()).isEqualTo(2);
     }
 }

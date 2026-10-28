@@ -28,7 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * reviewdb 마이그레이션(V2 ~ V4) ↔ 엔티티 매핑 검증 — 실제 MySQL 8.4(Testcontainers) + Flyway, ddl-auto: validate 로 컨텍스트가 뜨면 컬럼 · 타입 일치.
+ * reviewdb 마이그레이션(V2 ~ V5) ↔ 엔티티 매핑 검증 — 실제 MySQL 8.4(Testcontainers) + Flyway, ddl-auto: validate 로 컨텍스트가 뜨면 컬럼 · 타입 일치.
  * 마이그레이션을 추가하면 버전 기대값을 함께 고칠 것.
  */
 @DataJpaTest
@@ -62,11 +62,14 @@ class ReviewdbMappingTest {
     }
 
     @Test
-    @DisplayName("V4 까지 적용되고 helpful_count 는 없다 (도움돼요 범위 제외)")
-    void migrate_upToV4_dropsHelpfulCount() {
+    @DisplayName("V5 까지 적용되고 helpful_count · review_image.file_size 는 없다")
+    void migrate_upToV5_dropsUnusedColumns() {
         assertThat(jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1", Integer.class))
-                .isEqualTo(4);
+                .isEqualTo(5);
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'review_image' AND COLUMN_NAME = 'file_size'",
+                Integer.class)).isZero();
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'review' AND COLUMN_NAME = 'helpful_count'",
                 Integer.class)).isZero();
@@ -78,7 +81,7 @@ class ReviewdbMappingTest {
         // given
         Review review = Review.write(saveEligibility(11L), 5, "핏이 예뻐요", "<p>오버핏</p>", ReviewFit.TRUE_TO_SIZE);
         reviewRepository.save(review);
-        reviewImageRepository.save(new ReviewImage(review, "reviews/11/a.jpg", 0, 1_048_576));
+        reviewImageRepository.save(new ReviewImage(review, "reviews/11/a.jpg", 0));
         review.blind("욕설 · 비방", NOW);
         review.reply("감사합니다", NOW);
         em.flush();
@@ -100,7 +103,7 @@ class ReviewdbMappingTest {
         assertThat(found.getUpdatedAt()).isNotNull();
         assertThat(image.getReview().getId()).isEqualTo(review.getId());
         assertThat(image.getImageKey()).isEqualTo("reviews/11/a.jpg");
-        assertThat(image.getFileSize()).isEqualTo(1_048_576);
+        assertThat(image.getSortOrder()).isZero();
     }
 
     @Test

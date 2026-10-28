@@ -30,11 +30,14 @@ public class AwsConfig {
         return S3Presigner.builder().region(Region.of(region)).build();
     }
 
-    /** 이벤트 발행 (store-events, IRSA sns:Publish). 커밋 직후 요청 스레드에서 보내므로 승인 응답이 SNS 때문에 3초 넘게 늦지 않게 끊는다 */
+    /**
+     * 이벤트 발행 (store-events, IRSA sns:Publish). 커밋 직후 발행은 요청 스레드라 호출 전체 1초 · 시도 500ms 로 끊는다 —
+     * 호출자 admin 의 read-timeout 3초 안에 응답이 들어가게(타임아웃 예산). 늦으면 행이 NEW 로 남아 발행기가 다시 보낸다
+     */
     @Bean
     public SnsClient snsClient(@Value("${AWS_REGION:ap-northeast-2}") String region) {
         return SnsClient.builder().region(Region.of(region))
-                .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(3)).apiCallAttemptTimeout(Duration.ofSeconds(1)))
+                .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(1)).apiCallAttemptTimeout(Duration.ofMillis(500)))
                 .build();
     }
 }

@@ -42,13 +42,14 @@ public class SellerReviewService {
     private static final int LOW_RATING_MAX = 2;
 
     private final ReviewRepository reviewRepository;
+    private final ReviewImages reviewImages;
     private final Clock clock;
 
     public PageResponse<SellerReviewResponse> list(Long storeId, SellerReviewTab tab, Long productId, int page, int size) {
         requireStore(storeId);
-        return PageResponse.from(reviewRepository.findForSeller(storeId, productId, tab == SellerReviewTab.NO_REPLY,
-                        tab == SellerReviewTab.LOW_RATING, PageRequest.of(page, size, NEWEST))
-                .map(SellerReviewResponse::from));
+        return reviewImages.toPage(reviewRepository.findForSeller(storeId, productId, tab == SellerReviewTab.NO_REPLY,
+                        tab == SellerReviewTab.LOW_RATING, tab == SellerReviewTab.PHOTO, PageRequest.of(page, size, NEWEST)),
+                (review, images) -> SellerReviewResponse.from(review, ReviewImages.urls(images)));
     }
 
     public SellerReviewSummaryResponse summarize(Long storeId) {
@@ -62,7 +63,8 @@ public class SellerReviewService {
                 .toList();
         TabCounts tabCounts = new TabCounts(reviewRepository.countByStoreIdAndDeletedAtIsNull(storeId),
                 reviewRepository.countByStoreIdAndDeletedAtIsNullAndReplyContentIsNullAndBlindedFalse(storeId),
-                reviewRepository.countByStoreIdAndDeletedAtIsNullAndRatingLessThanEqual(storeId, LOW_RATING_MAX));
+                reviewRepository.countByStoreIdAndDeletedAtIsNullAndRatingLessThanEqual(storeId, LOW_RATING_MAX),
+                reviewRepository.countWithPhotoForStore(storeId));
 
         return new SellerReviewSummaryResponse(ratings.average(), ratings.count(), ratings.distribution(), products,
                 tabCounts);
