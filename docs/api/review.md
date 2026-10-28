@@ -11,6 +11,7 @@
 | 응답 | `ApiResponse<T>` 봉투 (컨벤션 2-4). 오류는 `code` · `message`, `data: null` |
 | 시각 | ISO-8601 오프셋 포함 (Asia/Seoul) |
 | 작성 자격 | `OrderItemConfirmed` 를 받아 저장한 `review_eligibility` 만 본다 — order 를 호출하지 않는다 (REV-01) |
+| 상품 표시값 | 상품명 · 옵션명 · 대표 사진은 구매확정 시점 스냅샷(자격에 저장) — review 는 product 를 호출하지 않는다. `OrderItemConfirmed` 에 `optionName` · `thumbnailUrl` · `buyerDisplayName` 추가 필요(order) |
 | 본문 | 일반 텍스트. 저장 전 OWASP sanitizer 로 태그를 모두 지운다(엔티티로 쓴 태그 포함). 화면은 React 기본 이스케이프로 출력 |
 
 ---
@@ -79,3 +80,40 @@
 |---|---|
 | `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
 | 없는 · 이미 삭제된 · 다른 회원의 리뷰 (구분하지 않음) | 404 `REVIEW_NOT_FOUND` |
+
+## 4. 내가 쓴 리뷰 — `GET /api/reviews/me?page=0&size=10` (REV-05)
+
+마이페이지 리뷰 관리(`/mypage/reviews`) "내가 쓴 리뷰" 탭(`MyReviews`). 게이트웨이는 `/api/reviews/**` GET 을 공개로 통과시키므로 로그인 확인은 review 가 합니다(`X-User-Id` 없으면 401).
+
+- 삭제한 리뷰 제외, **최신 작성순**. 블라인드된 리뷰도 `blinded: true` 로 보입니다(화면: "관리자에 의해 블라인드 처리됨", 수정 버튼 숨김).
+- `page` 0부터, `size` 1~50(기본 10). 탭 숫자는 `totalElements`.
+
+```json
+{ "content": [ { "reviewId": 31, "orderItemId": 11, "productId": 101, "productName": "린넨 오버핏 셔츠",
+    "optionName": "오트밀 / M", "thumbnailUrl": "https://…/products/1/a1b2.jpg", "rating": 5, "title": null,
+    "content": "…", "fit": "TRUE_TO_SIZE", "blinded": false, "replyContent": "소중한 후기 감사합니다.",
+    "repliedAt": "2026-10-21T09:30:00+09:00", "createdAt": "2026-10-20T14:00:00+09:00" } ],
+  "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "hasNext": false }
+```
+
+| 경우 | 응답 |
+|---|---|
+| `page` < 0 · `size` 1~50 밖 · 숫자 아님 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+
+## 5. 작성 가능한 리뷰 — `GET /api/reviews/me/writable` (REV-05)
+
+"작성 가능한 리뷰" 탭과 작성 모달 상단. 구매확정 후 30일 안이고 아직 리뷰가 없는 내 상품주문 — **삭제한 리뷰가 있는 상품주문은 빠집니다**(다시 쓸 수 없음). **기한 임박순**, 기한 30일이라 페이징 없음.
+
+```json
+[ { "orderItemId": 11, "productId": 101, "productName": "린넨 오버핏 셔츠", "optionName": "오트밀 / M",
+    "thumbnailUrl": "https://…/products/1/a1b2.jpg",
+    "confirmedAt": "2026-10-20T14:00:00+09:00", "expiresAt": "2026-11-19T14:00:00+09:00" } ]
+```
+
+- 화면 "작성기한 D-n" 은 `expiresAt` 으로 계산합니다 (연동 때 목업의 계산식을 이 값으로 바꿈).
+- `optionName` · `thumbnailUrl` 은 order payload 추가 전 자격이면 `null` — 화면은 기본 이미지 · 옵션 생략.
+
+| 경우 | 응답 |
+|---|---|
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
