@@ -17,7 +17,7 @@ public record SellerReviewSummaryResponse(
         @Schema(description = "상품별 평균 · 리뷰 수 — 평균 높은순")
         List<ProductRating> products,
 
-        @Schema(description = "탭 숫자 — 전체(블라인드 포함) · 답글 미작성 · 1~2점")
+        @Schema(description = "탭 숫자 — 전체(블라인드 포함) · 답글 미작성 · 1~2점 · 포토")
         TabCounts tabCounts) {
 
     public record ProductRating(
@@ -30,6 +30,7 @@ public record SellerReviewSummaryResponse(
     public record TabCounts(
             @Schema(description = "전체", example = "39") long all,
             @Schema(description = "답글 미작성 (블라인드 제외)", example = "8") long noReply,
-            @Schema(description = "별점 1~2", example = "3") long lowRating) {
+            @Schema(description = "별점 1~2", example = "3") long lowRating,
+            @Schema(description = "사진 있는 리뷰", example = "12") long photo) {
     }
 }

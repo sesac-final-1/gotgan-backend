@@ -33,10 +33,12 @@ public class InternalReviewService {
     private static final Sort NEWEST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final ReviewRepository reviewRepository;
+    private final ReviewImages reviewImages;
     private final Clock clock;
 
     public InternalReviewResponse get(Long reviewId) {
-        return InternalReviewResponse.from(findNotDeleted(reviewId));
+        Review review = findNotDeleted(reviewId);
+        return InternalReviewResponse.from(review, ReviewImages.urls(reviewImages.of(review.getId())));
     }
 
     /** 관리자 회원 상세 "작성 리뷰" — 그 회원의 리뷰(삭제 제외 · 블라인드 포함) 최신순. 없는 회원은 빈 목록 (review 는 회원을 모름) */
@@ -62,7 +64,7 @@ public class InternalReviewService {
             log.info("리뷰 블라인드 {} reviewId={} storeId={} reason={}", review.isBlinded() ? "처리" : "해제",
                     review.getId(), review.getStoreId(), review.getBlindReason());
         }
-        return InternalReviewResponse.from(review);
+        return InternalReviewResponse.from(review, ReviewImages.urls(reviewImages.of(review.getId())));
     }
 
     private Review findNotDeleted(Long reviewId) {

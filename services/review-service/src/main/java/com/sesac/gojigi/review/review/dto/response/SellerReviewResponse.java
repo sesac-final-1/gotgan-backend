@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.List;
 
 /** 판매자 리뷰 관리 한 건 (review.md 6절) — 프론트 SellerReviewList 표 */
 public record SellerReviewResponse(
@@ -47,16 +48,19 @@ public record SellerReviewResponse(
         OffsetDateTime repliedAt,
 
         @Schema(description = "작성 시각", example = "2026-10-20T14:00:00+09:00")
-        OffsetDateTime createdAt) {
+        OffsetDateTime createdAt,
+
+        @Schema(description = "리뷰 사진 URL — 순서대로, 없으면 빈 목록")
+        List<String> imageUrls) {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    public static SellerReviewResponse from(Review review) {
+    public static SellerReviewResponse from(Review review, List<String> imageUrls) {
         ReviewEligibility eligibility = review.getEligibility();
         return new SellerReviewResponse(review.getId(), review.getProductId(), eligibility.getProductName(),
                 eligibility.getOptionName(), review.getWriterDisplayName(), review.getRating(), review.getTitle(),
                 review.getContent(), review.getFit(), review.isBlinded(), review.getReplyContent(),
-                kst(review.getRepliedAt()), kst(review.getCreatedAt()));
+                kst(review.getRepliedAt()), kst(review.getCreatedAt()), imageUrls);
     }
 
     private static OffsetDateTime kst(LocalDateTime time) {
