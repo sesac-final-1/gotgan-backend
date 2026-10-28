@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 리뷰 작성 자격 — OrderItemConfirmed 수신 시 상품주문당 1개 저장 (REV-01).
- * review 는 order · user 를 호출하지 않으므로 표시에 필요한 값(구매자 표시 이름 · 상품명)을 여기에 스냅샷한다.
+ * review 는 order · user · product 를 호출하지 않으므로 표시에 필요한 값(구매자 표시 이름 · 상품명 · 옵션명 · 대표 사진)을 여기에 스냅샷한다.
  */
 @Getter
 @Entity
@@ -50,6 +50,12 @@ public class ReviewEligibility extends BaseTimeEntity {
     @Column(name = "product_name", nullable = false, length = 200)
     private String productName;
 
+    @Column(name = "option_name", length = 200)
+    private String optionName;
+
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
+
     @Column(name = "confirmed_at", nullable = false, columnDefinition = "DATETIME(6)")
     private LocalDateTime confirmedAt;
 
@@ -58,13 +64,16 @@ public class ReviewEligibility extends BaseTimeEntity {
 
     @Builder
     private ReviewEligibility(Long orderItemId, Long userId, Long productId, Long storeId,
-                              String buyerDisplayName, String productName, LocalDateTime confirmedAt) {
+                              String buyerDisplayName, String productName, String optionName, String thumbnailUrl,
+                              LocalDateTime confirmedAt) {
         this.orderItemId = orderItemId;
         this.userId = userId;
         this.productId = productId;
         this.storeId = storeId;
         this.buyerDisplayName = buyerDisplayName;
         this.productName = productName;
+        this.optionName = optionName;
+        this.thumbnailUrl = thumbnailUrl;
         this.confirmedAt = confirmedAt;
         this.expiresAt = confirmedAt.plusDays(WRITE_PERIOD_DAYS);
     }
