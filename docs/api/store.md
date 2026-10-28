@@ -26,26 +26,41 @@
 
 ---
 
-## 1. 스토어 상세 (내부) — `GET /internal/stores/{storeId}` (STR-14 · 회원 탈퇴)
+## 1. 스토어 상세 (내부) — `GET /internal/stores/{storeId}` (STR-14 · 회원 탈퇴 · 주문 배송비)
 
-user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부를 확인할 때, admin-service 스토어 관리가 부릅니다. chat-service 도 채팅 상대 표시 이름(`storeName`)과 정지 · 폐점 스토어의 새 스토어 톡 차단(`status` 가 `ACTIVE` 가 아니면 · 404 도 차단, 그 밖의 실패는 막지 않음 — `chat.md` D-1)에 씁니다(1분 캐시). DB 조회만 하므로 재시도 가능(GET).
+user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부를 확인할 때, admin-service 스토어 관리가 부릅니다. chat-service 도 채팅 상대 표시 이름(`storeName`)과 정지 · 폐점 스토어의 새 스토어 톡 차단(`status` 가 `ACTIVE` 가 아니면 · 404 도 차단, 그 밖의 실패는 막지 않음 — `chat.md` D-1)에 씁니다(1분 캐시). order-service 는 주문 생성 때 스토어별 배송비 계산에 씁니다(아래 배송 정책). DB 조회만 하므로 재시도 가능(GET).
 
 ```json
 {
   "code": "SUCCESS",
   "message": "스토어를 조회했습니다.",
-  "data": { "storeId": 1, "userId": 2, "storeName": "곳간상회", "status": "ACTIVE" }
+  "data": {
+    "storeId": 1, "userId": 2, "storeName": "곳간상회", "status": "ACTIVE",
+    "shippingFee": 3000, "freeShippingThreshold": 30000, "courier": "우체국택배"
+  }
 }
 ```
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
-| 스토어 있음 (상태 무관, `CLOSED` 포함) | 조회 | **200** `{storeId, userId, storeName, status}` | user: `status == CLOSED` 일 때만 탈퇴 진행. `userId` 가 요청자와 다르면 탈퇴 거부 권장 |
+| 스토어 있음 (상태 무관, `CLOSED` 포함) | 조회 | **200** `{storeId, userId, storeName, status, shippingFee, freeShippingThreshold, courier}` | user: `status == CLOSED` 일 때만 탈퇴 진행. `userId` 가 요청자와 다르면 탈퇴 거부 권장. order: 아래 규칙으로 배송비 계산 |
 | 없는 스토어 · 소프트 삭제된 스토어 | — | **404** `STORE_NOT_FOUND` | user: 탈퇴 거부(안전한 쪽). 서킷 실패로 세지 않음 |
 | `storeId` 가 숫자가 아님 | — | **400** `INVALID_INPUT` | 호출 코드 버그 |
 | store 장애 · 타임아웃 | — | 연결 실패 · 5xx | user: 서킷 `store` 로 집계, 탈퇴 차단 |
 
 - 응답 필드는 **추가만** 합니다(admin 스토어 상세에서 필요한 필드를 붙일 예정). 호출하는 쪽은 모르는 필드를 무시해 주세요.
+
+**배송 정책 (10/28 추가, 배송비 A안)** — store 는 규칙만 알려 주고 계산은 order 가 합니다.
+
+| 필드 | 타입 | 뜻 | null |
+|---|---|---|---|
+| `shippingFee` | long 원 | 스토어 묶음 기본 배송비 (승인 직후 3,000) | 없음 |
+| `freeShippingThreshold` | long 원 | 무료배송 기준 금액 | **무료배송 없음** |
+| `courier` | string | 기본 택배사 이름 (예: `CJ대한통운`) | 아직 안 정함 (승인 직후) |
+
+- 배송비 = 한 주문에서 **이 스토어 상품 합계**(가격 × 수량)가 `freeShippingThreshold` 이상이면 0원, 아니면 `shippingFee`. 스토어마다 한 번만 붙습니다(상품 · 수량별 배송비 없음).
+- 주문 시점 배송비는 order 가 스냅샷으로 저장합니다 — 판매자가 나중에 바꿔도 기존 주문은 그대로.
+- 따로 `/shipping-policy` API 는 두지 않습니다(10/26 결정). 여러 스토어 일괄 조회도 없음 — 주문의 스토어 수만큼 호출.
 
 ## 2. 입점 신청 — `POST /api/seller/apply` (STR-01 · 02 · 11)
 
