@@ -175,3 +175,40 @@
 | 관리자가 블라인드한 리뷰 | 409 `REVIEW_BLINDED` |
 
 - "관리자 검토 요청" 버튼은 이 API 가 아니라 admin 신고 API(`POST /api/reports`, `reasonCode: SELLER_REQUEST`) — `admin.md` 참고.
+
+## 9. 상품 상세 리뷰 (공개) — `GET /api/reviews?productId=` · `GET /api/reviews/summary?productId=` (REV-04)
+
+상품 상세 리뷰 탭(`ShopProductReviews`). 로그인 없이 부릅니다(게이트웨이 GET 공개). **블라인드 · 삭제 리뷰는 목록 · 요약 모두에서 빠집니다.** review 는 상품을 모르므로 없는 상품은 빈 목록 · 0 입니다.
+
+### 9-1. 목록 `GET /api/reviews?productId=101&rating=&sort=LATEST&page=0&size=10`
+
+- `productId` 필수. `rating` 1~5 로 별점 하나만(선택 — 화면의 분포 막대 클릭).
+- `sort`: `LATEST`(기본, 최신순) · `RATING_HIGH` · `RATING_LOW` — 같은 별점이면 최신 먼저. **도움순은 범위 제외**(10/28)라 없습니다.
+- `page` 0부터 · `size` 1~50(기본 10).
+- 작성자는 `writerDisplayName`(닉네임, 없으면 마스킹 실명)만 — **회원 ID · 아바타 · 등급은 주지 않습니다.** 화면은 기본 아바타, 등급 배지 생략.
+- 포토 리뷰만 · 사진은 사진 PR(REV-03)에서 추가합니다.
+
+```json
+{ "content": [ { "reviewId": 31, "writerDisplayName": "곳간러버", "rating": 5, "title": null,
+    "content": "…", "optionName": "오트밀 / M", "fit": "TRUE_TO_SIZE",
+    "replyContent": "소중한 후기 감사합니다.", "repliedAt": "2026-10-21T09:30:00+09:00",
+    "createdAt": "2026-10-20T14:00:00+09:00" } ],
+  "page": 0, "size": 10, "totalElements": 37, "totalPages": 4, "hasNext": true }
+```
+
+### 9-2. 요약 `GET /api/reviews/summary?productId=101`
+
+```json
+{ "averageRating": 4.62, "reviewCount": 37,
+  "distribution": [ { "rating": 5, "count": 23 }, { "rating": 4, "count": 10 }, { "rating": 3, "count": 2 },
+                    { "rating": 2, "count": 1 }, { "rating": 1, "count": 1 } ],
+  "fits": [ { "fit": "SMALL", "count": 3 }, { "fit": "TRUE_TO_SIZE", "count": 18 }, { "fit": "LARGE", "count": 2 } ] }
+```
+
+- 평균은 소수 둘째 자리 반올림(리뷰 없으면 0) — 판매자 평점 요약(6-2)과 같은 계산.
+- `fits` 는 항상 3칸, 사이즈 체감을 남긴 리뷰만 셉니다. 패션 · 신발가방이 아니면 화면이 감춥니다.
+- 리뷰 탭 숫자 · 상품 상단 별점은 이 값을 씁니다. 상품 카드 · 목록의 별점 · 리뷰 수(여러 상품 한 번에)는 별도 PR 입니다.
+
+| 경우 (9-1 · 9-2) | 응답 |
+|---|---|
+| `productId` 없음 · 숫자 아님 · `rating` 1~5 밖 · `sort` 모르는 값 · `page` · `size` 범위 밖 | 400 `INVALID_INPUT` |
