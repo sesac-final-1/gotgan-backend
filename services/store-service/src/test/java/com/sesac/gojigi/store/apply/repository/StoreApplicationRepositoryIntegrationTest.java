@@ -91,6 +91,39 @@ class StoreApplicationRepositoryIntegrationTest {
     }
 
     @Test
+    @DisplayName("심사 목록은 제출 최신순이고, 제출 시각이 같으면 나중에 들어온 신청이 먼저다")
+    void findAllOrderByTermsAgreedAt_sameSubmittedAt_newerIdFirst() {
+        // given — 시드 신청서(모두 승인)보다 최근에 같은 시각으로 두 건, 그보다 앞서 한 건
+        LocalDateTime submittedAt = LocalDateTime.of(2099, 1, 1, 10, 0);
+        Long first = storeApplicationRepository.saveAndFlush(application(4L, "첫 스토어", "first-store", submittedAt)).getId();
+        Long second = storeApplicationRepository.saveAndFlush(application(5L, "둘 스토어", "second-store", submittedAt)).getId();
+        Long older = storeApplicationRepository.saveAndFlush(application(6L, "옛 스토어", "older-store", submittedAt.minusDays(1))).getId();
+
+        // when
+        List<StoreApplication> all = storeApplicationRepository.findAllByOrderByTermsAgreedAtDescIdDesc();
+
+        // then
+        assertThat(all).extracting(StoreApplication::getId).startsWith(second, first, older);
+        assertThat(all).extracting(StoreApplication::getTermsAgreedAt)
+                .isSortedAccordingTo((a, b) -> b.compareTo(a));
+    }
+
+    @Test
+    @DisplayName("상태 필터 목록은 그 상태의 신청만 돌려준다")
+    void findAllByStatus_pendingFilter_returnsOnlyPending() {
+        // given — 시드 신청서는 모두 승인이라 심사대기는 새로 넣은 한 건뿐
+        Long pending = storeApplicationRepository.saveAndFlush(application(4L, "새 스토어", "new-store", LocalDateTime.now())).getId();
+
+        // when
+        List<StoreApplication> pendings = storeApplicationRepository.findAllByStatusOrderByTermsAgreedAtDescIdDesc(ApplicationStatus.PENDING);
+        List<StoreApplication> approved = storeApplicationRepository.findAllByStatusOrderByTermsAgreedAtDescIdDesc(ApplicationStatus.APPROVED);
+
+        // then
+        assertThat(pendings).extracting(StoreApplication::getId).containsExactly(pending);
+        assertThat(approved).isNotEmpty().allMatch(a -> a.getStatus() == ApplicationStatus.APPROVED);
+    }
+
+    @Test
     @DisplayName("스토어 검사는 폐점 스토어도 본다 — UK 가 모든 행에 걸리므로")
     void storeExists_closedStore_stillMatches() {
         // given — 시드 스토어 2(user 3, 토담공방)를 폐점

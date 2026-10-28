@@ -176,6 +176,36 @@
 
 - "관리자 검토 요청" 버튼은 이 API 가 아니라 admin 신고 API(`POST /api/reports`, `reasonCode: SELLER_REQUEST`) — `admin.md` 참고.
 
+## 8. 내부 — admin 신고 처리 `GET /internal/reviews/{reviewId}` · `PATCH /internal/reviews/{reviewId}/blind`
+
+호출자 admin-service(`ReviewClientAdapter`, 서킷 `review` — GET 만 재시도). 노션 확인 요청 「신고 · 리뷰 블라인드 (B안)」 4-2 계약 그대로입니다. 게이트웨이 라우트 없음, 사용자 헤더 없음.
+
+### 8-1. 조회
+
+```json
+{ "reviewId": 31, "productId": 101, "storeId": 1, "userId": 4, "rating": 1,
+  "content": "…", "imageUrls": [], "blinded": false, "blindReason": null,
+  "createdAt": "2026-10-20T14:00:00+09:00" }
+```
+
+- 블라인드된 리뷰도 그대로 보입니다. `imageUrls` 는 사진 업로드(REV-03) 전이라 지금은 항상 `[]`.
+- `storeId` · `userId` 는 admin 이 판매자 검토 요청의 내 스토어 여부 · 본인 신고 여부를 확인하는 데 씁니다.
+
+### 8-2. 블라인드 · 해제
+
+```json
+{ "blinded": true, "reason": "욕설 · 비방" }
+```
+
+- `blinded=true` 면 `reason` 필수(255자 이하, 앞뒤 공백 제거). 해제는 `reason` 생략 · `null` 가능 — 저장하지 않고 `blind_reason` · `blinded_at` 을 비웁니다.
+- 응답은 8-1 과 같은 모양. **같은 상태 재요청은 200 그대로**(블라인드 두 번이면 처음 사유 · 시각 유지).
+- 블라인드되면 구매자 목록 · 평균 · 리뷰 수에서 빠지고, 작성자 수정 · 판매자 답글이 409 `REVIEW_BLINDED` 로 막힙니다.
+
+| 경우 (8-1 · 8-2) | 응답 |
+|---|---|
+| `reviewId` 숫자 아님 · `blinded` 없음 · 형식 오류 · 블라인드인데 사유 없음 · 사유 256자 이상 | 400 `INVALID_INPUT` |
+| 없는 · 삭제된 리뷰 | 404 `REVIEW_NOT_FOUND` |
+
 ## 9. 상품 상세 리뷰 (공개) — `GET /api/reviews?productId=` · `GET /api/reviews/summary?productId=` (REV-04)
 
 상품 상세 리뷰 탭(`ShopProductReviews`). 로그인 없이 부릅니다(게이트웨이 GET 공개). **블라인드 · 삭제 리뷰는 목록 · 요약 모두에서 빠집니다.** review 는 상품을 모르므로 없는 상품은 빈 목록 · 0 입니다.
