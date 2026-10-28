@@ -1,10 +1,12 @@
 package com.sesac.gojigi.store.apply.service;
 
+import com.sesac.gojigi.store.apply.dto.event.StoreApprovedPayload;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationApproveResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import com.sesac.gojigi.store.apply.event.StoreApprovedEvent;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.exception.ApplyException;
 import com.sesac.gojigi.store.apply.repository.ApplicationHistoryRepository;
@@ -19,6 +21,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
@@ -37,9 +40,10 @@ public class ApplicationReviewService {
     private final ApplicationHistoryRepository applicationHistoryRepository;
     private final StoreRepository storeRepository;
     private final StoreStatusHistoryRepository storeStatusHistoryRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    /** 신청서로 스토어(ACTIVE)를 만들고 신청을 APPROVED 로 — 스토어 · 두 이력 · 신청 상태를 한 트랜잭션으로 */
+    /** 신청서로 스토어(ACTIVE)를 만들고 신청을 APPROVED 로 — 스토어 · 두 이력 · 신청 상태를 한 트랜잭션으로, StoreApproved 는 커밋 뒤 발행 */
     @Transactional
     public ApplicationApproveResponse approve(Long applicationId) {
         StoreApplication application = storeApplicationRepository.findById(applicationId)
@@ -56,9 +60,16 @@ public class ApplicationReviewService {
                 StoreStatusHistory.of(store.getId(), null, StoreStatus.ACTIVE, StoreActorType.ADMIN, null));
         applicationHistoryRepository.save(
                 ApplicationHistory.of(applicationId, fromStatus, ApplicationStatus.APPROVED, ActorType.ADMIN, null));
+        eventPublisher.publishEvent(new StoreApprovedEvent(applicationId, now, payload(application, store)));
 
         log.info("입점 승인 - applicationId={}, storeId={}, userId={}", applicationId, store.getId(), application.getUserId());
         return ApplicationApproveResponse.of(applicationId, application.getStatus(), store.getId(), now);
+    }
+
+    private static StoreApprovedPayload payload(StoreApplication application, Store store) {
+        return new StoreApprovedPayload(store.getId(), application.getUserId(), store.getStoreName(),
+                application.getManagerEmail(), new StoreApprovedPayload.SettlementAccount(
+                        application.getBankName(), application.getAccountNo(), application.getAccountHolder()));
     }
 
     /** 신청 이후 같은 회원 · 주소 · 스토어명의 스토어가 생겼는지 — 스토어(폐점 · 소프트 삭제 포함)만 본다 */

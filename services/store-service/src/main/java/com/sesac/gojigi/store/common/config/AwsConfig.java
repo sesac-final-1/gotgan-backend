@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.sns.SnsClient;
 
 /**
  * AWS SDK v2 클라이언트 — 자격 증명은 기본 체인(클러스터: IRSA 웹 아이덴티티 토큰, 로컬: ~/.aws 프로필).
@@ -27,5 +28,13 @@ public class AwsConfig {
     @Bean
     public S3Presigner s3Presigner(@Value("${AWS_REGION:ap-northeast-2}") String region) {
         return S3Presigner.builder().region(Region.of(region)).build();
+    }
+
+    /** 이벤트 발행 (store-events, IRSA sns:Publish). 커밋 직후 요청 스레드에서 보내므로 승인 응답이 SNS 때문에 3초 넘게 늦지 않게 끊는다 */
+    @Bean
+    public SnsClient snsClient(@Value("${AWS_REGION:ap-northeast-2}") String region) {
+        return SnsClient.builder().region(Region.of(region))
+                .overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(3)).apiCallAttemptTimeout(Duration.ofSeconds(1)))
+                .build();
     }
 }

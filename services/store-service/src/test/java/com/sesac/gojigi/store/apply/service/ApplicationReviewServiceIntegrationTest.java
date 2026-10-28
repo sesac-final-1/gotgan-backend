@@ -2,6 +2,10 @@ package com.sesac.gojigi.store.apply.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.store.TestcontainersConfiguration;
 import com.sesac.gojigi.store.apply.entity.ActorType;
@@ -10,9 +14,11 @@ import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.BizType;
 import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import com.sesac.gojigi.store.apply.event.StoreApprovedPublisher;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.repository.ApplicationHistoryRepository;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
+import com.sesac.gojigi.store.common.event.SnsEventPublisher;
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
@@ -36,11 +42,15 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.transaction.TestTransaction;
+import tools.jackson.databind.json.JsonMapper;
 
-/** 실제 MySQL + Flyway 위에서 승인 저장 결과 · UNIQUE 위반 메시지(제약 이름) 확인 */
+/** 실제 MySQL + Flyway 위에서 승인 저장 결과 · UNIQUE 위반 메시지(제약 이름) · 커밋 뒤에만 발행되는지 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({TestcontainersConfiguration.class, ApplicationReviewService.class, ApplicationReviewServiceIntegrationTest.FixedClock.class})
+@Import({TestcontainersConfiguration.class, ApplicationReviewService.class, StoreApprovedPublisher.class,
+        ApplicationReviewServiceIntegrationTest.FixedClock.class})
 @ActiveProfiles("test")
 class ApplicationReviewServiceIntegrationTest {
 
@@ -53,7 +63,15 @@ class ApplicationReviewServiceIntegrationTest {
         Clock clock() {
             return Clock.fixed(NOW.atZone(KST).toInstant(), KST);
         }
+
+        @Bean
+        JsonMapper jsonMapper() {
+            return JsonMapper.builder().build();
+        }
     }
+
+    @MockitoBean
+    private SnsEventPublisher snsEventPublisher;
 
     @Autowired
     private ApplicationReviewService service;
@@ -125,6 +143,44 @@ class ApplicationReviewServiceIntegrationTest {
 
         // then
         assertThat(ApplicationReviewService.duplicateCode(e)).isEqualTo(ApplyErrorCode.APPLY_SLUG_DUPLICATED);
+    }
+
+    @Test
+    @DisplayName("승인이 롤백되면 StoreApproved 를 보내지 않는다")
+    void approve_whenRolledBack_doesNotPublish() {
+        // given
+        StoreApplication application = storeApplicationRepository.saveAndFlush(application(4L, "곳간상회", "gotgan"));
+        service.approve(application.getId());
+
+        // when
+        TestTransaction.flagForRollback();
+        TestTransaction.end();
+
+        // then
+        verify(snsEventPublisher, never()).send(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("승인이 커밋된 뒤에 StoreApproved 를 한 번 보낸다")
+    void approve_whenCommitted_publishesOnce() {
+        // given
+        StoreApplication application = storeApplicationRepository.saveAndFlush(application(9L, "커밋상회", "commit-store"));
+        Long storeId = service.approve(application.getId()).storeId();
+        verify(snsEventPublisher, never()).send(anyString(), anyString(), anyString(), anyString()); // 커밋 전에는 안 보냄
+
+        // when
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        // then
+        try {
+            verify(snsEventPublisher).send(eq("StoreApproved"), eq(String.valueOf(storeId)), anyString(), anyString());
+        } finally { // 커밋된 행은 다른 테스트에 남지 않게 지운다 (FK 역순)
+            jdbcTemplate.update("DELETE FROM store_status_history WHERE store_id = ?", storeId);
+            jdbcTemplate.update("DELETE FROM store WHERE store_id = ?", storeId);
+            jdbcTemplate.update("DELETE FROM application_history WHERE store_application_id = ?", application.getId());
+            jdbcTemplate.update("DELETE FROM store_application WHERE store_application_id = ?", application.getId());
+        }
     }
 
     private static StoreApplication application(Long userId, String storeName, String slug) {

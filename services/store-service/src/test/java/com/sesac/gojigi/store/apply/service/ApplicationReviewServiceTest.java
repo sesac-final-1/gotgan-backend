@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.store.apply.dto.event.StoreApprovedPayload;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationApproveResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
@@ -16,6 +17,7 @@ import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.BizType;
 import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import com.sesac.gojigi.store.apply.event.StoreApprovedEvent;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.repository.ApplicationHistoryRepository;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
@@ -41,6 +43,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -59,6 +62,8 @@ class ApplicationReviewServiceTest {
     private StoreRepository storeRepository;
     @Mock
     private StoreStatusHistoryRepository storeStatusHistoryRepository;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     private ApplicationReviewService service;
 
@@ -66,7 +71,7 @@ class ApplicationReviewServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW.atZone(KST).toInstant(), KST);
         service = new ApplicationReviewService(storeApplicationRepository, applicationHistoryRepository,
-                storeRepository, storeStatusHistoryRepository, clock);
+                storeRepository, storeStatusHistoryRepository, eventPublisher, clock);
     }
 
     @ParameterizedTest
@@ -113,6 +118,13 @@ class ApplicationReviewServiceTest {
         assertThat(applicationHistory.getValue().getFromStatus()).isEqualTo(from);
         assertThat(applicationHistory.getValue().getToStatus()).isEqualTo(ApplicationStatus.APPROVED);
         assertThat(applicationHistory.getValue().getActorType()).isEqualTo(ActorType.ADMIN);
+
+        ArgumentCaptor<StoreApprovedEvent> event = ArgumentCaptor.forClass(StoreApprovedEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().applicationId()).isEqualTo(27L);
+        assertThat(event.getValue().decidedAt()).isEqualTo(NOW);
+        assertThat(event.getValue().payload()).isEqualTo(new StoreApprovedPayload(3L, 4L, "곳간상회", "seller@example.com",
+                new StoreApprovedPayload.SettlementAccount("국민", "000000-00-000000", "홍길동")));
     }
 
     @Test
@@ -182,6 +194,7 @@ class ApplicationReviewServiceTest {
         // when · then
         assertErrorCode(() -> service.approve(27L), ApplyErrorCode.APPLY_INVALID_STATUS);
         verify(storeRepository, never()).saveAndFlush(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @ParameterizedTest
@@ -201,6 +214,7 @@ class ApplicationReviewServiceTest {
         assertErrorCode(() -> service.approve(27L), expected);
         verify(storeStatusHistoryRepository, never()).save(any());
         verify(applicationHistoryRepository, never()).save(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
