@@ -131,6 +131,32 @@ class StoreRepositoryIntegrationTest {
                 .hasSize(8).doesNotContain(17L).contains(2L);
     }
 
+    @Test
+    @DisplayName("공개 목록은 운영 중 8개를 개설 최신순으로 — 정지 15 는 빠지고, 카테고리는 신청서 값")
+    void findAllActiveForPublic_seed_returnsActiveNewestFirstWithCategory() {
+        // when
+        List<StoreWithCategory> rows = storeRepository.findAllActiveForPublic();
+
+        // then — 관리자 목록 순서(19 · 15 · 2 · 17 · 11 · 18 · 12 · 1 · 13)에서 정지 15 만 빠짐
+        assertThat(rows).extracting(r -> r.store().getId()).containsExactly(19L, 2L, 17L, 11L, 18L, 12L, 1L, 13L);
+        assertThat(rows).filteredOn(r -> r.store().getId() == 1L).singleElement()
+                .extracting(StoreWithCategory::categoryId).isEqualTo(1L);   // 식품
+        assertThat(rows).filteredOn(r -> r.store().getId() == 2L).singleElement()
+                .extracting(StoreWithCategory::categoryId).isEqualTo(2L);   // 리빙
+    }
+
+    @Test
+    @DisplayName("공개 목록에서 폐점 · 소프트 삭제 스토어도 빠진다")
+    void findAllActiveForPublic_excludesClosedAndSoftDeleted() {
+        // given
+        update("UPDATE store SET status = 'CLOSED' WHERE store_id = 2");
+        update("UPDATE store SET deleted_at = NOW(6) WHERE store_id = 17");
+
+        // when · then
+        assertThat(storeRepository.findAllActiveForPublic()).extracting(r -> r.store().getId())
+                .containsExactly(19L, 11L, 18L, 12L, 1L, 13L);
+    }
+
     private void update(String sql) {
         entityManager.createNativeQuery(sql).executeUpdate();
         entityManager.clear();

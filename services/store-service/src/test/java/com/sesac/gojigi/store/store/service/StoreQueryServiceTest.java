@@ -12,6 +12,7 @@ import com.sesac.gojigi.store.apply.entity.StoreApplication;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
+import com.sesac.gojigi.store.store.dto.response.PublicStoreSummaryResponse;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
@@ -22,6 +23,7 @@ import com.sesac.gojigi.store.store.exception.StoreErrorCode;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
 import com.sesac.gojigi.store.store.repository.StoreStatusHistoryRepository;
 import com.sesac.gojigi.store.store.repository.StoreWithApplicant;
+import com.sesac.gojigi.store.store.repository.StoreWithCategory;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -140,6 +142,36 @@ class StoreQueryServiceTest {
 
         // when · then
         assertThat(storeQueryService.getAdminList(null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("공개 스토어 목록 — 신청서 카테고리 · 이미지 URL(없으면 null) · 개설 시각 +09:00, 순서는 저장소 그대로")
+    void getPublicList_mapsCategoryAndImageUrl() {
+        // given
+        Store withImage = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
+        ReflectionTestUtils.setField(withImage, "id", 1L);
+        ReflectionTestUtils.setField(withImage, "imageKey", "stores/1/a.jpg");
+        ReflectionTestUtils.setField(withImage, "color", "#2b2b2b");
+        ReflectionTestUtils.setField(withImage, "grade", StoreGrade.POWER);
+        ReflectionTestUtils.setField(withImage, "createdAt", LocalDateTime.of(2026, 10, 15, 9, 0));
+        Store noImage = Store.open(28L, 3L, "토담공방", "todam", null, "063-0000-0004");
+        ReflectionTestUtils.setField(noImage, "id", 2L);
+        ReflectionTestUtils.setField(noImage, "color", "#8c6d4f");
+        ReflectionTestUtils.setField(noImage, "grade", StoreGrade.SPROUT);
+        ReflectionTestUtils.setField(noImage, "createdAt", LocalDateTime.of(2026, 10, 1, 9, 0));
+        given(storeRepository.findAllActiveForPublic())
+                .willReturn(List.of(new StoreWithCategory(withImage, 3L), new StoreWithCategory(noImage, 2L)));
+        given(imageUrls.of("stores/1/a.jpg")).willReturn("https://images/stores/1/a.jpg");
+
+        // when
+        List<PublicStoreSummaryResponse> result = storeQueryService.getPublicList();
+
+        // then
+        assertThat(result).containsExactly(
+                new PublicStoreSummaryResponse(1L, "곳간상회", "gotgan", 3L, "<p>소개</p>", "https://images/stores/1/a.jpg",
+                        "#2b2b2b", StoreGrade.POWER, OffsetDateTime.parse("2026-10-15T09:00:00+09:00")),
+                new PublicStoreSummaryResponse(2L, "토담공방", "todam", 2L, null, null,
+                        "#8c6d4f", StoreGrade.SPROUT, OffsetDateTime.parse("2026-10-01T09:00:00+09:00")));
     }
 
     @Test
