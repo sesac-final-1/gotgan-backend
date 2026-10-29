@@ -86,15 +86,17 @@ public class SellerApplyController {
             documents: 보완요청 서류(requestedDocs)를 모두 다시 — 요청 밖 종류는 안 됨, 한 장 서류 1개 · 상품 사진 3~10장, 같은 종류 이전 서류는
             이전 제출본으로 남는다. 고칠 수 있는 항목(사업자 구분 · 대표자 · 사업자등록번호 · 상호 · 통신판매업 신고번호 · 담당자 휴대폰 · 이메일 ·
             사업장 주소 · 카테고리 · 소개 · 대표 상품 · 정산 계좌)은 보낸 것만 바꾼다. 사업자 구분 · 대표자 · 사업자등록번호를 바꾸면 사업자등록증도
-            다시 내야 한다(보완요청에 없어도). 스토어명 · 주소는 고칠 수 없다.
+            다시 내야 한다(보완요청에 없어도). 스토어명 · 주소도 바꿀 수 있고, 바꾸면 신청 때처럼 중복을 다시 확인한다.
             에러: 400 INVALID_INPUT(형식) · 400 APPLY_DOCUMENT_INVALID(서류) · 401 UNAUTHORIZED · 404 APPLY_NOT_FOUND ·
-            409 APPLY_INVALID_STATUS(보완요청 중 아님 · 기한 지남 · 동시 처리) · 502 EXTERNAL_API_ERROR(S3)""")
+            409 APPLY_INVALID_STATUS(보완요청 중 아님 · 기한 지남 · 동시 처리) · 409 APPLY_SLUG_DUPLICATED · 409 APPLY_STORE_NAME_DUPLICATED ·
+            502 EXTERNAL_API_ERROR(S3)""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "재제출 — 심사대기"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT · APPLY_DOCUMENT_INVALID"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "APPLY_NOT_FOUND"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "APPLY_INVALID_STATUS"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "APPLY_INVALID_STATUS · APPLY_SLUG_DUPLICATED · APPLY_STORE_NAME_DUPLICATED"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR")
     })
     @PatchMapping("/{applicationId}/resubmit")

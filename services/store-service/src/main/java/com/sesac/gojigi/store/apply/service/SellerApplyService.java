@@ -202,6 +202,7 @@ public class SellerApplyService {
         LocalDateTime now = LocalDateTime.now(clock);
         StoreApplication application = findOwn(userId, applicationId);
         application.requireResubmittable(now);
+        checkRenamedStoreIdentity(application, request);
         List<DocumentItem> items = request.documentsOrEmpty();
         checkResubmitDocuments(application.getRequestedDocs(), items, changesBusinessIdentity(application, request));
         List<VerifiedDocument> documents = verifyFiles(userId, items);
@@ -217,6 +218,23 @@ public class SellerApplyService {
         return storeApplicationRepository.findById(applicationId)
                 .filter(application -> application.getUserId().equals(userId))
                 .orElseThrow(() -> new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
+    }
+
+    /** 스토어명 · 주소를 바꾸면 신청 때와 같은 중복 확인 — 스토어(폐점 포함)와 자기 신청을 뺀 진행 중 신청 */
+    private void checkRenamedStoreIdentity(StoreApplication current, ApplicationResubmitRequest request) {
+        if (request.slug() != null && !request.slug().equals(current.getSlug())
+                && (storeRepository.existsBySlug(request.slug())
+                || storeApplicationRepository.existsBySlugAndStatusInAndIdNot(request.slug(), IN_PROGRESS, current.getId()))) {
+            throw new ApplyException(ApplyErrorCode.APPLY_SLUG_DUPLICATED);
+        }
+        if (request.storeName() != null && !request.storeName().trim().equals(current.getStoreName())) {
+            String normalizedName = normalizeStoreName(request.storeName().trim());
+            if (storeRepository.existsByNormalizedStoreName(normalizedName)
+                    || storeApplicationRepository.existsByNormalizedStoreNameAndStatusInAndIdNot(normalizedName, IN_PROGRESS,
+                    current.getId())) {
+                throw new ApplyException(ApplyErrorCode.APPLY_STORE_NAME_DUPLICATED);
+            }
+        }
     }
 
     /** 사업자 구분 · 대표자 · 사업자등록번호가 실제로 바뀌는지 — 바뀌면 사업자등록증으로 다시 확인해야 한다 */
@@ -284,6 +302,8 @@ public class SellerApplyService {
                 request.bizType() == null ? current.getBizType() : request.bizType(),
                 trimOr(request.ownerName(), current.getOwnerName()),
                 request.bizRegNo() == null ? current.getBizRegNo() : request.bizRegNo(),
+                trimOr(request.storeName(), current.getStoreName()),
+                request.slug() == null ? current.getSlug() : request.slug(),
                 trimOr(request.companyName(), current.getCompanyName()),
                 trimOr(request.ecommerceRegNo(), current.getEcommerceRegNo()),
                 trimOr(request.managerPhone(), current.getManagerPhone()),
@@ -299,6 +319,8 @@ public class SellerApplyService {
         addIfChanged(changed, "사업자 구분", current.getBizType(), correction.bizType());
         addIfChanged(changed, "대표자", current.getOwnerName(), correction.ownerName());
         addIfChanged(changed, "사업자등록번호", current.getBizRegNo(), correction.bizRegNo());
+        addIfChanged(changed, "스토어명", current.getStoreName(), correction.storeName());
+        addIfChanged(changed, "스토어 주소", current.getSlug(), correction.slug());
         addIfChanged(changed, "상호", current.getCompanyName(), correction.companyName());
         addIfChanged(changed, "통신판매업 신고번호", current.getEcommerceRegNo(), correction.ecommerceRegNo());
         addIfChanged(changed, "담당자 휴대폰", current.getManagerPhone(), correction.managerPhone());

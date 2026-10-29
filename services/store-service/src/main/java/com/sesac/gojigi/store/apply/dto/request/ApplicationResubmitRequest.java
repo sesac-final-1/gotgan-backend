@@ -6,6 +6,7 @@ import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.SettlementAcc
 import com.sesac.gojigi.store.apply.entity.BizType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -16,7 +17,7 @@ import java.util.List;
 /**
  * 보완 재제출 (docs/api/store.md 2-3절, STR-09) — 모든 항목 선택, 보내지 않은(null) 항목은 그대로.
  * 규칙은 신청(2절)과 같고 빈 문자열로 지울 수 없다. 사업자 구분 · 대표자 · 사업자등록번호를 바꾸면 사업자등록증도 다시 내야 한다.
- * 스토어명 · 주소는 고칠 수 없다(중복 검사 · 새 신청).
+ * 스토어명 · 주소를 바꾸면 신청 때처럼 스토어 · 다른 진행 중 신청과 중복을 다시 확인한다(승인 때 이름이 겹쳐 보완요청된 경우, 스펙 STR-04).
  */
 public record ApplicationResubmitRequest(
         @Schema(description = "사업자 구분 — 바꾸면 사업자등록증도 다시", example = "CORPORATE")
@@ -30,6 +31,16 @@ public record ApplicationResubmitRequest(
         @Schema(description = "사업자등록번호 — 바꾸면 사업자등록증도 다시", example = "000-00-00001")
         @Pattern(regexp = "^\\d{3}-\\d{2}-\\d{5}$", message = "사업자등록번호는 000-00-00000 형식입니다.")
         String bizRegNo,
+
+        @Schema(description = "스토어명 — 바꾸면 중복 다시 확인(공백 · 대소문자 무시)", example = "곳간상회")
+        @Pattern(regexp = NOT_BLANK, message = "스토어명을 비울 수 없습니다.")
+        @Size(max = 50, message = "스토어명은 50자 이하로 입력해 주세요.")
+        String storeName,
+
+        @Schema(description = "스토어 주소 gotgan.kr/store/{slug} — 바꾸면 중복 다시 확인, 승인 후 변경 불가", example = "gotgan-store")
+        @Pattern(regexp = "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$",
+                message = "스토어 주소는 영문 소문자 · 숫자 · 하이픈 3~30자로, 하이픈으로 시작하거나 끝날 수 없습니다.")
+        String slug,
 
         @Schema(description = "상호", example = "곳간상회")
         @Pattern(regexp = NOT_BLANK, message = "상호를 비울 수 없습니다.")
@@ -77,6 +88,12 @@ public record ApplicationResubmitRequest(
 
     /** 공백만 있는 값 거절 — null 은 통과(보내지 않음 = 그대로) */
     static final String NOT_BLANK = "(?s).*\\S.*";
+
+    @Schema(hidden = true)
+    @AssertTrue(message = "사용할 수 없는 스토어 주소입니다.")
+    public boolean isSlugNotReserved() {
+        return slug == null || !SellerApplyRequest.RESERVED_SLUGS.contains(slug);
+    }
 
     public List<DocumentItem> documentsOrEmpty() {
         return documents == null ? List.of() : documents;

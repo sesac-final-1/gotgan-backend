@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -393,7 +394,7 @@ class SellerApplyServiceTest {
         // given
         StoreApplication application = supplemented(List.of());
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
-        ApplicationResubmitRequest request = new ApplicationResubmitRequest(null, null, null, null, "2026-서울성동-1234", null, null, null, null,
+        ApplicationResubmitRequest request = new ApplicationResubmitRequest(null, null, null, null, null, null, "2026-서울성동-1234", null, null, null, null,
                 null, null, null, null);
 
         // when
@@ -538,6 +539,48 @@ class SellerApplyServiceTest {
     }
 
     @Test
+    @DisplayName("스토어명 · 주소 변경 — 스토어 · 자기를 뺀 진행 중 신청과 겹치면 409, 안 겹치면 저장하고 이력에 남김")
+    void resubmit_renameStore_checksDuplicatesExcludingSelf() {
+        // given — 승인 때 이름이 겹쳐 보완요청된 신청(스펙 STR-04)
+        StoreApplication application = supplemented(List.of());
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        given(storeRepository.existsBySlug("taken")).willReturn(true);
+        given(storeApplicationRepository.existsByNormalizedStoreNameAndStatusInAndIdNot("다른가게", SellerApplyService.IN_PROGRESS, 27L))
+                .willReturn(true);
+
+        // when · then
+        assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 27L, resubmitStore(null, "taken")))
+                .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_SLUG_DUPLICATED);
+        assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 27L, resubmitStore("다른 가게", null)))
+                .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_STORE_NAME_DUPLICATED);
+
+        // when — 겹치지 않는 새 이름 · 주소
+        sellerApplyService.resubmit(USER_ID, 27L, resubmitStore(" 리넨랩 성수 ", "linen-lab-seongsu"));
+
+        // then
+        assertThat(application.getStoreName()).isEqualTo("리넨랩 성수");
+        assertThat(application.getSlug()).isEqualTo("linen-lab-seongsu");
+        then(storeApplicationRepository).should().existsBySlugAndStatusInAndIdNot("linen-lab-seongsu", SellerApplyService.IN_PROGRESS, 27L);
+        ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
+        verify(applicationHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getReason()).isEqualTo("재제출 — 수정: 스토어명 · 스토어 주소");
+    }
+
+    @Test
+    @DisplayName("스토어명 · 주소를 지금 값 그대로 보내면 중복 검사를 하지 않는다(자기 이름과 겹쳐 막히지 않게)")
+    void resubmit_sameStoreIdentity_skipsDuplicateCheck() {
+        // given
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplemented(List.of())));
+
+        // when
+        sellerApplyService.resubmit(USER_ID, 27L, resubmitStore("Linen Lab", "linen-lab"));
+
+        // then
+        verify(storeRepository, never()).existsBySlug(anyString());
+        verify(storeRepository, never()).existsByNormalizedStoreName(anyString());
+    }
+
+    @Test
     @DisplayName("이력 사유 — 서류만 · 수정만 · 둘 다 · 아무것도 없음")
     void resubmitSummary_formats() {
         assertThat(SellerApplyService.resubmitSummary(List.of(DocType.BUSINESS_REG, DocType.PRODUCT_PHOTO), List.of()))
@@ -577,12 +620,17 @@ class SellerApplyServiceTest {
     }
 
     private static ApplicationResubmitRequest resubmit(List<DocumentItem> documents, String companyName, SettlementAccount account) {
-        return new ApplicationResubmitRequest(null, null, null, companyName, null, null, null, null, null, null, null, account, documents);
+        return new ApplicationResubmitRequest(null, null, null, null, null, companyName, null, null, null, null, null, null, null, account, documents);
+    }
+
+    private static ApplicationResubmitRequest resubmitStore(String storeName, String slug) {
+        return new ApplicationResubmitRequest(null, null, null, storeName, slug, null, null, null, null, null, null, null, null,
+                null, null);
     }
 
     private static ApplicationResubmitRequest resubmitBusiness(BizType bizType, String ownerName, String bizRegNo,
             List<DocumentItem> documents) {
-        return new ApplicationResubmitRequest(bizType, ownerName, bizRegNo, null, null, null, null, null, null, null, null, null,
+        return new ApplicationResubmitRequest(bizType, ownerName, bizRegNo, null, null, null, null, null, null, null, null, null, null, null,
                 documents);
     }
 

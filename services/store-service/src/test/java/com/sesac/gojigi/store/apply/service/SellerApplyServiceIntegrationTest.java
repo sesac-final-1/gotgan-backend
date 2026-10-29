@@ -86,7 +86,7 @@ class SellerApplyServiceIntegrationTest {
         given(sellerDocumentClient.head(anyString())).willReturn(Optional.of(new FileMeta("application/pdf", 300_000)));
 
         // when
-        sellerApplyService.resubmit(41L, id, new ApplicationResubmitRequest(null, null, null, "새상호", null, null, null, null, null, null, null, null,
+        sellerApplyService.resubmit(41L, id, new ApplicationResubmitRequest(null, null, null, null, null, "새상호", null, null, null, null, null, null, null, null,
                 List.of(new DocumentItem(DocType.ECOMMERCE_REG, "applications/41/ecom2.pdf", "신고증.pdf"))));
         entityManager.flush();
         entityManager.clear();

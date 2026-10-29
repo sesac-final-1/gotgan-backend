@@ -79,6 +79,21 @@ class StoreApplicationRepositoryIntegrationTest {
     }
 
     @Test
+    @DisplayName("재제출 주소 · 스토어명 중복 — 자기 신청은 빼고 다른 진행 중 신청과만 비교")
+    void existsByStoreIdentityAndIdNot_excludesOwnApplication() {
+        // given
+        Long own = storeApplicationRepository.saveAndFlush(application(4L, "Linen Lab", "linen-lab", LocalDateTime.of(2026, 10, 22, 10, 0))).getId();
+        Long other = storeApplicationRepository.saveAndFlush(application(7L, "토리 상점", "tori-shop", LocalDateTime.of(2026, 10, 23, 10, 0))).getId();
+
+        // when · then — 자기 값은 겹침이 아니고, 다른 신청 값은 겹침
+        assertThat(storeApplicationRepository.existsBySlugAndStatusInAndIdNot("linen-lab", IN_PROGRESS, own)).isFalse();
+        assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusInAndIdNot("linenlab", IN_PROGRESS, own)).isFalse();
+        assertThat(storeApplicationRepository.existsBySlugAndStatusInAndIdNot("tori-shop", IN_PROGRESS, own)).isTrue();
+        assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusInAndIdNot("토리상점", IN_PROGRESS, own)).isTrue();
+        assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusInAndIdNot("토리상점", IN_PROGRESS, other)).isFalse();
+    }
+
+    @Test
     @DisplayName("가장 최근 반려 신청을 상태 변경 시각 기준으로 찾는다")
     void findFirstByUserIdAndStatus_twoRejections_returnsLatest() {
         // given

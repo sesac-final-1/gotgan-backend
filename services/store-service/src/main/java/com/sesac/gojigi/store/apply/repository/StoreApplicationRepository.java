@@ -37,4 +37,15 @@ public interface StoreApplicationRepository extends JpaRepository<StoreApplicati
             """)
     boolean existsByNormalizedStoreNameAndStatusIn(@Param("normalizedName") String normalizedName,
             @Param("statuses") Collection<ApplicationStatus> statuses);
+
+    /** 재제출로 주소를 바꿀 때 — 자기 신청은 빼고 진행 중 신청과 비교 */
+    boolean existsBySlugAndStatusInAndIdNot(String slug, Collection<ApplicationStatus> statuses, Long id);
+
+    /** 재제출로 스토어명을 바꿀 때 — 자기 신청은 빼고 (규칙은 existsByNormalizedStoreNameAndStatusIn 과 같음) */
+    @Query("""
+            select count(a) > 0 from StoreApplication a
+            where a.status in :statuses and a.id <> :id and lower(replace(a.storeName, ' ', '')) = :normalizedName
+            """)
+    boolean existsByNormalizedStoreNameAndStatusInAndIdNot(@Param("normalizedName") String normalizedName,
+            @Param("statuses") Collection<ApplicationStatus> statuses, @Param("id") Long id);
 }
