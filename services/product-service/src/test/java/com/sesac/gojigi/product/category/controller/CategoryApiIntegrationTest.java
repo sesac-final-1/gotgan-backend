@@ -11,6 +11,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.sesac.gojigi.product.TestcontainersConfiguration;
 import com.sesac.gojigi.product.category.entity.Category;
 import com.sesac.gojigi.product.category.repository.CategoryRepository;
+import com.sesac.gojigi.product.product.entity.Product;
+import com.sesac.gojigi.product.product.entity.ProductStatus;
+import com.sesac.gojigi.product.product.repository.ProductRepository;
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,7 +34,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 카테고리 관리 (/internal/categories) · 공개 트리 (/api/categories) — 실제 MySQL · Flyway V1~V2.
- * 테스트마다 카테고리 표를 비우고 필요한 것만 만든다 (아직 product 행이 없어 FK 걱정 없음).
+ * 테스트마다 카테고리 · 상품 표를 비우고 필요한 것만 만든다 (product.category_id 는 논리 참조라 FK 없음).
  * 트레이스 샘플링 0 — span 이 생기면 Zipkin 전송 스레드가 없는 localhost:9411 에 실패해 WARN 을 남기고,
  * 그 줄이 같은 JVM 의 LogbackConfigTest 가짜 Loki 에 섞여 "1줄" 검사가 깨진다 (CI 실패 10/26).
  */
@@ -42,9 +47,12 @@ class CategoryApiIntegrationTest {
     @Autowired MockMvc mockMvc;
     @Autowired JsonMapper jsonMapper;
     @Autowired CategoryRepository categoryRepository;
+    @Autowired ProductRepository productRepository;
+    @Autowired Clock clock;
 
     @BeforeEach
     void clean() {
+        productRepository.deleteAll(); // 상품 수 테스트가 남긴 상품
         // 하위 먼저 지워야 FK(fk_category_parent) 에 걸리지 않는다
         categoryRepository.deleteAll(categoryRepository.findAll().stream().filter(c -> !c.isTop()).toList());
         categoryRepository.deleteAll();
@@ -183,6 +191,45 @@ class CategoryApiIntegrationTest {
             assertThat(open.get(1).path("children").get(0).path("id").asLong()).isEqualTo(shirts);
             assertThat(open.get(1).has("sortOrder")).isFalse();
             assertThat(open.get(1).has("active")).isFalse();
+        }
+
+        @Test
+        @DisplayName("관리자 트리의 productCount — 삭제 안 된 상품 전부(판매중지 포함), 상위는 하위 합, 없으면 0 · 공개 트리엔 없음")
+        void adminTree_countsProducts_excludingDeleted() throws Exception {
+            // given
+            long fashion = create("{\"name\":\"패션의류\",\"sortOrder\":1}");
+            long living = create("{\"name\":\"리빙\",\"sortOrder\":2}");
+            long shirts = create("{\"parentId\":" + fashion + ",\"name\":\"셔츠\",\"sortOrder\":1}");
+            long pants = create("{\"parentId\":" + fashion + ",\"name\":\"팬츠\",\"sortOrder\":2}");
+            create("{\"parentId\":" + living + ",\"name\":\"식기\"}");
+            activate(fashion);
+            productRepository.save(product(shirts, ProductStatus.ON_SALE));
+            productRepository.save(product(shirts, ProductStatus.STOPPED));
+            Product deleted = product(pants, ProductStatus.ON_SALE);
+            deleted.delete(LocalDateTime.now(clock));
+            productRepository.save(deleted);
+
+            // when
+            JsonNode admin = data(mockMvc.perform(get("/internal/categories")));
+            JsonNode open = data(mockMvc.perform(get("/api/categories")));
+
+            // then
+            assertThat(admin.get(0).path("productCount").asLong()).isEqualTo(2);                         // 패션의류 = 셔츠 2 + 팬츠 0
+            assertThat(admin.get(0).path("children").get(0).path("productCount").asLong()).isEqualTo(2); // 셔츠 (판매중 + 판매중지)
+            assertThat(admin.get(0).path("children").get(1).path("productCount").asLong()).isZero();     // 팬츠 (삭제 상품만)
+            assertThat(admin.get(1).path("productCount").asLong()).isZero();                             // 리빙 (상품 없음 · 꺼짐)
+            assertThat(admin.get(1).path("children").get(0).path("productCount").asLong()).isZero();
+            assertThat(open.get(0).has("productCount")).isFalse();
+            assertThat(open.get(0).path("children").get(0).has("productCount")).isFalse();
+        }
+
+        private static Product product(long categoryId, ProductStatus status) {
+            return Product.builder()
+                    .storeId(1L).categoryId(categoryId).name("상품")
+                    .price(10000).discountRate(0)
+                    .material("면").origin("대한민국")
+                    .status(status)
+                    .build();
         }
     }
 

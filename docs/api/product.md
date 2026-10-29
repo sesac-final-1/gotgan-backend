@@ -186,7 +186,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 
 | API | 요청 | 응답 |
 |---|---|---|
-| `GET /internal/categories` | | **200** 트리 — 비활성 포함 `[{ id, name, nameEn, sortOrder, active, children[{ id, name, nameEn, sortOrder, active }] }]` |
+| `GET /internal/categories` | | **200** 트리 — 비활성 포함 `[{ id, name, nameEn, sortOrder, active, children[{ id, name, nameEn, sortOrder, active, productCount }], productCount }]` |
 | `POST /internal/categories` | `{ parentId?, name, nameEn?, sortOrder? }` | **201** 만든 카테고리 |
 | `PUT /internal/categories/{id}` | `{ name, nameEn?, sortOrder }` | **200** — 상위 · 하위 이동(`parentId` 변경)은 안 됨 |
 | `PATCH /internal/categories/{id}` | `{ active }` | **200** — 사용 / 사용 중지 |
@@ -212,6 +212,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 
 - **상위를 켜기 전 수수료율 확인은 admin 이 합니다**(settlement 현재 율 조회 → 없으면 켜지 않음). product 는 다른 서비스를 부르지 않습니다(CAT-03).
 - 하위를 켜도 상위가 꺼져 있으면 여전히 숨겨집니다.
+- `productCount`(10/29 추가): **삭제되지 않은 상품 전부**(판매중 · 판매중지 · 강제 판매중지) — 하위는 그 카테고리의 상품 수, 상위는 하위 합, 없으면 0. 관리자 카테고리 수수료 화면이 "사용 중지 · 수수료 변경 시 영향 상품 수"로 씁니다. `GROUP BY category_id` 한 번으로 세고, 공개 트리(8절)에는 넣지 않습니다.
 - 시드 카테고리 ID(1 식품 · 2 리빙 · 3 패션 · 4 신발가방 · 5 뷰티 · 6 디지털, 하위 = 상위 × 100 + 순번)는 맨 아래 "설계 정리"에 둡니다.
 
 ## 8. 카테고리 트리 — `GET /api/categories` (CAT-01)

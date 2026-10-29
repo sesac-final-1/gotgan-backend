@@ -62,6 +62,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             group by p.id, p.name""")
     List<Object[]> findOnSaleStocks(@Param("storeId") Long storeId);
 
+    /** 하위 카테고리별 상품 수 — 삭제 안 된 것 전부(판매중 · 판매중지 · 강제 판매중지). 결과 [categoryId, 수] (7절 관리자 트리) */
+    @Query("select p.categoryId, count(p) from Product p where p.deletedAt is null group by p.categoryId")
+    List<Object[]> countByCategory();
+
     /** 상태별 상품 수 — 삭제 안 된 것만. storeId 가 null 이면 전체 */
     @Query("""
             select count(p) from Product p
