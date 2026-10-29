@@ -65,4 +65,18 @@ class StoreTest {
         }
         assertThat(store.getStatus()).isEqualTo(StoreStatus.CLOSED);
     }
+
+    @Test
+    @DisplayName("폐점 — 정지 중이어도 CLOSED 가 되고 정지 사유는 비운다, 이미 폐점이면 false")
+    void close_whenSuspended_closesAndClearsReason() {
+        // given
+        Store store = Store.open(27L, 4L, "곳간상회", "gotgan", null, "010-0000-1234");
+        store.changeStatusByAdmin(StoreStatus.SUSPENDED, "허위 광고");
+
+        // when · then
+        assertThat(store.close()).isTrue();
+        assertThat(store.getStatus()).isEqualTo(StoreStatus.CLOSED);
+        assertThat(store.getStatusReason()).isNull();
+        assertThat(store.close()).isFalse();
+    }
 }

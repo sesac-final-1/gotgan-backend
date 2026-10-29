@@ -41,6 +41,7 @@ app:
 
 resilience4j:
   circuitbreaker:
+    circuit-breaker-aspect-order: 1         # 서킷이 바깥 · 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 502 로 바꿔 재시도가 안 걸린다
     configs:
       default:
         sliding-window-size: 10
@@ -48,15 +49,31 @@ resilience4j:
         failure-rate-threshold: 50          # 최근 10건 중 50% 실패면 OPEN → 바로 폴백
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
-    instances:
-      orderClient: { base-config: default }
+      remote:                               # 다른 서비스 호출 (store/client/*ClientAdapter)
+        base-config: default
+        record-exceptions:                  # 장애로 세는 것: 연결 실패 · 타임아웃 · 5xx
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:                  # 4xx 변환(BusinessException)은 세지 않음
+          - com.sesac.gojigi.common.web.exception.BusinessException
+    instances:                              # 이름 = 대상 서비스 (컨벤션 · 스펙 STR-13)
+      order: { base-config: remote }        # OrderClientAdapter — 폐점 전 진행 중 주문
       productClient: { base-config: default }
-      settlementClient: { base-config: default }
+      settlement: { base-config: remote }   # SettlementClientAdapter — 폐점 전 미정산
   retry:
+    retry-aspect-order: 2
     configs:
       default:
         max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST 는 재시도 금지)
         wait-duration: 200ms
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+        ignore-exceptions:
+          - com.sesac.gojigi.common.web.exception.BusinessException
+    instances:
+      order: { base-config: default }
+      settlement: { base-config: default }
 
 management:
   endpoints:

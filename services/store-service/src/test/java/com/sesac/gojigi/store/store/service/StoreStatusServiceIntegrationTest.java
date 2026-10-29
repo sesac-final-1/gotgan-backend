@@ -3,6 +3,7 @@ package com.sesac.gojigi.store.store.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -11,7 +12,11 @@ import com.sesac.gojigi.store.common.event.EventOutboxService;
 import com.sesac.gojigi.store.common.event.OutboxEvent;
 import com.sesac.gojigi.store.common.event.OutboxEventRepository;
 import com.sesac.gojigi.store.common.event.SnsEventPublisher;
+import com.sesac.gojigi.store.store.client.OrderClientAdapter;
+import com.sesac.gojigi.store.store.client.SettlementClientAdapter;
+import com.sesac.gojigi.store.store.client.dto.SettlementOutstandingResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
+import com.sesac.gojigi.store.store.dto.response.StoreCloseResponse;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
@@ -19,6 +24,7 @@ import com.sesac.gojigi.store.store.repository.StoreStatusHistoryRepository;
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,6 +70,10 @@ class StoreStatusServiceIntegrationTest {
 
     @MockitoBean
     private SnsEventPublisher snsEventPublisher;
+    @MockitoBean
+    private OrderClientAdapter orderClientAdapter;
+    @MockitoBean
+    private SettlementClientAdapter settlementClientAdapter;
 
     @Autowired
     private StoreStatusService service;
@@ -147,6 +157,45 @@ class StoreStatusServiceIntegrationTest {
             jdbcTemplate.update("DELETE FROM outbox_event");
             jdbcTemplate.update("DELETE FROM store_status_history WHERE store_id = 1 AND to_status = 'SUSPENDED'");
             jdbcTemplate.update("UPDATE store SET status = 'ACTIVE', status_reason = NULL WHERE store_id = 1");
+        }
+    }
+
+    @Test
+    @DisplayName("정지 스토어 15 폐점이 커밋되면 CLOSED · 사유 비움 · 이력(SELLER), StoreStatusChanged{CLOSED} 봉투 1회 — 다시 폐점은 처음 시각 그대로")
+    void closeBySeller_whenCommitted_closesAndPublishesClosed() {
+        // given — order · settlement 확인 통과
+        given(orderClientAdapter.inProgressCount(15L)).willReturn(0L);
+        given(settlementClientAdapter.outstanding(15L)).willReturn(new SettlementOutstandingResponse(15L, 0, 0, 0, true));
+        StoreCloseResponse response = service.closeBySeller(15L);
+        assertThat(response.closedAt()).isEqualTo(OffsetDateTime.parse("2026-10-28T14:30:00+09:00"));
+
+        // when
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        // then
+        try {
+            entityManager.clear();
+            assertThat(storeRepository.findById(15L)).get().satisfies(s -> {
+                assertThat(s.getStatus()).isEqualTo(StoreStatus.CLOSED);
+                assertThat(s.getStatusReason()).isNull();   // 정지 사유가 남지 않게
+            });
+            assertThat(storeStatusHistoryRepository.findAllByStoreIdOrderByIdAsc(15L)).last().satisfies(h -> {
+                assertThat(h.getFromStatus()).isEqualTo(StoreStatus.SUSPENDED);
+                assertThat(h.getToStatus()).isEqualTo(StoreStatus.CLOSED);
+                assertThat(h.getActorType()).isEqualTo(StoreActorType.SELLER);
+            });
+            ArgumentCaptor<String> json = ArgumentCaptor.forClass(String.class);
+            verify(snsEventPublisher).send(eq("StoreStatusChanged"), eq("15"), anyString(), json.capture());
+            assertThat(JsonMapper.builder().build().readTree(json.getValue()).get("payload").get("status").asString()).isEqualTo("CLOSED");
+
+            StoreCloseResponse again = service.closeBySeller(15L);   // 이미 폐점 — 다른 서비스 확인 없이 처음 시각
+            assertThat(again.closedAt()).isNotNull();
+            verify(orderClientAdapter).inProgressCount(15L);         // 처음 한 번만
+        } finally { // 커밋된 변경은 시드 값(정지 · 사유 · 정지 이력까지)으로 되돌린다
+            jdbcTemplate.update("DELETE FROM outbox_event");
+            jdbcTemplate.update("DELETE FROM store_status_history WHERE store_id = 15 AND to_status = 'CLOSED'");
+            jdbcTemplate.update("UPDATE store SET status = 'SUSPENDED', status_reason = '반품 미처리 3건 — 처리 완료 후 해제' WHERE store_id = 15");
         }
     }
 }

@@ -441,6 +441,8 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 |---|---|---|---|
 | `STORE_NOT_FOUND` | 404 | `StoreErrorCode` | 없거나 소프트 삭제된 스토어 (1 · 9절) |
 | `STORE_INVALID_STATUS_TRANSITION` | 409 | `StoreErrorCode` | 폐점 스토어 정지 · 해제 (9절) |
+| `STORE_ORDERS_IN_PROGRESS` | 409 | `StoreErrorCode` | 폐점 — order 진행 중 상품주문 1건 이상, 메시지에 건수 (12절) |
+| `STORE_SETTLEMENT_OUTSTANDING` | 409 | `StoreErrorCode` | 폐점 — settlement 미정산(집계 전 · 지급 예정 · 보류), 메시지에 금액 합 (12절) |
 | `APPLY_NOT_FOUND` | 404 | `ApplyErrorCode` | 없는 입점 신청 (4~7절) |
 | `APPLY_INVALID_STATUS` | 409 | `ApplyErrorCode` | 승인 · 반려 · 보완요청을 할 수 없는 신청 상태, 동시 저장에서 진 쪽 (5~7절) |
 | `APPLY_STORE_ALREADY_EXISTS` | 409 | `ApplyErrorCode` | 신청자에게 이미 스토어가 있음 — 폐점 포함 (2 · 5절) |
@@ -450,17 +452,18 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | `APPLY_STORE_NAME_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어명이 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
 | `APPLY_DOCUMENT_INVALID` | 400 | `ApplyErrorCode` | 서류 종류 · 개수 · 형식 · 크기 · 키 위반, S3 에 없는 파일 (2절), 업로드 주소 발급의 개수 · 형식 · 크기 위반 (2-1절) |
 | `INVALID_INPUT` (공통) | 400 | `CommonErrorCode` | 경로 · 요청 형식 오류, 사유 누락 · 255자 초과 (6 · 7 · 9절) |
-| `UNAUTHORIZED` (공통) | 401 | `CommonErrorCode` | 사용자 헤더 없음 (2 · 2-1절) |
-| `EXTERNAL_API_ERROR` (공통) | 502 | `CommonErrorCode` | S3 확인 실패 (2절), 업로드 주소 발급 실패 — 자격 증명 (2-1절) |
+| `UNAUTHORIZED` (공통) | 401 | `CommonErrorCode` | 사용자 헤더 없음 (2 · 2-1 · 12절) |
+| `FORBIDDEN` (공통) | 403 | `CommonErrorCode` | `X-Store-Id` 없음 — 스토어가 없는 판매자 (12절) |
+| `EXTERNAL_API_ERROR` (공통) | 502 | `CommonErrorCode` | S3 확인 실패 (2절), 업로드 주소 발급 실패 — 자격 증명 (2-1절), order · settlement 확인 실패 · 서킷 OPEN (12절) |
 
 호출하는 서비스는 404 · 400 을 자기 도메인 코드로 바꾸거나 그대로 전달하고, **서킷 실패로 세지 않습니다**(`ignore-exceptions` = `BusinessException`).
 
 ## 11. 호출 쪽 준비 사항
 
 **user (이경석)**
-- `MockStoreClient` 를 `@HttpExchange` 클라이언트(`GET /internal/stores/{storeId}`)로 교체. 서킷 브레이커 인스턴스 이름은 **`store`**, 재시도 가능(GET).
+- ~~`MockStoreClient` 를 `@HttpExchange` 클라이언트(`GET /internal/stores/{storeId}`)로 교체~~ — **완료(#183)**. 서킷 브레이커 인스턴스 이름은 **`store`**, 재시도 가능(GET).
 - user-service `StoreStatus` enum 값(ACTIVE · SUSPENDED · CLOSED)은 이 문서와 같습니다. 바꿀 것 없음.
-- 지금은 폐점 API 가 없어 `CLOSED` 스토어가 생기지 않습니다 → 판매자 탈퇴는 폐점 API PR 전까지 계속 409 `USER_SELLER_STORE_NOT_CLOSED`.
+- 폐점 API(12절)부터 `CLOSED` 스토어가 생깁니다 — user 는 #183 으로 `MockStoreClient` 를 지우고 1절을 실제로 부르므로, **폐점한 판매자는 이 API 배포부터 탈퇴할 수 있습니다**. 폐점 전 탈퇴는 그대로 409 `USER_SELLER_STORE_NOT_CLOSED`.
 
 **admin (구지훈)**: 3~9절을 기준으로 먼저 개발해 주세요. 서킷 브레이커 이름은 **`store`**, 재시도는 GET(3 · 4 · 8 · 1절)만.
 - 목록(3 · 8절)은 전체 배열이라 `PageResponse` 로 감싸지 않습니다. 스펙 STR-03 의 "서버 페이징" 문구는 컨벤션 4-7 과 어긋나 이 문서를 따릅니다.
@@ -476,6 +479,26 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 **user (이경석)**: `StoreApproved` 는 승인 API PR 부터 발행됩니다(2절은 발행 없음). 신청 단계에서 기존 스토어 회원을 409 `APPLY_STORE_ALREADY_EXISTS` 로 막습니다(요청 4번).
 
 **frontend (박지연 — `features/store`)**: 서류는 2-1절 발급 → S3 PUT → 받은 `key` 를 2절 `documents[].key` 로. 4단계 폼 값을 2절 요청 모양으로 매핑. "모두 동의"는 필수 3개만 켜고 마케팅은 따로 체크 · 카테고리별 추가 서류 안내 제거 · 접수 완료 화면의 접수번호는 응답 `applicationNo`.
+
+## 12. 스토어 폐점 (판매자) — `PATCH /api/seller/store/close` (STR-13)
+
+판매자가 자기 스토어(`X-Store-Id`)를 닫습니다. **되돌릴 수 없고 재입점할 수 없습니다**(1인 1스토어 — `uk_store_user_id` 등이 폐점 스토어에도 걸림). 판매자 회원 탈퇴는 폐점 뒤에만 됩니다(user `USER_SELLER_STORE_NOT_CLOSED`). 본문 없음.
+
+| 경우 | 처리 | 응답 | 호출자(화면) 권장 처리 |
+|---|---|---|---|
+| 운영 중 · 정지 중, 진행 중 주문 0 · 미정산 없음 | `CLOSED` · 사유 비움 + 스토어 이력(`SELLER`) + `StoreStatusChanged{CLOSED}` | **200** `{storeId, status: "CLOSED", closedAt}` | 폐점 완료 안내 → 탈퇴 안내. 판매자센터는 다음 로그인부터 쓸 수 없음(역할은 user 담당) |
+| 이미 폐점 | 다른 서비스를 부르지 않고 그대로 | **200** (멱등, `closedAt` = 처음 폐점 시각) | 그대로 |
+| order 진행 중 상품주문 ≥ 1 | — | **409** `STORE_ORDERS_IN_PROGRESS` "진행 중인 주문 n건이 모두 끝난 뒤 폐점할 수 있습니다." | 메시지 그대로 · 주문 관리로 |
+| settlement 미정산 있음(`clear=false`) | — | **409** `STORE_SETTLEMENT_OUTSTANDING` "미정산 n원 — 지급 완료(매주 목요일) 후 폐점할 수 있습니다." | 메시지 그대로 · 정산 내역으로 |
+| order · settlement 장애 · 타임아웃 · 서킷 OPEN | 확인할 수 없으면 **거절** | **502** `EXTERNAL_API_ERROR` | 잠시 후 다시 |
+| `X-Store-Id` 없음 / 사용자 헤더 없음 | — | **403** `FORBIDDEN` / **401** `UNAUTHORIZED` | — |
+| 없거나 소프트 삭제된 스토어 | — | **404** `STORE_NOT_FOUND` | — |
+
+- **확인 순서**: order `GET /internal/stats/orders?storeId=` 의 `inProgressCount`(ORD-10) → settlement `GET /internal/settlements/outstanding?storeId=` 의 `clear`. 둘 다 통과하면 스토어 행을 잠가(`FOR UPDATE`, 9절과 같은 잠금) 바꿉니다. **HTTP 호출은 잠금 · 트랜잭션 밖**에서 해 다른 서비스가 느려도 스토어 행을 잡고 있지 않습니다 — 확인과 폐점 사이에 새 주문이 들어올 틈은 아주 짧고, 폐점 즉시 product 가 상품을 숨깁니다.
+- 서킷 브레이커 **`order` · `settlement`**(이름 = 대상 서비스), 두 호출 모두 GET 이라 재시도 1회. 4xx 는 store 쪽 호출 버그로 보고 502(서킷 실패로 세지 않음).
+- 미정산 금액 = `unsettledPayoutAmt + scheduledPayoutAmt + heldPayoutAmt`(settlement.md 폐점 · 탈퇴 조건).
+- **정지 중에도 폐점 가능** — 막으면 정지된 판매자는 탈퇴할 수 없음. 정지 사유는 폐점하면서 지웁니다(이력에는 남음).
+- 발행 `StoreStatusChanged{storeId, status: "CLOSED"}` — 9절과 같은 규칙(`eventId` 매번 새 값 · `occurredAt` = 폐점 시각). product 는 상품 숨김(#169), settlement 는 지급 보류.
 
 ## 10/20 설계 정리
 
@@ -531,3 +554,15 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 2 | SNS 타임아웃 | 호출 1초 · 시도 500ms — admin read-timeout 3초 안에 응답(타임아웃 예산). 늦으면 발행기에 맡김 |
 | 3 | `eventId` · `occurredAt` | 부르는 쪽이 정해 아웃박스 행에 저장 — 승인은 신청 ID 이름 기반 UUID · 승인 시각. 다시 보내도 같은 봉투 |
 | 4 | 실패 로그 | 9회까지 warn, 10회째 error + 스택 한 번, 그 뒤 한 줄 warn(컨벤션 2-8 반복 실패는 첫 회만 스택) |
+
+## 10/29 설계 정리 (폐점)
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | 이미 폐점 | 200 멱등 — 다른 서비스를 부르지 않음, `closedAt` 은 처음 폐점 시각(마지막 CLOSED 이력) |
+| 2 | 정지 중 폐점 | 허용 — 판매자 탈퇴가 폐점 뒤라 막으면 정지된 판매자는 탈퇴 불가. 정지 사유는 지움 |
+| 3 | 본문 · 사유 | 없음(스펙에 사유 입력 없음), 이력 `actor = SELLER` · 사유 NULL |
+| 4 | 응답 | `{storeId, status, closedAt}` — 1절 상세는 내부 · 관리자용이라 판매자 화면에 맞지 않음 |
+| 5 | 확인 위치 | order · settlement 확인은 잠금 · 트랜잭션 밖, 통과 뒤 행 잠금 안에서 다시 상태 확인(동시 요청은 한쪽만 이력 · 이벤트) |
+| 6 | 장애 응답 | 502 `EXTERNAL_API_ERROR` — 스펙 "장애 · 타임아웃이면 거절". 서킷 이름은 설정의 `orderClient` · `settlementClient` 를 `order` · `settlement` 로 바꿈 |
+| 7 | 응답 필드 호환 | store 가 order · settlement 응답의 일부 필드만 읽어도 됨 — `RestClient.builder()` 기본 변환기가 모르는 필드를 무시(어댑터 테스트로 확인). 1절 확장으로 store 응답 필드가 늘어도 order · user · chat 은 같은 이유로 영향 없음 |
