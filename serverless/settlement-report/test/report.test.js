@@ -63,6 +63,24 @@ test('메일 실패 — 그 메시지만 batchItemFailures, 발송 완료를 기
   assert.ok(!calls.some((c) => c.type === 'UpdateCommand'));
 });
 
+test('SES 가 받는 주소를 거절(MessageRejected — 샌드박스 미인증 등)하면 REJECTED 로 남기고 재전달하지 않는다', async () => {
+  const err = Object.assign(new Error('Email address is not verified.'), { name: 'MessageRejected' });
+  const { calls, deps } = fake({ SendEmailCommand: err });
+  const result = await createHandler(deps)({ Records: [record(envelope())] });
+
+  assert.deepEqual(result, { batchItemFailures: [] });
+  assert.deepEqual(calls.map((c) => c.type), ['PutCommand', 'PutObjectCommand', 'SendEmailCommand', 'UpdateCommand']);
+  assert.equal(calls.at(-1).input.ExpressionAttributeValues[':rejected'], 'REJECTED');
+});
+
+test('받는 주소가 없으면 메일을 보내지 않고 실패 — 재전달 → DLQ 알람으로 계약 누락을 알게 됨', async () => {
+  const { calls, deps } = fake();
+  const result = await createHandler(deps)({ Records: [record(envelope({ ...payload, sellerEmail: null }), 'm-no-email')] });
+
+  assert.deepEqual(result, { batchItemFailures: [{ itemIdentifier: 'm-no-email' }] });
+  assert.ok(!calls.some((c) => c.type === 'SendEmailCommand'));
+});
+
 test('여러 레코드 중 실패한 것만 돌려준다 — 깨진 JSON · S3 실패', async () => {
   const { deps } = fake();
   const okThenS3Fail = fake({ PutObjectCommand: new Error('S3 503') });

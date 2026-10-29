@@ -66,6 +66,9 @@ export function createHandler({ ddb, s3, ses, env, log = console }) {
       return;
     }
     const p = envelope.payload;
+    if (!p.sellerEmail) {
+      throw new Error('받는 주소 없음 — SettlementPaid payload 확인');   // 계약 누락은 재전달 → DLQ 알람으로 (order-notification 과 같게)
+    }
     const keys = { PK: `STORE#${p.storeId}`, SK: `WEEK#${p.week}` };
 
     // ① 선점 — 없거나 SENT 가 아닐 때만(앞선 시도가 중간에 실패했으면 다시)
@@ -90,13 +93,27 @@ export function createHandler({ ddb, s3, ses, env, log = console }) {
     const key = reportKey(p);
     await s3.send(new PutObjectCommand({ Bucket: env.BUCKET, Key: key, Body: buildCsv(p), ContentType: 'text/csv; charset=utf-8' }));
 
-    // ③ 메일
+    // ③ 메일 — SES 가 받는 주소를 거절하면(MessageRejected: 샌드박스의 미인증 주소 등) 다시 보내도 같으므로 재전달하지 않고 REJECTED 로 남긴다
+    //   (CSV 는 이미 올라가 있어 판매자 센터 정산 화면에서 받을 수 있다)
     const { subject, text } = buildEmail(p, env.FRONT_URL);
-    await ses.send(new SendEmailCommand({
-      FromEmailAddress: env.FROM_EMAIL,
-      Destination: { ToAddresses: [p.sellerEmail] },
-      Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
-    }));
+    try {
+      await ses.send(new SendEmailCommand({
+        FromEmailAddress: env.FROM_EMAIL,
+        Destination: { ToAddresses: [p.sellerEmail] },
+        Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
+      }));
+    } catch (e) {
+      if (e?.name !== 'MessageRejected') throw e;
+      await ddb.send(new UpdateCommand({
+        TableName: env.TABLE,
+        Key: keys,
+        UpdateExpression: 'SET #s = :rejected, s3Key = :k, updatedAt = :t',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':rejected': 'REJECTED', ':k': key, ':t': new Date().toISOString() },
+      }));
+      log.warn(JSON.stringify({ msg: 'SES 가 받는 주소를 거절 — 재전달 안 함', storeId: p.storeId, week: p.week, eventId: envelope.eventId, detail: e?.message }));
+      return;
+    }
 
     // ④ 발송 완료
     await ddb.send(new UpdateCommand({
