@@ -83,7 +83,8 @@ public class ApplicationQueryService {
                         ? kst(application.getStatusChangedAt().plusDays(SellerApplyService.REAPPLY_RESTRICTION_DAYS)) : null,
                 status == ApplicationStatus.APPROVED
                         ? storeRepository.findByStoreApplicationId(applicationId).map(Store::getId).orElse(null) : null,
-                histories(applicationId));
+                histories(applicationId),
+                status == ApplicationStatus.SUPPLEMENT ? application.getRequestedDocs() : null);
     }
 
     private List<History> histories(Long applicationId) {

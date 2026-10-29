@@ -106,6 +106,11 @@ public class StoreApplication extends BaseTimeEntity {
     @Column(name = "status_reason")
     private String statusReason;
 
+    /** 보완요청 서류 종류 — SUPPLEMENT 일 때만, V5 전 보완요청은 null (store.md 7절 · 2-3절) */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "requested_docs")
+    private List<DocType> requestedDocs;
+
     @Column(name = "marketing_agreed", nullable = false)
     private boolean marketingAgreed;
 
@@ -156,6 +161,7 @@ public class StoreApplication extends BaseTimeEntity {
         requireUndecided();
         this.status = ApplicationStatus.APPROVED;
         this.statusReason = null; // 보완요청 사유가 승인 뒤에도 남아 보이지 않게
+        this.requestedDocs = null;
         this.statusChangedAt = decidedAt;
     }
 
@@ -164,20 +170,55 @@ public class StoreApplication extends BaseTimeEntity {
         requireUndecided();
         this.status = ApplicationStatus.REJECTED;
         this.statusReason = reason;
+        this.requestedDocs = null;
         this.statusChangedAt = decidedAt;
     }
 
     /**
      * 보완요청 — 심사대기에서만(보완요청 중이면 재제출을 기다림, 409). 메시지는 신청자 화면 · 메일에 보인다 (store.md 7절).
-     * 기한은 저장하지 않고 상태 변경 시각 + 7일로 계산 — 7일 자동 반려도 같은 기준
+     * 기한은 저장하지 않고 상태 변경 시각 + 7일로 계산 — 7일 자동 반려도 같은 기준. 요청 서류는 재제출 검사 · 신청자 화면용으로 저장
      */
-    public void requestSupplement(String message, LocalDateTime requestedAt) {
+    public void requestSupplement(String message, List<DocType> requestedDocs, LocalDateTime requestedAt) {
         if (status != ApplicationStatus.PENDING) {
             throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS);
         }
         this.status = ApplicationStatus.SUPPLEMENT;
         this.statusReason = message;
+        this.requestedDocs = List.copyOf(requestedDocs);
         this.statusChangedAt = requestedAt;
+    }
+
+    /**
+     * 재제출 — 보완요청 중이고 기한 전일 때만 심사대기로 (store.md 2-3절). 고칠 수 있는 필드만 바꾸고(값이 다 채워져 온다),
+     * 사업자등록번호 · 대표자 · 스토어명 · 주소(slug)는 그대로. 사유 · 요청 서류는 비운다
+     */
+    public void resubmit(ApplicationCorrection correction, LocalDateTime resubmittedAt) {
+        requireResubmittable(resubmittedAt);
+        this.companyName = correction.companyName();
+        this.ecommerceRegNo = correction.ecommerceRegNo();
+        this.managerPhone = correction.managerPhone();
+        this.managerEmail = correction.managerEmail();
+        this.businessAddress = correction.businessAddress();
+        this.categoryId = correction.categoryId();
+        this.intro = correction.intro();
+        this.representativeProducts = correction.representativeProducts();
+        this.bankName = correction.bankName();
+        this.accountNo = correction.accountNo();
+        this.accountHolder = correction.accountHolder();
+        this.status = ApplicationStatus.PENDING;
+        this.statusReason = null;
+        this.requestedDocs = null;
+        this.statusChangedAt = resubmittedAt;
+    }
+
+    /** 재제출 가능 여부 — 서류를 S3 에서 확인하기 전에도 먼저 본다. 기한이 지났으면 자동 반려 전이라도 거절 */
+    public void requireResubmittable(LocalDateTime now) {
+        if (status != ApplicationStatus.SUPPLEMENT) {
+            throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS, "보완요청 중인 신청만 다시 제출할 수 있습니다.");
+        }
+        if (!now.isBefore(supplementDueAt())) {
+            throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS, "보완 기한이 지나 다시 제출할 수 없습니다.");
+        }
     }
 
     /** 보완 기한 — 보완요청 중일 때만 의미 있음 */

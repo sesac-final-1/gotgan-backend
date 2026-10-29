@@ -272,7 +272,7 @@ class ApplicationQueryServiceTest {
     void getMine_whenSupplement_returnsDueAtAndHistory() {
         // given
         StoreApplication application = application(27L, "000-00-00001", SUBMITTED_AT);
-        application.requestSupplement("사본이 흐립니다", LocalDateTime.of(2026, 10, 23, 10, 0));
+        application.requestSupplement("사본이 흐립니다", List.of(DocType.ECOMMERCE_REG), LocalDateTime.of(2026, 10, 23, 10, 0));
         given(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(4L)).willReturn(Optional.of(application));
         given(applicationHistoryRepository.findAllByStoreApplicationIdOrderByIdAsc(27L)).willReturn(List.of(
                 history(ApplicationStatus.PENDING, ActorType.APPLICANT, null, SUBMITTED_AT),
@@ -289,6 +289,7 @@ class ApplicationQueryServiceTest {
         assertThat(mine.reapplyAvailableAt()).isNull();
         assertThat(mine.storeId()).isNull();
         assertThat(mine.history()).extracting(History::toStatus).containsExactly(ApplicationStatus.PENDING, ApplicationStatus.SUPPLEMENT);
+        assertThat(mine.requestedDocs()).containsExactly(DocType.ECOMMERCE_REG);
         then(storeRepository).should(never()).findByStoreApplicationId(any());
     }
 

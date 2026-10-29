@@ -1,15 +1,20 @@
 package com.sesac.gojigi.store.apply.service;
 
-import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient.FileMeta;
-import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
+import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
+import com.sesac.gojigi.store.apply.dto.request.ApplicationResubmitRequest;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.DocumentItem;
+import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.SettlementAccount;
+import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationResubmitResponse;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
+import com.sesac.gojigi.store.apply.entity.ApplicationCorrection;
 import com.sesac.gojigi.store.apply.entity.ApplicationDocument;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.DocType;
+import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.exception.ApplyException;
@@ -20,22 +25,29 @@ import com.sesac.gojigi.store.common.html.IntroHtml;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 입점 신청 (STR-01 · 02 · 11, docs/api/store.md 2절). 담당 박지연.
+ * 입점 신청 · 보완 재제출 (STR-01 · 02 · 09 · 11, docs/api/store.md 2 · 2-3절). 담당 박지연.
  * 검사는 계약 순서대로 — DB 검사 → 서류 규칙 → S3 확인 — 하고, 저장만 트랜잭션으로 묶는다.
  * S3 HeadObject(서류 최대 13개)를 트랜잭션 밖에서 불러 느린 S3 가 DB 커넥션을 붙잡지 않게 한다.
+ * 보완 재제출(2-3절)도 같은 서류 검사를 쓴다.
  */
 @Slf4j
 @Service
@@ -48,6 +60,7 @@ public class SellerApplyService {
     static final int MAX_PRODUCT_PHOTOS = 10;
 
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final StoreRepository storeRepository;
     private final StoreApplicationRepository storeApplicationRepository;
@@ -100,18 +113,27 @@ public class SellerApplyService {
 
     /** 개수 · 키 규칙을 먼저 보고(S3 호출 없음), 통과하면 파일마다 HeadObject 로 실제 형식 · 크기 확인 */
     private List<VerifiedDocument> verifyDocuments(Long userId, List<DocumentItem> items) {
+        checkCounts(items, EnumSet.allOf(DocType.class));
+        return verifyFiles(userId, items);
+    }
+
+    /** {@code types} 의 종류마다 개수 — 한 장 서류는 1개, 상품 사진은 3~10장 */
+    private static void checkCounts(List<DocumentItem> items, Set<DocType> types) {
         Map<DocType, Integer> counts = new EnumMap<>(DocType.class);
         items.forEach(item -> counts.merge(item.docType(), 1, Integer::sum));
-        for (DocType single : List.of(DocType.BUSINESS_REG, DocType.ECOMMERCE_REG, DocType.BANK_COPY)) {
-            if (counts.getOrDefault(single, 0) != 1) {
-                throw invalidDocument(label(single) + "은 1개를 올려 주세요.");
+        for (DocType type : types) {
+            int count = counts.getOrDefault(type, 0);
+            if (type != DocType.PRODUCT_PHOTO && count != 1) {
+                throw invalidDocument(label(type) + "은 1개를 올려 주세요.");
+            }
+            if (type == DocType.PRODUCT_PHOTO && (count < MIN_PRODUCT_PHOTOS || count > MAX_PRODUCT_PHOTOS)) {
+                throw invalidDocument("대표 상품 사진은 3~10장을 올려 주세요.");
             }
         }
-        int photos = counts.getOrDefault(DocType.PRODUCT_PHOTO, 0);
-        if (photos < MIN_PRODUCT_PHOTOS || photos > MAX_PRODUCT_PHOTOS) {
-            throw invalidDocument("대표 상품 사진은 3~10장을 올려 주세요.");
-        }
+    }
 
+    /** 내 applications/{userId}/ 키 · 중복 확인 뒤 파일마다 S3 확인 */
+    private List<VerifiedDocument> verifyFiles(Long userId, List<DocumentItem> items) {
         String ownPrefix = "applications/" + userId + "/";
         Set<String> keys = new HashSet<>();
         for (DocumentItem item : items) {
@@ -166,13 +188,137 @@ public class SellerApplyService {
                 .submittedAt(now)
                 .build());
 
-        applicationDocumentRepository.saveAll(documents.stream()
-                .map(d -> ApplicationDocument.of(application.getId(), d.item().docType(), d.item().key(),
-                        d.item().originalName(), d.meta().contentType(), (int) d.meta().size()))
-                .toList());
+        applicationDocumentRepository.saveAll(documents.stream().map(d -> toDocument(application.getId(), d)).toList());
         applicationHistoryRepository.save(
                 ApplicationHistory.of(application.getId(), null, ApplicationStatus.PENDING, ActorType.APPLICANT, null));
         return application;
+    }
+
+    /**
+     * 보완 재제출 (2-3절, STR-09) — 내 보완요청 중 신청만. 상태 · 서류 구성 → S3 확인(트랜잭션 밖) → 저장 순서.
+     * 저장 순간에 자동 반려 · 관리자 처리가 먼저 끝났으면 @Version 이 달라 409 (스펙 STR-09 — 진 쪽은 실패)
+     */
+    public ApplicationResubmitResponse resubmit(Long userId, Long applicationId, ApplicationResubmitRequest request) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        StoreApplication application = findOwn(userId, applicationId);
+        application.requireResubmittable(now);
+        List<DocumentItem> items = request.documentsOrEmpty();
+        checkResubmitDocuments(application.getRequestedDocs(), items);
+        List<VerifiedDocument> documents = verifyFiles(userId, items);
+
+        transactionTemplate.executeWithoutResult(status -> saveResubmit(applicationId, request, documents, now));
+        log.info("입점 보완 재제출 - userId={}, applicationId={}, docTypes={}", userId, applicationId,
+                items.stream().map(DocumentItem::docType).distinct().toList());
+        return new ApplicationResubmitResponse(applicationId, ApplicationStatus.PENDING, now.atZone(KST).toOffsetDateTime());
+    }
+
+    /** 남의 신청은 없는 것과 같이 404 — 있는지 알려 주지 않는다 */
+    private StoreApplication findOwn(Long userId, Long applicationId) {
+        return storeApplicationRepository.findById(applicationId)
+                .filter(application -> application.getUserId().equals(userId))
+                .orElseThrow(() -> new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
+    }
+
+    /** 요청 서류는 모두 · 요청 밖 종류는 안 됨, 낸 종류마다 개수 규칙. V5 전 보완요청(요청 서류 기록 없음)은 낸 종류만 본다 */
+    private static void checkResubmitDocuments(List<DocType> requestedDocs, List<DocumentItem> items) {
+        Set<DocType> submitted = items.stream().map(DocumentItem::docType)
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(DocType.class)));
+        if (requestedDocs != null) {
+            for (DocType requested : requestedDocs) {
+                if (!submitted.contains(requested)) {
+                    throw invalidDocument(label(requested) + "을 다시 올려 주세요.");
+                }
+            }
+            for (DocType type : submitted) {
+                if (!requestedDocs.contains(type)) {
+                    throw invalidDocument("보완 요청받지 않은 서류입니다: " + label(type));
+                }
+            }
+        }
+        checkCounts(items, submitted);
+    }
+
+    private void saveResubmit(Long applicationId, ApplicationResubmitRequest request, List<VerifiedDocument> documents,
+            LocalDateTime now) {
+        StoreApplication application = storeApplicationRepository.findById(applicationId).orElseThrow(); // 앞에서 확인
+        List<String> changed = new ArrayList<>();
+        application.resubmit(correction(application, request, changed), now);
+        try {
+            storeApplicationRepository.saveAndFlush(application);
+        } catch (OptimisticLockingFailureException e) {
+            throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS, "신청 상태가 바뀌었습니다. 다시 확인해 주세요.");
+        }
+
+        List<DocType> types = documents.stream().map(d -> d.item().docType()).distinct().toList();
+        if (!types.isEmpty()) {
+            applicationDocumentRepository.findAllByStoreApplicationIdAndCurrentTrueAndDocTypeIn(applicationId, types)
+                    .forEach(ApplicationDocument::replace);
+            applicationDocumentRepository.saveAll(documents.stream().map(d -> toDocument(applicationId, d)).toList());
+        }
+        applicationHistoryRepository.save(ApplicationHistory.of(applicationId, ApplicationStatus.SUPPLEMENT,
+                ApplicationStatus.PENDING, ActorType.APPLICANT, resubmitSummary(types, changed)));
+    }
+
+    /** 보내지 않은 항목은 지금 값 — 실제로 바뀐 항목 이름을 {@code changed} 에 모은다(이력 사유로 관리자에게 보임) */
+    private static ApplicationCorrection correction(StoreApplication current, ApplicationResubmitRequest request,
+            List<String> changed) {
+        SettlementAccount account = request.settlementAccount();
+        String intro = request.intro() == null ? current.getIntro() : IntroHtml.sanitize(request.intro());
+        List<RepresentativeProduct> products = request.representativeProducts() == null ? current.getRepresentativeProducts()
+                : SellerApplyRequest.toRepresentativeProducts(request.representativeProducts());
+        ApplicationCorrection correction = new ApplicationCorrection(
+                trimOr(request.companyName(), current.getCompanyName()),
+                trimOr(request.ecommerceRegNo(), current.getEcommerceRegNo()),
+                trimOr(request.managerPhone(), current.getManagerPhone()),
+                trimOr(request.managerEmail(), current.getManagerEmail()),
+                trimOr(request.businessAddress(), current.getBusinessAddress()),
+                request.categoryId() == null ? current.getCategoryId() : request.categoryId(),
+                intro,
+                products,
+                account == null ? current.getBankName() : account.bank().trim(),
+                account == null ? current.getAccountNo() : account.number().trim(),
+                account == null ? current.getAccountHolder() : account.holder().trim());
+
+        addIfChanged(changed, "상호", current.getCompanyName(), correction.companyName());
+        addIfChanged(changed, "통신판매업 신고번호", current.getEcommerceRegNo(), correction.ecommerceRegNo());
+        addIfChanged(changed, "담당자 휴대폰", current.getManagerPhone(), correction.managerPhone());
+        addIfChanged(changed, "담당자 이메일", current.getManagerEmail(), correction.managerEmail());
+        addIfChanged(changed, "사업장 주소", current.getBusinessAddress(), correction.businessAddress());
+        addIfChanged(changed, "카테고리", current.getCategoryId(), correction.categoryId());
+        addIfChanged(changed, "스토어 소개", current.getIntro(), correction.intro());
+        addIfChanged(changed, "대표 상품", current.getRepresentativeProducts(), correction.representativeProducts());
+        addIfChanged(changed, "정산 계좌", List.of(current.getBankName(), current.getAccountNo(), current.getAccountHolder()),
+                List.of(correction.bankName(), correction.accountNo(), correction.accountHolder()));
+        return correction;
+    }
+
+    /** 이력 사유 — 예: "재제출 — 서류: 통신판매업 신고증 / 수정: 상호 · 정산 계좌" (255자 안) */
+    static String resubmitSummary(List<DocType> docTypes, List<String> changedFields) {
+        StringBuilder summary = new StringBuilder("재제출");
+        String separator = " — ";
+        if (!docTypes.isEmpty()) {
+            summary.append(separator).append("서류: ").append(docTypes.stream().map(DocumentRules::label).collect(Collectors.joining(" · ")));
+            separator = " / ";
+        }
+        if (!changedFields.isEmpty()) {
+            summary.append(separator).append("수정: ").append(String.join(" · ", changedFields));
+        }
+        return summary.toString();
+    }
+
+    private static void addIfChanged(List<String> changed, String name, Object before, Object after) {
+        if (!Objects.equals(before, after)) {
+            changed.add(name);
+        }
+    }
+
+    private static String trimOr(String requested, String current) {
+        return requested == null ? current : requested.trim();
+    }
+
+    private static ApplicationDocument toDocument(Long applicationId, VerifiedDocument document) {
+        return ApplicationDocument.of(applicationId, document.item().docType(), document.item().key(),
+                document.item().originalName(), document.meta().contentType(), (int) document.meta().size());
     }
 
     /** 스토어명 중복 비교 규칙 — 공백 제거 + 소문자 (저장소 쿼리의 lower(replace(name, ' ', '')) 와 같게) */

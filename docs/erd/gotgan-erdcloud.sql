@@ -1,5 +1,5 @@
 -- 곳간(GOTGAN) 전체 ERD — ERD Cloud 가져오기용 (자동 생성: node docs/erd/build-erd.mjs, 직접 수정 금지)
--- 생성: 2026-10-28 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
+-- 생성: 2026-10-29 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
 -- 서비스마다 DB 가 따로라 서비스 사이 참조(user_id · order_item_id 등 "논리 참조")는 FK 로 그리지 않는다 — 컬럼 COMMENT 참고
 -- 제외: shedlock (스케줄러 잠금). 여러 DB 에 있는 같은 이름 테이블은 {db}_ 접두어
 
@@ -75,7 +75,7 @@ CREATE TABLE `point_use_saga` (
 );
 
 -- ============================================================ storedb (store-service · 담당 박지연)
--- 원본: V1__init_store_ddl.sql · V2__store_display_columns.sql · V3__store_comment_cleanup.sql · V4__event_outbox.sql
+-- 원본: V1__init_store_ddl.sql · V2__store_display_columns.sql · V3__store_comment_cleanup.sql · V4__event_outbox.sql · V5__application_requested_docs.sql
 
 -- 입점 신청서 (진행 중 신청 1건은 서비스 검증)
 CREATE TABLE `store_application` (
@@ -101,6 +101,7 @@ CREATE TABLE `store_application` (
 	`account_holder`	VARCHAR(50)	NOT NULL	COMMENT '예금주',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT 'PENDING / SUPPLEMENT / APPROVED / REJECTED',
 	`status_reason`	VARCHAR(255)	NULL	COMMENT '가장 최근 반려 · 보완 사유 (전체는 application_history)',
+	`requested_docs`	JSON	NULL	COMMENT '보완요청 서류 종류 ["BUSINESS_REG", ...] — SUPPLEMENT 일 때만, 재제출 · 승인 · 반려 때 NULL',
 	`marketing_agreed`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '마케팅 수신 동의 (선택 약관)',
 	`terms_agreed_at`	DATETIME(6)	NOT NULL	COMMENT '필수 약관 동의 시각 (애플리케이션이 기록)',
 	`status_changed_at`	DATETIME(6)	NOT NULL	COMMENT '마지막 상태 변경 시각 — 7일 자동 반려(SUPPLEMENT) · 30일 재신청 제한(REJECTED) 기준',
@@ -452,7 +453,7 @@ CREATE TABLE `payment_cancel` (
 );
 
 -- ============================================================ reviewdb (review-service · 담당 이경석)
--- 원본: V1__init.sql · V2__init_reviewdb.sql · V3__drop_review_helpful_count.sql · V4__review_eligibility_option_thumbnail.sql · V5__drop_review_image_file_size.sql
+-- 원본: V1__init.sql · V2__init_reviewdb.sql · V3__drop_review_helpful_count.sql · V4__review_eligibility_option_thumbnail.sql · V5__drop_review_image_file_size.sql · V6__product_inquiry_snapshot.sql
 
 -- 리뷰 작성 자격 (상품주문당 1개)
 CREATE TABLE `review_eligibility` (
@@ -512,6 +513,9 @@ CREATE TABLE `product_inquiry` (
 	`user_id`	BIGINT	NOT NULL	COMMENT 'user-service users.user_id (논리 참조) — 작성자',
 	`product_id`	BIGINT	NOT NULL	COMMENT 'product-service product.product_id (논리 참조)',
 	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service store.store_id (논리 참조) — 판매자 문의 목록 키',
+	`product_name`	VARCHAR(200)	NOT NULL	COMMENT '등록 시점 상품명 스냅샷 — 내 문의 · 판매자 문의 목록 표시용',
+	`thumbnail_url`	VARCHAR(500)	NULL	COMMENT '등록 시점 상품 대표 사진 URL 스냅샷 — 사진 없으면 NULL',
+	`writer_display_name`	VARCHAR(50)	NOT NULL	COMMENT '작성자 공개 표시 이름 (닉네임, 없으면 가운데 가린 실명)',
 	`content`	TEXT	NOT NULL	COMMENT '문의 본문 (sanitizer 정화)',
 	`answer_content`	TEXT	NULL	COMMENT '판매자 답변 (sanitizer 정화)',
 	`is_secret`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '비밀글 — 작성자 · 판매자만 본문 확인',

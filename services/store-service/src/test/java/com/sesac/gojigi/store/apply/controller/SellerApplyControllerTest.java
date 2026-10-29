@@ -3,27 +3,33 @@ package com.sesac.gojigi.store.apply.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
-import com.sesac.gojigi.store.apply.service.ApplicationQueryService;
-import com.sesac.gojigi.store.apply.entity.ActorType;
+import com.sesac.gojigi.store.apply.dto.request.ApplicationResubmitRequest;
 import com.sesac.gojigi.store.apply.dto.request.DocumentPresignRequest;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
-import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
-import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.History;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationResubmitResponse;
 import com.sesac.gojigi.store.apply.dto.response.DocumentPresignResponse;
+import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.History;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
+import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
+import com.sesac.gojigi.store.apply.entity.DocType;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.exception.ApplyException;
+import com.sesac.gojigi.store.apply.service.ApplicationQueryService;
 import com.sesac.gojigi.store.apply.service.SellerApplyService;
 import com.sesac.gojigi.store.apply.service.SellerDocumentPresignService;
 import java.time.LocalDateTime;
@@ -239,7 +245,8 @@ class SellerApplyControllerTest {
         given(applicationQueryService.getMine(4L)).willReturn(new MyApplicationResponse(27L, "AP-2610-027", ApplicationStatus.SUPPLEMENT,
                 "곳간상회", "gotgan", "사본이 흐립니다", submitted, supplemented, OffsetDateTime.parse("2026-10-30T10:00:00+09:00"), null, null,
                 List.of(new History(null, ApplicationStatus.PENDING, ActorType.APPLICANT, null, submitted),
-                        new History(ApplicationStatus.PENDING, ApplicationStatus.SUPPLEMENT, ActorType.ADMIN, "사본이 흐립니다", supplemented))));
+                        new History(ApplicationStatus.PENDING, ApplicationStatus.SUPPLEMENT, ActorType.ADMIN, "사본이 흐립니다", supplemented)),
+                List.of(DocType.ECOMMERCE_REG)));
 
         // when · then
         mockMvc.perform(get("/api/seller/apply/me").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
@@ -249,7 +256,8 @@ class SellerApplyControllerTest {
                 .andExpect(jsonPath("$.data.statusReason").value("사본이 흐립니다"))
                 .andExpect(jsonPath("$.data.supplementDueAt").value("2026-10-30T10:00:00+09:00"))
                 .andExpect(jsonPath("$.data.reapplyAvailableAt").value(nullValue()))
-                .andExpect(jsonPath("$.data.history[1].toStatus").value("SUPPLEMENT"));
+                .andExpect(jsonPath("$.data.history[1].toStatus").value("SUPPLEMENT"))
+                .andExpect(jsonPath("$.data.requestedDocs[0]").value("ECOMMERCE_REG"));
     }
 
     @Test
@@ -273,5 +281,82 @@ class SellerApplyControllerTest {
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
 
         verifyNoInteractions(applicationQueryService);
+    }
+
+    // ── 보완 재제출 (2-3절) ──
+
+    private static final String RESUBMIT_BODY = """
+            {
+              "companyName": "새상호",
+              "settlementAccount": { "bank": "신한", "number": "111-111", "holder": "홍길동" },
+              "documents": [
+                { "docType": "ECOMMERCE_REG", "key": "applications/4/ecom2.pdf", "originalName": "신고증.pdf" }
+              ]
+            }
+            """;
+
+    @Test
+    @DisplayName("보완 재제출 — 200, 경로의 신청 ID · X-User-Id 로 서비스 호출, 봉투 data 에 PENDING · resubmittedAt")
+    void resubmit_validRequest_returns200() throws Exception {
+        // given
+        given(sellerApplyService.resubmit(eq(4L), eq(27L), any(ApplicationResubmitRequest.class))).willReturn(
+                new ApplicationResubmitResponse(27L, ApplicationStatus.PENDING, OffsetDateTime.parse("2026-10-29T16:20:00+09:00")));
+
+        // when · then
+        performResubmit(RESUBMIT_BODY)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.applicationId").value(27))
+                .andExpect(jsonPath("$.data.status").value("PENDING"))
+                .andExpect(jsonPath("$.data.resubmittedAt").value("2026-10-29T16:20:00+09:00"));
+    }
+
+    @Test
+    @DisplayName("보완 재제출 — 빈 본문 {} 도 200(내용 보완 확인만), 보내지 않은 항목은 null 로 넘어감")
+    void resubmit_emptyBody_passesNulls() throws Exception {
+        // given
+        given(sellerApplyService.resubmit(eq(4L), eq(27L), any(ApplicationResubmitRequest.class))).willReturn(
+                new ApplicationResubmitResponse(27L, ApplicationStatus.PENDING, OffsetDateTime.parse("2026-10-29T16:20:00+09:00")));
+
+        // when · then
+        performResubmit("{}").andExpect(status().isOk());
+        then(sellerApplyService).should().resubmit(eq(4L), eq(27L),
+                argThat(r -> r.companyName() == null && r.documentsOrEmpty().isEmpty() && r.settlementAccount() == null));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "상호 공백           | {\"companyName\": \"  \"}",
+            "휴대폰 형식         | {\"managerPhone\": \"01000001234\"}",
+            "이메일 형식         | {\"managerEmail\": \"seller\"}",
+            "카테고리 0          | {\"categoryId\": 0}",
+            "대표 상품 1개       | {\"representativeProducts\": [{\"name\": \"셔츠\", \"subCategory\": \"셔츠\", \"price\": 1}]}",
+            "계좌 예금주 없음    | {\"settlementAccount\": {\"bank\": \"신한\", \"number\": \"1\", \"holder\": \"\"}}",
+            "서류 종류 없음      | {\"documents\": [{\"key\": \"applications/4/a.pdf\", \"originalName\": \"a.pdf\"}]}"
+    })
+    @DisplayName("보완 재제출 형식 오류 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
+    void resubmit_invalidBody_returns400(String name, String body) throws Exception {
+        performResubmit(body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        verifyNoInteractions(sellerApplyService);
+    }
+
+    @Test
+    @DisplayName("보완 재제출 — 서비스의 404 · 409 를 그대로")
+    void resubmit_serviceErrors_passThrough() throws Exception {
+        // given
+        given(sellerApplyService.resubmit(eq(4L), eq(27L), any(ApplicationResubmitRequest.class)))
+                .willThrow(new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND))
+                .willThrow(new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS, "보완 기한이 지나 다시 제출할 수 없습니다."));
+
+        // when · then
+        performResubmit("{}").andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("APPLY_NOT_FOUND"));
+        performResubmit("{}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("APPLY_INVALID_STATUS"))
+                .andExpect(jsonPath("$.message").value("보완 기한이 지나 다시 제출할 수 없습니다."));
+    }
+
+    private ResultActions performResubmit(String body) throws Exception {
+        return mockMvc.perform(patch("/api/seller/apply/27/resubmit").header("X-User-Id", "4").header("X-User-Roles", "BUYER")
+                .contentType(MediaType.APPLICATION_JSON).content(body));
     }
 }
