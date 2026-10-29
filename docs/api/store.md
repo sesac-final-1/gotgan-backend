@@ -461,9 +461,9 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 ## 11. 호출 쪽 준비 사항
 
 **user (이경석)**
-- `MockStoreClient` 를 `@HttpExchange` 클라이언트(`GET /internal/stores/{storeId}`)로 교체. 서킷 브레이커 인스턴스 이름은 **`store`**, 재시도 가능(GET).
+- ~~`MockStoreClient` 를 `@HttpExchange` 클라이언트(`GET /internal/stores/{storeId}`)로 교체~~ — **완료(#183)**. 서킷 브레이커 인스턴스 이름은 **`store`**, 재시도 가능(GET).
 - user-service `StoreStatus` enum 값(ACTIVE · SUSPENDED · CLOSED)은 이 문서와 같습니다. 바꿀 것 없음.
-- 폐점 API(12절)부터 `CLOSED` 스토어가 생깁니다 → `MockStoreClient` 를 걷어 내면 폐점한 판매자의 탈퇴가 열립니다. 그 전까지 판매자 탈퇴는 409 `USER_SELLER_STORE_NOT_CLOSED`.
+- 폐점 API(12절)부터 `CLOSED` 스토어가 생깁니다 — user 는 #183 으로 `MockStoreClient` 를 지우고 1절을 실제로 부르므로, **폐점한 판매자는 이 API 배포부터 탈퇴할 수 있습니다**. 폐점 전 탈퇴는 그대로 409 `USER_SELLER_STORE_NOT_CLOSED`.
 
 **admin (구지훈)**: 3~9절을 기준으로 먼저 개발해 주세요. 서킷 브레이커 이름은 **`store`**, 재시도는 GET(3 · 4 · 8 · 1절)만.
 - 목록(3 · 8절)은 전체 배열이라 `PageResponse` 로 감싸지 않습니다. 스펙 STR-03 의 "서버 페이징" 문구는 컨벤션 4-7 과 어긋나 이 문서를 따릅니다.
