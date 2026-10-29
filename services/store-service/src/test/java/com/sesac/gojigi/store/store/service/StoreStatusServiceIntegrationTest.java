@@ -11,6 +11,7 @@ import com.sesac.gojigi.store.common.event.EventOutboxService;
 import com.sesac.gojigi.store.common.event.OutboxEvent;
 import com.sesac.gojigi.store.common.event.OutboxEventRepository;
 import com.sesac.gojigi.store.common.event.SnsEventPublisher;
+import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
@@ -39,7 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** 실제 MySQL + Flyway + 시연 시드 위에서 잠금 조회 · 상태 · 이력 저장 · 커밋 뒤 StoreStatusChanged 발행 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({TestcontainersConfiguration.class, StoreStatusService.class, EventOutboxService.class,
+@Import({TestcontainersConfiguration.class, StoreStatusService.class, StoreQueryService.class, EventOutboxService.class,
         StoreStatusServiceIntegrationTest.FixedClock.class})
 @ActiveProfiles("test")
 @TestPropertySource(properties = "spring.flyway.locations=classpath:db/migration,classpath:db/seed")
@@ -106,7 +107,13 @@ class StoreStatusServiceIntegrationTest {
     @DisplayName("정지가 커밋되면 상태 · 사유 · 이력이 저장되고 StoreStatusChanged 봉투를 한 번 보낸다 — payload {storeId, status}")
     void changeByAdmin_whenCommitted_persistsAndPublishesEnvelope() {
         // given
-        service.changeByAdmin(1L, StoreStatus.SUSPENDED, "허위 광고 신고 3건 확인");
+        InternalStoreResponse response = service.changeByAdmin(1L, StoreStatus.SUSPENDED, "허위 광고 신고 3건 확인");
+        assertThat(response.status()).isEqualTo(StoreStatus.SUSPENDED);
+        assertThat(response.statusReason()).isEqualTo("허위 광고 신고 3건 확인");
+        assertThat(response.statusHistory()).last().satisfies(h -> {   // 방금 남긴 이력까지 응답에 담긴다
+            assertThat(h.toStatus()).isEqualTo(StoreStatus.SUSPENDED);
+            assertThat(h.changedAt()).isNotNull();
+        });
         verify(snsEventPublisher, never()).send(anyString(), anyString(), anyString(), anyString());
 
         // when

@@ -35,6 +35,7 @@ public class StoreStatusService {
     private final StoreRepository storeRepository;
     private final StoreStatusHistoryRepository storeStatusHistoryRepository;
     private final EventOutboxService eventOutboxService;
+    private final StoreQueryService storeQueryService;
     private final Clock clock;
 
     /** ACTIVE ↔ SUSPENDED 만. 이미 그 상태면 그대로 200(이력 · 이벤트 없음), 폐점 스토어는 409 */
@@ -54,6 +55,6 @@ public class StoreStatusService {
                     LocalDateTime.now(clock), new StoreStatusChangedPayload(storeId, target));
             log.info("스토어 상태 변경 - storeId={}, {} → {}, actor=ADMIN", storeId, fromStatus, target);
         }
-        return InternalStoreResponse.from(store);
+        return storeQueryService.getInternal(storeId); // 바뀐 상태 · 새 이력까지 담은 1절 응답
     }
 }
