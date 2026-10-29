@@ -5,18 +5,23 @@ import com.sesac.gojigi.common.web.auth.CurrentUser;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
+import com.sesac.gojigi.store.store.dto.request.SellerStoreUpdateRequest;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.StoreCloseResponse;
+import com.sesac.gojigi.store.store.service.SellerStoreService;
 import com.sesac.gojigi.store.store.service.StoreQueryService;
 import com.sesac.gojigi.store.store.service.StoreStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SellerStoreController {
 
     private final StoreQueryService storeQueryService;
+    private final SellerStoreService sellerStoreService;
     private final StoreStatusService storeStatusService;
 
     @Operation(summary = "내 스토어 조회",
@@ -44,6 +50,27 @@ public class SellerStoreController {
     @GetMapping
     public ResponseEntity<ApiResponse<SellerStoreResponse>> getMyStore(@Parameter(hidden = true) @CurrentUser AuthUser user) {
         return ResponseEntity.ok(ApiResponse.success("내 스토어를 조회했습니다.", storeQueryService.getSellerStore(storeId(user))));
+    }
+
+    @Operation(summary = "내 스토어 설정 수정",
+            description = """
+            인가: SELLER (스토어 = X-Store-Id). 설정 전체를 보낸다(PUT) — 소개(5000자, 서버 정화) · 대표 이미지 키(null · 지금 키 · 내
+            stores/{storeId}/ 키만) · 표시 색 #RRGGBB · 고객 문의 연락처 · 기본 배송비(0~100,000원) · 무료배송 기준(null = 없음) · 택배사 ·
+            출고 안내. 스토어명 · 주소는 바꾸지 않는다. 이미 들어온 주문의 배송비는 그대로(주문 시점 스냅샷). 정지 중에도 수정 가능.
+            응답은 내 스토어 조회와 같은 모양. 에러: 400 INVALID_INPUT(형식 · 이미지 키) · 401 · 403 FORBIDDEN · 404 STORE_NOT_FOUND ·
+            409 STORE_CLOSED(폐점 스토어)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 — 바뀐 설정"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT — 형식 · 이미지 키"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN — X-Store-Id 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "STORE_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "STORE_CLOSED — 폐점 스토어")
+    })
+    @PutMapping
+    public ResponseEntity<ApiResponse<SellerStoreResponse>> updateMyStore(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Valid @RequestBody SellerStoreUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("스토어 설정을 저장했습니다.", sellerStoreService.update(storeId(user), request)));
     }
 
     @Operation(summary = "스토어 폐점",
