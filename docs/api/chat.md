@@ -101,6 +101,7 @@
 | `SUBSCRIBE /user/queue/errors` | 내가 보낸 `SEND` 의 업무 오류 `{ code, message }` — 연결은 유지 |
 | `SEND /pub/rooms/{roomId}` `{ content }` (content-type `application/json`) | 1~1,000자 · 개행 3줄 이상은 2줄로 · 앞뒤 공백 제거. 저장 · 커밋 후 구독자에게. 오류는 `/user/queue/errors` — `INVALID_INPUT` · `CHAT_NOT_ALLOWED`(읽기 전용) · `CHAT_TOO_FAST` · `CHAT_ROOM_NOT_FOUND`. 닫힌 상담방에 관리자가 아닌 쪽이 보내면 다시 `OPEN` |
 | `SEND /pub/rooms/{roomId}/typing` | 입력 중 신호 — 저장 · 알림 없이 같은 방 구독자에게 `{ type: TYPING, userRole }`. 연결마다 1초에 1번만 전달(넘치면 버림), 읽기 전용 열람은 무시. 화면은 입력하는 동안 3초마다 보내고, 받으면 5초 동안 "입력 중…" |
+| `SEND` 그 밖의 주소 | `/pub/` 로 시작하지 않으면(브로커 주소 `/sub/**` · `/user/**` 로 직접 보내기 등) `ERROR` (`CHAT_NOT_ALLOWED`) — 멤버 검사 · 요청 제한 · 저장을 건너뛰고 구독자에게 바로 전달되지 않게 |
 | 서버 → 구독 | 새 메시지 `{ type: MESSAGE, messageId, roomId, senderRole, kind, content, context, createdAt }`(3절 모양에서 `mine` 없음 — 화면이 senderRole 과 자기 자리로 판단) · 읽음 `{ type: READ, userRole, lastMessageId }` · 상태 `{ type: STATUS, status }` |
 
 - 파드 간: 저장한 파드가 Redis `chat:room:{roomId}` 에 발행 → 모든 파드가 자기 구독자에게

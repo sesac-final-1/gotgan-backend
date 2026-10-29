@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>CONNECT — Authorization: Bearer 토큰을 Keycloak JWKS 로 검증 · 탈퇴 차단 확인 → 연결 사용자(ChatPrincipal). 거절이면 서버가 곧 닫음</li>
  *   <li>SUBSCRIBE — /sub/rooms/{id} 는 방 멤버만(관리자 읽기 전용 포함) · /user/queue/errors 만 그 밖에 허용. 구독하면 접속 중 표시</li>
- *   <li>SEND — 토큰이 만료됐으면 거절(다시 연결해 새 토큰으로)</li>
+ *   <li>SEND — 토큰이 만료됐으면 거절(다시 연결해 새 토큰으로) · /pub 밖(브로커 주소 /sub · /user)은 거절 — 멤버 검사 · 저장 없이 구독자에게 바로 가지 않게</li>
  *   <li>UNSUBSCRIBE — 접속 중 표시 해제 (연결 끊김은 ChatSessionEvents)</li>
  * </ul>
  */
@@ -36,6 +36,7 @@ public class StompAuthInterceptor implements ChannelInterceptor {
     static final String ERRORS_DESTINATION = "/user/queue/errors";
     private static final Pattern ROOM_DESTINATION = Pattern.compile("^" + ChatRelay.DESTINATION_PREFIX + "(\\d{1,18})$");
     private static final String BEARER = "Bearer ";
+    private static final String APP_PREFIX = "/pub/";   // WebSocketConfig 의 application destination prefix
 
     private final JwtDecoder jwtDecoder;
     private final BlockedUsers blockedUsers;
@@ -53,7 +54,7 @@ public class StompAuthInterceptor implements ChannelInterceptor {
         switch (accessor.getCommand()) {
             case CONNECT -> connect(accessor);
             case SUBSCRIBE -> subscribe(accessor);
-            case SEND -> principal(accessor);
+            case SEND -> send(accessor);
             case UNSUBSCRIBE -> presence.leave(accessor.getSessionId(), accessor.getSubscriptionId());
             default -> {
                 // DISCONNECT 등은 그대로 — 정리는 SessionDisconnectEvent 에서 한 번에
@@ -112,6 +113,14 @@ public class StompAuthInterceptor implements ChannelInterceptor {
             throw new MessagingException(e.getErrorCode().getCode() + ": " + e.getMessage());
         }
         presence.enter(accessor.getSessionId(), accessor.getSubscriptionId(), roomId, seat.readerKey());
+    }
+
+    private void send(StompHeaderAccessor accessor) {
+        principal(accessor);
+        String destination = accessor.getDestination();
+        if (destination == null || !destination.startsWith(APP_PREFIX)) {
+            throw new MessagingException("CHAT_NOT_ALLOWED: 보낼 수 없는 주소입니다.");
+        }
     }
 
     private ChatPrincipal principal(StompHeaderAccessor accessor) {

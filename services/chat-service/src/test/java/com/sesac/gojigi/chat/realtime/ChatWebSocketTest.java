@@ -209,6 +209,20 @@ class ChatWebSocketTest {
     }
 
     @Test
+    @DisplayName("/pub 밖(브로커 주소 /sub · /user)으로 SEND 하면 ERROR — 남의 방 구독자에게 검사 · 저장 없이 전달되지 않음")
+    void sendOutsideAppPrefixIsRejected() throws Exception {
+        long roomId = storeInquiry();
+        Client seller = connect("seller");
+        BlockingQueue<String> sellerFrames = seller.subscribe(ChatRelay.DESTINATION_PREFIX + roomId);
+        await().until(() -> presence.isWatching(roomId, "STORE#5"));
+
+        assertThat(sendError("stranger", ChatRelay.DESTINATION_PREFIX + roomId)).contains("CHAT_NOT_ALLOWED");
+        assertThat(sendError("stranger", "/user/20/queue/errors")).contains("CHAT_NOT_ALLOWED");
+        assertThat(sellerFrames.poll(1_000, TimeUnit.MILLISECONDS)).isNull();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM chat_message", Integer.class)).isZero();
+    }
+
+    @Test
     @DisplayName("1초 5건 넘게 보내면 CHAT_TOO_FAST · 빈 메시지는 INVALID_INPUT — 둘 다 오류 큐로")
     void rateLimitAndValidation() throws Exception {
         long roomId = storeInquiry();
@@ -282,6 +296,21 @@ class ChatWebSocketTest {
                 errorCollector(errors)).get(5, TimeUnit.SECONDS);
         opened.add(session);
         session.subscribe(destination, new Collector(new LinkedBlockingQueue<>()));
+        return errors.poll(5, TimeUnit.SECONDS);
+    }
+
+    /** 위조 메시지 프레임을 destination 으로 직접 SEND — 막히면 ERROR 프레임 내용 */
+    private String sendError(String token, String destination) throws Exception {
+        BlockingQueue<String> errors = new LinkedBlockingQueue<>();
+        StompHeaders headers = new StompHeaders();
+        headers.add("Authorization", "Bearer " + token);
+        StompSession session = client.connectAsync("ws://localhost:" + port + "/ws/chat", new WebSocketHttpHeaders(), headers,
+                errorCollector(errors)).get(5, TimeUnit.SECONDS);
+        opened.add(session);
+        StompHeaders send = new StompHeaders();
+        send.setDestination(destination);
+        send.setContentType(org.springframework.util.MimeTypeUtils.APPLICATION_JSON);
+        session.send(send, json.writeValueAsString(Map.of("type", "MESSAGE", "content", "위조", "senderRole", "SELLER")));
         return errors.poll(5, TimeUnit.SECONDS);
     }
 
