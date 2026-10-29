@@ -9,6 +9,7 @@ import com.sesac.gojigi.settlement.settlement.dto.response.SettlementDetailRespo
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementListResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementOutstandingResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementStatsResponse;
+import com.sesac.gojigi.settlement.settlement.dto.response.StoreRecentSettlementsResponse;
 import com.sesac.gojigi.settlement.settlement.entity.SettlementHistory.Actor;
 import com.sesac.gojigi.settlement.settlement.entity.SettlementStatus;
 import com.sesac.gojigi.settlement.settlement.service.SettlementCommandService;
@@ -18,6 +19,8 @@ import com.sesac.gojigi.settlement.settlement.util.SettlementWeek;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -51,6 +54,13 @@ public class InternalSettlementController {
     public ApiResponse<SettlementListResponse> list(@RequestParam(required = false) @Pattern(regexp = ISO_WEEK) String week,
             @RequestParam(required = false) Long storeId, @RequestParam(required = false) SettlementStatus status) {
         return ApiResponse.success("정산 목록을 조회했습니다.", settlementQueryService.list(week(week), storeId, status));
+    }
+
+    @Operation(summary = "스토어 최근 정산서", description = "관리자 스토어 상세 — storeId 의 최근 weeks(1~12, 기본 8)주 정산서, 이번 주 포함 · 최신 주차 먼저 + 합계")
+    @GetMapping("/internal/settlements/recent")
+    public ApiResponse<StoreRecentSettlementsResponse> recent(@RequestParam Long storeId,
+            @RequestParam(defaultValue = "8") @Min(1) @Max(12) int weeks) {
+        return ApiResponse.success("스토어 정산 이력을 조회했습니다.", settlementQueryService.recentForStore(storeId, weeks));
     }
 
     @Operation(summary = "정산 상세", description = "건별 상품주문 · 수수료율 · 지급 계좌 · 상태 이력")

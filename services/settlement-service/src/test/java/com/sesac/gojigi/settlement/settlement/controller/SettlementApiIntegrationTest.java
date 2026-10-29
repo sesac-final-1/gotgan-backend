@@ -438,6 +438,33 @@ class SettlementApiIntegrationTest {
         }
 
         @Test
+        @DisplayName("스토어 최근 정산서 — 이번 주 포함 최근 8주(W37~)만 · 최신 주차 먼저 · 합계, weeks 범위 밖 400 · 없는 스토어 빈 목록")
+        void storeRecent() throws Exception {
+            long storeId = store(true);
+            item(storeId, 59_000L, LocalDateTime.of(2026, 10, 20, 12, 0));   // W43
+            item(storeId, 30_000L, LocalDateTime.of(2026, 10, 13, 12, 0));   // W42
+            item(storeId, 10_000L, LocalDateTime.of(2026, 9, 1, 12, 0));     // W36 — 8주 밖
+            aggregateWeek("2026-W36");
+            aggregateWeek("2026-W42");
+            aggregate();
+
+            mockMvc.perform(get("/internal/settlements/recent").param("storeId", String.valueOf(storeId)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.weeks").value(8))
+                    .andExpect(jsonPath("$.data.fromWeek").value("2026-W37"))
+                    .andExpect(jsonPath("$.data.settlements.length()").value(2))
+                    .andExpect(jsonPath("$.data.settlements[0].week").value(W43))
+                    .andExpect(jsonPath("$.data.settlements[1].week").value("2026-W42"))
+                    .andExpect(jsonPath("$.data.totals.count").value(2))
+                    .andExpect(jsonPath("$.data.totals.salesAmt").value(89_000));
+            mockMvc.perform(get("/internal/settlements/recent").param("storeId", String.valueOf(storeId)).param("weeks", "13"))
+                    .andExpect(status().isBadRequest());
+            mockMvc.perform(get("/internal/settlements/recent").param("storeId", "999999"))
+                    .andExpect(jsonPath("$.data.settlements.length()").value(0))
+                    .andExpect(jsonPath("$.data.totals.count").value(0));
+        }
+
+        @Test
         @DisplayName("주차 형식이 틀리면 400 · 없는 정산서 404 · 없는 경로 404")
         void invalidInputs() throws Exception {
             mockMvc.perform(get("/internal/settlements").param("week", "2026-43")).andExpect(status().isBadRequest())

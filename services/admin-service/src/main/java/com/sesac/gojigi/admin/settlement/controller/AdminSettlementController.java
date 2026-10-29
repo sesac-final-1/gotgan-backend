@@ -33,6 +33,14 @@ public class AdminSettlementController {
         return ApiResponse.success("정산 목록을 조회했습니다.", settlementClientAdapter.list(week, storeId, status));
     }
 
+    @Operation(summary = "스토어 최근 정산서", description = """
+            관리자 스토어 상세 정산 이력 · 8주 KPI — settlement GET /internal/settlements/recent 그대로.
+            weeks(1~12, 기본 8) → {storeId, weeks, fromWeek, totals, settlements[목록 항목과 같음](최신 주차 먼저)}. 범위 밖 400""")
+    @GetMapping("/api/admin/stores/{storeId}/settlements")
+    public ApiResponse<JsonNode> storeRecent(@PathVariable Long storeId, @RequestParam(required = false) Integer weeks) {
+        return ApiResponse.success("스토어 정산 이력을 조회했습니다.", settlementClientAdapter.recent(storeId, weeks));
+    }
+
     @Operation(summary = "정산 상세", description = "건별 상품주문 · 수수료율 · 지급 계좌 · 상태 이력. 404 SETTLE_NOT_FOUND")
     @GetMapping("/api/admin/settlements/{id}")
     public ApiResponse<JsonNode> detail(@PathVariable Long id) {

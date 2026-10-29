@@ -22,6 +22,9 @@ public interface SettlementClient {
     ApiResponse<JsonNode> list(@RequestParam(required = false) String week, @RequestParam(required = false) Long storeId,
                                @RequestParam(required = false) String status);
 
+    @GetExchange("/settlements/recent")
+    ApiResponse<JsonNode> recent(@RequestParam Long storeId, @RequestParam(required = false) Integer weeks);
+
     @GetExchange("/settlements/{id}")
     ApiResponse<JsonNode> detail(@PathVariable Long id);
 

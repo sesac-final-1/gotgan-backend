@@ -51,6 +51,7 @@
 | API | 요청 | 응답 |
 |---|---|---|
 | `GET /internal/settlements?week=&storeId=&status=` | | `{week, totals{count, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt}, settlements[Summary]}` |
+| `GET /internal/settlements/recent?storeId=&weeks=8` | | `{storeId, weeks, fromWeek, totals, settlements[Summary]}` — 관리자 스토어 상세(admin `GET /api/admin/stores/{storeId}/settlements`)의 정산 이력 · 8주 KPI. 이번 주를 포함해 최근 `weeks`(1~12, 기본 8)주 동안 시작한 주차, 최신 주차 먼저 · 없는 스토어는 빈 목록 (10/29) |
 | `GET /internal/settlements/{id}` | | `{settlement: Summary, items[{orderItemId, orderNo, productName, confirmedAt, itemAmt, categoryId, rate, commission, paymentFee, payout, carriedOver}], history[{at, actor(SYSTEM/ADMIN), from, to, reason}]}` |
 | `POST /internal/settlements/aggregate` | `{week?}` | `{week, created, updated, autoHeld, carriedOver}` — 멱등(스토어 × 주차 1건) |
 | `POST /internal/settlements/pay` | `{ids[]}` | `{success[ids], failed[{id, code, message}]}` — 건마다 따로 커밋 |
