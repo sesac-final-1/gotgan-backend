@@ -214,7 +214,8 @@ const inactiveStores = STORES.filter((s) => s.status !== 'ACTIVE').map((s) => s.
 const productSql = `${header('VoC-100', `-- 카테고리 = product.md "시드 카테고리 ID"(10/20 확정) — 상위 ID 1~6 은 settlement 수수료 · store 신청서와 같은 번호,
 --   하위 ID = 상위 × 100 + 순번. 시드가 603 까지 넣으므로 관리자가 새로 만드는 카테고리는 604 부터
 -- 상품 = 프론트 목업 39개 — product_id = 스토어 × 100 + 순번(order 시드 상품주문과 같은 번호 · 이름 · 판매가), 옵션 = 상품 × 100 + 조합 순번,
---   이미지 = 상품 × 10 + 순번 · S3 키 products/seed/…(프론트 public/images/p 파일을 images 버킷에 올려 둠). 정지 스토어(${inactiveStores}) 상품은 is_store_active FALSE`)}
+--   이미지 = 상품 × 10 + 순번 · S3 키 products/seed/…(프론트 public/images/p 파일을 images 버킷에 올려 둠). 정지 스토어(${inactiveStores}) 상품은 is_store_active FALSE
+--   store_status = 운영 중이 아닌 스토어만(행이 없으면 운영 중) — 정지 스토어가 새로 등록하는 상품도 숨김으로 시작`)}
 ${insert('category', ['category_id', 'parent_id', 'name', 'name_en', 'sort_order', 'is_active'],
   CATEGORY_TREE.map((c) => [c.id, 'NULL', q(c.name), q(c.en), c.sort, 'TRUE']))}
 ${insert('category', ['category_id', 'parent_id', 'name', 'sort_order', 'is_active'],
@@ -229,6 +230,8 @@ CATALOG.map((p) => {
     q(p.options[0]?.[0] ?? null), q(p.options[1]?.[0] ?? null), q(p.status ?? 'ON_SALE'), inactive ? 'FALSE' : 'TRUE',
     inactive ? ago(store.suspendedDaysAgo) : 'NULL', ago(p.created)];
 }))}
+${insert('store_status', ['store_id', 'status', 'status_changed_at'],
+  STORES.filter((s) => s.status !== 'ACTIVE').map((s) => [s.storeId, q(s.status), ago(s.suspendedDaysAgo)]))}
 ${insert('product_option', ['product_option_id', 'product_id', 'option1_value', 'option2_value', 'extra_price', 'stock', 'created_at'],
   CATALOG.flatMap((p) => combos(p).map((c, i, all) => [p.id * 100 + i + 1, p.id, q(c[0] ?? null), q(c[1] ?? null), 0, stockOf(p, i, all.length), ago(p.created)])))}
 ${insert('product_image', ['product_image_id', 'product_id', 's3_key', 'sort_order', 'created_at'],

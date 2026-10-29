@@ -24,6 +24,7 @@ import com.sesac.gojigi.product.product.exception.ProductException;
 import com.sesac.gojigi.product.product.repository.ProductRepository;
 import com.sesac.gojigi.product.stock.exception.StockErrorCode;
 import com.sesac.gojigi.product.stock.exception.StockException;
+import com.sesac.gojigi.product.store.repository.StoreStatusRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -50,7 +51,7 @@ import org.springframework.util.StringUtils;
 
 /**
  * 판매자 상품 목록 · 등록 · 수정 · 상세 · 재고 수정 · 판매중지/재개 · 삭제 (PRD-01 · 02 · 03 · 04 · 05 · 15, product.md 11 ~ 16절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
- * TODO 박지연: 정지 · 폐점 스토어도 등록되면 바로 노출됨(storeActive=true 로 시작) — StoreStatusChanged 소비 PR 에서 함께 정한다.
+ * 정지 · 폐점 스토어도 등록은 받되 숨김으로 시작한다 — store_status 스냅샷(StoreStatusChanged) 기준, 행이 없으면 운영 중.
  */
 @Slf4j
 @Service
@@ -71,6 +72,7 @@ public class SellerProductService {
     private final ProductRepository productRepository;
     private final ProductOptionRepository productOptionRepository;
     private final CategoryRepository categoryRepository;
+    private final StoreStatusRepository storeStatusRepository;
     private final ImageUrls imageUrls;
     private final Clock clock;
 
@@ -125,6 +127,8 @@ public class SellerProductService {
                 .option2Name(optionNames.size() < 2 ? null : optionNames.get(1))
                 .status(status)
                 .build();
+        storeStatusRepository.findById(storeId)
+                .ifPresent(s -> product.startWithStoreStatus(s.isActive(), s.getStatusChangedAt()));
         options.forEach(spec -> product.addOption(spec.toNewOption()));   // 상품 복사(12절 응답 재등록)의 productOptionId 는 무시
         for (int i = 0; i < imageKeys.size(); i++) {
             product.addImage(ProductImage.of(imageKeys.get(i), i));

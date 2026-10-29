@@ -47,7 +47,7 @@ class DemoSeedTest {
     }
 
     @Test
-    @DisplayName("상품 시드 — 39개 모두 하위 카테고리 · 옵션 ≥ 1 · 이미지 3장(대표 1), 정지 스토어(15) 상품만 비노출, order 시드 상품주문과 같은 번호 · 판매가")
+    @DisplayName("상품 시드 — 39개 모두 하위 카테고리 · 옵션 ≥ 1 · 이미지 3장(대표 1), 정지 스토어(15) 상품만 비노출 · 스냅샷, order 시드 상품주문과 같은 번호 · 판매가")
     void seed_products() {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product", Integer.class)).isEqualTo(39);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product p JOIN category c ON c.category_id = p.category_id WHERE c.parent_id IS NULL",
@@ -57,6 +57,10 @@ class DemoSeedTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_image WHERE sort_order = 0", Integer.class)).isEqualTo(39);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product_image", Integer.class)).isEqualTo(39 * 3);
         assertThat(jdbc.queryForList("SELECT DISTINCT store_id FROM product WHERE NOT is_store_active", Long.class)).containsExactly(15L);
+        // 스토어 상태 스냅샷도 정지 스토어(15)만 — 상품의 store_status_changed_at 과 같은 시각이라 그 뒤 등록 상품도 숨김으로 시작
+        assertThat(jdbc.queryForList("SELECT CONCAT(store_id, ':', status) FROM store_status", String.class)).containsExactly("15:SUSPENDED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product p JOIN store_status s ON s.store_id = p.store_id "
+                + "WHERE p.store_status_changed_at <> s.status_changed_at", Integer.class)).isZero();
         // 판매가 = price × (100 − 할인율) / 100 을 10원 단위 반올림 — 서버 규칙과 같게
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM product WHERE sale_price <> ROUND(price * (100 - discount_rate) / 100, -1)",
                 Integer.class)).isZero();

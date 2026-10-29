@@ -51,7 +51,7 @@ public class CartController {
     @Operation(summary = "장바구니 조회", description = """
             ORD-02: 스토어별 묶음 · 스토어별 배송비 1회 · 무료배송까지 남은 금액(amountToFree). 가격 · 품절은 product 에서 다시 확인.
             금액 · 배송비는 선택(checked)되고 구매 가능한 줄만 — 주문서와 같다. product 에 없는 옵션은 unavailable 로.
-            Redis 캐시 → 미스 · 장애면 MySQL 원본(그때 캐시를 다시 채움). 에러: 502 EXTERNAL_API_ERROR(product 장애)""")
+            Redis 캐시 → 미스 · 장애면 MySQL 원본(그때 캐시를 다시 채움). 에러: 502 EXTERNAL_API_ERROR(product · store 장애)""")
     @GetMapping("/api/carts")
     public ApiResponse<CartResponse> get(@Parameter(hidden = true) @CurrentUser AuthUser user) {
         return ApiResponse.success("장바구니를 조회했습니다.", cartQueryService.get(user.userId()));

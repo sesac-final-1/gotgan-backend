@@ -17,14 +17,12 @@ import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.order.order.client.PaymentClientAdapter;
 import com.sesac.gojigi.order.order.client.ProductClientAdapter;
-import com.sesac.gojigi.order.order.client.ShippingPolicyClient;
 import com.sesac.gojigi.order.order.client.StoreClientAdapter;
 import com.sesac.gojigi.order.order.client.UserClientAdapter;
 import com.sesac.gojigi.order.order.client.dto.PaymentCancelRequest;
 import com.sesac.gojigi.order.order.client.dto.PaymentResponse;
 import com.sesac.gojigi.order.order.client.dto.PointUseRequest;
 import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
-import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.StockItem;
 import com.sesac.gojigi.order.order.client.dto.StockReleaseRequest;
 import com.sesac.gojigi.order.order.client.dto.StockReserveRequest;
@@ -66,7 +64,6 @@ class PlaceOrderSagaTest {
     @Mock private OrderSagaTxService sagaTx;
     @Mock private UserClientAdapter user;
     @Mock private StoreClientAdapter store;
-    @Mock private ShippingPolicyClient shippingPolicy;
     @Mock private ProductClientAdapter product;
     @Mock private PaymentClientAdapter payment;
 
@@ -101,8 +98,7 @@ class PlaceOrderSagaTest {
         ReflectionTestUtils.setField(instance, "id", 7L);
         given(product.getOptions(List.of(11L))).willReturn(List.of(option(11L, true)));
         given(user.getUser(BUYER_ID)).willReturn(new UserSummaryResponse(BUYER_ID, "buyer@example.com", "김구매", null));
-        given(store.getStore(1L)).willReturn(new StoreResponse(1L, 2L, "곳간상회", "ACTIVE"));
-        given(shippingPolicy.getShippingPolicy(1L)).willReturn(new ShippingPolicy(3_000L, 50_000L));
+        given(store.getStore(1L)).willReturn(new StoreResponse(1L, 2L, "곳간상회", "ACTIVE", 3_000L, 50_000L));
         given(orderTx.createPending(any(), any(), any(), any())).willReturn(new PendingOrder(order, List.of(item)));
         given(sagaTx.startPlaceOrder(order)).willReturn(instance);
     }

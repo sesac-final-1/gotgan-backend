@@ -26,6 +26,7 @@ import com.sesac.gojigi.product.stock.dto.request.StockItem;
 import com.sesac.gojigi.product.stock.dto.request.StockReserveRequest;
 import com.sesac.gojigi.product.stock.service.StockReservationService;
 import java.util.ArrayList;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +95,7 @@ class SellerProductApiIntegrationTest {
     @AfterEach
     void clean() {
         jdbc.update("DELETE FROM stock_history"); // 재고 수정 · 예약 테스트가 남긴 원장 — 옵션 FK 보다 먼저
+        jdbc.update("DELETE FROM store_status WHERE store_id = ?", STORE_ID);
         productRepository.deleteAll(); // 옵션 · 이미지는 cascade 로 함께
         categoryRepository.deleteAll(categoryRepository.findAll().stream().filter(c -> !c.isTop()).toList());
         categoryRepository.deleteAll();
@@ -1062,5 +1064,32 @@ class SellerProductApiIntegrationTest {
             }
             assertThat(outcomes).as("수정 먼저 · 예약 먼저 두 경우가 모두 시험됐는지").contains("updated", "STOCK_CHANGED");
         }
+    }
+
+    @Test
+    @DisplayName("정지된 스토어도 등록은 되지만 숨김으로 시작한다 — store_status 스냅샷의 상태 · 시각을 그대로")
+    void register_whenStoreSuspended_startsHidden() throws Exception {
+        // given
+        jdbc.update("INSERT INTO store_status (store_id, status, status_changed_at) VALUES (?, 'SUSPENDED', '2026-10-28 14:30:00')", STORE_ID);
+
+        // when
+        long productId = registerOk();
+
+        // then
+        Map<String, Object> row = jdbc.queryForMap("SELECT is_store_active, store_status_changed_at FROM product WHERE product_id = ?", productId);
+        assertThat(row.get("is_store_active")).isEqualTo(false);
+        assertThat(row.get("store_status_changed_at")).isEqualTo(LocalDateTime.of(2026, 10, 28, 14, 30));
+    }
+
+    @Test
+    @DisplayName("스냅샷이 없는 스토어(이벤트를 받은 적 없음)는 운영 중으로 시작한다")
+    void register_whenNoSnapshot_startsActive() throws Exception {
+        // when
+        long productId = registerOk();
+
+        // then
+        Map<String, Object> row = jdbc.queryForMap("SELECT is_store_active, store_status_changed_at FROM product WHERE product_id = ?", productId);
+        assertThat(row.get("is_store_active")).isEqualTo(true);
+        assertThat(row.get("store_status_changed_at")).isNull();
     }
 }

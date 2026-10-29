@@ -15,15 +15,22 @@ import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedExce
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest;
 import software.amazon.awssdk.services.dynamodb.model.QueryResponse;
 import software.amazon.awssdk.services.dynamodb.model.Select;
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 
 /**
  * 알림함 (DynamoDB sesac-gojigi-inbox) — PK 받는 쪽 · SK {epoch ms 13자리}#{sourceId}, TTL 90일.
+ * 같은 알림 판별은 표식 행 SK `SRC#{sourceId}` 로 — 내부 API 알림은 저장 시각이 매번 달라 SK 만으로는 중복을 못 막는다(10/29).
+ * 목록 조회는 SK 가 숫자로 시작하는 범위(&lt; "A")만 읽어 표식 행이 섞이지 않는다.
  * 받는 쪽이 몇 개(회원 · 스토어 · 관리자)뿐이라 받는 쪽마다 Query 하고 화면 쪽에서 합친다.
  */
 @Repository
 public class InboxRepository {
 
     private static final Duration KEEP = Duration.ofDays(90);
+    private static final String SOURCE_PREFIX = "SRC#";
+    /** 알림 SK(숫자 13자리로 시작)의 위쪽 경계 — 표식 행(SRC#…)은 이보다 크다 */
+    private static final String NOTIFICATION_SK_END = "A";
 
     private final DynamoDbClient dynamoDb;
     private final String table;
@@ -37,7 +44,7 @@ public class InboxRepository {
     public record Item(String recipient, String sortKey, String type, String title, String body, String link, boolean read, Instant createdAt) {
     }
 
-    /** 새 알림이면 true — 같은 키(이벤트 재전달 · 같은 sourceId)는 덮어쓰지 않고 false (읽음 상태 유지) */
+    /** 새 알림이면 true — 같은 받는 쪽 · 같은 sourceId(이벤트 재전달 · 내부 API 재시도)는 쓰지 않고 false (읽음 상태 유지) */
     public boolean saveIfAbsent(NewNotification n) {
         Map<String, AttributeValue> item = new HashMap<>();
         item.put("PK", s(n.recipient()));
@@ -53,10 +60,14 @@ public class InboxRepository {
         item.put("read", AttributeValue.fromBool(false));
         item.put("createdAt", s(n.occurredAt().toString()));
         item.put("ttl", AttributeValue.fromN(String.valueOf(n.occurredAt().plus(KEEP).getEpochSecond())));
+        Map<String, AttributeValue> marker = Map.of("PK", s(n.recipient()), "SK", s(SOURCE_PREFIX + n.sourceId()), "ttl", item.get("ttl"));
         try {
-            dynamoDb.putItem(b -> b.tableName(table).item(item).conditionExpression("attribute_not_exists(SK)"));
+            // 표식과 알림을 함께 — 표식이 이미 있으면 둘 다 쓰지 않음 (권한은 PutItem 그대로)
+            dynamoDb.transactWriteItems(b -> b.transactItems(
+                    TransactWriteItem.builder().put(p -> p.tableName(table).item(marker).conditionExpression("attribute_not_exists(SK)")).build(),
+                    TransactWriteItem.builder().put(p -> p.tableName(table).item(item).conditionExpression("attribute_not_exists(SK)")).build()));
             return true;
-        } catch (ConditionalCheckFailedException e) {
+        } catch (TransactionCanceledException e) {
             return false;
         }
     }
@@ -65,7 +76,7 @@ public class InboxRepository {
     public List<Item> latest(String recipient, String before, int limit) {
         QueryRequest.Builder q = QueryRequest.builder().tableName(table).scanIndexForward(false).limit(limit);
         if (before == null) {
-            q.keyConditionExpression("PK = :pk").expressionAttributeValues(Map.of(":pk", s(recipient)));
+            q.keyConditionExpression("PK = :pk AND SK < :end").expressionAttributeValues(Map.of(":pk", s(recipient), ":end", s(NOTIFICATION_SK_END)));
         } else {
             q.keyConditionExpression("PK = :pk AND SK < :before").expressionAttributeValues(Map.of(":pk", s(recipient), ":before", s(before)));
         }
@@ -109,9 +120,9 @@ public class InboxRepository {
     }
 
     private QueryRequest.Builder unread(String recipient, Map<String, AttributeValue> start) {
-        return QueryRequest.builder().tableName(table).keyConditionExpression("PK = :pk").filterExpression("#r = :f")
+        return QueryRequest.builder().tableName(table).keyConditionExpression("PK = :pk AND SK < :end").filterExpression("#r = :f")
                 .expressionAttributeNames(Map.of("#r", "read"))
-                .expressionAttributeValues(Map.of(":pk", s(recipient), ":f", AttributeValue.fromBool(false)))
+                .expressionAttributeValues(Map.of(":pk", s(recipient), ":end", s(NOTIFICATION_SK_END), ":f", AttributeValue.fromBool(false)))
                 .exclusiveStartKey(start);
     }
 
