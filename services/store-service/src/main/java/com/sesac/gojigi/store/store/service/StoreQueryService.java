@@ -4,6 +4,7 @@ import com.sesac.gojigi.store.apply.entity.StoreApplication;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
+import com.sesac.gojigi.store.store.dto.response.PublicStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.PublicStoreSummaryResponse;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.entity.Store;
@@ -38,6 +39,20 @@ public class StoreQueryService {
         return storeRepository.findAllActiveForPublic().stream()
                 .map(row -> PublicStoreSummaryResponse.of(row, imageUrls.of(row.store().getImageKey())))
                 .toList();
+    }
+
+    /**
+     * 공개 스토어 홈 (14-2절, STR-12) — 운영 중이면 홈 전체, 정지 · 폐점이면 안내 화면용 이름 · 상태만(200).
+     * 없거나 소프트 삭제면 STORE_NOT_FOUND. 대표자 · 사업자번호 · 카테고리는 원래 신청서
+     */
+    public PublicStoreResponse getPublic(Long storeId) {
+        Store store = storeRepository.findByIdAndDeletedAtIsNull(storeId)
+                .orElseThrow(() -> new StoreException(StoreErrorCode.STORE_NOT_FOUND));
+        if (store.getStatus() != StoreStatus.ACTIVE) {
+            return PublicStoreResponse.closed(store);
+        }
+        StoreApplication application = storeApplicationRepository.findById(store.getStoreApplicationId()).orElseThrow(); // FK
+        return PublicStoreResponse.of(store, application, imageUrls.of(store.getImageKey()));
     }
 
     /** 판매자 내 스토어 (13절, STR-06) — 상태와 상관없이(정지 · 폐점도 설정은 보임), 대표자 · 사업자번호는 원래 신청서 */

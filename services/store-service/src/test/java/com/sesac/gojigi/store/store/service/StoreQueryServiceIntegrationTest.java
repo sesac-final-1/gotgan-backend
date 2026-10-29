@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sesac.gojigi.store.TestcontainersConfiguration;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
+import com.sesac.gojigi.store.store.dto.response.PublicStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreGrade;
@@ -70,6 +71,29 @@ class StoreQueryServiceIntegrationTest {
             assertThat(h.fromStatus()).isNull();
             assertThat(h.toStatus()).isEqualTo(StoreStatus.ACTIVE);
         });
+    }
+
+    @Test
+    @DisplayName("공개 스토어 홈 — 시드 스토어 1 은 홈 전체(신청서 카테고리 · 대표자), 정지 15 는 이름 · 상태만")
+    void getPublic_seedStores_returnsHomeOrNameOnly() {
+        // when
+        PublicStoreResponse park = storeQueryService.getPublic(1L);
+        PublicStoreResponse suspended = storeQueryService.getPublic(15L);
+
+        // then
+        assertThat(park.status()).isEqualTo(StoreStatus.ACTIVE);
+        assertThat(park.categoryId()).isEqualTo(1L);
+        assertThat(park.ownerName()).isEqualTo("박영철");
+        assertThat(park.bizRegNo()).isEqualTo("000-00-00006");
+        assertThat(park.shippingFee()).isEqualTo(3000L);
+        assertThat(park.freeShippingThreshold()).isEqualTo(30000L);
+        assertThat(park.courier()).isEqualTo("우체국택배");
+        assertThat(park.dispatchNote()).isNotBlank();
+        assertThat(park.createdAt().getOffset().getTotalSeconds()).isEqualTo(9 * 3600);
+        assertThat(suspended.storeName()).isEqualTo("볕드는집");
+        assertThat(suspended.status()).isEqualTo(StoreStatus.SUSPENDED);
+        assertThat(suspended.slug()).isNull();
+        assertThat(suspended.ownerName()).isNull();
     }
 
     @Test

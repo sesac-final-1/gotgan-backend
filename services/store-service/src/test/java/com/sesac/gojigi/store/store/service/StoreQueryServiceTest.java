@@ -2,8 +2,11 @@ package com.sesac.gojigi.store.store.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.store.apply.entity.BizType;
@@ -12,6 +15,7 @@ import com.sesac.gojigi.store.apply.entity.StoreApplication;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
+import com.sesac.gojigi.store.store.dto.response.PublicStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.PublicStoreSummaryResponse;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.entity.Store;
@@ -172,6 +176,63 @@ class StoreQueryServiceTest {
                         "#2b2b2b", StoreGrade.POWER, OffsetDateTime.parse("2026-10-15T09:00:00+09:00")),
                 new PublicStoreSummaryResponse(2L, "토담공방", "todam", 2L, null, null,
                         "#8c6d4f", StoreGrade.SPROUT, OffsetDateTime.parse("2026-10-01T09:00:00+09:00")));
+    }
+
+    @Test
+    @DisplayName("공개 스토어 홈 — 운영 중이면 신청서의 카테고리 · 대표자 · 사업자번호와 배송 정책 · 이미지 URL")
+    void getPublic_whenActive_returnsHome() {
+        // given
+        Store store = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
+        ReflectionTestUtils.setField(store, "id", 1L);
+        ReflectionTestUtils.setField(store, "imageKey", "stores/1/a.jpg");
+        ReflectionTestUtils.setField(store, "color", "#2b2b2b");
+        ReflectionTestUtils.setField(store, "grade", StoreGrade.POWER);
+        ReflectionTestUtils.setField(store, "courier", "CJ대한통운");
+        ReflectionTestUtils.setField(store, "createdAt", LocalDateTime.of(2026, 10, 15, 9, 0));
+        given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store));
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(publicApplication()));
+        given(imageUrls.of("stores/1/a.jpg")).willReturn("https://images/stores/1/a.jpg");
+
+        // when
+        PublicStoreResponse home = storeQueryService.getPublic(1L);
+
+        // then
+        assertThat(home).isEqualTo(new PublicStoreResponse(1L, "곳간상회", StoreStatus.ACTIVE, "gotgan", 3L, "<p>소개</p>",
+                "https://images/stores/1/a.jpg", "#2b2b2b", StoreGrade.POWER, OffsetDateTime.parse("2026-10-15T09:00:00+09:00"),
+                "홍길동", "000-00-00001", "010-0000-1234", 3000L, null, "CJ대한통운", null));
+    }
+
+    @Test
+    @DisplayName("공개 스토어 홈 — 정지 · 폐점이면 이름 · 상태만, 신청서는 읽지 않는다 / 없으면 404")
+    void getPublic_whenNotActive_returnsNameAndStatusOnly() {
+        // given
+        Store suspended = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
+        ReflectionTestUtils.setField(suspended, "id", 1L);
+        suspended.changeStatusByAdmin(StoreStatus.SUSPENDED, "허위 광고");
+        given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(suspended));
+        given(storeRepository.findByIdAndDeletedAtIsNull(9L)).willReturn(Optional.empty());
+
+        // when
+        PublicStoreResponse home = storeQueryService.getPublic(1L);
+
+        // then
+        assertThat(home).isEqualTo(new PublicStoreResponse(1L, "곳간상회", StoreStatus.SUSPENDED, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null));
+        then(storeApplicationRepository).should(never()).findById(any());
+        assertThatThrownBy(() -> storeQueryService.getPublic(9L))
+                .extracting("errorCode").isEqualTo(StoreErrorCode.STORE_NOT_FOUND);
+    }
+
+    private static StoreApplication publicApplication() {
+        return StoreApplication.builder()
+                .userId(2L).categoryId(3L).bizType(BizType.INDIVIDUAL)
+                .companyName("곳간상사").ownerName("홍길동").bizRegNo("000-00-00001").ecommerceRegNo("2026-서울성동-0000")
+                .managerPhone("010-0000-1234").managerEmail("seller@example.com").businessAddress("서울시 성동구")
+                .storeName("곳간상회").slug("gotgan").intro("<p>소개</p>")
+                .representativeProducts(List.of(new RepresentativeProduct("리넨 셔츠", "셔츠", 39000)))
+                .bankName("국민").accountNo("000000-00-000000").accountHolder("홍길동")
+                .marketingAgreed(false).submittedAt(LocalDateTime.of(2026, 10, 10, 9, 0))
+                .build();
     }
 
     @Test
