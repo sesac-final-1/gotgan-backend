@@ -14,14 +14,14 @@ import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
-import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient.FileMeta;
+import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
 import com.sesac.gojigi.store.apply.dto.request.ApplicationResubmitRequest;
-import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.Agreements;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.DocumentItem;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.ProductItem;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.SettlementAccount;
+import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationResubmitResponse;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
@@ -38,6 +38,7 @@ import com.sesac.gojigi.store.apply.repository.ApplicationHistoryRepository;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -83,7 +84,8 @@ class SellerApplyServiceTest {
         Clock clock = Clock.fixed(ZonedDateTime.of(NOW, KST).toInstant(), KST);
         TransactionTemplate transactionTemplate = new TransactionTemplate(mock(PlatformTransactionManager.class));
         sellerApplyService = new SellerApplyService(storeRepository, storeApplicationRepository,
-                applicationDocumentRepository, applicationHistoryRepository, sellerDocumentClient, transactionTemplate, clock);
+                applicationDocumentRepository, applicationHistoryRepository, sellerDocumentClient, transactionTemplate, clock,
+                new SupplementDeadline(Duration.ofDays(7)));
     }
 
     @Test

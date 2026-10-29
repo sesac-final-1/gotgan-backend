@@ -11,13 +11,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
-import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient.PresignedDownload;
-import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse;
+import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.History;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SameApplication;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SameStore;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SettlementAccount;
+import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationSummaryResponse;
 import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
@@ -36,6 +36,7 @@ import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -68,6 +70,9 @@ class ApplicationQueryServiceTest {
 
     @Mock
     private SellerDocumentClient sellerDocumentClient;
+
+    @Spy
+    private SupplementDeadline supplementDeadline = new SupplementDeadline(Duration.ofDays(7));
 
     @InjectMocks
     private ApplicationQueryService applicationQueryService;

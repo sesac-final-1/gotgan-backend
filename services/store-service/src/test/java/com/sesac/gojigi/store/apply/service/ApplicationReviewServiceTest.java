@@ -38,6 +38,7 @@ import com.sesac.gojigi.store.store.repository.StoreRepository;
 import com.sesac.gojigi.store.store.repository.StoreStatusHistoryRepository;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -80,7 +81,7 @@ class ApplicationReviewServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW.atZone(KST).toInstant(), KST);
         service = new ApplicationReviewService(storeApplicationRepository, applicationHistoryRepository,
-                storeRepository, storeStatusHistoryRepository, eventOutboxService, clock);
+                storeRepository, storeStatusHistoryRepository, eventOutboxService, clock, new SupplementDeadline(Duration.ofDays(7)));
     }
 
     @ParameterizedTest
@@ -433,6 +434,89 @@ class ApplicationReviewServiceTest {
                 .isEqualTo(ApplicationReviewService.storeApprovedEventId(27L))
                 .isNotEqualTo(ApplicationReviewService.storeApprovedEventId(28L));
         assertThat(UUID.fromString(ApplicationReviewService.storeApprovedEventId(27L)).version()).isEqualTo(3);
+    }
+
+    // ── 보완 기한 지난 신청 자동 반려 (7-1절) ──
+
+    @Test
+    @DisplayName("자동 반려 — 기한 정각(보완요청 + 7일)이면 반려 · 이력 SYSTEM · 관리자 반려와 같은 이벤트(신청 ID 고정 eventId · 고정 사유)")
+    void rejectExpiredSupplement_whenDue_rejectsAsSystem() {
+        // given
+        StoreApplication application = supplementedAt(NOW.minusDays(7));
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+
+        // when
+        boolean rejected = service.rejectExpiredSupplement(27L);
+
+        // then
+        assertThat(rejected).isTrue();
+        assertThat(application.getStatus()).isEqualTo(ApplicationStatus.REJECTED);
+        assertThat(application.getStatusReason()).isEqualTo(ApplicationReviewService.AUTO_REJECT_REASON);
+        assertThat(application.getRequestedDocs()).isNull();
+        assertThat(application.getStatusChangedAt()).isEqualTo(NOW);   // 30일 재신청 제한 기준
+        verify(storeApplicationRepository).saveAndFlush(application);
+
+        ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
+        verify(applicationHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getFromStatus()).isEqualTo(ApplicationStatus.SUPPLEMENT);
+        assertThat(history.getValue().getToStatus()).isEqualTo(ApplicationStatus.REJECTED);
+        assertThat(history.getValue().getActorType()).isEqualTo(ActorType.SYSTEM);
+
+        verify(eventOutboxService).enqueue("StoreApplicationRejected", "27",
+                ApplicationReviewService.applicationEventId("StoreApplicationRejected", 27L), NOW,
+                new StoreApplicationRejectedPayload(27L, 4L, "곳간상회", "seller@example.com",
+                        "보완 기한 안에 다시 제출하지 않아 자동 반려되었습니다.", OffsetDateTime.parse("2026-10-28T14:30:00+09:00")));
+    }
+
+    @Test
+    @DisplayName("자동 반려 — 기한 1초 전 · 이미 재제출(PENDING) · 없는 신청은 건너뛴다(false), 저장 · 이벤트 없음")
+    void rejectExpiredSupplement_whenNotTarget_skips() {
+        // given
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplementedAt(NOW.minusDays(7).plusSeconds(1))));
+        given(storeApplicationRepository.findById(28L)).willReturn(Optional.of(application(28L, ApplicationStatus.PENDING)));
+        given(storeApplicationRepository.findById(29L)).willReturn(Optional.empty());
+
+        // when · then
+        assertThat(service.rejectExpiredSupplement(27L)).isFalse();
+        assertThat(service.rejectExpiredSupplement(28L)).isFalse();
+        assertThat(service.rejectExpiredSupplement(29L)).isFalse();
+        verify(storeApplicationRepository, never()).saveAndFlush(any());
+        verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("자동 반려 저장 순간 재제출이 먼저 저장됐으면(@Version) 409 — 이력 · 이벤트 없음(스케줄러가 건너뜀)")
+    void rejectExpiredSupplement_whenVersionConflict_throwsInvalidStatus() {
+        // given
+        StoreApplication application = supplementedAt(NOW.minusDays(8));
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        willThrow(new ObjectOptimisticLockingFailureException(StoreApplication.class, 27L))
+                .given(storeApplicationRepository).saveAndFlush(application);
+
+        // when · then
+        assertErrorCode(() -> service.rejectExpiredSupplement(27L), ApplyErrorCode.APPLY_INVALID_STATUS);
+        verify(applicationHistoryRepository, never()).save(any());
+        verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("보완 기한이 설정값이면(시연 3분) 그 값으로 판단한다")
+    void rejectExpiredSupplement_withShortDeadline_usesSetting() {
+        // given
+        ApplicationReviewService demo = new ApplicationReviewService(storeApplicationRepository, applicationHistoryRepository,
+                storeRepository, storeStatusHistoryRepository, eventOutboxService,
+                Clock.fixed(NOW.atZone(KST).toInstant(), KST), new SupplementDeadline(Duration.ofMinutes(3)));
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplementedAt(NOW.minusMinutes(3))));
+
+        // when · then
+        assertThat(demo.rejectExpiredSupplement(27L)).isTrue();
+    }
+
+    /** 보완요청 중 신청 — 보완요청 시각만 다르게 */
+    private static StoreApplication supplementedAt(LocalDateTime requestedAt) {
+        StoreApplication application = application(27L, ApplicationStatus.PENDING);
+        application.requestSupplement("사본이 흐립니다", List.of(DocType.BANK_COPY), requestedAt);
+        return application;
     }
 
     private static DataIntegrityViolationException duplicate(String key) {
