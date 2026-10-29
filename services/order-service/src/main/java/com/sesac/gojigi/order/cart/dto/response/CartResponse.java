@@ -12,9 +12,9 @@ public record CartResponse(List<StoreGroup> stores, List<UnavailableItem> unavai
 
     /**
      * 스토어 1곳 — productAmt: 선택된 구매 가능 상품 합계, shippingFee: 그 합계 기준 묶음 배송비(선택한 상품이 없으면 0),
-     * amountToFree: 무료배송까지 더 담을 금액(무료이거나 선택 없음이면 0)
+     * freeThreshold: 무료배송 기준(null 이면 무료배송 없음), amountToFree: 무료배송까지 더 담을 금액(무료 · 선택 없음 · 무료배송 없음이면 0)
      */
-    public record StoreGroup(Long storeId, String storeName, long productAmt, long shippingFee, long freeThreshold,
+    public record StoreGroup(Long storeId, String storeName, long productAmt, long shippingFee, Long freeThreshold,
                              long amountToFree, List<Line> items) {
     }
 

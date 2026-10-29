@@ -8,5 +8,6 @@ app:
   user-uri: http://localhost:1               # 테스트엔 user · store 가 없다 — 바로 실패해 번호 표시로 (이름 연동은 ChatDirectoryTest)
   store-uri: http://localhost:1
   settlement-uri: http://localhost:1
+  product-uri: http://localhost:1
   chat:
     realtime: local                         # 테스트에는 Redis 가 없어 이 JVM 연결에만 중계 · 표시 (Redis 동작은 ChatRedisTest 가 컨테이너로)

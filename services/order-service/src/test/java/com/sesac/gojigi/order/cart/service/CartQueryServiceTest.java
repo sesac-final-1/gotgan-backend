@@ -1,24 +1,26 @@
 package com.sesac.gojigi.order.cart.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.order.cart.dto.response.CartResponse;
 import com.sesac.gojigi.order.cart.entity.CartItem;
 import com.sesac.gojigi.order.cart.repository.CartItemRepository;
 import com.sesac.gojigi.order.cart.repository.CartRedisRepository;
 import com.sesac.gojigi.order.cart.repository.CartRedisRepository.CachedLine;
 import com.sesac.gojigi.order.order.client.ProductClientAdapter;
-import com.sesac.gojigi.order.order.client.ShippingPolicyClient;
 import com.sesac.gojigi.order.order.client.StoreClientAdapter;
 import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
-import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.StoreResponse;
+import com.sesac.gojigi.order.order.exception.OrderErrorCode;
+import com.sesac.gojigi.order.order.exception.OrderException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,14 +43,14 @@ class CartQueryServiceTest {
     @Mock private CartRedisRepository cartRedisRepository;
     @Mock private ProductClientAdapter productClient;
     @Mock private StoreClientAdapter storeClient;
-    @Mock private ShippingPolicyClient shippingPolicy;
     @InjectMocks private CartQueryService cartQuery;
 
     @BeforeEach
     void setUp() {
-        given(shippingPolicy.getShippingPolicy(anyLong())).willReturn(new ShippingPolicy(3_000L, 50_000L));
-        given(storeClient.getStore(1L)).willReturn(new StoreResponse(1L, 2L, "곳간상회", "ACTIVE"));
-        given(storeClient.getStore(2L)).willThrow(new IllegalStateException("store down"));
+        given(storeClient.getStore(1L)).willReturn(new StoreResponse(1L, 2L, "곳간상회", "ACTIVE", 3_000L, 50_000L));
+        given(storeClient.getStore(2L)).willThrow(new OrderException(OrderErrorCode.ORDER_PRODUCT_NOT_PURCHASABLE));   // 없는 스토어
+        given(storeClient.getStore(3L)).willReturn(new StoreResponse(3L, 5L, "무료없음상회", "ACTIVE", 3_500L, null));
+        given(storeClient.getStore(4L)).willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "store down"));
     }
 
     private static ProductOptionResponse option(long optionId, long storeId, long unitPrice, boolean purchasable) {
@@ -57,7 +59,7 @@ class CartQueryServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 적중 — 스토어별 묶음 · 선택된 구매 가능 줄만 금액 · 배송비 · 무료배송까지 남은 금액, 없는 옵션은 unavailable, 스토어명 실패는 비움")
+    @DisplayName("캐시 적중 — 스토어별 묶음 · 선택된 구매 가능 줄만 금액 · 배송비 · 무료배송까지 남은 금액, 없는 옵션은 unavailable, 없는 스토어는 이름 · 배송비 없이")
     void groupsAndTotals() {
         // given — 스토어1: 선택 20,000 + 선택 해제 5,000 + 구매 불가 9,000 / 스토어2: 선택 60,000(무료) / 99: product 에 없음
         Map<Long, CachedLine> lines = new TreeMap<>(Map.of(11L, new CachedLine(2, true), 12L, new CachedLine(1, false),
@@ -74,6 +76,7 @@ class CartQueryServiceTest {
                         CartResponse.StoreGroup::productAmt, CartResponse.StoreGroup::shippingFee, CartResponse.StoreGroup::amountToFree)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple(1L, "곳간상회", 20_000L, 3_000L, 30_000L),
                         org.assertj.core.groups.Tuple.tuple(2L, null, 60_000L, 0L, 0L));
+        assertThat(cart.stores()).extracting(CartResponse.StoreGroup::freeThreshold).containsExactly(50_000L, null);
         CartResponse.Line first = cart.stores().get(0).items().get(0);
         assertThat(first.productName()).isEqualTo("상품 11");
         assertThat(first.lineAmt()).isEqualTo(20_000L);
@@ -97,6 +100,30 @@ class CartQueryServiceTest {
 
         assertThat(group.shippingFee()).isZero();
         assertThat(group.amountToFree()).isZero();
+    }
+
+    @Test
+    @DisplayName("무료배송 기준이 없는 스토어 — 금액과 상관없이 기본 배송비, 무료까지 남은 금액 0")
+    void noFreeShipping() {
+        given(cartRedisRepository.find(4L)).willReturn(Optional.of(new TreeMap<>(Map.of(31L, new CachedLine(1, true)))));
+        given(productClient.getOptions(List.of(31L))).willReturn(List.of(option(31L, 3L, 90_000L, true)));
+
+        CartResponse.StoreGroup group = cartQuery.get(4L).stores().get(0);
+
+        assertThat(group.storeName()).isEqualTo("무료없음상회");
+        assertThat(group.shippingFee()).isEqualTo(3_500L);
+        assertThat(group.freeThreshold()).isNull();
+        assertThat(group.amountToFree()).isZero();
+    }
+
+    @Test
+    @DisplayName("store 장애 — 배송비를 알 수 없어 502 를 그대로 (틀린 배송비를 보여 주지 않음)")
+    void storeDown_propagates() {
+        given(cartRedisRepository.find(4L)).willReturn(Optional.of(new TreeMap<>(Map.of(41L, new CachedLine(1, true)))));
+        given(productClient.getOptions(List.of(41L))).willReturn(List.of(option(41L, 4L, 10_000L, true)));
+
+        assertThatThrownBy(() -> cartQuery.get(4L)).isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
     }
 
     @Test

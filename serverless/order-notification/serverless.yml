@@ -31,15 +31,15 @@ provider:
 functions:
   notify:
     handler: src/notify.handler
-    # 핸들러는 10/21 구현 — order · store 가 이벤트를 발행하기 시작하면 enabled: true 로 켜고 E2E (구지훈)
+    # order(OrderPaid 등) · store(입점 승인 · 반려 · 보완요청, #166~#168) 모두 발행 중이라 켬 (10/29). SES 샌드박스의 미인증 주소는 REJECTED 로 남기고 재전달하지 않음
     events:
       - sqs:
           arn: ${ssm:/sesac-gojigi/dev/sqs/notification-order-queue-arn}
           batchSize: 5
           functionResponseType: ReportBatchItemFailures
-          enabled: false                     # 발행 전이라 꺼 둠 — 켜기 전까지 메시지는 큐에 4일 보관
+          enabled: true
       - sqs:
           arn: ${ssm:/sesac-gojigi/dev/sqs/notification-store-queue-arn}
           batchSize: 5
           functionResponseType: ReportBatchItemFailures
-          enabled: false                     # 발행 전이라 꺼 둠 — 켜기 전까지 메시지는 큐에 4일 보관
+          enabled: true

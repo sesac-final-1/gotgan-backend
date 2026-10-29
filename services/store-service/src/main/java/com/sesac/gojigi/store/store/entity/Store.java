@@ -13,11 +13,13 @@ import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 /**
  * 스토어 · 배송 정책 (storedb store). 입점 승인으로 생성, 1인 1스토어(uk_store_user_id).
  * 내부 상세 조회 · 입점 승인에 필요한 컬럼만 매핑한다 — 배송 정책은 order 배송비 계산용 3개만, 이미지 · 색 등은 그 API 를 만들 때 추가.
- * 매핑하지 않은 color · grade 는 승인 때 DDL 기본값이 들어간다.
+ * 매핑하지 않은 color 와 읽기 전용 grade 는 승인 때 DDL 기본값이 들어간다.
  * 폐점은 status = CLOSED 로 표현하고 deleted_at 은 채우지 않는다 (폐점 스토어도 주문 · 정산 내역에서 조회돼야 함).
  */
 @Getter
@@ -60,6 +62,12 @@ public class Store extends BaseTimeEntity {
 
     @Column(name = "status_reason")
     private String statusReason;
+
+    /** 판매자 등급 — 승인 때 DDL 기본값 SPROUT, 승급 기준 미정이라 읽기만 (관리자 스토어 목록 · 상세) */
+    @Generated(event = EventType.INSERT)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "grade", insertable = false, updatable = false, length = 20)
+    private StoreGrade grade;
 
     /** 스토어 묶음 기본 배송비 (원) — 승인 직후 3,000원 */
     @Column(name = "shipping_fee", nullable = false)

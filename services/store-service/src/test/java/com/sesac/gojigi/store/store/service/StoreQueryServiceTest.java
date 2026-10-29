@@ -7,10 +7,16 @@ import static org.mockito.Mockito.mock;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
+import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
 import com.sesac.gojigi.store.store.entity.Store;
+import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
+import com.sesac.gojigi.store.store.repository.StoreWithApplicant;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -60,5 +66,40 @@ class StoreQueryServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(StoreErrorCode.STORE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("관리자 목록 한 줄은 스토어 · 신청서 값을 담고 개설 시각을 +09:00 으로 바꾼다")
+    void getAdminList_withStatus_mapsSummary() {
+        // given
+        Store store = mock(Store.class);
+        given(store.getId()).willReturn(15L);
+        given(store.getStoreName()).willReturn("볕드는집");
+        given(store.getSlug()).willReturn("sunny-house");
+        given(store.getUserId()).willReturn(205L);
+        given(store.getGrade()).willReturn(StoreGrade.SPROUT);
+        given(store.getStatus()).willReturn(StoreStatus.SUSPENDED);
+        given(store.getStatusReason()).willReturn("허위 원산지 표기 신고 확인");
+        given(store.getCreatedAt()).willReturn(LocalDateTime.of(2025, 12, 31, 10, 0));
+        given(storeRepository.findAllForAdmin(StoreStatus.SUSPENDED))
+                .willReturn(List.of(new StoreWithApplicant(store, "윤하늘", "000-00-00005")));
+
+        // when
+        List<InternalStoreSummaryResponse> result = storeQueryService.getAdminList(StoreStatus.SUSPENDED);
+
+        // then
+        assertThat(result).containsExactly(new InternalStoreSummaryResponse(15L, "볕드는집", "sunny-house", 205L, "윤하늘",
+                "000-00-00005", StoreGrade.SPROUT, StoreStatus.SUSPENDED, "허위 원산지 표기 신고 확인",
+                OffsetDateTime.parse("2025-12-31T10:00:00+09:00")));
+    }
+
+    @Test
+    @DisplayName("status 가 null 이면 그대로 넘겨 전체를 조회한다 — 없으면 빈 목록")
+    void getAdminList_whenStatusNull_returnsEmpty() {
+        // given
+        given(storeRepository.findAllForAdmin(null)).willReturn(List.of());
+
+        // when · then
+        assertThat(storeQueryService.getAdminList(null)).isEmpty();
     }
 }

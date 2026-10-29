@@ -1,5 +1,6 @@
 package com.sesac.gojigi.admin.user.controller;
 
+import com.sesac.gojigi.admin.review.client.ReviewReader;
 import com.sesac.gojigi.admin.user.client.UserClientAdapter;
 import com.sesac.gojigi.common.web.auth.AuthUser;
 import com.sesac.gojigi.common.web.auth.CurrentUser;
@@ -28,6 +29,7 @@ import tools.jackson.databind.JsonNode;
 public class AdminUserController {
 
     private final UserClientAdapter userClientAdapter;
+    private final ReviewReader reviewReader;
 
     @Operation(summary = "회원 목록", description = "q(이름 · 이메일) · status(ACTIVE/SUSPENDED) · page(0부터) · size(1~100) → PageResponse")
     @GetMapping
@@ -48,6 +50,15 @@ public class AdminUserController {
     public ApiResponse<JsonNode> points(@Parameter(hidden = true) @CurrentUser AuthUser admin, @PathVariable Long userId,
                                         @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
         return ApiResponse.success("회원 포인트를 조회했습니다.", userClientAdapter.points(admin.userId(), userId, page, size));
+    }
+
+    @Operation(summary = "회원 작성 리뷰", description = """
+            review GET /internal/reviews?userId= 그대로 (review.md 8-3) — 삭제 제외 · 블라인드 포함, 최신순. page(0부터) · size(1~50, 기본 10)
+            → PageResponse [{reviewId, productId, productName, storeId, rating, content, blinded, blindReason, createdAt}]. 없는 회원은 빈 목록""")
+    @GetMapping("/{userId}/reviews")
+    public ApiResponse<JsonNode> reviews(@PathVariable Long userId,
+                                         @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
+        return ApiResponse.success("회원 리뷰를 조회했습니다.", reviewReader.listByUser(userId, page, size));
     }
 
     @Operation(summary = "이용정지 · 해제", description = """

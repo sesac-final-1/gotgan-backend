@@ -233,6 +233,9 @@ public class ChatRoomService {
         } else if (context.type() == ContextType.STORE) {
             String storeName = directory.storeName(context.id());
             title = storeName == null ? title : "스토어 " + storeName;
+        } else if (context.type() == ContextType.PRODUCT) {
+            String productName = directory.productName(context.id());
+            title = productName == null ? title : productName;
         } else if (context.type() == ContextType.ORDER) {
             title = "주문 " + orderNo(context.id());
         } else if (context.type() == ContextType.SETTLEMENT) {

@@ -68,6 +68,16 @@ test('메일 실패 — 그 메시지만 batchItemFailures, 발송 완료를 남
   assert.ok(!calls.some((c) => c.type === 'UpdateCommand'));
 });
 
+test('SES 가 받는 주소를 거절(MessageRejected — 샌드박스 미인증 주소)하면 재전달하지 않고 REJECTED 로 남긴다', async () => {
+  const err = Object.assign(new Error('Email address is not verified.'), { name: 'MessageRejected' });
+  const { calls, deps } = fake({ SendEmailCommand: err });
+  const result = await createHandler(deps)({ Records: [record(envelope('OrderPaid', orderPaid), 'm-rejected')] });
+
+  assert.deepEqual(result, { batchItemFailures: [] });
+  assert.deepEqual(calls.map((c) => c.type), ['PutCommand', 'SendEmailCommand', 'UpdateCommand']);
+  assert.equal(calls[2].input.ExpressionAttributeValues[':rejected'], 'REJECTED');
+});
+
 test('받는 주소가 없으면 실패로 돌려준다(재전달 → DLQ 알람으로 계약 누락을 알게 됨) · 깨진 JSON 도 실패', async () => {
   const { calls, deps } = fake();
   const noEmail = { ...orderPaid, ordererEmail: undefined };

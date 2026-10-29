@@ -5,7 +5,6 @@ import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.order.common.logging.OrderLogContext;
 import com.sesac.gojigi.order.order.client.PaymentClientAdapter;
 import com.sesac.gojigi.order.order.client.ProductClientAdapter;
-import com.sesac.gojigi.order.order.client.ShippingPolicyClient;
 import com.sesac.gojigi.order.order.client.StoreClientAdapter;
 import com.sesac.gojigi.order.order.client.UserClientAdapter;
 import com.sesac.gojigi.order.order.client.dto.PaymentCancelRequest;
@@ -17,6 +16,7 @@ import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
 import com.sesac.gojigi.order.order.client.dto.StockItem;
 import com.sesac.gojigi.order.order.client.dto.StockReleaseRequest;
 import com.sesac.gojigi.order.order.client.dto.StockReserveRequest;
+import com.sesac.gojigi.order.order.client.dto.StoreResponse;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.dto.response.OrderCreateResponse;
@@ -64,7 +64,6 @@ public class PlaceOrderSaga {
     private final OrderSagaTxService sagaTx;
     private final UserClientAdapter user;
     private final StoreClientAdapter store;
-    private final ShippingPolicyClient shippingPolicy;
     private final ProductClientAdapter product;
     private final PaymentClientAdapter payment;
 
@@ -73,9 +72,9 @@ public class PlaceOrderSaga {
         // Mapping Product
         List<OrderPricing.Line> lines = lines(request);
         UserSummaryResponse buyer = user.getUser(buyerId);  // 회원 정보 가져오기
-        Map<Long, String> storeNames = storeNames(lines);   // 스토어 정보 가져오기(중복 제거)
-        OrderPricing.Result priced = OrderPricing.calculate(lines, shippingPolicy::getShippingPolicy, request.usePoint());
-        PendingOrder pending = createPending(buyer, request, priced, storeNames);   // order tx
+        Map<Long, StoreResponse> stores = stores(lines);   // 스토어 정보 가져오기(중복 제거) — 스토어명 · 배송비 정책
+        OrderPricing.Result priced = OrderPricing.calculate(lines, id -> stores.get(id).shippingPolicy(), request.usePoint());
+        PendingOrder pending = createPending(buyer, request, priced, storeNames(stores));   // order tx
         // Ready to Saga
         Order order = pending.order();
         SagaInstance saga = sagaTx.startPlaceOrder(order);
@@ -256,11 +255,17 @@ public class PlaceOrderSaga {
         }).toList();
     }
 
-    /** 상품주문 스냅샷의 스토어명 — 스토어마다 한 번 조회 */
-    private Map<Long, String> storeNames(List<OrderPricing.Line> lines) {
-        Map<Long, String> names = new LinkedHashMap<>();
-        lines.forEach(line -> names.computeIfAbsent(line.option().storeId(), id -> store.getStore(id).storeName()));
+    /** 스토어 — 스토어마다 한 번 조회 */
+    private Map<Long, StoreResponse> stores(List<OrderPricing.Line> lines) {
+        Map<Long, StoreResponse> stores = new LinkedHashMap<>();
+        lines.forEach(line -> stores.computeIfAbsent(line.option().storeId(), store::getStore));
+        return stores;
+    }
 
+    /** 상품주문 스냅샷의 스토어명 */
+    private static Map<Long, String> storeNames(Map<Long, StoreResponse> stores) {
+        Map<Long, String> names = new LinkedHashMap<>();
+        stores.forEach((id, s) -> names.put(id, s.storeName()));
         return names;
     }
 
