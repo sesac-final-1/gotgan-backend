@@ -76,6 +76,8 @@ public record InternalStoreResponse(
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
+    /** springdoc 스키마 이름 — 입점 신청 상세의 History 와 이름이 같으면 명세에서 하나로 합쳐져 덮어쓰인다 */
+    @Schema(name = "StoreStatusHistory")
     public record History(
             @Schema(description = "이전 상태 — 개설은 null", example = "ACTIVE")
             StoreStatus fromStatus,
