@@ -38,6 +38,7 @@ app:
     bucket: ${SELLER_DOCS_BUCKET:}          # 입점 서류 (비공개) — 신청 때 HeadObject 로 확인
   images:
     base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{key} (ConfigMap, product 와 같은 규칙)
+    bucket: ${IMAGES_BUCKET:}                 # 대표 이미지 presigned PUT 대상 (ConfigMap) — stores/{storeId}/… 만 IRSA PutObject
   scheduler:
     zone: Asia/Seoul
 

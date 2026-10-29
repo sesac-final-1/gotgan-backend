@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,8 +18,10 @@ import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.store.store.dto.request.SellerStoreUpdateRequest;
+import com.sesac.gojigi.store.store.dto.request.StoreImagePresignRequest;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.StoreCloseResponse;
+import com.sesac.gojigi.store.store.dto.response.StoreImagePresignResponse;
 import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
@@ -209,5 +212,39 @@ class SellerStoreControllerTest {
                 .andExpect(jsonPath("$.code").value("STORE_CLOSED"));
         mockMvc.perform(seller(put("/api/seller/store")).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("대표 이미지 업로드 주소 — 200, 형식 · 크기를 X-Store-Id 스토어로 넘기고 key · uploadUrl · 만료")
+    void presignImage_whenValid_returns200() throws Exception {
+        // given
+        given(sellerStoreService.presignImage(eq(1L), any(StoreImagePresignRequest.class))).willReturn(new StoreImagePresignResponse(
+                "stores/1/3f2a0c5e-7d1b-4c1e-9a1f-0b2c3d4e5f60.jpg", "https://s3/upload", OffsetDateTime.parse("2026-10-29T15:10:00+09:00")));
+
+        // when · then
+        mockMvc.perform(seller(post("/api/seller/store/image/presign")).header("X-Store-Id", "1").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"contentType\":\"image/jpeg\",\"size\":834512}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.key").value("stores/1/3f2a0c5e-7d1b-4c1e-9a1f-0b2c3d4e5f60.jpg"))
+                .andExpect(jsonPath("$.data.uploadUrl").value("https://s3/upload"))
+                .andExpect(jsonPath("$.data.expiresAt").value("2026-10-29T15:10:00+09:00"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"contentType\":\"image/gif\",\"size\":100}",
+            "{\"contentType\":\"application/pdf\",\"size\":100}",
+            "{\"contentType\":\"image/jpeg\",\"size\":0}",
+            "{\"contentType\":\"image/jpeg\",\"size\":10485761}",
+            "{\"size\":100}",
+            "{\"contentType\":\"image/jpeg\"}"
+    })
+    @DisplayName("대표 이미지 업로드 주소 형식 오류(gif · pdf · 0바이트 · 10MB 초과 · 형식 없음 · 크기 없음) — 400, 서비스를 부르지 않는다")
+    void presignImage_whenInvalid_returns400(String body) throws Exception {
+        mockMvc.perform(seller(post("/api/seller/store/image/presign")).header("X-Store-Id", "1").contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        verifyNoInteractions(sellerStoreService);
     }
 }

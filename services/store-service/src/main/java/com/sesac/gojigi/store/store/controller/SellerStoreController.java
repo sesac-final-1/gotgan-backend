@@ -6,8 +6,10 @@ import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.store.store.dto.request.SellerStoreUpdateRequest;
+import com.sesac.gojigi.store.store.dto.request.StoreImagePresignRequest;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.StoreCloseResponse;
+import com.sesac.gojigi.store.store.dto.response.StoreImagePresignResponse;
 import com.sesac.gojigi.store.store.service.SellerStoreService;
 import com.sesac.gojigi.store.store.service.StoreQueryService;
 import com.sesac.gojigi.store.store.service.StoreStatusService;
@@ -20,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -71,6 +74,27 @@ public class SellerStoreController {
     public ResponseEntity<ApiResponse<SellerStoreResponse>> updateMyStore(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @Valid @RequestBody SellerStoreUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.success("스토어 설정을 저장했습니다.", sellerStoreService.update(storeId(user), request)));
+    }
+
+    @Operation(summary = "대표 이미지 업로드 주소 발급",
+            description = """
+            인가: SELLER (스토어 = X-Store-Id). images 버킷 presigned PUT 주소(10분) — 키 stores/{storeId}/{UUID}.{jpg|png|webp}.
+            브라우저가 uploadUrl 로 PUT(Content-Type · 크기를 요청과 같게 — 서명에 포함돼 다르면 S3 403) → 받은 key 를 설정 수정의 imageKey 로.
+            JPG · PNG · WEBP, 10MB 이하. 에러: 400 INVALID_INPUT(형식 · 크기) · 401 · 403 FORBIDDEN · 404 STORE_NOT_FOUND ·
+            409 STORE_CLOSED · 502 EXTERNAL_API_ERROR(자격 증명)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "발급"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT — 형식 · 크기"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN — X-Store-Id 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "STORE_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "STORE_CLOSED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR")
+    })
+    @PostMapping("/image/presign")
+    public ResponseEntity<ApiResponse<StoreImagePresignResponse>> presignImage(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Valid @RequestBody StoreImagePresignRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("업로드 주소를 발급했습니다.", sellerStoreService.presignImage(storeId(user), request)));
     }
 
     @Operation(summary = "스토어 폐점",

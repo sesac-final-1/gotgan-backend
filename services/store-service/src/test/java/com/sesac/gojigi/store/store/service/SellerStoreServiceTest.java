@@ -3,6 +3,9 @@ package com.sesac.gojigi.store.store.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -10,17 +13,24 @@ import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
+import com.sesac.gojigi.store.store.client.StoreImageClient;
+import com.sesac.gojigi.store.store.client.StoreImageClient.PresignedUpload;
 import com.sesac.gojigi.store.store.dto.request.SellerStoreUpdateRequest;
+import com.sesac.gojigi.store.store.dto.request.StoreImagePresignRequest;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
+import com.sesac.gojigi.store.store.dto.response.StoreImagePresignResponse;
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -34,6 +44,8 @@ class SellerStoreServiceTest {
     private StoreRepository storeRepository;
     @Mock
     private StoreQueryService storeQueryService;
+    @Mock
+    private StoreImageClient storeImageClient;
 
     @InjectMocks
     private SellerStoreService service;
@@ -117,5 +129,40 @@ class SellerStoreServiceTest {
 
     private static SellerStoreUpdateRequest request(String intro, String imageKey, String color) {
         return new SellerStoreUpdateRequest(intro, imageKey, color, "02-0000-1234", 2500L, 50000L, " CJ대한통운 ", "  ");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"image/jpeg, jpg", "image/png, png", "image/webp, webp"})
+    @DisplayName("업로드 주소 — 키 stores/{storeId}/{UUID}.{확장자}, 형식 · 크기를 서명에 넘기고, 그 키는 설정 수정의 이미지 키 검사를 통과한다")
+    void presignImage_whenActive_issuesOwnStoreKey(String contentType, String extension) {
+        // given
+        given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store(1L, StoreStatus.SUSPENDED, null)));
+        given(storeImageClient.presignUpload(anyString(), eq(contentType), eq(834512L)))
+                .willReturn(new PresignedUpload("https://s3/upload", Instant.parse("2026-10-29T06:10:00Z")));
+
+        // when
+        StoreImagePresignResponse response = service.presignImage(1L, new StoreImagePresignRequest(contentType, 834512L));
+
+        // then
+        assertThat(response.key()).matches("stores/1/[0-9a-f-]{36}\\." + extension);
+        assertThat(response.uploadUrl()).isEqualTo("https://s3/upload");
+        assertThat(response.expiresAt()).isEqualTo(OffsetDateTime.parse("2026-10-29T15:10:00+09:00"));
+        assertThat(SellerStoreService.checkImageKey(1L, response.key(), null)).isEqualTo(response.key());
+    }
+
+    @Test
+    @DisplayName("업로드 주소 — 폐점 스토어 409 STORE_CLOSED · 없는 스토어 404, 서명하지 않는다")
+    void presignImage_whenClosedOrMissing_rejects() {
+        // given
+        given(storeRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(store(2L, StoreStatus.CLOSED, null)));
+        given(storeRepository.findByIdAndDeletedAtIsNull(99L)).willReturn(Optional.empty());
+        StoreImagePresignRequest request = new StoreImagePresignRequest("image/jpeg", 1L);
+
+        // when · then
+        assertThatThrownBy(() -> service.presignImage(2L, request))
+                .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(StoreErrorCode.STORE_CLOSED);
+        assertThatThrownBy(() -> service.presignImage(99L, request))
+                .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(StoreErrorCode.STORE_NOT_FOUND);
+        verify(storeImageClient, never()).presignUpload(anyString(), anyString(), anyLong());
     }
 }
