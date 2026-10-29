@@ -29,6 +29,12 @@ public class SettlementClientAdapter {
     }
 
     @Retry(name = TARGET)
+    @CircuitBreaker(name = TARGET, fallbackMethod = "recentFallback")
+    public JsonNode recent(Long storeId, Integer weeks) {
+        return call(() -> settlementClient.recent(storeId, weeks));
+    }
+
+    @Retry(name = TARGET)
     @CircuitBreaker(name = TARGET, fallbackMethod = "detailFallback")
     public JsonNode detail(Long id) {
         return call(() -> settlementClient.detail(id));
@@ -77,6 +83,10 @@ public class SettlementClientAdapter {
 
     // 폴백 — 이름이 겹치면(오버로드) Resilience4j 가 고르지 못해 인자 모양마다 따로. 이미 바꾼 4xx 는 그대로, 장애는 502
     JsonNode listFallback(String week, Long storeId, String status, Throwable t) {
+        throw RemoteCalls.unavailable(TARGET, t);
+    }
+
+    JsonNode recentFallback(Long storeId, Integer weeks, Throwable t) {
         throw RemoteCalls.unavailable(TARGET, t);
     }
 

@@ -199,6 +199,24 @@ class AdminRelayApiTest {
     }
 
     @Test
+    @DisplayName("스토어 최근 정산서 — storeId · weeks 전달, 응답 그대로 · 범위 밖 400 그대로 · 연결 실패는 한 번 더 시도 후 502")
+    void settlements_storeRecent() throws Exception {
+        when(settlementClient.recent(1L, null)).thenReturn(ok("{\"storeId\":1,\"weeks\":8,\"fromWeek\":\"2026-W37\",\"totals\":{\"count\":2},\"settlements\":[]}"));
+        mockMvc.perform(get("/api/admin/stores/1/settlements").header("X-User-Id", ADMIN_ID))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.fromWeek").value("2026-W37"))
+                .andExpect(jsonPath("$.data.totals.count").value(2));
+
+        when(settlementClient.recent(1L, 13)).thenThrow(rejected(HttpStatus.BAD_REQUEST,
+                "{\"code\":\"INVALID_INPUT\",\"message\":\"입력값이 올바르지 않습니다.\",\"data\":null}"));
+        mockMvc.perform(get("/api/admin/stores/1/settlements").param("weeks", "13").header("X-User-Id", ADMIN_ID))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        when(settlementClient.recent(2L, null)).thenThrow(new ResourceAccessException("connect timed out"));
+        mockMvc.perform(get("/api/admin/stores/2/settlements").header("X-User-Id", ADMIN_ID)).andExpect(status().isBadGateway());
+        verify(settlementClient, times(2)).recent(2L, null);
+    }
+
+    @Test
     @DisplayName("정산 — 목록 조건 전달 · 본문 없는 집계 · 일괄 지급 결과 그대로 · 보류 사유 없음 400 그대로")
     void settlements_relay() throws Exception {
         when(settlementClient.list("2026-W43", null, "HELD")).thenReturn(ok("{\"week\":\"2026-W43\",\"settlements\":[]}"));

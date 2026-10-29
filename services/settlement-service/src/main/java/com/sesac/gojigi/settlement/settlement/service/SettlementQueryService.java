@@ -5,6 +5,7 @@ import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.settlement.settlement.dto.response.SellerSettlementsResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementDetailResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementListResponse;
+import com.sesac.gojigi.settlement.settlement.dto.response.StoreRecentSettlementsResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementOutstandingResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementStatsResponse;
 import com.sesac.gojigi.settlement.settlement.dto.response.SettlementSummaryResponse;
@@ -58,6 +59,17 @@ public class SettlementQueryService {
         List<SettlementSummaryResponse> summaries = rows.stream()
                 .map(s -> SettlementSummaryResponse.of(s, stores.get(s.getStoreId()))).toList();
         return new SettlementListResponse(week.isoWeek(), SettlementListResponse.Totals.of(summaries), summaries);
+    }
+
+    /** 관리자 스토어 상세 — 이번 주를 포함해 최근 weeks 주 동안 시작한 주차의 정산서(최신 주차 먼저) + 합계. 없는 스토어는 빈 목록 */
+    public StoreRecentSettlementsResponse recentForStore(Long storeId, int weeks) {
+        SettlementWeek from = SettlementWeek.of(LocalDate.now(clock)).minusWeeks(weeks - 1L);
+        List<Settlement> rows = settlementRepository.findByStoreIdOrderByWeekStartDesc(storeId).stream()
+                .filter(s -> !s.getWeekStart().isBefore(from.start()))
+                .toList();
+        SettlementStore store = settlementStoreRepository.findByStoreId(storeId).orElse(null);
+        List<SettlementSummaryResponse> summaries = rows.stream().map(s -> SettlementSummaryResponse.of(s, store)).toList();
+        return new StoreRecentSettlementsResponse(storeId, weeks, from.isoWeek(), SettlementListResponse.Totals.of(summaries), summaries);
     }
 
     /** 관리자 상세 */
