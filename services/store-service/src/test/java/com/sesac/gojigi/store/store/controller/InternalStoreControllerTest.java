@@ -1,5 +1,6 @@
 package com.sesac.gojigi.store.store.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
+import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
@@ -55,7 +57,7 @@ class InternalStoreControllerTest {
     void get_whenStoreExists_returns200() throws Exception {
         // given
         given(storeQueryService.getInternal(1L)).willReturn(
-                new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.ACTIVE, 3000L, 30000L, "우체국택배"));
+                basic(1L, 2L, "곳간상회", StoreStatus.ACTIVE, 3000L, 30000L, "우체국택배"));
 
         // when · then
         mockMvc.perform(get("/internal/stores/1"))
@@ -74,7 +76,7 @@ class InternalStoreControllerTest {
     void get_whenNoFreeShippingAndCourier_returnsNullFields() throws Exception {
         // given
         given(storeQueryService.getInternal(3L)).willReturn(
-                new InternalStoreResponse(3L, 6L, "새 스토어", StoreStatus.ACTIVE, 3000L, null, null));
+                basic(3L, 6L, "새 스토어", StoreStatus.ACTIVE, 3000L, null, null));
 
         // when · then
         mockMvc.perform(get("/internal/stores/3"))
@@ -153,7 +155,7 @@ class InternalStoreControllerTest {
     void changeStatus_whenSuspend_returns200Detail() throws Exception {
         // given
         given(storeStatusService.changeByAdmin(1L, StoreStatus.SUSPENDED, "허위 광고 신고 3건 확인"))
-                .willReturn(new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.SUSPENDED, 3000L, null, null));
+                .willReturn(basic(1L, 2L, "곳간상회", StoreStatus.SUSPENDED, 3000L, null, null));
 
         // when · then
         mockMvc.perform(patch("/internal/stores/1/status").contentType(MediaType.APPLICATION_JSON)
@@ -206,5 +208,46 @@ class InternalStoreControllerTest {
         mockMvc.perform(patch("/internal/stores/99/status").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("스토어 상세 1절 확장 — 기존 7필드 뒤에 관리자용 필드 · 상태 이력(오래된 순)이 붙는다")
+    void get_withAdminFields_returnsExtendedFields() throws Exception {
+        // given
+        OffsetDateTime opened = OffsetDateTime.parse("2025-12-31T10:00:00+09:00");
+        OffsetDateTime suspended = OffsetDateTime.parse("2026-09-27T10:00:00+09:00");
+        given(storeQueryService.getInternal(15L)).willReturn(new InternalStoreResponse(15L, 205L, "볕드는집", StoreStatus.SUSPENDED,
+                3000L, null, "CJ대한통운", "byeot-house", "정다은", "볕드는집", "000-00-00005", "010-0000-0005", StoreGrade.SPROUT,
+                "평일 14시 이전 결제 시 당일 출고", "반품 미처리 3건", 15L, opened, List.of(
+                        new InternalStoreResponse.History(null, StoreStatus.ACTIVE, StoreActorType.ADMIN, null, opened),
+                        new InternalStoreResponse.History(StoreStatus.ACTIVE, StoreStatus.SUSPENDED, StoreActorType.ADMIN, "반품 미처리 3건", suspended))));
+
+        // when · then
+        mockMvc.perform(get("/internal/stores/15"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUSPENDED"))
+                .andExpect(jsonPath("$.data.slug").value("byeot-house"))
+                .andExpect(jsonPath("$.data.ownerName").value("정다은"))
+                .andExpect(jsonPath("$.data.companyName").value("볕드는집"))
+                .andExpect(jsonPath("$.data.bizRegNo").value("000-00-00005"))
+                .andExpect(jsonPath("$.data.csPhone").value("010-0000-0005"))
+                .andExpect(jsonPath("$.data.grade").value("SPROUT"))
+                .andExpect(jsonPath("$.data.dispatchNote").value("평일 14시 이전 결제 시 당일 출고"))
+                .andExpect(jsonPath("$.data.statusReason").value("반품 미처리 3건"))
+                .andExpect(jsonPath("$.data.applicationId").value(15))
+                .andExpect(jsonPath("$.data.createdAt").value("2025-12-31T10:00:00+09:00"))
+                .andExpect(jsonPath("$.data.statusHistory[0].fromStatus").value(nullValue()))
+                .andExpect(jsonPath("$.data.statusHistory[0].toStatus").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.statusHistory[1].toStatus").value("SUSPENDED"))
+                .andExpect(jsonPath("$.data.statusHistory[1].actor").value("ADMIN"))
+                .andExpect(jsonPath("$.data.statusHistory[1].reason").value("반품 미처리 3건"))
+                .andExpect(jsonPath("$.data.statusHistory[1].changedAt").value("2026-09-27T10:00:00+09:00"));
+    }
+
+    /** 기존 호출자(user · order · chat)가 읽는 7필드만 채운 응답 — 확장 필드는 이 테스트들의 관심 밖 */
+    private static InternalStoreResponse basic(Long storeId, Long userId, String storeName, StoreStatus status, Long shippingFee,
+            Long freeShippingThreshold, String courier) {
+        return new InternalStoreResponse(storeId, userId, storeName, status, shippingFee, freeShippingThreshold, courier,
+                null, null, null, null, null, null, null, null, null, null, List.of());
     }
 }

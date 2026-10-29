@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -51,12 +52,14 @@ class StoreStatusServiceTest {
     private StoreStatusHistoryRepository storeStatusHistoryRepository;
     @Mock
     private EventOutboxService eventOutboxService;
+    @Mock
+    private StoreQueryService storeQueryService;
 
     private StoreStatusService service;
 
     @BeforeEach
     void setUp() {
-        service = new StoreStatusService(storeRepository, storeStatusHistoryRepository, eventOutboxService,
+        service = new StoreStatusService(storeRepository, storeStatusHistoryRepository, eventOutboxService, storeQueryService,
                 Clock.fixed(NOW.atZone(KST).toInstant(), KST));
     }
 
@@ -67,13 +70,15 @@ class StoreStatusServiceTest {
         // given
         Store store = store(1L, from);
         given(storeRepository.findForUpdate(1L)).willReturn(Optional.of(store));
+        InternalStoreResponse detail = mock(InternalStoreResponse.class);
+        given(storeQueryService.getInternal(1L)).willReturn(detail);
 
         // when
         InternalStoreResponse response = service.changeByAdmin(1L, to, "허위 광고 신고 3건 확인");
 
         // then
-        assertThat(response.storeId()).isEqualTo(1L);
-        assertThat(response.status()).isEqualTo(to);
+        assertThat(response).isSameAs(detail); // 바뀐 상태 · 새 이력까지 담은 1절 응답을 상세 조회로 다시 만든다
+        assertThat(store.getStatus()).isEqualTo(to);
         assertThat(store.getStatusReason()).isEqualTo("허위 광고 신고 3건 확인");
 
         ArgumentCaptor<StoreStatusHistory> history = ArgumentCaptor.forClass(StoreStatusHistory.class);
@@ -97,12 +102,15 @@ class StoreStatusServiceTest {
         Store store = store(15L, StoreStatus.SUSPENDED);
         ReflectionTestUtils.setField(store, "statusReason", "반품 미처리");
         given(storeRepository.findForUpdate(15L)).willReturn(Optional.of(store));
+        InternalStoreResponse detail = mock(InternalStoreResponse.class);
+        given(storeQueryService.getInternal(15L)).willReturn(detail);
 
         // when
         InternalStoreResponse response = service.changeByAdmin(15L, StoreStatus.SUSPENDED, "다시 정지");
 
         // then
-        assertThat(response.status()).isEqualTo(StoreStatus.SUSPENDED);
+        assertThat(response).isSameAs(detail);
+        assertThat(store.getStatus()).isEqualTo(StoreStatus.SUSPENDED);
         assertThat(store.getStatusReason()).isEqualTo("반품 미처리");
         verify(storeStatusHistoryRepository, never()).save(any());
         verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());

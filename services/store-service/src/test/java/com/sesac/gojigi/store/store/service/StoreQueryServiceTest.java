@@ -6,13 +6,20 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.store.apply.entity.BizType;
+import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
+import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
 import com.sesac.gojigi.store.store.entity.Store;
+import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
+import com.sesac.gojigi.store.store.entity.StoreStatusHistory;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
+import com.sesac.gojigi.store.store.repository.StoreStatusHistoryRepository;
 import com.sesac.gojigi.store.store.repository.StoreWithApplicant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -24,6 +31,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class StoreQueryServiceTest {
@@ -31,28 +39,55 @@ class StoreQueryServiceTest {
     @Mock
     private StoreRepository storeRepository;
 
+    @Mock
+    private StoreApplicationRepository storeApplicationRepository;
+
+    @Mock
+    private StoreStatusHistoryRepository storeStatusHistoryRepository;
+
     @InjectMocks
     private StoreQueryService storeQueryService;
 
     @Test
-    @DisplayName("내부 상세는 스토어 ID · 판매자 ID · 스토어명 · 상태 · 배송 정책을 돌려준다")
-    void getInternal_whenStoreExists_returnsStatus() {
+    @DisplayName("내부 상세는 기존 7필드(상태 · 배송 정책) 뒤에 신청서의 대표자 · 상호 · 사업자번호와 상태 이력(오래된 순, +09:00)을 붙인다")
+    void getInternal_whenStoreExists_returnsDetailWithApplicantAndHistory() {
         // given
-        Store store = mock(Store.class);
-        given(store.getId()).willReturn(1L);
-        given(store.getUserId()).willReturn(2L);
-        given(store.getStoreName()).willReturn("곳간상회");
-        given(store.getStatus()).willReturn(StoreStatus.CLOSED);
-        given(store.getShippingFee()).willReturn(3000L);
-        given(store.getFreeShippingThreshold()).willReturn(null);
-        given(store.getCourier()).willReturn("CJ대한통운");
+        Store store = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
+        ReflectionTestUtils.setField(store, "id", 1L);
+        ReflectionTestUtils.setField(store, "status", StoreStatus.CLOSED);
+        ReflectionTestUtils.setField(store, "statusReason", "판매자 폐점");
+        ReflectionTestUtils.setField(store, "courier", "CJ대한통운");
+        ReflectionTestUtils.setField(store, "dispatchNote", "평일 14시 이전 결제 시 당일 출고");
+        ReflectionTestUtils.setField(store, "grade", StoreGrade.POWER);
+        ReflectionTestUtils.setField(store, "createdAt", LocalDateTime.of(2026, 10, 15, 9, 0));
         given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store));
+        StoreApplication application = StoreApplication.builder()
+                .userId(2L).categoryId(1L).bizType(BizType.INDIVIDUAL)
+                .companyName("곳간상사").ownerName("홍길동").bizRegNo("000-00-00001").ecommerceRegNo("2026-서울성동-0000")
+                .managerPhone("010-0000-1234").managerEmail("seller@example.com").businessAddress("서울시 성동구")
+                .storeName("곳간상회").slug("gotgan").intro("<p>소개</p>")
+                .representativeProducts(List.of(new RepresentativeProduct("리넨 셔츠", "셔츠", 39000)))
+                .bankName("국민").accountNo("000000-00-000000").accountHolder("홍길동")
+                .marketingAgreed(false).submittedAt(LocalDateTime.of(2026, 10, 10, 9, 0))
+                .build();
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        StoreStatusHistory opened = StoreStatusHistory.of(1L, null, StoreStatus.ACTIVE, StoreActorType.ADMIN, null);
+        ReflectionTestUtils.setField(opened, "createdAt", LocalDateTime.of(2026, 10, 15, 9, 0));
+        StoreStatusHistory closed = StoreStatusHistory.of(1L, StoreStatus.ACTIVE, StoreStatus.CLOSED, StoreActorType.SELLER, "판매자 폐점");
+        ReflectionTestUtils.setField(closed, "createdAt", LocalDateTime.of(2026, 10, 28, 14, 30));
+        given(storeStatusHistoryRepository.findAllByStoreIdOrderByIdAsc(1L)).willReturn(List.of(opened, closed));
 
         // when
         InternalStoreResponse response = storeQueryService.getInternal(1L);
 
         // then
-        assertThat(response).isEqualTo(new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.CLOSED, 3000L, null, "CJ대한통운"));
+        assertThat(response).isEqualTo(new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.CLOSED, 3000L, null, "CJ대한통운",
+                "gotgan", "홍길동", "곳간상사", "000-00-00001", "010-0000-1234", StoreGrade.POWER, "평일 14시 이전 결제 시 당일 출고",
+                "판매자 폐점", 27L, OffsetDateTime.parse("2026-10-15T09:00:00+09:00"), List.of(
+                        new InternalStoreResponse.History(null, StoreStatus.ACTIVE, StoreActorType.ADMIN, null,
+                                OffsetDateTime.parse("2026-10-15T09:00:00+09:00")),
+                        new InternalStoreResponse.History(StoreStatus.ACTIVE, StoreStatus.CLOSED, StoreActorType.SELLER, "판매자 폐점",
+                                OffsetDateTime.parse("2026-10-28T14:30:00+09:00")))));
     }
 
     @Test

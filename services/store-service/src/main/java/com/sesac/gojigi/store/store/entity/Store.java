@@ -20,7 +20,7 @@ import org.hibernate.generator.EventType;
 
 /**
  * 스토어 · 배송 정책 (storedb store). 입점 승인으로 생성, 1인 1스토어(uk_store_user_id).
- * 내부 상세 조회 · 입점 승인에 필요한 컬럼만 매핑한다 — 배송 정책은 order 배송비 계산용 3개만, 이미지 · 색 등은 그 API 를 만들 때 추가.
+ * 내부 상세 조회 · 입점 승인에 필요한 컬럼만 매핑한다 — 배송 정책 · 출고 안내 · 등급까지, 이미지 · 색 등은 그 API 를 만들 때 추가.
  * 매핑하지 않은 color 와 읽기 전용 grade 는 승인 때 DDL 기본값이 들어간다.
  * 폐점은 status = CLOSED 로 표현하고 deleted_at 은 채우지 않는다 (폐점 스토어도 주문 · 정산 내역에서 조회돼야 함).
  */
@@ -82,6 +82,10 @@ public class Store extends BaseTimeEntity {
     /** 기본 택배사 이름 — 승인 직후 null */
     @Column(name = "courier", length = 30)
     private String courier;
+
+    /** 출고 안내 문구 — 승인 직후 null (판매자 스토어 설정에서 입력) */
+    @Column(name = "dispatch_note", length = 100)
+    private String dispatchNote;
 
     @Column(name = "deleted_at", columnDefinition = "DATETIME(6)")
     private LocalDateTime deletedAt;
