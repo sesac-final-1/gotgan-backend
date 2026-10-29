@@ -10,8 +10,7 @@
 |---|---|
 | 대상 `targetType` | `REVIEW` · `USER` |
 | 신고 상태 | `OPEN`(처리 대기) → 관리자 조치 한 번에 대상의 열린 신고가 모두 `RESOLVED`(블라인드 · 정지) 또는 `DISMISSED`(해제 · 기각) |
-| 대상 서비스 | 리뷰 조회 · 블라인드 = review `GET` · `PATCH /internal/reviews/{id}(/blind)` (서킷 `review`), 회원 조회 · 정지 = user `GET` · `PATCH /internal/users/{id}(/status)` (서킷 `user`). 오류는 HTTP 상태 · code 그대로, 장애는 502 `EXTERNAL_API_ERROR` |
-| review 배포 전 | `REVIEW_CLIENT_MOCK=true`(기본) — 어떤 리뷰 ID 든 있는 것으로 보고 블라인드 상태만 메모리에. 배포 후 ConfigMap `REVIEW_CLIENT_MOCK=false` |
+| 대상 서비스 | 리뷰 조회 · 블라인드 = review `GET` · `PATCH /internal/reviews/{id}(/blind)` (서킷 `review`) — 회원 상세 "작성 리뷰" `GET /api/admin/users/{id}/reviews` 도 같은 서킷으로 review `GET /internal/reviews?userId=`(review.md 8-3) 를 그대로 전달, 회원 조회 · 정지 = user `GET` · `PATCH /internal/users/{id}(/status)` (서킷 `user`). 오류는 HTTP 상태 · code 그대로, 장애는 502 `EXTERNAL_API_ERROR` |
 | 자동 처리 | 없음 — 신고가 쌓여도 자동 임시 블라인드 · 처리 메일 없음(관리자 수동 처리만) |
 
 ### 신고 사유 `reasonCode`

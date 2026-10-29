@@ -6,15 +6,13 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** review-service 호출 — 서킷 브레이커 "review", 재시도는 GET 만(블라인드 PATCH 는 재시도 없음). review 내부 API 배포 후 REVIEW_CLIENT_MOCK=false */
+/** review-service 호출 — 서킷 브레이커 "review", 재시도는 GET 만(블라인드 PATCH 는 재시도 없음) */
 @Component
-@ConditionalOnProperty(name = "app.client.review-mock", havingValue = "false")
 @RequiredArgsConstructor
 public class ReviewClientAdapter implements ReviewReader {
 
@@ -36,6 +34,13 @@ public class ReviewClientAdapter implements ReviewReader {
         return call(() -> reviewClient.blind(reviewId, jsonMapper.createObjectNode().put("blinded", blinded).put("reason", reason)));
     }
 
+    @Override
+    @Retry(name = TARGET)
+    @CircuitBreaker(name = TARGET, fallbackMethod = "listByUserFallback")
+    public JsonNode listByUser(Long userId, Integer page, Integer size) {
+        return call(() -> reviewClient.listByUser(userId, page, size));
+    }
+
     private static JsonNode call(Supplier<ApiResponse<JsonNode>> request) {
         try {
             return request.get().data();
@@ -50,6 +55,10 @@ public class ReviewClientAdapter implements ReviewReader {
     }
 
     JsonNode blindFallback(Long reviewId, boolean blinded, String reason, Throwable t) {
+        throw RemoteCalls.unavailable(TARGET, t);
+    }
+
+    JsonNode listByUserFallback(Long userId, Integer page, Integer size, Throwable t) {
         throw RemoteCalls.unavailable(TARGET, t);
     }
 }

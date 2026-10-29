@@ -43,9 +43,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 신고 (10/26 B안) — 접수 · 대상별 묶음 · 상세 · 처리. review · user 클라이언트는 가짜, DB(admindb) · 서킷 · 오류 전달은 실제.
- * review-mock=false 로 실제 ReviewClientAdapter 경로를 탄다. 대상 ID 는 테스트마다 새로 (같은 컨텍스트가 DB 를 공유)
+ * 대상 ID 는 테스트마다 새로 (같은 컨텍스트가 DB 를 공유)
  */
-@SpringBootTest(properties = { "management.tracing.sampling.probability=0", "app.client.review-mock=false" })
+@SpringBootTest(properties = "management.tracing.sampling.probability=0")
 @Import(TestcontainersConfiguration.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")

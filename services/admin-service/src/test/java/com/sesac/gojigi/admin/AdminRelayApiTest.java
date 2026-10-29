@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.admin.product.client.AdminProductClient;
+import com.sesac.gojigi.admin.review.client.ReviewClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.admin.user.client.UserClient;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
@@ -39,7 +40,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * admin 중계 — 관리자 회원(user) · 정산 · 수수료(settlement) · 상품(product). 다른 서비스 클라이언트는 가짜, 서킷 브레이커 · 재시도 · 오류 전달은 실제.
+ * admin 중계 — 관리자 회원(user · 작성 리뷰 review) · 정산 · 수수료(settlement) · 상품(product). 다른 서비스 클라이언트는 가짜, 서킷 브레이커 · 재시도 · 오류 전달은 실제.
  * 트레이스 샘플링 0 — 같은 JVM 의 LogbackConfigTest 에 Zipkin 경고가 섞이지 않게 (product #90 과 같은 이유)
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -55,12 +56,13 @@ class AdminRelayApiTest {
     @MockitoBean UserClient userClient;
     @MockitoBean SettlementClient settlementClient;
     @MockitoBean AdminProductClient adminProductClient;
+    @MockitoBean ReviewClient reviewClient;
     @Autowired CircuitBreakerRegistry circuitBreakers;
 
     /** 목 · 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
     @BeforeEach
     void resetMocks() {
-        reset(userClient, settlementClient, adminProductClient);
+        reset(userClient, settlementClient, adminProductClient, reviewClient);
         circuitBreakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
     }
 
@@ -104,6 +106,31 @@ class AdminRelayApiTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("USER_INVALID_STATUS_TRANSITION"))
                 .andExpect(jsonPath("$.message").value("이미 정지된 회원입니다."));
+    }
+
+    @Test
+    @DisplayName("회원 작성 리뷰 — review 회원별 목록 그대로(page · size 전달), 400 그대로, 연결 실패는 한 번 더 시도 후 502")
+    void users_reviews_relaysReviewList() throws Exception {
+        when(reviewClient.listByUser(4L, 0, 5)).thenReturn(ok("""
+                {"content":[{"reviewId":31,"productName":"린넨 셔츠","rating":1,"blinded":true,"blindReason":"욕설 · 비방"}],
+                "page":0,"size":5,"totalElements":1,"totalPages":1,"hasNext":false}"""));
+        mockMvc.perform(get("/api/admin/users/4/reviews").param("page", "0").param("size", "5").header("X-User-Id", ADMIN_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].productName").value("린넨 셔츠"))
+                .andExpect(jsonPath("$.data.content[0].blinded").value(true))
+                .andExpect(jsonPath("$.data.totalElements").value(1));
+
+        when(reviewClient.listByUser(4L, null, 99)).thenThrow(rejected(HttpStatus.BAD_REQUEST,
+                "{\"code\":\"INVALID_INPUT\",\"message\":\"입력값이 올바르지 않습니다.\",\"data\":null}"));
+        mockMvc.perform(get("/api/admin/users/4/reviews").param("size", "99").header("X-User-Id", ADMIN_ID))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        when(reviewClient.listByUser(5L, null, null)).thenThrow(new ResourceAccessException("connect timed out"));
+        mockMvc.perform(get("/api/admin/users/5/reviews").header("X-User-Id", ADMIN_ID))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("EXTERNAL_API_ERROR"));
+        verify(reviewClient, times(2)).listByUser(5L, null, null);
     }
 
     @Test
