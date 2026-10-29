@@ -349,7 +349,7 @@ API 가 아니라 이벤트 소비입니다. 구매확정(구매자 버튼 · �
 |---|---|
 | `productId` | 필수. 판매중지 · 품절 상품도 문의 가능, **없는 · 삭제된 상품만** 404 |
 | `content` | 필수, 일반 텍스트 1~1,000자 — 태그는 지우고 저장(공통 "본문") |
-| `secret` | 선택, 생략하면 공개. `true` 면 작성자 · 그 스토어 판매자만 내용을 봅니다(목록 PR 에서 가림) |
+| `secret` | 선택, 생략하면 공개. `true` 면 작성자 · 그 스토어 판매자만 내용을 봅니다(16절) |
 
 - 스토어는 요청으로 받지 않고 **상품에서** 가져옵니다(판매자 문의 목록 키).
 - 상품명 · 대표 사진 · 작성자 표시 이름(닉네임, 없으면 가운데 가린 실명 — 리뷰와 같은 규칙)은 **등록 시점 값**으로 저장합니다. 상품명이 바뀌어도 문의 목록은 그대로입니다.
@@ -392,3 +392,64 @@ API 가 아니라 이벤트 소비입니다. 구매확정(구매자 버튼 · �
 |---|---|
 | `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
 | 없는 · 이미 삭제된 · 다른 회원의 문의 (구분하지 않음) | 404 `INQUIRY_NOT_FOUND` |
+
+## 16. 상품 문의 목록 (공개) — `GET /api/inquiries?productId=&page=0&size=10` (REV-08)
+
+상품 상세 Q&A 탭(`ShopProductQna`)에서 씁니다. 로그인하지 않아도 되고, 로그인 상태면 게이트웨이가 토큰에서 넣은 `X-User-Id` · `X-Store-Id` 로 **비밀글을 엽니다**.
+
+- 삭제 제외, 최신 등록순. 탭 숫자 `Q&A n` 은 `totalElements`.
+- **비밀글**: 작성자 · 그 스토어 판매자가 아니면 `content` · `answerContent` 가 `null` — 화면은 "비밀글입니다". 작성자 이름 · 답변 여부(`answered`)는 보입니다.
+- `mine` = 내가 쓴 문의 → 수정 · 삭제 버튼(14 · 15절). 답변이 있으면 수정 버튼은 숨겨 주세요(409).
+- `page`(0부터) · `size`(1~50, 기본 10). 없는 상품은 빈 목록.
+
+```json
+{ "content": [ { "inquiryId": 12, "writerDisplayName": "곳간러버", "secret": false, "mine": false,
+                 "content": "M이랑 L 중 어떤 걸 추천하시나요?", "answered": true, "answerContent": "M 추천드립니다.",
+                 "answeredAt": "2026-10-29T11:00:00+09:00", "createdAt": "2026-10-29T10:00:00+09:00" } ],
+  "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "hasNext": false }
+```
+
+| 경우 | 응답 |
+|---|---|
+| `productId` 없음 · 숫자 아님 · `page` · `size` 범위 밖 | 400 `INVALID_INPUT` |
+
+## 17. 내 문의 — `GET /api/inquiries/me?page=0&size=10` (REV-08)
+
+마이페이지 상품 문의(`/mypage/qna`, `MyQna`)에서 씁니다. 내가 쓴 문의(삭제 제외 · 비밀글 포함) 최신 등록순, 항목은 14절 수정 응답과 같습니다 — 상품명 · 대표 사진은 등록 시점 값, 판매자 답변 포함.
+
+| 경우 | 응답 |
+|---|---|
+| `page` · `size` 범위 밖 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+
+## 18. 판매자 문의 목록 — `GET /api/seller/inquiries?tab=ALL&page=0&size=10` (REV-09)
+
+판매자센터 상품 문의(`SellerQnaList`)에서 씁니다. 스토어는 `X-Store-Id`.
+
+- 내 스토어 상품 문의(삭제 제외) 최신 등록순. **비밀글도 내용을 보여 줍니다** — `secret` 은 자물쇠 표시용.
+- `tab`: `ALL`(기본) · `UNANSWERED`(미답변) · `ANSWERED`(답변완료). `page` · `size`(1~50, 기본 10).
+- 작성자는 `writerDisplayName`(닉네임, 없으면 가운데 가린 실명) — 구매자 목업 조회는 필요 없습니다.
+
+```json
+{ "content": [ { "inquiryId": 12, "productId": 101, "productName": "린넨 오버핏 셔츠", "writerDisplayName": "곳간러버",
+                 "content": "배송지 변경 가능할까요?", "secret": true, "answerContent": null, "answeredAt": null,
+                 "createdAt": "2026-10-29T10:00:00+09:00" } ],
+  "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "hasNext": false }
+```
+
+| 경우 | 응답 |
+|---|---|
+| 모르는 `tab` · `page` · `size` 범위 밖 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 스토어 정보 없음(`X-Store-Id` 없음) | 403 `FORBIDDEN` |
+
+## 19. 판매자 문의 탭 숫자 — `GET /api/seller/inquiries/summary` (REV-09)
+
+문의 화면 탭 숫자, 판매자 메뉴 "상품 문의" 배지 · 대시보드 "미답변 문의"(`SellerLayout` · `SellerDashboard`)에서 씁니다. 삭제 제외.
+
+응답 **200** `{ "unanswered": 3, "answered": 12, "all": 15 }`
+
+| 경우 | 응답 |
+|---|---|
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 스토어 정보 없음 | 403 `FORBIDDEN` |
