@@ -7,23 +7,33 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
+import com.sesac.gojigi.common.web.dto.PageResponse;
+import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
 import com.sesac.gojigi.review.inquiry.dto.request.InquiryCreateRequest;
 import com.sesac.gojigi.review.inquiry.dto.request.InquiryUpdateRequest;
+import com.sesac.gojigi.review.inquiry.dto.request.SellerInquiryTab;
 import com.sesac.gojigi.review.inquiry.dto.response.InquiryCreateResponse;
 import com.sesac.gojigi.review.inquiry.dto.response.InquiryResponse;
+import com.sesac.gojigi.review.inquiry.dto.response.ProductInquiryResponse;
+import com.sesac.gojigi.review.inquiry.dto.response.SellerInquiryResponse;
+import com.sesac.gojigi.review.inquiry.dto.response.SellerInquirySummaryResponse;
 import com.sesac.gojigi.review.inquiry.exception.InquiryErrorCode;
 import com.sesac.gojigi.review.inquiry.exception.InquiryException;
 import com.sesac.gojigi.review.inquiry.service.InquiryService;
 import java.time.OffsetDateTime;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -167,6 +177,98 @@ class InquiryControllerTest {
         mockMvc.perform(delete("/api/inquiries/99").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("INQUIRY_NOT_FOUND"));
+    }
+
+    @Nested
+    @DisplayName("조회")
+    class Read {
+
+        private static final OffsetDateTime AT = OffsetDateTime.parse("2026-10-29T10:00:00+09:00");
+
+        @Test
+        @DisplayName("상품 문의 — 비로그인은 viewer null, 비밀글은 내용 null 그대로")
+        void listForProduct_anonymous() throws Exception {
+            // given
+            given(inquiryService.listForProduct(101L, null, null, 0, 10)).willReturn(new PageResponse<>(List.of(
+                    new ProductInquiryResponse(12L, "곳간러버", true, false, null, true, null, AT, AT)), 0, 10, 1, 1, false));
+
+            // when · then
+            mockMvc.perform(get("/api/inquiries?productId=101"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.totalElements").value(1))
+                    .andExpect(jsonPath("$.data.content[0].secret").value(true))
+                    .andExpect(jsonPath("$.data.content[0].content").doesNotExist())
+                    .andExpect(jsonPath("$.data.content[0].answered").value(true))
+                    .andExpect(jsonPath("$.data.content[0].writerDisplayName").value("곳간러버"));
+        }
+
+        @Test
+        @DisplayName("상품 문의 — 로그인 헤더(X-User-Id · X-Store-Id)를 viewer 로 넘긴다")
+        void listForProduct_withViewerHeaders() throws Exception {
+            given(inquiryService.listForProduct(101L, 4L, 7L, 1, 20)).willReturn(new PageResponse<>(List.of(), 1, 20, 0, 0, false));
+
+            mockMvc.perform(get("/api/inquiries?productId=101&page=1&size=20")
+                            .header("X-User-Id", "4").header("X-User-Roles", "SELLER").header("X-Store-Id", "7"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.page").value(1));
+            verify(inquiryService).listForProduct(101L, 4L, 7L, 1, 20);
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = { "/api/inquiries", "/api/inquiries?productId=101&page=-1", "/api/inquiries?productId=101&size=51",
+                "/api/inquiries/me?size=0", "/api/seller/inquiries?tab=NEW", "/api/seller/inquiries?size=51" })
+        @DisplayName("productId 없음 · page · size 범위 밖 · 모르는 tab — 400 INVALID_INPUT")
+        void list_invalidParam_returns400(String url) throws Exception {
+            mockMvc.perform(get(url).header("X-User-Id", "4").header("X-User-Roles", "SELLER").header("X-Store-Id", "7"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+            verifyNoInteractions(inquiryService);
+        }
+
+        @Test
+        @DisplayName("내 문의 — 로그인 회원으로, 헤더 없으면 401")
+        void listMine() throws Exception {
+            given(inquiryService.listMine(4L, 0, 10)).willReturn(new PageResponse<>(List.of(
+                    new InquiryResponse(12L, 101L, "린넨 오버핏 셔츠", null, "재입고 언제 되나요?", false, "다음 주", AT, AT)), 0, 10, 1, 1, false));
+
+            mockMvc.perform(get("/api/inquiries/me").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.content[0].productName").value("린넨 오버핏 셔츠"))
+                    .andExpect(jsonPath("$.data.content[0].answerContent").value("다음 주"));
+            mockMvc.perform(get("/api/inquiries/me"))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        @DisplayName("판매자 문의 — X-Store-Id 스토어 · tab 그대로")
+        void listForSeller() throws Exception {
+            given(inquiryService.listForSeller(7L, SellerInquiryTab.UNANSWERED, 0, 10)).willReturn(new PageResponse<>(List.of(
+                    new SellerInquiryResponse(12L, 101L, "린넨 오버핏 셔츠", "곳간러버", "배송지 변경 가능할까요?", true, null, null, AT)),
+                    0, 10, 1, 1, false));
+
+            mockMvc.perform(get("/api/seller/inquiries?tab=UNANSWERED")
+                            .header("X-User-Id", "9").header("X-User-Roles", "SELLER").header("X-Store-Id", "7"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.content[0].content").value("배송지 변경 가능할까요?"))
+                    .andExpect(jsonPath("$.data.content[0].secret").value(true))
+                    .andExpect(jsonPath("$.data.content[0].writerDisplayName").value("곳간러버"));
+        }
+
+        @Test
+        @DisplayName("판매자 탭 숫자 — 200, 스토어 정보 없으면 서비스의 403 그대로")
+        void summarizeForSeller() throws Exception {
+            given(inquiryService.summarizeForSeller(7L)).willReturn(new SellerInquirySummaryResponse(3, 12, 15));
+            given(inquiryService.summarizeForSeller(null)).willThrow(new BusinessException(CommonErrorCode.FORBIDDEN, "스토어 정보가 없습니다."));
+
+            mockMvc.perform(get("/api/seller/inquiries/summary")
+                            .header("X-User-Id", "9").header("X-User-Roles", "SELLER").header("X-Store-Id", "7"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.unanswered").value(3))
+                    .andExpect(jsonPath("$.data.answered").value(12))
+                    .andExpect(jsonPath("$.data.all").value(15));
+            mockMvc.perform(get("/api/seller/inquiries/summary").header("X-User-Id", "9").header("X-User-Roles", "SELLER"))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     private void assertInvalidInput(MockHttpServletRequestBuilder request, String body) throws Exception {
