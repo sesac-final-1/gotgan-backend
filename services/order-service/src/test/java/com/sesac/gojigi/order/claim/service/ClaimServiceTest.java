@@ -10,8 +10,8 @@ import com.sesac.gojigi.order.claim.dto.response.ClaimPreviewResponse;
 import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
 import com.sesac.gojigi.order.claim.service.ClaimTxService.ClaimTarget;
-import com.sesac.gojigi.order.order.client.ShippingPolicyClient;
-import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
+import com.sesac.gojigi.order.order.client.StoreClientAdapter;
+import com.sesac.gojigi.order.order.client.dto.StoreResponse;
 import com.sesac.gojigi.order.order.entity.Order;
 import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.entity.OrderItem;
@@ -24,14 +24,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 환불 예정액 · 반품 · 교환 신청 — 유형 · 사유별 금액, 판매자 귀책이면 스토어 배송비 정책을 부르지 않음 */
+/** 환불 예정액 · 반품 · 교환 신청 — 유형 · 사유별 금액, 판매자 귀책이면 store 를 부르지 않음 */
 @ExtendWith(MockitoExtension.class)
 class ClaimServiceTest {
 
     private static final String ORDER_NO = "20261022-000123";
+    /** 스토어 1 — 기본 배송비 3,000원 */
+    private static final StoreResponse STORE = new StoreResponse(1L, 2L, "곳간상회", "ACTIVE", 3_000L, 50_000L);
 
     @Mock private ClaimTxService claimTx;
-    @Mock private ShippingPolicyClient shippingPolicy;
+    @Mock private StoreClientAdapter store;
 
     @InjectMocks
     private ClaimService claimService;
@@ -57,13 +59,13 @@ class ClaimServiceTest {
     void preview_cancel() {
         assertThat(preview(ClaimType.CANCEL, ClaimReasonCode.CHANGE_OF_MIND)).isEqualTo(new ClaimPreviewResponse(
                 456L, ClaimType.CANCEL, ClaimReasonCode.CHANGE_OF_MIND, 64_000L, 3_000L, false, 65_000L, 2_000L, 0L));   // 구매확정 전 — 회수할 적립 없음
-        verifyNoInteractions(shippingPolicy);
+        verifyNoInteractions(store);
     }
 
     @Test
     @DisplayName("반품 단순변심 — 스토어 기본 배송비 × 2 를 빼고 환불")
     void preview_returnChangeOfMind() {
-        given(shippingPolicy.getShippingPolicy(1L)).willReturn(new ShippingPolicy(3_000L, 50_000L));
+        given(store.getStore(1L)).willReturn(STORE);
 
         ClaimPreviewResponse result = preview(ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND);
 
@@ -74,14 +76,14 @@ class ClaimServiceTest {
     }
 
     @Test
-    @DisplayName("반품 불량 — 판매자 부담이라 차감 없음 · 배송비 정책을 부르지 않음")
+    @DisplayName("반품 불량 — 판매자 부담이라 차감 없음 · store 를 부르지 않음")
     void preview_returnDefective() {
         ClaimPreviewResponse result = preview(ClaimType.RETURN, ClaimReasonCode.DEFECTIVE);
 
         assertThat(result.shippingFee()).isZero();
         assertThat(result.refundAmt()).isEqualTo(62_000L);
         assertThat(result.sellerFault()).isTrue();
-        verifyNoInteractions(shippingPolicy);
+        verifyNoInteractions(store);
     }
 
     @Test
@@ -102,7 +104,7 @@ class ClaimServiceTest {
         ClaimCreateRequest exchange = new ClaimCreateRequest(456L, ClaimType.EXCHANGE, ClaimReasonCode.CHANGE_OF_MIND, null);
         given(claimTx.find(4L, ORDER_NO, 456L, ClaimType.RETURN)).willReturn(target);
         given(claimTx.find(4L, ORDER_NO, 456L, ClaimType.EXCHANGE)).willReturn(target);
-        given(shippingPolicy.getShippingPolicy(1L)).willReturn(new ShippingPolicy(3_000L, 50_000L));
+        given(store.getStore(1L)).willReturn(STORE);
 
         claimService.requestReturnOrExchange(4L, ORDER_NO, ret);
         claimService.requestReturnOrExchange(4L, ORDER_NO, exchange);
