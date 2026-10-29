@@ -12,6 +12,7 @@ import com.sesac.gojigi.store.apply.entity.StoreApplication;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
+import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreGrade;
@@ -44,6 +45,9 @@ class StoreQueryServiceTest {
 
     @Mock
     private StoreStatusHistoryRepository storeStatusHistoryRepository;
+
+    @Mock
+    private ImageUrls imageUrls;
 
     @InjectMocks
     private StoreQueryService storeQueryService;
@@ -136,5 +140,51 @@ class StoreQueryServiceTest {
 
         // when · then
         assertThat(storeQueryService.getAdminList(null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("판매자 내 스토어 — 이미지 키를 조회 URL 로 바꾸고 대표자 · 사업자번호는 신청서에서, 정지 사유까지")
+    void getSellerStore_whenStoreExists_returnsSettingsWithImageUrl() {
+        // given
+        Store store = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
+        ReflectionTestUtils.setField(store, "id", 1L);
+        ReflectionTestUtils.setField(store, "imageKey", "stores/1/a.jpg");
+        ReflectionTestUtils.setField(store, "color", "#2b2b2b");
+        ReflectionTestUtils.setField(store, "grade", StoreGrade.SPROUT);
+        ReflectionTestUtils.setField(store, "createdAt", LocalDateTime.of(2026, 10, 15, 9, 0));
+        store.changeStatusByAdmin(StoreStatus.SUSPENDED, "허위 광고");
+        given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store));
+        StoreApplication application = StoreApplication.builder()
+                .userId(2L).categoryId(1L).bizType(BizType.INDIVIDUAL)
+                .companyName("곳간상사").ownerName("홍길동").bizRegNo("000-00-00001").ecommerceRegNo("2026-서울성동-0000")
+                .managerPhone("010-0000-1234").managerEmail("seller@example.com").businessAddress("서울시 성동구")
+                .storeName("곳간상회").slug("gotgan").intro("<p>소개</p>")
+                .representativeProducts(List.of(new RepresentativeProduct("리넨 셔츠", "셔츠", 39000)))
+                .bankName("국민").accountNo("000000-00-000000").accountHolder("홍길동")
+                .marketingAgreed(false).submittedAt(LocalDateTime.of(2026, 10, 10, 9, 0))
+                .build();
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        given(imageUrls.of("stores/1/a.jpg")).willReturn("https://images/stores/1/a.jpg");
+
+        // when
+        SellerStoreResponse mine = storeQueryService.getSellerStore(1L);
+
+        // then
+        assertThat(mine).isEqualTo(new SellerStoreResponse(1L, "곳간상회", "gotgan", StoreStatus.SUSPENDED, "허위 광고", "<p>소개</p>",
+                "stores/1/a.jpg", "https://images/stores/1/a.jpg", "#2b2b2b", "010-0000-1234", 3000L, null, null, null,
+                StoreGrade.SPROUT, "홍길동", "000-00-00001", OffsetDateTime.parse("2026-10-15T09:00:00+09:00")));
+    }
+
+    @Test
+    @DisplayName("판매자 내 스토어 — 없거나 소프트 삭제면 STORE_NOT_FOUND")
+    void getSellerStore_whenStoreMissing_throwsNotFound() {
+        // given
+        given(storeRepository.findByIdAndDeletedAtIsNull(99L)).willReturn(Optional.empty());
+
+        // when · then
+        assertThatThrownBy(() -> storeQueryService.getSellerStore(99L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(StoreErrorCode.STORE_NOT_FOUND);
     }
 }

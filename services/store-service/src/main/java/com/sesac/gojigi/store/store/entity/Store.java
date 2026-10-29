@@ -20,8 +20,8 @@ import org.hibernate.generator.EventType;
 
 /**
  * 스토어 · 배송 정책 (storedb store). 입점 승인으로 생성, 1인 1스토어(uk_store_user_id).
- * 내부 상세 조회 · 입점 승인에 필요한 컬럼만 매핑한다 — 배송 정책 · 출고 안내 · 등급까지, 이미지 · 색 등은 그 API 를 만들 때 추가.
- * 매핑하지 않은 color 와 읽기 전용 grade 는 승인 때 DDL 기본값이 들어간다.
+ * 내부 상세 · 판매자 설정 · 입점 승인에 쓰는 컬럼을 매핑한다 — 소개 · 이미지 · 색 · 연락처 · 배송 정책 · 출고 안내 · 등급.
+ * color · grade 는 승인 때 DDL 기본값이 들어간다(INSERT 에 넣지 않음) — grade 는 읽기만, color 는 판매자 설정에서 바꿈.
  * 폐점은 status = CLOSED 로 표현하고 deleted_at 은 채우지 않는다 (폐점 스토어도 주문 · 정산 내역에서 조회돼야 함).
  */
 @Getter
@@ -53,6 +53,15 @@ public class Store extends BaseTimeEntity {
     /** 스토어 소개 — 신청 때 정화한 HTML */
     @Column(name = "intro", columnDefinition = "TEXT")
     private String intro;
+
+    /** 대표 이미지 S3 키(images 버킷 stores/ 공개 경로) — 없으면 null, 화면은 color 아바타 */
+    @Column(name = "image_key")
+    private String imageKey;
+
+    /** 표시 색 #RRGGBB — 승인 때 DDL 기본값(#5b6b4a), 판매자 설정에서 6색 중 선택 */
+    @Generated(event = EventType.INSERT)
+    @Column(name = "color", insertable = false, length = 7)
+    private String color;
 
     /** 고객 문의 연락처 — 승인 때 신청서 담당자 휴대폰 */
     @Column(name = "cs_phone", nullable = false, length = 20)

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sesac.gojigi.store.TestcontainersConfiguration;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
+import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
@@ -19,7 +20,7 @@ import org.springframework.test.context.TestPropertySource;
 /** 실제 MySQL + Flyway + 시연 시드 위에서 1절 확장 응답(신청서 값 · 출고 안내 · 등급 · 상태 이력)이 채워지는지 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({TestcontainersConfiguration.class, StoreQueryService.class})
+@Import({TestcontainersConfiguration.class, StoreQueryService.class, ImageUrls.class})
 @ActiveProfiles("test")
 @TestPropertySource(properties = "spring.flyway.locations=classpath:db/migration,classpath:db/seed")
 class StoreQueryServiceIntegrationTest {
@@ -69,5 +70,27 @@ class StoreQueryServiceIntegrationTest {
             assertThat(h.fromStatus()).isNull();
             assertThat(h.toStatus()).isEqualTo(StoreStatus.ACTIVE);
         });
+    }
+
+    @Test
+    @DisplayName("판매자 내 스토어 — 시드 스토어 1 의 색 · 연락처 · 배송 정책 · 출고 안내 · 대표자, 이미지 없음은 null")
+    void getSellerStore_seedStore_returnsSettings() {
+        // when
+        SellerStoreResponse mine = storeQueryService.getSellerStore(1L);
+
+        // then
+        assertThat(mine.storeName()).isEqualTo("산골농부 박씨네");
+        assertThat(mine.slug()).isEqualTo("park-farm");
+        assertThat(mine.color()).isEqualTo("#d0701f");
+        assertThat(mine.csPhone()).isEqualTo("064-0000-0006");
+        assertThat(mine.shippingFee()).isEqualTo(3000L);
+        assertThat(mine.freeShippingThreshold()).isEqualTo(30000L);
+        assertThat(mine.courier()).isEqualTo("우체국택배");
+        assertThat(mine.dispatchNote()).isNotBlank();
+        assertThat(mine.imageKey()).isNull();
+        assertThat(mine.imageUrl()).isNull();
+        assertThat(mine.ownerName()).isEqualTo("박영철");
+        assertThat(mine.bizRegNo()).isEqualTo("000-00-00006");
+        assertThat(mine.createdAt().getOffset().getTotalSeconds()).isEqualTo(9 * 3600);
     }
 }

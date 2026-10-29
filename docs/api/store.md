@@ -535,6 +535,37 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 - **정지 중에도 폐점 가능** — 막으면 정지된 판매자는 탈퇴할 수 없음. 정지 사유는 폐점하면서 지웁니다(이력에는 남음).
 - 발행 `StoreStatusChanged{storeId, status: "CLOSED"}` — 9절과 같은 규칙(`eventId` 매번 새 값 · `occurredAt` = 폐점 시각). product 는 상품 숨김(#169), settlement 는 지급 보류.
 
+## 13. 판매자 내 스토어 — `GET /api/seller/store` (STR-06)
+
+판매자 스토어 설정 화면이 부릅니다. 스토어 = `X-Store-Id`. 수정(`PUT /api/seller/store`) · 대표 이미지 업로드 주소는 다음 PR 에서 이 절에 이어 붙입니다.
+
+```json
+{
+  "storeId": 1, "storeName": "곳간상회", "slug": "gotgan-store", "status": "ACTIVE", "statusReason": null,
+  "intro": "<p>리넨 의류를 만듭니다.</p>",
+  "imageKey": "stores/1/7f3c9e2a.jpg",
+  "imageUrl": "https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/stores/1/7f3c9e2a.jpg",
+  "color": "#5b6b4a", "csPhone": "010-0000-1234",
+  "shippingFee": 3000, "freeShippingThreshold": 50000, "courier": "CJ대한통운", "dispatchNote": "평일 14시 이전 결제 시 당일 출고",
+  "grade": "SPROUT", "ownerName": "홍길동", "bizRegNo": "000-00-00001", "createdAt": "2026-10-15T09:00:00+09:00"
+}
+```
+
+| 경우 | 응답 |
+|---|---|
+| 스토어 있음 (정지 · 폐점 포함) | **200** 위 응답 |
+| `X-Store-Id` 없음 / 사용자 헤더 없음 | **403** `FORBIDDEN` / **401** `UNAUTHORIZED` |
+| 없거나 소프트 삭제된 스토어 | **404** `STORE_NOT_FOUND` |
+
+| 필드 | 설명 |
+|---|---|
+| `storeName` · `slug` | 읽기만 — 주소는 변경 불가, 스토어명 변경은 관리자 승인 필요(P2) |
+| `imageKey` · `imageUrl` | 대표 이미지(images 버킷 `stores/` 공개 경로) — `imageUrl = IMAGES_BASE_URL/{imageKey}`(product 와 같은 규칙). 없으면 둘 다 `null` → 화면은 `color` 아바타 |
+| `color` | `#RRGGBB` — 승인 때 기본값 `#5b6b4a` |
+| `csPhone` | 승인 때 신청서 담당자 휴대폰을 복사, 이후 판매자가 수정(신청서 기록은 그대로) |
+| `shippingFee` · `freeShippingThreshold` · `courier` · `dispatchNote` | 1절 배송 정책과 같은 값 — 승인 직후 3,000원 · `null` · `null` · `null` → 화면은 "배송 정책을 확인해 주세요" 안내 |
+| `ownerName` · `bizRegNo` | 원래 신청서(store 에 없음) — 바뀌면 새 사업자라 재심사 |
+
 ## 10/20 설계 정리
 
 | # | 항목 | 정한 내용 |
