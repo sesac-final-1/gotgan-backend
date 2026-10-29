@@ -8,7 +8,7 @@ import static org.mockito.BDDMockito.given;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient.FileMeta;
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient.PresignedDownload;
-import com.sesac.gojigi.store.apply.client.SellerDocumentClient.PresignedUpload;
+import com.sesac.gojigi.store.common.s3.PresignedUpload;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -29,6 +29,7 @@ import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 @ExtendWith(MockitoExtension.class)
 class SellerDocumentClientTest {
@@ -109,10 +110,9 @@ class SellerDocumentClientTest {
 
     @Test
     @DisplayName("presign 중 자격 증명 실패는 502 EXTERNAL_API_ERROR")
-    @SuppressWarnings("unchecked")
     void presignUpload_credentialFailure_throwsExternalApiError() {
         // given
-        given(failingPresigner.presignPutObject(any(Consumer.class))).willThrow(SdkClientException.create("no credentials"));
+        given(failingPresigner.presignPutObject(any(PutObjectPresignRequest.class))).willThrow(SdkClientException.create("no credentials"));
         SellerDocumentClient client = new SellerDocumentClient(s3Client, failingPresigner, BUCKET);
 
         // when · then

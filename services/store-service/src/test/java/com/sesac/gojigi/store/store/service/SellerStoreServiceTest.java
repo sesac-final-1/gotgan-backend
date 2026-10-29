@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.store.store.client.StoreImageClient;
-import com.sesac.gojigi.store.store.client.StoreImageClient.PresignedUpload;
+import com.sesac.gojigi.store.common.s3.PresignedUpload;
 import com.sesac.gojigi.store.store.dto.request.SellerStoreUpdateRequest;
 import com.sesac.gojigi.store.store.dto.request.StoreImagePresignRequest;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;

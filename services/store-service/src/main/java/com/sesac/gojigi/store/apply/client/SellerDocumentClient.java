@@ -2,6 +2,8 @@ package com.sesac.gojigi.store.apply.client;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
+import com.sesac.gojigi.store.common.s3.PresignedPut;
+import com.sesac.gojigi.store.common.s3.PresignedUpload;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -15,7 +17,6 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
-import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 /**
  * 입점 서류 버킷(비공개 seller-docs) — 업로드 주소 발급(presigned PUT) · 심사 열람 주소 발급(presigned GET)과,
@@ -25,7 +26,6 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 @Component
 public class SellerDocumentClient {
 
-    static final Duration UPLOAD_TTL = Duration.ofMinutes(10);
     static final Duration DOWNLOAD_TTL = Duration.ofMinutes(10);
 
     private final S3Client s3Client;
@@ -38,19 +38,9 @@ public class SellerDocumentClient {
         this.bucket = bucket;
     }
 
-    /**
-     * presigned PUT — Content-Type · Content-Length 를 서명에 넣어 발급 때 말한 형식 · 크기와 다른 파일은 S3 가 403 으로 막는다.
-     * 서명은 로컬 계산이지만 IRSA 자격 증명을 못 얻으면 실패 → EXTERNAL_API_ERROR(502)
-     */
+    /** presigned PUT — 서명 · 실패 처리는 스토어 대표 이미지와 같은 {@link PresignedPut} */
     public PresignedUpload presignUpload(String key, String contentType, long size) {
-        try {
-            PresignedPutObjectRequest presigned = s3Presigner.presignPutObject(b -> b.signatureDuration(UPLOAD_TTL)
-                    .putObjectRequest(p -> p.bucket(bucket).key(key).contentType(contentType).contentLength(size)));
-            return new PresignedUpload(presigned.url().toString(), presigned.expiration());
-        } catch (SdkException e) {
-            log.error("입점 서류 업로드 주소 발급 실패 - key={}", key, e);
-            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "업로드 주소를 발급하지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        }
+        return PresignedPut.sign(s3Presigner, bucket, key, contentType, size, "입점 서류");
     }
 
     /**
@@ -88,9 +78,6 @@ public class SellerDocumentClient {
     }
 
     public record FileMeta(String contentType, long size) {
-    }
-
-    public record PresignedUpload(String url, Instant expiresAt) {
     }
 
     public record PresignedDownload(String url, Instant expiresAt) {

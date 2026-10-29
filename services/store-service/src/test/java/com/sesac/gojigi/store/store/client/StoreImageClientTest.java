@@ -7,10 +7,9 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
-import com.sesac.gojigi.store.store.client.StoreImageClient.PresignedUpload;
+import com.sesac.gojigi.store.common.s3.PresignedUpload;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.function.Consumer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -18,6 +17,7 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 class StoreImageClientTest {
 
@@ -48,11 +48,10 @@ class StoreImageClientTest {
 
     @Test
     @DisplayName("자격 증명 실패는 502 EXTERNAL_API_ERROR")
-    @SuppressWarnings("unchecked")
     void presignUpload_credentialFailure_throwsExternalApiError() {
         // given
         S3Presigner failing = mock(S3Presigner.class);
-        given(failing.presignPutObject(any(Consumer.class))).willThrow(SdkClientException.create("no credentials"));
+        given(failing.presignPutObject(any(PutObjectPresignRequest.class))).willThrow(SdkClientException.create("no credentials"));
 
         // when · then
         assertThatThrownBy(() -> new StoreImageClient(failing, BUCKET).presignUpload("stores/1/a.jpg", "image/jpeg", 1L))
