@@ -10,7 +10,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
-import com.sesac.gojigi.store.apply.client.SellerDocumentClient.PresignedUpload;
+import com.sesac.gojigi.store.common.s3.PresignedUpload;
 import com.sesac.gojigi.store.apply.dto.request.DocumentPresignRequest;
 import com.sesac.gojigi.store.apply.dto.request.DocumentPresignRequest.FileItem;
 import com.sesac.gojigi.store.apply.dto.response.DocumentPresignResponse;

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.store.TestcontainersConfiguration;
+import com.sesac.gojigi.store.store.client.StoreImageClient;
 import com.sesac.gojigi.store.store.dto.request.SellerStoreUpdateRequest;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
@@ -20,6 +21,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /** 실제 MySQL + Flyway + 시연 시드 위에서 설정 수정이 컬럼에 저장되고 상태 · 등급 · 이름은 그대로인지 확인 */
 @DataJpaTest
@@ -28,6 +30,9 @@ import org.springframework.test.context.TestPropertySource;
 @ActiveProfiles("test")
 @TestPropertySource(properties = "spring.flyway.locations=classpath:db/migration,classpath:db/seed")
 class SellerStoreServiceIntegrationTest {
+
+    @MockitoBean
+    private StoreImageClient storeImageClient;
 
     @Autowired
     private SellerStoreService service;
