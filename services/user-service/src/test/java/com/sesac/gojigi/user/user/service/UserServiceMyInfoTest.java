@@ -11,7 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.sesac.gojigi.user.auth.service.AuthService;
-import com.sesac.gojigi.user.user.client.StoreClient;
+import com.sesac.gojigi.user.user.client.StoreClientAdapter;
 import com.sesac.gojigi.user.user.dto.request.ChangePasswordRequest;
 import com.sesac.gojigi.user.user.dto.request.UpdateMyInfoRequest;
 import com.sesac.gojigi.user.user.dto.response.MyInfoResponse;
@@ -49,7 +49,7 @@ class UserServiceMyInfoTest {
     @Mock
     private AuthService authService;
     @Mock
-    private StoreClient storeClient;
+    private StoreClientAdapter storeClient;
     @Mock
     private BlockedUserRedisRepository blockedUserRedisRepository;
     @Mock
