@@ -203,7 +203,7 @@ public class SellerApplyService {
         StoreApplication application = findOwn(userId, applicationId);
         application.requireResubmittable(now);
         List<DocumentItem> items = request.documentsOrEmpty();
-        checkResubmitDocuments(application.getRequestedDocs(), items);
+        checkResubmitDocuments(application.getRequestedDocs(), items, changesBusinessIdentity(application, request));
         List<VerifiedDocument> documents = verifyFiles(userId, items);
 
         transactionTemplate.executeWithoutResult(status -> saveResubmit(applicationId, request, documents, now));
@@ -219,10 +219,24 @@ public class SellerApplyService {
                 .orElseThrow(() -> new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
     }
 
-    /** 요청 서류는 모두 · 요청 밖 종류는 안 됨, 낸 종류마다 개수 규칙. V5 전 보완요청(요청 서류 기록 없음)은 낸 종류만 본다 */
-    private static void checkResubmitDocuments(List<DocType> requestedDocs, List<DocumentItem> items) {
+    /** 사업자 구분 · 대표자 · 사업자등록번호가 실제로 바뀌는지 — 바뀌면 사업자등록증으로 다시 확인해야 한다 */
+    private static boolean changesBusinessIdentity(StoreApplication current, ApplicationResubmitRequest request) {
+        return (request.bizType() != null && request.bizType() != current.getBizType())
+                || (request.ownerName() != null && !request.ownerName().trim().equals(current.getOwnerName()))
+                || (request.bizRegNo() != null && !request.bizRegNo().equals(current.getBizRegNo()));
+    }
+
+    /**
+     * 요청 서류는 모두 · 요청 밖 종류는 안 됨, 낸 종류마다 개수 규칙. V5 전 보완요청(요청 서류 기록 없음)은 낸 종류만 본다.
+     * 사업자 정보를 바꾸면 사업자등록증이 필수 — 보완요청에 없던 서류여도 받는다
+     */
+    private static void checkResubmitDocuments(List<DocType> requestedDocs, List<DocumentItem> items,
+            boolean businessIdentityChanged) {
         Set<DocType> submitted = items.stream().map(DocumentItem::docType)
                 .collect(Collectors.toCollection(() -> EnumSet.noneOf(DocType.class)));
+        if (businessIdentityChanged && !submitted.contains(DocType.BUSINESS_REG)) {
+            throw invalidDocument("사업자 구분 · 대표자 · 사업자등록번호를 고치면 사업자등록증도 다시 올려 주세요.");
+        }
         if (requestedDocs != null) {
             for (DocType requested : requestedDocs) {
                 if (!submitted.contains(requested)) {
@@ -230,7 +244,7 @@ public class SellerApplyService {
                 }
             }
             for (DocType type : submitted) {
-                if (!requestedDocs.contains(type)) {
+                if (!requestedDocs.contains(type) && !(businessIdentityChanged && type == DocType.BUSINESS_REG)) {
                     throw invalidDocument("보완 요청받지 않은 서류입니다: " + label(type));
                 }
             }
@@ -267,6 +281,9 @@ public class SellerApplyService {
         List<RepresentativeProduct> products = request.representativeProducts() == null ? current.getRepresentativeProducts()
                 : SellerApplyRequest.toRepresentativeProducts(request.representativeProducts());
         ApplicationCorrection correction = new ApplicationCorrection(
+                request.bizType() == null ? current.getBizType() : request.bizType(),
+                trimOr(request.ownerName(), current.getOwnerName()),
+                request.bizRegNo() == null ? current.getBizRegNo() : request.bizRegNo(),
                 trimOr(request.companyName(), current.getCompanyName()),
                 trimOr(request.ecommerceRegNo(), current.getEcommerceRegNo()),
                 trimOr(request.managerPhone(), current.getManagerPhone()),
@@ -279,6 +296,9 @@ public class SellerApplyService {
                 account == null ? current.getAccountNo() : account.number().trim(),
                 account == null ? current.getAccountHolder() : account.holder().trim());
 
+        addIfChanged(changed, "사업자 구분", current.getBizType(), correction.bizType());
+        addIfChanged(changed, "대표자", current.getOwnerName(), correction.ownerName());
+        addIfChanged(changed, "사업자등록번호", current.getBizRegNo(), correction.bizRegNo());
         addIfChanged(changed, "상호", current.getCompanyName(), correction.companyName());
         addIfChanged(changed, "통신판매업 신고번호", current.getEcommerceRegNo(), correction.ecommerceRegNo());
         addIfChanged(changed, "담당자 휴대폰", current.getManagerPhone(), correction.managerPhone());

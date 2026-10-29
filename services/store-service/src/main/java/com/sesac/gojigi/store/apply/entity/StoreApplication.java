@@ -190,10 +190,13 @@ public class StoreApplication extends BaseTimeEntity {
 
     /**
      * 재제출 — 보완요청 중이고 기한 전일 때만 심사대기로 (store.md 2-3절). 고칠 수 있는 필드만 바꾸고(값이 다 채워져 온다),
-     * 사업자등록번호 · 대표자 · 스토어명 · 주소(slug)는 그대로. 사유 · 요청 서류는 비운다
+     * 스토어명 · 주소(slug)는 그대로. 사유 · 요청 서류는 비운다
      */
     public void resubmit(ApplicationCorrection correction, LocalDateTime resubmittedAt) {
         requireResubmittable(resubmittedAt);
+        this.bizType = correction.bizType();
+        this.ownerName = correction.ownerName();
+        this.bizRegNo = correction.bizRegNo();
         this.companyName = correction.companyName();
         this.ecommerceRegNo = correction.ecommerceRegNo();
         this.managerPhone = correction.managerPhone();

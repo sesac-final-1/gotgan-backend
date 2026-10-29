@@ -3,6 +3,7 @@ package com.sesac.gojigi.store.apply.dto.request;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.DocumentItem;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.ProductItem;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.SettlementAccount;
+import com.sesac.gojigi.store.apply.entity.BizType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -14,9 +15,22 @@ import java.util.List;
 
 /**
  * 보완 재제출 (docs/api/store.md 2-3절, STR-09) — 모든 항목 선택, 보내지 않은(null) 항목은 그대로.
- * 규칙은 신청(2절)과 같고 빈 문자열로 지울 수 없다. 사업자등록번호 · 대표자 · 스토어명 · 주소는 고칠 수 없다(새 신청).
+ * 규칙은 신청(2절)과 같고 빈 문자열로 지울 수 없다. 사업자 구분 · 대표자 · 사업자등록번호를 바꾸면 사업자등록증도 다시 내야 한다.
+ * 스토어명 · 주소는 고칠 수 없다(중복 검사 · 새 신청).
  */
 public record ApplicationResubmitRequest(
+        @Schema(description = "사업자 구분 — 바꾸면 사업자등록증도 다시", example = "CORPORATE")
+        BizType bizType,
+
+        @Schema(description = "대표자 — 바꾸면 사업자등록증도 다시", example = "홍길동")
+        @Pattern(regexp = NOT_BLANK, message = "대표자를 비울 수 없습니다.")
+        @Size(max = 50, message = "대표자는 50자 이하로 입력해 주세요.")
+        String ownerName,
+
+        @Schema(description = "사업자등록번호 — 바꾸면 사업자등록증도 다시", example = "000-00-00001")
+        @Pattern(regexp = "^\\d{3}-\\d{2}-\\d{5}$", message = "사업자등록번호는 000-00-00000 형식입니다.")
+        String bizRegNo,
+
         @Schema(description = "상호", example = "곳간상회")
         @Pattern(regexp = NOT_BLANK, message = "상호를 비울 수 없습니다.")
         @Size(max = 100, message = "상호는 100자 이하로 입력해 주세요.")

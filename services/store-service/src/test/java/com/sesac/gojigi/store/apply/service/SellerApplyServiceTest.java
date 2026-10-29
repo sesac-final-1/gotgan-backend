@@ -393,7 +393,7 @@ class SellerApplyServiceTest {
         // given
         StoreApplication application = supplemented(List.of());
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
-        ApplicationResubmitRequest request = new ApplicationResubmitRequest(null, "2026-서울성동-1234", null, null, null, null,
+        ApplicationResubmitRequest request = new ApplicationResubmitRequest(null, null, null, null, "2026-서울성동-1234", null, null, null, null,
                 null, null, null, null);
 
         // when
@@ -491,6 +491,53 @@ class SellerApplyServiceTest {
     }
 
     @Test
+    @DisplayName("사업자등록번호를 고치면 사업자등록증 필수 — 없으면 400, 있으면 보완요청에 없던 서류여도 받고 이력에 남김")
+    void resubmit_bizRegNoChanged_requiresBusinessRegistration() {
+        // given — 보완요청은 통신판매업 신고증만
+        StoreApplication application = supplemented(List.of(DocType.ECOMMERCE_REG));
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        List<DocumentItem> ecommerceOnly = List.of(doc(DocType.ECOMMERCE_REG, "ecom2.pdf"));
+
+        // when · then — 사업자등록증 없이 번호만 고침
+        assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 27L,
+                resubmitBusiness(null, null, "000-00-00100", ecommerceOnly)))
+                .hasMessageContaining("사업자등록증도 다시 올려 주세요")
+                .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_DOCUMENT_INVALID);
+        verify(sellerDocumentClient, never()).head(anyString());
+
+        // when — 사업자등록증까지
+        givenFilesUploaded();
+        sellerApplyService.resubmit(USER_ID, 27L, resubmitBusiness(BizType.CORPORATE, " 김대표 ", "000-00-00100",
+                List.of(doc(DocType.ECOMMERCE_REG, "ecom2.pdf"), doc(DocType.BUSINESS_REG, "biz2.pdf"))));
+
+        // then
+        assertThat(application.getBizRegNo()).isEqualTo("000-00-00100");
+        assertThat(application.getOwnerName()).isEqualTo("김대표");
+        assertThat(application.getBizType()).isEqualTo(BizType.CORPORATE);
+        ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
+        verify(applicationHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getReason())
+                .isEqualTo("재제출 — 서류: 통신판매업 신고증 · 사업자등록증 / 수정: 사업자 구분 · 대표자 · 사업자등록번호");
+    }
+
+    @Test
+    @DisplayName("사업자 정보를 지금 값 그대로 보내면 바뀐 게 아니라 사업자등록증을 요구하지 않는다")
+    void resubmit_sameBusinessValues_doesNotRequireBusinessRegistration() {
+        // given
+        StoreApplication application = supplemented(List.of());
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+
+        // when
+        sellerApplyService.resubmit(USER_ID, 27L, resubmitBusiness(BizType.INDIVIDUAL, "홍길동", "000-00-00099", null));
+
+        // then
+        assertThat(application.getStatus()).isEqualTo(ApplicationStatus.PENDING);
+        ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
+        verify(applicationHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getReason()).isEqualTo("재제출");
+    }
+
+    @Test
     @DisplayName("이력 사유 — 서류만 · 수정만 · 둘 다 · 아무것도 없음")
     void resubmitSummary_formats() {
         assertThat(SellerApplyService.resubmitSummary(List.of(DocType.BUSINESS_REG, DocType.PRODUCT_PHOTO), List.of()))
@@ -530,7 +577,13 @@ class SellerApplyServiceTest {
     }
 
     private static ApplicationResubmitRequest resubmit(List<DocumentItem> documents, String companyName, SettlementAccount account) {
-        return new ApplicationResubmitRequest(companyName, null, null, null, null, null, null, null, account, documents);
+        return new ApplicationResubmitRequest(null, null, null, companyName, null, null, null, null, null, null, null, account, documents);
+    }
+
+    private static ApplicationResubmitRequest resubmitBusiness(BizType bizType, String ownerName, String bizRegNo,
+            List<DocumentItem> documents) {
+        return new ApplicationResubmitRequest(bizType, ownerName, bizRegNo, null, null, null, null, null, null, null, null, null,
+                documents);
     }
 
     private void assertDocumentInvalid(List<DocumentItem> documents, String messagePart) {

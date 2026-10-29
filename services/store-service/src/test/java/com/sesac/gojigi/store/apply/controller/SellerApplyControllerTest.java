@@ -326,6 +326,9 @@ class SellerApplyControllerTest {
     @ParameterizedTest(name = "{0}")
     @CsvSource(delimiter = '|', value = {
             "상호 공백           | {\"companyName\": \"  \"}",
+            "사업자번호 형식     | {\"bizRegNo\": \"0000000001\"}",
+            "대표자 공백         | {\"ownerName\": \" \"}",
+            "사업자 구분 모름    | {\"bizType\": \"PERSON\"}",
             "휴대폰 형식         | {\"managerPhone\": \"01000001234\"}",
             "이메일 형식         | {\"managerEmail\": \"seller\"}",
             "카테고리 0          | {\"categoryId\": 0}",
