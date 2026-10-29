@@ -1,6 +1,7 @@
 package com.sesac.gojigi.product.category.service;
 
 import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.toMap;
 
 import com.sesac.gojigi.product.category.dto.request.CategoryCreateRequest;
 import com.sesac.gojigi.product.category.dto.request.CategoryUpdateRequest;
@@ -11,6 +12,7 @@ import com.sesac.gojigi.product.category.entity.Category;
 import com.sesac.gojigi.product.category.exception.CategoryErrorCode;
 import com.sesac.gojigi.product.category.exception.CategoryException;
 import com.sesac.gojigi.product.category.repository.CategoryRepository;
+import com.sesac.gojigi.product.product.repository.ProductRepository;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -28,13 +30,17 @@ import org.springframework.util.StringUtils;
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final ProductRepository productRepository;
 
+    /** 상품 수는 GROUP BY category_id 한 번 — 상품은 하위 id 만 가지므로 상위는 응답 조립 때 하위 합 */
     public List<AdminCategoryTreeResponse> adminTree() {
         List<Category> all = categoryRepository.findAllByOrderBySortOrderAscIdAsc();
         Map<Long, List<Category>> children = childrenByParent(all);
+        Map<Long, Long> productCount = productRepository.countByCategory().stream()
+                .collect(toMap(row -> (Long) row[0], row -> (Long) row[1]));
         return all.stream()
                 .filter(Category::isTop)
-                .map(top -> AdminCategoryTreeResponse.of(top, children.getOrDefault(top.getId(), List.of())))
+                .map(top -> AdminCategoryTreeResponse.of(top, children.getOrDefault(top.getId(), List.of()), productCount))
                 .toList();
     }
 
