@@ -64,12 +64,12 @@ public class NotificationService {
         return recipients.size();
     }
 
-    /** 최신순 목록 — 받는 쪽마다 size 개씩 읽어 합친 뒤 size 개. cursor = 이전 페이지 마지막 알림 id */
+    /** 최신순 목록 — 받는 쪽마다 size + 1 개씩 읽어 합친 뒤 size 개(한 개 더 있으면 다음 페이지). cursor = 이전 페이지 마지막 알림 id */
     public NotificationPage page(AuthUser user, String cursor, int size) {
         int limit = Math.clamp(size, 1, MAX_PAGE);
         String before = cursor == null || cursor.isBlank() ? null : decode(cursor)[1];
         List<Item> merged = new ArrayList<>();
-        recipientsOf(user).forEach(r -> merged.addAll(inbox.latest(r, before, limit)));
+        recipientsOf(user).forEach(r -> merged.addAll(inbox.latest(r, before, limit + 1)));
         merged.sort(Comparator.comparing(Item::sortKey).reversed());
         List<Item> page = merged.stream().limit(limit).toList();
         String next = merged.size() > limit ? encode(page.getLast().recipient(), page.getLast().sortKey()) : null;

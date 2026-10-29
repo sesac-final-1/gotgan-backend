@@ -90,8 +90,8 @@ class NotificationServiceTest {
     @Test
     @DisplayName("목록 — 판매자는 회원 · 스토어 알림을 합쳐 최신순, 더 있으면 nextCursor, 다음 페이지는 그 이전 것만")
     void page_mergesRecipients() {
-        given(inbox.latest(eq("USER#2"), isNull(), eq(2))).willReturn(List.of(item("USER#2", "0000000000300#a", false)));
-        given(inbox.latest(eq("STORE#1"), isNull(), eq(2))).willReturn(List.of(item("STORE#1", "0000000000400#b", true), item("STORE#1", "0000000000100#c", false)));
+        given(inbox.latest(eq("USER#2"), isNull(), eq(3))).willReturn(List.of(item("USER#2", "0000000000300#a", false)));
+        given(inbox.latest(eq("STORE#1"), isNull(), eq(3))).willReturn(List.of(item("STORE#1", "0000000000400#b", true), item("STORE#1", "0000000000100#c", false)));
         given(inbox.countUnread(anyString())).willReturn(1L);
 
         NotificationPage page = service.page(SELLER, null, 2);
@@ -101,7 +101,22 @@ class NotificationServiceTest {
         assertThat(NotificationService.decode(page.nextCursor())[1]).isEqualTo("0000000000300#a");
 
         service.page(SELLER, page.nextCursor(), 2);
-        verify(inbox).latest("STORE#1", "0000000000300#a", 2);
+        verify(inbox).latest("STORE#1", "0000000000300#a", 3);
+    }
+
+    @Test
+    @DisplayName("목록 — 받는 쪽이 하나(구매자)여도 size 보다 많으면 nextCursor, 딱 size 개면 없음")
+    void page_singleRecipientHasNextCursor() {
+        given(inbox.latest(eq("USER#4"), isNull(), eq(3))).willReturn(List.of(
+                item("USER#4", "0000000000300#a", false), item("USER#4", "0000000000200#b", false), item("USER#4", "0000000000100#c", false)));
+
+        NotificationPage page = service.page(BUYER, null, 2);
+
+        assertThat(page.items()).hasSize(2);
+        assertThat(NotificationService.decode(page.nextCursor())[1]).isEqualTo("0000000000200#b");
+
+        given(inbox.latest(eq("USER#4"), eq("0000000000200#b"), eq(3))).willReturn(List.of(item("USER#4", "0000000000100#c", false)));
+        assertThat(service.page(BUYER, page.nextCursor(), 2).nextCursor()).isNull();
     }
 
     @Test
