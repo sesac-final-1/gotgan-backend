@@ -293,6 +293,7 @@ class ApplicationReviewServiceIntegrationTest {
             assertThat(supplemented.getStatus()).isEqualTo(ApplicationStatus.SUPPLEMENT);
             assertThat(supplemented.getStatusReason()).isEqualTo("사본이 흐려 확인이 어렵습니다");
             assertThat(supplemented.getStatusChangedAt()).isEqualTo(NOW);
+            assertThat(supplemented.getRequestedDocs()).containsExactly(DocType.BUSINESS_REG, DocType.BANK_COPY);   // V5 JSON
             assertThat(applicationHistoryRepository.findAllByStoreApplicationIdOrderByIdAsc(application.getId()))
                     .singleElement().satisfies(h -> {
                         assertThat(h.getToStatus()).isEqualTo(ApplicationStatus.SUPPLEMENT);

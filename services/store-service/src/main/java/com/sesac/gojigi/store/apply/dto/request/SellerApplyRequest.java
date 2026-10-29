@@ -118,6 +118,11 @@ public record SellerApplyRequest(
     }
 
     public List<RepresentativeProduct> toRepresentativeProducts() {
+        return toRepresentativeProducts(representativeProducts);
+    }
+
+    /** 앞뒤 공백 정리 — 재제출(ApplicationResubmitRequest)도 같은 규칙 */
+    public static List<RepresentativeProduct> toRepresentativeProducts(List<ProductItem> representativeProducts) {
         return representativeProducts.stream()
                 .map(p -> new RepresentativeProduct(p.name().trim(), p.subCategory().trim(), p.price()))
                 .toList();

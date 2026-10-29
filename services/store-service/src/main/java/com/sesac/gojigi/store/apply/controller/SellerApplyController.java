@@ -3,8 +3,10 @@ package com.sesac.gojigi.store.apply.controller;
 import com.sesac.gojigi.common.web.auth.AuthUser;
 import com.sesac.gojigi.common.web.auth.CurrentUser;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.store.apply.dto.request.ApplicationResubmitRequest;
 import com.sesac.gojigi.store.apply.dto.request.DocumentPresignRequest;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationResubmitResponse;
 import com.sesac.gojigi.store.apply.dto.response.DocumentPresignResponse;
 import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
@@ -21,12 +23,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 입점 신청 · 서류 업로드 주소 — 게이트웨이 /api/seller/apply/** (BUYER) → store-service (docs/api/store.md 2절 · 2-1절) */
+/** 입점 신청 · 서류 업로드 주소 · 내 신청 · 보완 재제출 — 게이트웨이 /api/seller/apply/** (BUYER) → store-service (docs/api/store.md 2 ~ 2-3절) */
 @Tag(name = "입점 신청", description = "구매자가 판매자로 입점 신청 — 인가: BUYER")
 @RestController
 @RequestMapping("/api/seller/apply")
@@ -77,10 +81,36 @@ public class SellerApplyController {
                 sellerDocumentPresignService.presign(user.userId(), request)));
     }
 
+    @Operation(summary = "보완 재제출", description = """
+            인가: BUYER (X-User-Id 본인 신청만 — 남의 신청은 404). 보완요청(SUPPLEMENT) 중이고 기한(보완요청 + 7일) 전일 때 심사대기(PENDING)로.
+            documents: 보완요청 서류(requestedDocs)를 모두 다시 — 요청 밖 종류는 안 됨, 한 장 서류 1개 · 상품 사진 3~10장, 같은 종류 이전 서류는
+            이전 제출본으로 남는다. 고칠 수 있는 항목(사업자 구분 · 대표자 · 사업자등록번호 · 상호 · 통신판매업 신고번호 · 담당자 휴대폰 · 이메일 ·
+            사업장 주소 · 카테고리 · 소개 · 대표 상품 · 정산 계좌)은 보낸 것만 바꾼다. 사업자 구분 · 대표자 · 사업자등록번호를 바꾸면 사업자등록증도
+            다시 내야 한다(보완요청에 없어도). 스토어명 · 주소도 바꿀 수 있고, 바꾸면 신청 때처럼 중복을 다시 확인한다.
+            에러: 400 INVALID_INPUT(형식) · 400 APPLY_DOCUMENT_INVALID(서류) · 401 UNAUTHORIZED · 404 APPLY_NOT_FOUND ·
+            409 APPLY_INVALID_STATUS(보완요청 중 아님 · 기한 지남 · 동시 처리) · 409 APPLY_SLUG_DUPLICATED · 409 APPLY_STORE_NAME_DUPLICATED ·
+            502 EXTERNAL_API_ERROR(S3)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "재제출 — 심사대기"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT · APPLY_DOCUMENT_INVALID"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "APPLY_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+                    description = "APPLY_INVALID_STATUS · APPLY_SLUG_DUPLICATED · APPLY_STORE_NAME_DUPLICATED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR")
+    })
+    @PatchMapping("/{applicationId}/resubmit")
+    public ResponseEntity<ApiResponse<ApplicationResubmitResponse>> resubmit(@Parameter(hidden = true) @CurrentUser AuthUser user,
+            @Parameter(description = "신청 ID", example = "27") @PathVariable Long applicationId,
+            @Valid @RequestBody ApplicationResubmitRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("보완 서류를 다시 제출했습니다.",
+                sellerApplyService.resubmit(user.userId(), applicationId, request)));
+    }
+
     @Operation(summary = "내 입점 신청 상태",
             description = """
             인가: BUYER (X-User-Id 본인 신청만). 가장 최근 신청 1건 — 접수번호 · 상태 · 반려 · 보완요청 사유 · 상태 이력(타임라인).
-            보완요청이면 supplementDueAt(보완요청 + 7일, 지나면 자동 반려), 반려면 reapplyAvailableAt(반려 + 30일), 승인이면 storeId.
+            보완요청이면 supplementDueAt(보완요청 + 7일, 지나면 자동 반려) · requestedDocs(다시 낼 서류), 반려면 reapplyAvailableAt(반려 + 30일), 승인이면 storeId.
             신청한 적이 없으면 200 data null(화면은 신청 폼). 에러: 401 UNAUTHORIZED""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 신청이 없으면 data null"),

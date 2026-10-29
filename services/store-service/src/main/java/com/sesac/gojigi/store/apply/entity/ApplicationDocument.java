@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 입점 서류 (storedb application_document). 파일은 비공개 seller-docs 버킷에 있고 DB 에는 키만.
- * 재제출하면 새 행을 넣고 이전 행은 is_current = FALSE 로 남긴다 (보완 재제출 PR).
+ * 재제출하면 새 행을 넣고 이전 행은 is_current = FALSE 로 남긴다 — 관리자가 이전 제출본과 비교 (store.md 2-3절).
  */
 @Getter
 @Entity
@@ -62,5 +62,10 @@ public class ApplicationDocument extends BaseTimeEntity {
         document.fileSize = fileSize;
         document.current = true;
         return document;
+    }
+
+    /** 재제출로 같은 종류의 새 서류가 들어오면 이전 제출본으로 (행은 지우지 않음) */
+    public void replace() {
+        this.current = false;
     }
 }

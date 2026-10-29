@@ -2,6 +2,7 @@ package com.sesac.gojigi.store.apply.dto.response;
 
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.History;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
+import com.sesac.gojigi.store.apply.entity.DocType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -42,5 +43,8 @@ public record MyApplicationResponse(
         Long storeId,
 
         @Schema(description = "상태 이력 — 오래된 순 (접수 null → PENDING 부터)")
-        List<History> history) {
+        List<History> history,
+
+        @Schema(description = "다시 낼 서류 종류 — 보완요청일 때만(서류가 아닌 내용 보완이면 [], 10/29 전 보완요청은 null)", example = "[\"ECOMMERCE_REG\"]")
+        List<DocType> requestedDocs) {
 }

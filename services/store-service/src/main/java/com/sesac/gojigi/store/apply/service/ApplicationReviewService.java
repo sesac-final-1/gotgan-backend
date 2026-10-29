@@ -108,7 +108,7 @@ public class ApplicationReviewService {
         return ApplicationRejectResponse.of(applicationId, application.getStatus(), now);
     }
 
-    /** 신청을 SUPPLEMENT 로 + 이력(메시지) + StoreApplicationSupplementRequested 아웃박스 행을 한 트랜잭션으로. requestedDocs 는 저장하지 않음 */
+    /** 신청을 SUPPLEMENT 로 + 이력(메시지) + StoreApplicationSupplementRequested 아웃박스 행을 한 트랜잭션으로. requestedDocs 는 재제출 검사용으로 저장(V5) */
     @Transactional
     public ApplicationSupplementResponse requestSupplement(Long applicationId, String message, List<DocType> requestedDocs) {
         if (new HashSet<>(requestedDocs).size() != requestedDocs.size()) {
@@ -118,7 +118,7 @@ public class ApplicationReviewService {
                 .orElseThrow(() -> new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
         LocalDateTime now = LocalDateTime.now(clock);
 
-        application.requestSupplement(message, now);
+        application.requestSupplement(message, requestedDocs, now);
         flushApplication(application);
         LocalDateTime dueAt = application.supplementDueAt();
 
