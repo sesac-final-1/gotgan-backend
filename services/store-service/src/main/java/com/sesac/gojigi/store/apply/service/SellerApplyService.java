@@ -69,6 +69,7 @@ public class SellerApplyService {
     private final SellerDocumentClient sellerDocumentClient;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+    private final SupplementDeadline supplementDeadline;
 
     public SellerApplyResponse apply(Long userId, SellerApplyRequest request) {
         LocalDateTime now = LocalDateTime.now(clock);
@@ -201,7 +202,7 @@ public class SellerApplyService {
     public ApplicationResubmitResponse resubmit(Long userId, Long applicationId, ApplicationResubmitRequest request) {
         LocalDateTime now = LocalDateTime.now(clock);
         StoreApplication application = findOwn(userId, applicationId);
-        application.requireResubmittable(now);
+        application.requireResubmittable(now, supplementDeadline.due());
         checkRenamedStoreIdentity(application, request);
         List<DocumentItem> items = request.documentsOrEmpty();
         checkResubmitDocuments(application.getRequestedDocs(), items, changesBusinessIdentity(application, request));
@@ -274,7 +275,7 @@ public class SellerApplyService {
             LocalDateTime now) {
         StoreApplication application = storeApplicationRepository.findById(applicationId).orElseThrow(); // 앞에서 확인
         List<String> changed = new ArrayList<>();
-        application.resubmit(correction(application, request, changed), now);
+        application.resubmit(correction(application, request, changed), now, supplementDeadline.due());
         try {
             storeApplicationRepository.saveAndFlush(application);
         } catch (OptimisticLockingFailureException e) {

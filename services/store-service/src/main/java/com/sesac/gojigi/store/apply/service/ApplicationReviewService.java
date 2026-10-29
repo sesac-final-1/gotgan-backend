@@ -40,7 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 관리자 입점 심사 — 승인 · 반려 · 보완요청 (docs/api/store.md 5 · 6 · 7절).
+ * 관리자 입점 심사 — 승인 · 반려 · 보완요청 (docs/api/store.md 5 · 6 · 7절) + 보완 기한이 지난 신청 자동 반려(7-1절, 스케줄러가 부름).
  * 동시 처리는 미리 검사한 뒤에도 저장 순간에 다시 걸릴 수 있어, saveAndFlush 로 그 자리에서 실행해 보고 409 로 바꾼다.
  * 이벤트는 같은 트랜잭션에서 아웃박스에 남기고 커밋 뒤 발행한다 — 발행이 실패해도 승인은 그대로, 발행기가 다시 보낸다.
  */
@@ -52,6 +52,8 @@ public class ApplicationReviewService {
     static final String STORE_APPROVED = "StoreApproved";
     static final String STORE_APPLICATION_REJECTED = "StoreApplicationRejected";
     static final String STORE_APPLICATION_SUPPLEMENT_REQUESTED = "StoreApplicationSupplementRequested";
+    /** 자동 반려 사유 — 신청자 화면 · 반려 메일에 그대로 보인다. 기한 길이는 설정값이라 숫자를 넣지 않음 */
+    static final String AUTO_REJECT_REASON = "보완 기한 안에 다시 제출하지 않아 자동 반려되었습니다.";
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final StoreApplicationRepository storeApplicationRepository;
@@ -60,6 +62,7 @@ public class ApplicationReviewService {
     private final StoreStatusHistoryRepository storeStatusHistoryRepository;
     private final EventOutboxService eventOutboxService;
     private final Clock clock;
+    private final SupplementDeadline supplementDeadline;
 
     /** 신청서로 스토어(ACTIVE)를 만들고 신청을 APPROVED 로 — 스토어 · 두 이력 · 신청 상태 · StoreApproved 아웃박스 행을 한 트랜잭션으로 */
     @Transactional
@@ -90,22 +93,46 @@ public class ApplicationReviewService {
     public ApplicationRejectResponse reject(Long applicationId, String reason) {
         StoreApplication application = storeApplicationRepository.findById(applicationId)
                 .orElseThrow(() -> new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
-        ApplicationStatus fromStatus = application.getStatus();
         LocalDateTime now = LocalDateTime.now(clock);
+
+        rejectAndPublish(application, reason, ActorType.ADMIN, now);
+        log.info("입점 반려 - applicationId={}, userId={}", applicationId, application.getUserId());
+        return ApplicationRejectResponse.of(applicationId, application.getStatus(), now);
+    }
+
+    /**
+     * 보완 기한이 지난 신청 자동 반려 (7-1절, STR-09) — 관리자 반려와 같은 저장 · 이벤트, 이력만 SYSTEM.
+     * 그 사이 재제출 · 관리자 처리로 대상이 아니게 됐으면 건너뛰고(false), 저장 순간 경합이면 @Version 으로 409 — 스케줄러가 건너뜀
+     */
+    @Transactional
+    public boolean rejectExpiredSupplement(Long applicationId) {
+        StoreApplication application = storeApplicationRepository.findById(applicationId).orElse(null);
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (application == null || application.getStatus() != ApplicationStatus.SUPPLEMENT
+                || now.isBefore(supplementDeadline.dueAt(application))) {
+            return false;
+        }
+
+        rejectAndPublish(application, AUTO_REJECT_REASON, ActorType.SYSTEM, now);
+        log.info("입점 자동 반려(보완 기한 지남) - applicationId={}, userId={}", applicationId, application.getUserId());
+        return true;
+    }
+
+    /** 신청을 REJECTED 로 + 이력 + StoreApplicationRejected 아웃박스 행 — 관리자 · 자동 반려가 같이 쓴다 */
+    private void rejectAndPublish(StoreApplication application, String reason, ActorType actor, LocalDateTime now) {
+        Long applicationId = application.getId();
+        ApplicationStatus fromStatus = application.getStatus();
 
         application.reject(reason, now);
         flushApplication(application);
 
         applicationHistoryRepository.save(
-                ApplicationHistory.of(applicationId, fromStatus, ApplicationStatus.REJECTED, ActorType.ADMIN, reason));
+                ApplicationHistory.of(applicationId, fromStatus, ApplicationStatus.REJECTED, actor, reason));
         // 반려는 신청 하나에 한 번뿐(REJECTED 에서 다른 상태로 가지 않음) → 승인과 같이 신청 ID 로 eventId 고정
         eventOutboxService.enqueue(STORE_APPLICATION_REJECTED, String.valueOf(applicationId),
                 applicationEventId(STORE_APPLICATION_REJECTED, applicationId), now,
                 new StoreApplicationRejectedPayload(applicationId, application.getUserId(), application.getStoreName(),
                         application.getManagerEmail(), reason, kst(now)));
-
-        log.info("입점 반려 - applicationId={}, userId={}", applicationId, application.getUserId());
-        return ApplicationRejectResponse.of(applicationId, application.getStatus(), now);
     }
 
     /** 신청을 SUPPLEMENT 로 + 이력(메시지) + StoreApplicationSupplementRequested 아웃박스 행을 한 트랜잭션으로. requestedDocs 는 재제출 검사용으로 저장(V5) */
@@ -120,7 +147,7 @@ public class ApplicationReviewService {
 
         application.requestSupplement(message, requestedDocs, now);
         flushApplication(application);
-        LocalDateTime dueAt = application.supplementDueAt();
+        LocalDateTime dueAt = supplementDeadline.dueAt(application);
 
         applicationHistoryRepository.save(ApplicationHistory.of(applicationId, ApplicationStatus.PENDING,
                 ApplicationStatus.SUPPLEMENT, ActorType.ADMIN, message));

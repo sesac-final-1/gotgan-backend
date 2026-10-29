@@ -39,8 +39,13 @@ app:
   images:
     base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{key} (ConfigMap, product 와 같은 규칙)
     bucket: ${IMAGES_BUCKET:}                 # 대표 이미지 presigned PUT 대상 (ConfigMap) — stores/{storeId}/… 만 IRSA PutObject
+  apply:
+    supplement-due: ${APPLY_SUPPLEMENT_DUE:7d}   # 보완 기한(STR-09) — 지나면 재제출 막힘 · 자동 반려. 시연 때만 짧게(예: 3m)
   scheduler:
     zone: Asia/Seoul
+    supplement-expiry:                         # 보완 기한 지난 신청 자동 반려 (SupplementExpiryScheduler, ShedLock)
+      interval: 10m
+      initial-delay: 60s
 
 resilience4j:
   circuitbreaker:

@@ -2,9 +2,11 @@ package com.sesac.gojigi.store.apply.repository;
 
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -37,6 +39,14 @@ public interface StoreApplicationRepository extends JpaRepository<StoreApplicati
             """)
     boolean existsByNormalizedStoreNameAndStatusIn(@Param("normalizedName") String normalizedName,
             @Param("statuses") Collection<ApplicationStatus> statuses);
+
+    /** 자동 반려 대상 — 보완요청 시각(status_changed_at)이 before 이전(포함)인 보완요청 중 신청, 오래된 순 (7-1절) */
+    @Query("""
+            select a.id from StoreApplication a
+            where a.status = com.sesac.gojigi.store.apply.entity.ApplicationStatus.SUPPLEMENT and a.statusChangedAt <= :before
+            order by a.statusChangedAt, a.id
+            """)
+    List<Long> findExpiredSupplementIds(@Param("before") LocalDateTime before, Limit limit);
 
     /** 재제출로 주소를 바꿀 때 — 자기 신청은 빼고 진행 중 신청과 비교 */
     boolean existsBySlugAndStatusInAndIdNot(String slug, Collection<ApplicationStatus> statuses, Long id);

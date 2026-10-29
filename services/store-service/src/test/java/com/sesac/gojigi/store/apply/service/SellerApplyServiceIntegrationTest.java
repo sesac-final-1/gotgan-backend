@@ -6,8 +6,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
 import com.sesac.gojigi.store.TestcontainersConfiguration;
-import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
 import com.sesac.gojigi.store.apply.client.SellerDocumentClient.FileMeta;
+import com.sesac.gojigi.store.apply.client.SellerDocumentClient;
 import com.sesac.gojigi.store.apply.dto.request.ApplicationResubmitRequest;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.DocumentItem;
 import com.sesac.gojigi.store.apply.entity.ActorType;
@@ -41,7 +41,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 /** 실제 MySQL + Flyway(V5 requested_docs) 위에서 보완 재제출 — 서류 교체(is_current) · 고친 항목 · 요청 서류 비움 · 이력 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({TestcontainersConfiguration.class, SellerApplyService.class, SellerApplyServiceIntegrationTest.FixedClock.class})
+@Import({TestcontainersConfiguration.class, SellerApplyService.class, SupplementDeadline.class,
+        SellerApplyServiceIntegrationTest.FixedClock.class})
 @ActiveProfiles("test")
 class SellerApplyServiceIntegrationTest {
 

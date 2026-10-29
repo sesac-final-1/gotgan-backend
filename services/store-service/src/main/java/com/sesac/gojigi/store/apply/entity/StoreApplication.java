@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AccessLevel;
@@ -30,9 +31,6 @@ import org.hibernate.type.SqlTypes;
 @Table(name = "store_application")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class StoreApplication extends BaseTimeEntity {
-
-    /** 보완요청 후 재제출 기한 (store.md 7절, STR-09) */
-    public static final int SUPPLEMENT_DUE_DAYS = 7;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -176,7 +174,7 @@ public class StoreApplication extends BaseTimeEntity {
 
     /**
      * 보완요청 — 심사대기에서만(보완요청 중이면 재제출을 기다림, 409). 메시지는 신청자 화면 · 메일에 보인다 (store.md 7절).
-     * 기한은 저장하지 않고 상태 변경 시각 + 7일로 계산 — 7일 자동 반려도 같은 기준. 요청 서류는 재제출 검사 · 신청자 화면용으로 저장
+     * 기한은 저장하지 않고 상태 변경 시각 + 보완 기한(운영 7일, SupplementDeadline)으로 계산 — 자동 반려도 같은 기준. 요청 서류는 재제출 검사 · 신청자 화면용으로 저장
      */
     public void requestSupplement(String message, List<DocType> requestedDocs, LocalDateTime requestedAt) {
         if (status != ApplicationStatus.PENDING) {
@@ -192,8 +190,8 @@ public class StoreApplication extends BaseTimeEntity {
      * 재제출 — 보완요청 중이고 기한 전일 때만 심사대기로 (store.md 2-3절). 고칠 수 있는 필드만 바꾸고(값이 다 채워져 온다),
      * 사유 · 요청 서류는 비운다
      */
-    public void resubmit(ApplicationCorrection correction, LocalDateTime resubmittedAt) {
-        requireResubmittable(resubmittedAt);
+    public void resubmit(ApplicationCorrection correction, LocalDateTime resubmittedAt, Duration due) {
+        requireResubmittable(resubmittedAt, due);
         this.bizType = correction.bizType();
         this.ownerName = correction.ownerName();
         this.bizRegNo = correction.bizRegNo();
@@ -217,18 +215,18 @@ public class StoreApplication extends BaseTimeEntity {
     }
 
     /** 재제출 가능 여부 — 서류를 S3 에서 확인하기 전에도 먼저 본다. 기한이 지났으면 자동 반려 전이라도 거절 */
-    public void requireResubmittable(LocalDateTime now) {
+    public void requireResubmittable(LocalDateTime now, Duration due) {
         if (status != ApplicationStatus.SUPPLEMENT) {
             throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS, "보완요청 중인 신청만 다시 제출할 수 있습니다.");
         }
-        if (!now.isBefore(supplementDueAt())) {
+        if (!now.isBefore(supplementDueAt(due))) {
             throw new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS, "보완 기한이 지나 다시 제출할 수 없습니다.");
         }
     }
 
-    /** 보완 기한 — 보완요청 중일 때만 의미 있음 */
-    public LocalDateTime supplementDueAt() {
-        return statusChangedAt.plusDays(SUPPLEMENT_DUE_DAYS);
+    /** 보완 기한 — 보완요청 중일 때만 의미 있음. 기한 길이는 SupplementDeadline(설정값) */
+    public LocalDateTime supplementDueAt(Duration due) {
+        return statusChangedAt.plus(due);
     }
 
     private void requireUndecided() {

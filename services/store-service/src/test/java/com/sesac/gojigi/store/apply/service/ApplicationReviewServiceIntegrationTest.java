@@ -54,7 +54,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** 실제 MySQL + Flyway 위에서 승인 저장 결과 · UNIQUE 위반 메시지(제약 이름) · 아웃박스 행 · 커밋 뒤에만 발행되는지 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({TestcontainersConfiguration.class, ApplicationReviewService.class, EventOutboxService.class,
+@Import({TestcontainersConfiguration.class, ApplicationReviewService.class, EventOutboxService.class, SupplementDeadline.class,
         ApplicationReviewServiceIntegrationTest.FixedClock.class})
 @ActiveProfiles("test")
 class ApplicationReviewServiceIntegrationTest {

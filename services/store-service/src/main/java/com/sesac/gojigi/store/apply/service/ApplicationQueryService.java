@@ -47,6 +47,7 @@ public class ApplicationQueryService {
     private final ApplicationHistoryRepository applicationHistoryRepository;
     private final StoreRepository storeRepository;
     private final SellerDocumentClient sellerDocumentClient;
+    private final SupplementDeadline supplementDeadline;
 
     /** 페이징 없이 전체 — 관리자 화면이 전체를 받아 탭 건수 · 검색 · 정렬을 한다 (컨벤션 4-7). status 가 null 이면 전체 */
     public List<InternalApplicationSummaryResponse> getList(ApplicationStatus status) {
@@ -78,7 +79,7 @@ public class ApplicationQueryService {
                 application.getStatusReason(),
                 kst(application.getTermsAgreedAt()),
                 kst(application.getStatusChangedAt()),
-                status == ApplicationStatus.SUPPLEMENT ? kst(application.supplementDueAt()) : null,
+                status == ApplicationStatus.SUPPLEMENT ? kst(supplementDeadline.dueAt(application)) : null,
                 status == ApplicationStatus.REJECTED
                         ? kst(application.getStatusChangedAt().plusDays(SellerApplyService.REAPPLY_RESTRICTION_DAYS)) : null,
                 status == ApplicationStatus.APPROVED

@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Limit;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
@@ -76,6 +77,28 @@ class StoreApplicationRepositoryIntegrationTest {
         assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusIn("linenlab", IN_PROGRESS)).isTrue();
         // 시드의 승인된 신청서(산골농부 박씨네)는 진행 중이 아니라 신청서 쪽 검사에는 걸리지 않는다 — 스토어 쪽 검사가 막음
         assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusIn("산골농부 박씨네", IN_PROGRESS)).isFalse();
+    }
+
+    @Test
+    @DisplayName("자동 반려 대상 — 보완요청 시각이 기준 이전(포함)인 SUPPLEMENT 만, 오래된 순 · 개수 제한")
+    void findExpiredSupplementIds_returnsOnlyExpiredSupplements() {
+        // given — 기준 10/22 10:00
+        LocalDateTime before = LocalDateTime.of(2026, 10, 22, 10, 0);
+        Long onBoundary = saveWithStatus(41L, "경계상회", "boundary-store", "SUPPLEMENT", before);
+        Long older = saveWithStatus(42L, "오래된상회", "older-store", "SUPPLEMENT", before.minusDays(1));
+        saveWithStatus(43L, "기한전상회", "not-due-store", "SUPPLEMENT", before.plusSeconds(1));
+        saveWithStatus(44L, "재제출상회", "pending-store", "PENDING", before.minusDays(3));
+
+        // when · then — 시드 102(보완요청 중)는 최근이라 대상 아님
+        assertThat(storeApplicationRepository.findExpiredSupplementIds(before, Limit.of(10))).containsExactly(older, onBoundary);
+        assertThat(storeApplicationRepository.findExpiredSupplementIds(before, Limit.of(1))).containsExactly(older);
+    }
+
+    private Long saveWithStatus(Long userId, String storeName, String slug, String status, LocalDateTime statusChangedAt) {
+        Long id = storeApplicationRepository.saveAndFlush(application(userId, storeName, slug, statusChangedAt)).getId();
+        update("UPDATE store_application SET status = '" + status + "', status_changed_at = '" + statusChangedAt
+                + "' WHERE store_application_id = " + id);
+        return id;
     }
 
     @Test
