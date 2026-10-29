@@ -5,6 +5,7 @@
 --   하위 ID = 상위 × 100 + 순번. 시드가 603 까지 넣으므로 관리자가 새로 만드는 카테고리는 604 부터
 -- 상품 = 프론트 목업 39개 — product_id = 스토어 × 100 + 순번(order 시드 상품주문과 같은 번호 · 이름 · 판매가), 옵션 = 상품 × 100 + 조합 순번,
 --   이미지 = 상품 × 10 + 순번 · S3 키 products/seed/…(프론트 public/images/p 파일을 images 버킷에 올려 둠). 정지 스토어(15) 상품은 is_store_active FALSE
+--   store_status = 운영 중이 아닌 스토어만(행이 없으면 운영 중) — 정지 스토어가 새로 등록하는 상품도 숨김으로 시작
 -- 재실행 안전: PK 가 이미 있으면 건너뜀(INSERT IGNORE) — 시연 중 바뀐 값은 유지
 
 SET @today := DATE(UTC_TIMESTAMP() + INTERVAL 9 HOUR);            -- KST 오늘 (DB 시간대와 무관)
@@ -88,6 +89,9 @@ INSERT IGNORE INTO product (product_id, category_id, store_id, name, price, disc
   (1902, 602, 19, '노이즈캔슬링 무선 헤드폰', 249000, 20.00, 199200, '<p>노이즈캔슬링 무선 헤드폰</p><p>소재 · 원재료: - / 원산지: 중국</p>', '-', '중국', '컬러', NULL, 'ON_SALE', TRUE, NULL, TIMESTAMP(@today - INTERVAL 130 DAY, '10:00:00')),
   (1903, 603, 19, '월넛 원목 모니터 받침대', 89000, 0.00, 89000, '<p>월넛 원목 모니터 받침대</p><p>소재 · 원재료: 북미산 월넛 원목 / 원산지: 대한민국</p>', '북미산 월넛 원목', '대한민국', '폭', NULL, 'ON_SALE', TRUE, NULL, TIMESTAMP(@today - INTERVAL 30 DAY, '10:00:00')),
   (1904, 603, 19, '울 펠트 데스크 매트 900×400', 34000, 10.00, 30600, '<p>울 펠트 데스크 매트 900×400</p><p>소재 · 원재료: 울 펠트 / 논슬립 백 / 원산지: 중국</p>', '울 펠트 / 논슬립 백', '중국', '컬러', NULL, 'ON_SALE', TRUE, NULL, TIMESTAMP(@today - INTERVAL 240 DAY, '10:00:00'));
+
+INSERT IGNORE INTO store_status (store_id, status, status_changed_at) VALUES
+  (15, 'SUSPENDED', TIMESTAMP(@today - INTERVAL 31 DAY, '10:00:00'));
 
 INSERT IGNORE INTO product_option (product_option_id, product_id, option1_value, option2_value, extra_price, stock, created_at) VALUES
   (110101, 1101, '오트밀', 'S', 0, 12, TIMESTAMP(@today - INTERVAL 160 DAY, '10:00:00')),
