@@ -4,9 +4,14 @@ import com.sesac.gojigi.admin.dashboard.client.OrderClientAdapter;
 import com.sesac.gojigi.admin.product.client.AdminProductClientAdapter;
 import com.sesac.gojigi.admin.settlement.client.SettlementClientAdapter;
 import com.sesac.gojigi.common.web.exception.BusinessException;
-import java.util.ArrayList;
+import io.micrometer.context.ContextExecutorService;
+import io.micrometer.context.ContextSnapshotFactory;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,23 +33,33 @@ public class AdminDashboardService {
     private final OrderClientAdapter orderClientAdapter;
     private final AdminProductClientAdapter adminProductClientAdapter;
 
+    /** 영역 호출 스레드 — 가상 스레드, 요청 스레드의 Observation(traceId · MDC)을 이어받는다 */
+    private static final ExecutorService SECTIONS = ContextExecutorService.wrap(
+            Executors.newVirtualThreadPerTaskExecutor(), () -> ContextSnapshotFactory.builder().build().captureAll());
+
+    /** 네 영역을 동시에 호출 — 응답 시간은 가장 느린 한 곳(합이 아니라 최댓값) */
     public Dashboard dashboard() {
-        List<String> unavailable = new ArrayList<>();
-        JsonNode settlement = section("settlement", settlementClientAdapter::platformStats, unavailable);
-        JsonNode order = section("order", orderClientAdapter::platformStats, unavailable);
-        JsonNode orderDaily = section("orderDaily", () -> orderClientAdapter.dailyStats(DAILY_DAYS), unavailable);
-        JsonNode product = section("product", adminProductClientAdapter::platformStats, unavailable);
-        return new Dashboard(settlement, order, orderDaily, product, unavailable);
+        CompletableFuture<Section> settlement = section("settlement", settlementClientAdapter::platformStats);
+        CompletableFuture<Section> order = section("order", orderClientAdapter::platformStats);
+        CompletableFuture<Section> orderDaily = section("orderDaily", () -> orderClientAdapter.dailyStats(DAILY_DAYS));
+        CompletableFuture<Section> product = section("product", adminProductClientAdapter::platformStats);
+        List<Section> sections = Stream.of(settlement, order, orderDaily, product).map(CompletableFuture::join).toList();
+        List<String> unavailable = sections.stream().filter(Section::failed).map(Section::name).toList();
+        return new Dashboard(sections.get(0).value(), sections.get(1).value(), sections.get(2).value(), sections.get(3).value(), unavailable);
     }
 
-    private static JsonNode section(String name, Supplier<JsonNode> call, List<String> unavailable) {
-        try {
-            return call.get();
-        } catch (BusinessException e) {
-            log.warn("대시보드 {} 영역 비움 - code={}", name, e.getErrorCode().getCode());
-            unavailable.add(name);
-            return null;
-        }
+    private static CompletableFuture<Section> section(String name, Supplier<JsonNode> call) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return new Section(name, call.get(), false);
+            } catch (BusinessException e) {
+                log.warn("대시보드 {} 영역 비움 - code={}", name, e.getErrorCode().getCode());
+                return new Section(name, null, true);
+            }
+        }, SECTIONS);
+    }
+
+    private record Section(String name, JsonNode value, boolean failed) {
     }
 
     /**
