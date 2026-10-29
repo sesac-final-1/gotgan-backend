@@ -624,9 +624,9 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 - 올라온 파일은 Lambda `upload-guard` 가 앞부분 바이트로 실제 JPG · PNG · WEBP 인지 확인해 아니면 지웁니다(product 17절과 같음). 13-2절은 S3 존재를 확인하지 않으므로 지워진 키는 깨진 이미지로 보입니다.
 - 올리고 저장하지 않은 파일 · 교체 전 옛 이미지는 S3 에 남습니다(삭제 권한 없음 — product 와 같이 보류).
 
-## 14. 공개 스토어 — `GET /api/stores` (STR-12)
+## 14. 공개 스토어 — `GET /api/stores` · `GET /api/stores/{storeId}` (STR-12)
 
-구매자 스토어 목록 화면(`/stores`)이 부릅니다. 로그인 없이 호출(게이트웨이 `GET /api/stores/**` 공개). 스토어 홈 `GET /api/stores/{storeId}` 는 다음 PR 에서 14-2 로 이어 붙입니다.
+구매자 스토어 목록(`/stores`) · 스토어 홈(`/store/:id`) 화면이 부릅니다. 로그인 없이 호출(게이트웨이 `GET /api/stores/**` 공개).
 
 ### 14-1. 목록 — `GET /api/stores`
 
@@ -656,6 +656,35 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 - 정지 · 폐점 · 소프트 삭제 스토어는 빠집니다. 정지가 풀리면 다시 나옵니다.
 - 상품 미리보기는 상품 목록 API(product 9절, `storeId` 필터) — store 는 상품을 모릅니다.
 - 관심고객 수는 팔로우 기능이 범위 밖이라 없습니다(스펙 STR-12).
+
+### 14-2. 스토어 홈 — `GET /api/stores/{storeId}`
+
+```json
+{
+  "storeId": 1, "storeName": "산골농부 박씨네", "status": "ACTIVE", "slug": "park-farm", "categoryId": 1,
+  "intro": "<p>제주 서귀포에서 3대째 귤 농사를 짓습니다.</p>",
+  "imageUrl": null, "color": "#d0701f", "grade": "BIG_POWER", "createdAt": "2024-03-23T10:00:00+09:00",
+  "ownerName": "박영철", "bizRegNo": "000-00-00006", "csPhone": "064-0000-0006",
+  "shippingFee": 3000, "freeShippingThreshold": 30000, "courier": "우체국택배", "dispatchNote": "수확일 기준 당일 발송"
+}
+```
+
+| 경우 | 응답 | 화면 권장 처리 |
+|---|---|---|
+| 운영 중(`ACTIVE`) | **200** 위 응답 | 스토어 홈 |
+| 정지(`SUSPENDED`) · 폐점(`CLOSED`) | **200** `{storeId, storeName, status}` 만, 나머지 필드 `null` | "○○은(는) 현재 운영하지 않는 스토어입니다" 안내 — 오류 응답은 `data: null` 이라 이름을 줄 수 없어 200 |
+| 없거나 소프트 삭제 | **404** `STORE_NOT_FOUND` | "존재하지 않는 스토어" |
+| 숫자 아님(예: slug) | **400** `INVALID_INPUT` | — |
+
+| 필드 | 설명 |
+|---|---|
+| 목록과 같은 필드 | `slug` · `categoryId` · `intro` · `imageUrl` · `color` · `grade` · `createdAt` — 14-1 과 같은 의미 |
+| `status` | 목록에는 없음(운영 중만 나오므로). 홈은 정지 · 폐점도 응답하므로 이 값으로 화면을 나눔 |
+| `ownerName` · `bizRegNo` | 판매자 정보 — 원래 신청서(store 에 없음). 정지 · 폐점이면 `null` |
+| `csPhone` | 고객 문의 연락처(판매자가 13-2 에서 수정) |
+| `shippingFee` · `freeShippingThreshold` · `courier` · `dispatchNote` | 배송 안내 — 1절 · 13-1 과 같은 값(`freeShippingThreshold: null` = 무료배송 없음) |
+
+- 정지가 풀리면 다시 홈 전체가 나옵니다. 상품은 정지 · 폐점 동안 product 가 숨깁니다(product 9절).
 
 ## 10/20 설계 정리
 
@@ -754,3 +783,5 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 2 | 목록 범위 | 운영 중만, 개설 최신순, 페이징 없음 — 스토어 수가 수십 개 수준이고 화면이 전체를 받아 카테고리 탭으로 거름 |
 | 3 | 카테고리 | 신청서 `category_id` 조인. 10/22 설계 정리 4 의 "구매자 화면에 쓰이면 product 확인" 은 붙이지 않음 — 탭 필터에만 쓰고, 없는 ID 면 화면에서 이름이 비는 정도 |
 | 4 | 경로 키 | 숫자 `storeId`(스펙 경로 `{id}`, 상품 상세 채팅 버튼이 숫자 id 필요) — `slug` 는 응답에만 |
+| 5 | 정지 · 폐점 홈 | 200 + `{storeId, storeName, status}` 만 — 화면 안내에 이름이 필요한데 오류 응답은 `data: null`. 판매자 정보(대표자 · 사업자번호 · 연락처)는 내보내지 않음. 신청서도 읽지 않음 |
+| 6 | 필드 이름 | 표의 `openedAt` · `representativeName` 대신 기존 응답(8 · 13절)과 같은 `createdAt` · `ownerName` — 화면 변환 함수가 API 마다 달라지지 않게 |
