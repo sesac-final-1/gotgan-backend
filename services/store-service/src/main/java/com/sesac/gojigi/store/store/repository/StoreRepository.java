@@ -29,6 +29,18 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     List<StoreWithApplicant> findAllForAdmin(@Param("status") StoreStatus status);
 
     /**
+     * 공개 스토어 목록 — 운영 중만, 소프트 삭제 제외, 개설 최신순(같으면 ID 큰 순) (store.md 14절).
+     * 카테고리는 원래 신청서에서 — 연관 매핑이 없어 ID 로 조인
+     */
+    @Query("""
+            select new com.sesac.gojigi.store.store.repository.StoreWithCategory(s, a.categoryId)
+            from Store s join StoreApplication a on a.id = s.storeApplicationId
+            where s.deletedAt is null and s.status = com.sesac.gojigi.store.store.entity.StoreStatus.ACTIVE
+            order by s.createdAt desc, s.id desc
+            """)
+    List<StoreWithCategory> findAllActiveForPublic();
+
+    /**
      * 상태 변경용 — 행을 잠가(SELECT … FOR UPDATE) 정지 · 해제 · 폐점이 동시에 들어와도 차례로 처리한다.
      * store 테이블에 @Version 컬럼이 없어 비관적 잠금으로 DB 최종 상태와 이벤트 occurredAt 순서를 맞춘다
      */
