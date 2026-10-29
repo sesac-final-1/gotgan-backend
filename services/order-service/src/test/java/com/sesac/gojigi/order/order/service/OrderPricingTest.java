@@ -24,6 +24,16 @@ class OrderPricingTest {
     }
 
     @Test
+    @DisplayName("무료배송 기준이 없는 스토어는 합계와 상관없이 기본 배송비")
+    void calculate_noFreeShipping() {
+        OrderPricing.Result result = OrderPricing.calculate(List.of(line(11L, 1L, 60_000L, 1)),
+                storeId -> new ShippingPolicy(3_000L, null), 0L);
+
+        assertThat(result.totalShippingFee()).isEqualTo(3_000L);
+        assertThat(result.payAmt()).isEqualTo(63_000L);
+    }
+
+    @Test
     @DisplayName("배송비는 스토어별 1회 — 스토어 상품 합계가 무료 기준 이상이면 0")
     void calculate_shippingFeePerStore() {
         // given — 스토어 1: 30,000 + 20,000 = 50,000(무료), 스토어 2: 10,000(3,000원)

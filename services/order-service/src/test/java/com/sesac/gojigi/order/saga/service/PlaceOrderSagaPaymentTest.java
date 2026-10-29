@@ -16,7 +16,6 @@ import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.order.order.client.PaymentClientAdapter;
 import com.sesac.gojigi.order.order.client.ProductClientAdapter;
-import com.sesac.gojigi.order.order.client.ShippingPolicyClient;
 import com.sesac.gojigi.order.order.client.StoreClientAdapter;
 import com.sesac.gojigi.order.order.client.UserClientAdapter;
 import com.sesac.gojigi.order.order.client.dto.PaymentCancelRequest;
@@ -59,7 +58,6 @@ class PlaceOrderSagaPaymentTest {
     @Mock private OrderSagaTxService sagaTx;
     @Mock private UserClientAdapter user;
     @Mock private StoreClientAdapter store;
-    @Mock private ShippingPolicyClient shippingPolicy;
     @Mock private ProductClientAdapter product;
     @Mock private PaymentClientAdapter payment;
 

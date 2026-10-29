@@ -274,7 +274,7 @@ class ClientAdaptersTest {
         void store() {
             StoreClientAdapter adapter = new StoreClientAdapter(storeClient);
             given(storeClient.getStore(anyLong())).willReturn(ApiResponse.success("ok",
-                    new StoreResponse(1L, 2L, "곳간상회", "ACTIVE")))
+                    new StoreResponse(1L, 2L, "곳간상회", "ACTIVE", 3_000L, 50_000L)))
                     .willThrow(rejected(HttpStatus.NOT_FOUND, "STORE_NOT_FOUND"))
                     .willThrow(rejected(HttpStatus.BAD_REQUEST, "INVALID_INPUT"));
 

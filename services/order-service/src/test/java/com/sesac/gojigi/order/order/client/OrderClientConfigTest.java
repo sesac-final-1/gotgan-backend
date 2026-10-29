@@ -2,22 +2,12 @@ package com.sesac.gojigi.order.order.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
-/** store API 가 생기기 전 Mock 과 클라이언트 프록시 설정 */
-class MockClientsTest {
-
-    @Test
-    @DisplayName("Mock 배송비 정책 — 3,000원, 50,000원 이상 무료")
-    void mockShippingPolicy() {
-        ShippingPolicy policy = new MockShippingPolicyClient().getShippingPolicy(1L);
-
-        assertThat(policy.feeFor(49_999L)).isEqualTo(3_000L);
-        assertThat(policy.feeFor(50_000L)).isZero();
-    }
+/** 다른 서비스 클라이언트 프록시 설정 */
+class OrderClientConfigTest {
 
     @Test
     @DisplayName("user · payment · store · product 클라이언트 프록시를 만든다")
