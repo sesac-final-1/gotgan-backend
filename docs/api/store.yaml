@@ -796,25 +796,125 @@ components:
         storeId:
           type: integer
           format: int64
+          description: 스토어 ID
+          example: 1
         userId:
           type: integer
           format: int64
+          description: 판매자 회원 ID
+          example: 2
         storeName:
           type: string
+          description: 스토어명
+          example: 곳간상회
         status:
           type: string
+          description: 스토어 상태
           enum:
           - ACTIVE
           - SUSPENDED
           - CLOSED
+          example: ACTIVE
         shippingFee:
           type: integer
           format: int64
+          description: 스토어 묶음 기본 배송비 (원)
+          example: 3000
         freeShippingThreshold:
           type: integer
           format: int64
+          description: 무료배송 기준 금액 (원) — null 이면 무료배송 없음
+          example: 30000
         courier:
           type: string
+          description: 기본 택배사 — 승인 직후 null
+          example: 우체국택배
+        slug:
+          type: string
+          description: 스토어 주소
+          example: gotgan-store
+        ownerName:
+          type: string
+          description: 대표자명 — 원래 신청서
+          example: 홍길동
+        companyName:
+          type: string
+          description: 상호 — 원래 신청서
+          example: 곳간상회
+        bizRegNo:
+          type: string
+          description: 사업자등록번호 — 원래 신청서
+          example: 000-00-00001
+        csPhone:
+          type: string
+          description: 고객 문의 연락처
+          example: 010-0000-1234
+        grade:
+          type: string
+          description: 판매자 등급
+          enum:
+          - SPROUT
+          - POWER
+          - BIG_POWER
+          example: SPROUT
+        dispatchNote:
+          type: string
+          description: 출고 안내 문구 — 없으면 null
+          example: 평일 14시 이전 결제 시 당일 출고
+        statusReason:
+          type: string
+          description: 가장 최근 정지 · 해제 · 폐점 사유 — 없으면 null
+          example: 허위 광고 신고 3건 확인
+        applicationId:
+          type: integer
+          format: int64
+          description: 원래 입점 신청 ID
+          example: 27
+        createdAt:
+          type: string
+          format: date-time
+          description: 개설 시각(승인 시각)
+          example: 2026-10-15T09:00:00+09:00
+        statusHistory:
+          type: array
+          description: 상태 이력 — 오래된 순 (개설 NULL → ACTIVE 부터)
+          items:
+            $ref: "#/components/schemas/StoreStatusHistory"
+    StoreStatusHistory:
+      type: object
+      properties:
+        fromStatus:
+          type: string
+          description: 이전 상태 — 개설은 null
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          example: ACTIVE
+        toStatus:
+          type: string
+          description: 바뀐 상태
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          example: SUSPENDED
+        actor:
+          type: string
+          description: 바꾼 쪽 — 관리자 개인은 남기지 않음
+          enum:
+          - SELLER
+          - ADMIN
+          example: ADMIN
+        reason:
+          type: string
+          description: 사유 — 없으면 null
+          example: 허위 광고 신고 3건 확인
+        changedAt:
+          type: string
+          format: date-time
+          description: 바뀐 시각
+          example: 2026-10-28T14:30:00+09:00
     ApplicationSupplementRequest:
       type: object
       properties:

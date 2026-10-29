@@ -28,7 +28,7 @@
 
 ## 1. 스토어 상세 (내부) — `GET /internal/stores/{storeId}` (STR-14 · 회원 탈퇴 · 주문 배송비)
 
-user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부를 확인할 때, admin-service 스토어 관리가 부릅니다. chat-service 도 채팅 상대 표시 이름(`storeName`)과 정지 · 폐점 스토어의 새 스토어 톡 차단(`status` 가 `ACTIVE` 가 아니면 · 404 도 차단, 그 밖의 실패는 막지 않음 — `chat.md` D-1)에 씁니다(1분 캐시). order-service 는 주문 생성 때 스토어별 배송비 계산에 씁니다(아래 배송 정책). DB 조회만 하므로 재시도 가능(GET).
+user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부를 확인할 때, admin-service 스토어 관리(관리자 스토어 상세 — 아래 관리자용 필드)가 부릅니다. chat-service 도 채팅 상대 표시 이름(`storeName`)과 정지 · 폐점 스토어의 새 스토어 톡 차단(`status` 가 `ACTIVE` 가 아니면 · 404 도 차단, 그 밖의 실패는 막지 않음 — `chat.md` D-1)에 씁니다(1분 캐시). order-service 는 주문 생성 때 스토어별 배송비 계산에 씁니다(아래 배송 정책). DB 조회만 하므로 재시도 가능(GET).
 
 ```json
 {
@@ -36,19 +36,27 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
   "message": "스토어를 조회했습니다.",
   "data": {
     "storeId": 1, "userId": 2, "storeName": "곳간상회", "status": "ACTIVE",
-    "shippingFee": 3000, "freeShippingThreshold": 30000, "courier": "우체국택배"
+    "shippingFee": 3000, "freeShippingThreshold": 30000, "courier": "우체국택배",
+
+    "slug": "gotgan-store", "ownerName": "홍길동", "companyName": "곳간상사", "bizRegNo": "000-00-00001",
+    "csPhone": "010-0000-1234", "grade": "SPROUT", "dispatchNote": "평일 14시 이전 결제 시 당일 출고",
+    "statusReason": null, "applicationId": 27, "createdAt": "2026-10-15T09:00:00+09:00",
+    "statusHistory": [
+      { "fromStatus": null, "toStatus": "ACTIVE", "actor": "ADMIN", "reason": null, "changedAt": "2026-10-15T09:00:00+09:00" }
+    ]
   }
 }
 ```
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
-| 스토어 있음 (상태 무관, `CLOSED` 포함) | 조회 | **200** `{storeId, userId, storeName, status, shippingFee, freeShippingThreshold, courier}` | user: `status == CLOSED` 일 때만 탈퇴 진행. `userId` 가 요청자와 다르면 탈퇴 거부 권장. order: 아래 규칙으로 배송비 계산 |
+| 스토어 있음 (상태 무관, `CLOSED` 포함) | 조회 | **200** `{storeId, userId, storeName, status, shippingFee, freeShippingThreshold, courier, …관리자용 필드}` | user: `status == CLOSED` 일 때만 탈퇴 진행. `userId` 가 요청자와 다르면 탈퇴 거부 권장. order: 아래 규칙으로 배송비 계산 |
 | 없는 스토어 · 소프트 삭제된 스토어 | — | **404** `STORE_NOT_FOUND` | user: 탈퇴 거부(안전한 쪽). 서킷 실패로 세지 않음 |
 | `storeId` 가 숫자가 아님 | — | **400** `INVALID_INPUT` | 호출 코드 버그 |
 | store 장애 · 타임아웃 | — | 연결 실패 · 5xx | user: 서킷 `store` 로 집계, 탈퇴 차단 |
 
-- 응답 필드는 **추가만** 합니다(admin 스토어 상세에서 필요한 필드를 붙일 예정). 호출하는 쪽은 모르는 필드를 무시해 주세요.
+- 응답 필드는 **추가만** 합니다. 호출하는 쪽은 모르는 필드를 무시해 주세요 — `RestClient.builder()` 기본 변환기가 무시하므로 user · order · chat 은 그대로 동작합니다(10/29 확인).
+- **관리자용 필드 (10/29 구현, 아래 8절 "1절 확장")**: `slug` · `ownerName` · `companyName` · `bizRegNo`(대표자 · 상호 · 사업자번호는 원래 신청서 — store 에 없음) · `csPhone` · `grade` · `dispatchNote` · `statusReason` · `applicationId` · `createdAt` · `statusHistory[{fromStatus, toStatus, actor, reason, changedAt}]`(오래된 순, 개설 `null → ACTIVE` 부터). 조회가 신청서 · 이력 2번 늘지만 user · order 호출 빈도에서 무시할 수준(10/26 설계 정리 8).
 
 **배송 정책 (10/28 추가, 배송비 A안)** — store 는 규칙만 알려 주고 계산은 order 가 합니다.
 
@@ -212,7 +220,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 처리자 | 상태를 바꾼 쪽은 `actor` = `APPLICANT`(신청자) · `ADMIN` · `SYSTEM`(7일 자동 반려) / 스토어는 `SELLER` · `ADMIN`. **관리자 개인은 저장하지 않음**(storedb V1) — 화면의 "곳간 운영팀 · 정다은" 같은 이름은 내려 주지 않습니다 |
 | 사유 | 반려 · 보완요청 · 정지 · 해제는 사유 필수, 255자 이하. 비거나 길면 400 `INVALID_INPUT` |
 | 이벤트 | 상태 변경과 같은 트랜잭션에서 아웃박스(storedb `outbox_event`)에 남기고 커밋 직후 발행. 발행이 실패해도 API 응답은 그대로이고 발행기가 30초마다 다시 보냄 — **최소 1회 전달**(같은 `eventId` 봉투가 두 번 올 수 있음, 구독자 `processed_event` 로 거름) |
-| 구현 시기 | 구현됨: 3 · 4 · 5 · 6 · 7 · 8 · 9절 / 4주차: 1절 확장(배송 필드 3개는 구현됨). 그 전까지 admin 은 이 문서 기준으로 개발 |
+| 구현 시기 | 구현됨: 3 · 4 · 5 · 6 · 7 · 8 · 9절 · 1절 확장(10/29) — 관리자 내부 API 모두 구현 |
 
 ### 입점 신청 상태 `status`
 
@@ -403,9 +411,9 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 ```
 
 - 대표자 · 사업자번호는 원래 신청서(`store.store_application_id`)에서 가져옵니다.
-- 스토어 상세(관리자 상세 화면)는 1절을 씁니다 — 4주차에 1절 응답에 관리자용 필드와 상태 이력을 **추가**합니다(아래 "1절 확장").
+- 스토어 상세(관리자 상세 화면)는 1절을 씁니다 — 1절 응답에 관리자용 필드와 상태 이력을 **추가**했습니다(아래 "1절 확장").
 
-**1절 확장 (4주차)** — 지금 4개 필드 뒤에 붙습니다. user · order 는 기존 필드만 읽으면 됩니다.
+**1절 확장 (10/29 구현)** — 기존 7개 필드(배송 정책 포함) 뒤에 붙습니다. user · order · chat 은 기존 필드만 읽으면 됩니다. 정지 · 해제(9절) 응답도 같은 모양입니다.
 `slug` · `ownerName` · `companyName` · `bizRegNo` · `csPhone` · `grade` · `shippingFee` · `freeShippingThreshold` · `courier` · `dispatchNote` · `statusReason` · `applicationId` · `createdAt` · `statusHistory[{fromStatus, toStatus, actor, reason, changedAt}]`(오래된 순)
 
 ## 9. 스토어 정지 · 해제 (내부) — `PATCH /internal/stores/{storeId}/status` (STR-13)
