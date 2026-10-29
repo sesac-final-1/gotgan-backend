@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, STORES, VIEW_BUYERS,
+  APPLICATIONS, CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, STORES, VIEW_BUYERS,
   combos, salePrice, subCategoryId,
 } from './scenario.mjs';
 
@@ -102,16 +102,23 @@ const storeSql = `${header('VoC-100', `-- 목업 스토어 9개(프론트 mocks/
 --   store_id = 10 + 목업 번호. 단 시연 판매자 로그인 스토어 1 · 2 는 Keycloak 시드 · settlement 시드와 번호가 같아야 해서
 --   seller1 user 2 → store 1 (산골농부 박씨네, 식품) · seller2 user 3 → store 2 (토담공방, 리빙). 나머지 대표자는 user 200 + 목업 번호(조회용)
 -- category_id = productdb 카테고리 시드(1~6). 신청서 id = 스토어 id, 이력 id = 스토어 id × 10 + 순번. 볕드는집(15)은 정지
+-- 심사 시연용 신청 101(심사대기, buyer3 user 6) · 102(보완요청, buyer2 user 5 — 4일 전 신청 · 2일 전 보완요청). 스토어 없음
 -- 사업자 · 계좌는 가짜 값. 서류(application_document)는 S3 객체가 없어 넣지 않는다. 이벤트는 발행되지 않는다`)}
 ${insert('store_application', ['store_application_id', 'user_id', 'category_id', 'biz_type', 'company_name', 'owner_name', 'biz_reg_no', 'ecommerce_reg_no',
   'manager_phone', 'manager_email', 'business_address', 'store_name', 'slug', 'intro', 'representative_products', 'expected_monthly_sales', 'sales_channel',
-  'bank_name', 'account_no', 'account_holder', 'status', 'marketing_agreed', 'terms_agreed_at', 'status_changed_at', 'created_at'],
+  'bank_name', 'account_no', 'account_holder', 'status', 'status_reason', 'marketing_agreed', 'terms_agreed_at', 'status_changed_at', 'created_at'],
 STORES.map((s) => [s.storeId, s.userId, CATEGORY[s.cat], "'INDIVIDUAL'", q(s.name), q(s.owner), q(s.bizNo), q(`2026-시연-${String(s.storeId).padStart(4, '0')}`),
   q(s.phone), q(s.email), q(`서울 성동구 성수이로 ${s.storeId}`), q(s.name), q(s.slug), q(`<p>${s.intro}</p>`), json(REPRESENTATIVE[s.cat]), "'FROM_5M_TO_20M'", 'NULL',
-  "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), "'APPROVED'", 'FALSE', ago(s.since + 3), ago(s.since), ago(s.since + 3)]))}
+  "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), "'APPROVED'", 'NULL', 'FALSE', ago(s.since + 3), ago(s.since), ago(s.since + 3)])
+  .concat(APPLICATIONS.map((a) => [a.applicationId, a.userId, CATEGORY[a.cat], "'INDIVIDUAL'", q(a.name), q(a.owner), q(a.bizNo), q(`2026-시연-${a.applicationId}`),
+    q(a.phone), q(a.email), q(`서울 성동구 성수이로 ${a.applicationId}`), q(a.name), q(a.slug), q(`<p>${a.intro}</p>`), json(REPRESENTATIVE[a.cat]), "'UNDER_5M'", 'NULL',
+    "'곳간은행'", q(`100-0000-${String(a.applicationId).padStart(6, '0')}`), q(a.owner), q(a.status), q(a.supplement?.reason ?? null), 'FALSE',
+    ago(a.submittedDaysAgo), ago(a.supplement?.daysAgo ?? a.submittedDaysAgo), ago(a.submittedDaysAgo)])))}
 ${insert('application_history', ['application_history_id', 'store_application_id', 'from_status', 'to_status', 'actor_type', 'reason', 'created_at'],
   STORES.flatMap((s) => [[s.storeId * 10 + 1, s.storeId, 'NULL', "'PENDING'", "'APPLICANT'", 'NULL', ago(s.since + 3)],
-    [s.storeId * 10 + 2, s.storeId, "'PENDING'", "'APPROVED'", "'ADMIN'", 'NULL', ago(s.since)]]))}
+    [s.storeId * 10 + 2, s.storeId, "'PENDING'", "'APPROVED'", "'ADMIN'", 'NULL', ago(s.since)]])
+  .concat(APPLICATIONS.flatMap((a) => [[a.applicationId * 10 + 1, a.applicationId, 'NULL', "'PENDING'", "'APPLICANT'", 'NULL', ago(a.submittedDaysAgo)],
+    ...(a.supplement ? [[a.applicationId * 10 + 2, a.applicationId, "'PENDING'", "'SUPPLEMENT'", "'ADMIN'", q(a.supplement.reason), ago(a.supplement.daysAgo)]] : [])])))}
 ${insert('store', ['store_id', 'store_application_id', 'user_id', 'store_name', 'slug', 'intro', 'color', 'cs_phone', 'shipping_fee', 'free_shipping_threshold',
   'courier', 'dispatch_note', 'grade', 'status', 'status_reason', 'created_at'],
 STORES.map((s) => [s.storeId, s.storeId, s.userId, q(s.name), q(s.slug), q(`<p>${s.intro}</p>`), q(s.color), q(s.phone), s.shipFee, q(s.freeOver),
