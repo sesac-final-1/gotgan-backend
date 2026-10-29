@@ -188,6 +188,23 @@ class StoreApplicationRepositoryIntegrationTest {
         return (String) entityManager.createNativeQuery("SELECT slug FROM store WHERE store_id = " + storeId).getSingleResult();
     }
 
+    @Test
+    @DisplayName("내 신청은 신청자의 가장 최근 신청 — 반려 뒤 다시 신청하면 새 신청, 신청 없는 회원은 empty")
+    void findFirstByUserId_latestApplication_returnsNewest() {
+        // given — user 7 이 반려된 옛 신청 뒤 새로 신청
+        Long old = storeApplicationRepository.saveAndFlush(application(7L, "옛 스토어", "old-one", LocalDateTime.of(2026, 8, 1, 10, 0))).getId();
+        update("UPDATE store_application SET status = 'REJECTED' WHERE store_application_id = " + old);
+        Long latest = storeApplicationRepository.saveAndFlush(application(7L, "새 스토어", "new-one", LocalDateTime.of(2026, 10, 1, 10, 0))).getId();
+
+        // when · then
+        assertThat(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(7L))
+                .get().extracting(StoreApplication::getId).isEqualTo(latest);
+        assertThat(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(999L)).isEmpty();
+        // 시드 — buyer2(user 5)는 보완요청 중인 102
+        assertThat(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(5L))
+                .get().extracting(StoreApplication::getStatus).isEqualTo(ApplicationStatus.SUPPLEMENT);
+    }
+
     private void update(String sql) {
         entityManager.createNativeQuery(sql).executeUpdate();
         entityManager.clear();

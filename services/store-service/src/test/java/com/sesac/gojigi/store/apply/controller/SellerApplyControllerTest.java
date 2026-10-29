@@ -1,18 +1,24 @@
 package com.sesac.gojigi.store.apply.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.store.apply.service.ApplicationQueryService;
+import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.dto.request.DocumentPresignRequest;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
+import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.History;
 import com.sesac.gojigi.store.apply.dto.response.DocumentPresignResponse;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
@@ -77,11 +83,14 @@ class SellerApplyControllerTest {
     @Mock
     private SellerDocumentPresignService sellerDocumentPresignService;
 
+    @Mock
+    private ApplicationQueryService applicationQueryService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new SellerApplyController(sellerApplyService, sellerDocumentPresignService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new SellerApplyController(sellerApplyService, applicationQueryService, sellerDocumentPresignService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -219,5 +228,50 @@ class SellerApplyControllerTest {
                 .header(CurrentUserArgumentResolver.USER_ROLES_HEADER, "BUYER")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
+    }
+
+    @Test
+    @DisplayName("내 신청 상태 — 200, X-User-Id 본인 신청의 상태 · 사유 · 보완 기한 · 이력")
+    void getMine_whenApplied_returns200() throws Exception {
+        // given
+        OffsetDateTime submitted = OffsetDateTime.parse("2026-10-22T14:05:11+09:00");
+        OffsetDateTime supplemented = OffsetDateTime.parse("2026-10-23T10:00:00+09:00");
+        given(applicationQueryService.getMine(4L)).willReturn(new MyApplicationResponse(27L, "AP-2610-027", ApplicationStatus.SUPPLEMENT,
+                "곳간상회", "gotgan", "사본이 흐립니다", submitted, supplemented, OffsetDateTime.parse("2026-10-30T10:00:00+09:00"), null, null,
+                List.of(new History(null, ApplicationStatus.PENDING, ActorType.APPLICANT, null, submitted),
+                        new History(ApplicationStatus.PENDING, ApplicationStatus.SUPPLEMENT, ActorType.ADMIN, "사본이 흐립니다", supplemented))));
+
+        // when · then
+        mockMvc.perform(get("/api/seller/apply/me").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.applicationNo").value("AP-2610-027"))
+                .andExpect(jsonPath("$.data.status").value("SUPPLEMENT"))
+                .andExpect(jsonPath("$.data.statusReason").value("사본이 흐립니다"))
+                .andExpect(jsonPath("$.data.supplementDueAt").value("2026-10-30T10:00:00+09:00"))
+                .andExpect(jsonPath("$.data.reapplyAvailableAt").value(nullValue()))
+                .andExpect(jsonPath("$.data.history[1].toStatus").value("SUPPLEMENT"));
+    }
+
+    @Test
+    @DisplayName("신청한 적이 없으면 200 data null — 오류가 아니라 화면이 신청 폼을 보여 줌")
+    void getMine_whenNeverApplied_returnsNullData() throws Exception {
+        // given
+        given(applicationQueryService.getMine(6L)).willReturn(null);
+
+        // when · then
+        mockMvc.perform(get("/api/seller/apply/me").header("X-User-Id", "6").header("X-User-Roles", "BUYER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("사용자 헤더가 없으면 401 — 서비스를 부르지 않는다")
+    void getMine_whenNoUser_returns401() throws Exception {
+        mockMvc.perform(get("/api/seller/apply/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+
+        verifyNoInteractions(applicationQueryService);
     }
 }

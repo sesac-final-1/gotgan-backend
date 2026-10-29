@@ -19,6 +19,7 @@ import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailRespon
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SameStore;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SettlementAccount;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationSummaryResponse;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationDocument;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
@@ -264,5 +265,66 @@ class ApplicationQueryServiceTest {
         ApplicationHistory history = ApplicationHistory.of(27L, null, toStatus, actor, reason);
         ReflectionTestUtils.setField(history, "createdAt", at);
         return history;
+    }
+
+    @Test
+    @DisplayName("내 신청 — 보완요청이면 사유 · 보완 기한(+7일) · 이력, 반려 · 승인 값은 null")
+    void getMine_whenSupplement_returnsDueAtAndHistory() {
+        // given
+        StoreApplication application = application(27L, "000-00-00001", SUBMITTED_AT);
+        application.requestSupplement("사본이 흐립니다", LocalDateTime.of(2026, 10, 23, 10, 0));
+        given(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(4L)).willReturn(Optional.of(application));
+        given(applicationHistoryRepository.findAllByStoreApplicationIdOrderByIdAsc(27L)).willReturn(List.of(
+                history(ApplicationStatus.PENDING, ActorType.APPLICANT, null, SUBMITTED_AT),
+                history(ApplicationStatus.SUPPLEMENT, ActorType.ADMIN, "사본이 흐립니다", LocalDateTime.of(2026, 10, 23, 10, 0))));
+
+        // when
+        MyApplicationResponse mine = applicationQueryService.getMine(4L);
+
+        // then
+        assertThat(mine.applicationNo()).isEqualTo("AP-2610-027");
+        assertThat(mine.status()).isEqualTo(ApplicationStatus.SUPPLEMENT);
+        assertThat(mine.statusReason()).isEqualTo("사본이 흐립니다");
+        assertThat(mine.supplementDueAt()).isEqualTo(OffsetDateTime.parse("2026-10-30T10:00:00+09:00"));
+        assertThat(mine.reapplyAvailableAt()).isNull();
+        assertThat(mine.storeId()).isNull();
+        assertThat(mine.history()).extracting(History::toStatus).containsExactly(ApplicationStatus.PENDING, ApplicationStatus.SUPPLEMENT);
+        then(storeRepository).should(never()).findByStoreApplicationId(any());
+    }
+
+    @Test
+    @DisplayName("내 신청 — 반려면 재신청 가능 시각(반려 + 30일), 승인이면 만들어진 storeId")
+    void getMine_whenRejectedOrApproved_returnsStatusSpecificValues() {
+        // given
+        StoreApplication rejected = application(27L, "000-00-00001", SUBMITTED_AT);
+        rejected.reject("서류 불일치", LocalDateTime.of(2026, 10, 24, 9, 0));
+        StoreApplication approved = application(28L, "000-00-00002", SUBMITTED_AT);
+        approved.approve(LocalDateTime.of(2026, 10, 24, 9, 0));
+        given(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(4L)).willReturn(Optional.of(rejected));
+        given(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(5L)).willReturn(Optional.of(approved));
+        Store store = mock(Store.class);
+        given(store.getId()).willReturn(3L);
+        given(storeRepository.findByStoreApplicationId(28L)).willReturn(Optional.of(store));
+
+        // when
+        MyApplicationResponse mineRejected = applicationQueryService.getMine(4L);
+        MyApplicationResponse mineApproved = applicationQueryService.getMine(5L);
+
+        // then
+        assertThat(mineRejected.reapplyAvailableAt()).isEqualTo(OffsetDateTime.parse("2026-11-23T09:00:00+09:00"));
+        assertThat(mineRejected.supplementDueAt()).isNull();
+        assertThat(mineRejected.statusReason()).isEqualTo("서류 불일치");
+        assertThat(mineApproved.storeId()).isEqualTo(3L);
+        assertThat(mineApproved.reapplyAvailableAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("신청한 적이 없으면 null")
+    void getMine_whenNeverApplied_returnsNull() {
+        // given
+        given(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(6L)).willReturn(Optional.empty());
+
+        // when · then
+        assertThat(applicationQueryService.getMine(6L)).isNull();
     }
 }
