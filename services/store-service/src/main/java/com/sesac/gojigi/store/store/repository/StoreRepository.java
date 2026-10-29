@@ -1,6 +1,7 @@
 package com.sesac.gojigi.store.store.repository;
 
 import com.sesac.gojigi.store.store.entity.Store;
+import com.sesac.gojigi.store.store.entity.StoreStatus;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +13,18 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
 
     /** 활성 조회 — 소프트 삭제(deleted_at)된 스토어는 없는 것으로 본다 (컨벤션 3-5) */
     Optional<Store> findByIdAndDeletedAtIsNull(Long id);
+
+    /**
+     * 관리자 스토어 목록 — 소프트 삭제 제외, 개설 최신순(같으면 ID 큰 순). status 가 null 이면 전체 (store.md 8절).
+     * 대표자 · 사업자번호는 원래 신청서에서 — 연관 매핑이 없어 ID 로 조인
+     */
+    @Query("""
+            select new com.sesac.gojigi.store.store.repository.StoreWithApplicant(s, a.ownerName, a.bizRegNo)
+            from Store s join StoreApplication a on a.id = s.storeApplicationId
+            where s.deletedAt is null and (:status is null or s.status = :status)
+            order by s.createdAt desc, s.id desc
+            """)
+    List<StoreWithApplicant> findAllForAdmin(@Param("status") StoreStatus status);
 
     /** 승인된 신청으로 만든 스토어 — uk_store_store_application_id */
     Optional<Store> findByStoreApplicationId(Long storeApplicationId);

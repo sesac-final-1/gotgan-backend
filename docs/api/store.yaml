@@ -256,6 +256,40 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApiResponseApplicationApproveResponse"
+  /internal/stores:
+    get:
+      tags:
+      - 스토어 (내부)
+      summary: 스토어 목록 (관리자)
+      description: "인가: 내부. admin 스토어 관리 — 페이징 없이 전체 배열, 소프트 삭제 제외, 개설 최신순. status(ACTIVE\
+        \ · SUSPENDED · CLOSED)를 생략하면 전체, 모르는 값이면 400 INVALID_INPUT. 대표자 · 사업자번호는\
+        \ 원래 신청서 값"
+      operationId: list
+      parameters:
+      - name: status
+        in: query
+        description: 스토어 상태 필터 (ACTIVE · SUSPENDED · CLOSED)
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+        example: SUSPENDED
+      responses:
+        "200":
+          description: 조회 성공 (없으면 빈 배열)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListInternalStoreSummaryResponse"
+        "400":
+          description: INVALID_INPUT — status 값 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListInternalStoreSummaryResponse"
   /internal/stores/{storeId}:
     get:
       tags:
@@ -294,7 +328,7 @@ paths:
       summary: 입점 신청 목록
       description: "인가: 내부. 페이징 없이 전체 배열, 제출 최신순. status 를 생략하면 전체, 모르는 값이면 400 INVALID_INPUT.\
         \ 카테고리 이름은 내려 주지 않음(categoryId 만)"
-      operationId: list
+      operationId: list_1
       parameters:
       - name: status
         in: query
@@ -810,6 +844,71 @@ components:
           format: date-time
           description: 승인 시각
           example: 2026-10-28T14:30:00+09:00
+    ApiResponseListInternalStoreSummaryResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalStoreSummaryResponse"
+    InternalStoreSummaryResponse:
+      type: object
+      properties:
+        storeId:
+          type: integer
+          format: int64
+          description: 스토어 ID
+          example: 1
+        storeName:
+          type: string
+          description: 스토어명
+          example: 곳간상회
+        slug:
+          type: string
+          description: 스토어 주소
+          example: gotgan-store
+        userId:
+          type: integer
+          format: int64
+          description: 판매자 회원 ID
+          example: 2
+        ownerName:
+          type: string
+          description: 대표자명 — 원래 신청서
+          example: 홍길동
+        bizRegNo:
+          type: string
+          description: 사업자등록번호 — 원래 신청서
+          example: 000-00-00001
+        grade:
+          type: string
+          description: 판매자 등급
+          enum:
+          - SPROUT
+          - POWER
+          - BIG_POWER
+          example: SPROUT
+        status:
+          type: string
+          description: 스토어 상태
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+          example: ACTIVE
+        statusReason:
+          type: string
+          description: 정지 · 폐점 사유 (없으면 null)
+          example: "null"
+        createdAt:
+          type: string
+          format: date-time
+          description: 개설 시각(승인 시각)
+          example: 2026-10-15T09:00:00+09:00
     ApiResponseInternalStoreResponse:
       type: object
       properties:
