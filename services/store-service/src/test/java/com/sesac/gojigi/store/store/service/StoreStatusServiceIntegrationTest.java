@@ -46,7 +46,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** 실제 MySQL + Flyway + 시연 시드 위에서 잠금 조회 · 상태 · 이력 저장 · 커밋 뒤 StoreStatusChanged 발행 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({TestcontainersConfiguration.class, StoreStatusService.class, StoreQueryService.class, EventOutboxService.class,
+@Import({TestcontainersConfiguration.class, StoreStatusService.class, StoreQueryService.class, ImageUrls.class, EventOutboxService.class,
         StoreStatusServiceIntegrationTest.FixedClock.class})
 @ActiveProfiles("test")
 @TestPropertySource(properties = "spring.flyway.locations=classpath:db/migration,classpath:db/seed")

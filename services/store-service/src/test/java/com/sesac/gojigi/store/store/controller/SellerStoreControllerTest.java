@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,10 +13,13 @@ import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.StoreCloseResponse;
+import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
 import com.sesac.gojigi.store.store.exception.StoreException;
+import com.sesac.gojigi.store.store.service.StoreQueryService;
 import com.sesac.gojigi.store.store.service.StoreStatusService;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,13 +36,16 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class SellerStoreControllerTest {
 
     @Mock
+    private StoreQueryService storeQueryService;
+
+    @Mock
     private StoreStatusService storeStatusService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new SellerStoreController(storeStatusService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new SellerStoreController(storeQueryService, storeStatusService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -99,5 +106,41 @@ class SellerStoreControllerTest {
 
     private static MockHttpServletRequestBuilder seller(MockHttpServletRequestBuilder request) {
         return request.header("X-User-Id", "2").header("X-User-Roles", "SELLER");
+    }
+
+    @Test
+    @DisplayName("내 스토어 조회 — 200, X-Store-Id 스토어의 설정 값 · 이미지 URL · 개설 시각 +09:00")
+    void getMyStore_whenSeller_returns200() throws Exception {
+        // given
+        given(storeQueryService.getSellerStore(1L)).willReturn(new SellerStoreResponse(1L, "곳간상회", "gotgan", StoreStatus.ACTIVE, null,
+                "<p>소개</p>", "stores/1/a.jpg", "https://images/stores/1/a.jpg", "#5b6b4a", "010-0000-1234", 3000L, 50000L,
+                "CJ대한통운", "평일 14시 이전 결제 시 당일 출고", StoreGrade.SPROUT, "홍길동", "000-00-00001",
+                OffsetDateTime.parse("2026-10-15T09:00:00+09:00")));
+
+        // when · then
+        mockMvc.perform(seller(get("/api/seller/store")).header("X-Store-Id", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("내 스토어를 조회했습니다."))
+                .andExpect(jsonPath("$.data.storeName").value("곳간상회"))
+                .andExpect(jsonPath("$.data.imageUrl").value("https://images/stores/1/a.jpg"))
+                .andExpect(jsonPath("$.data.color").value("#5b6b4a"))
+                .andExpect(jsonPath("$.data.freeShippingThreshold").value(50000))
+                .andExpect(jsonPath("$.data.ownerName").value("홍길동"))
+                .andExpect(jsonPath("$.data.createdAt").value("2026-10-15T09:00:00+09:00"));
+    }
+
+    @Test
+    @DisplayName("내 스토어 조회 — X-Store-Id 없음 403 · 없는 스토어 404")
+    void getMyStore_whenNoStoreOrMissing_rejects() throws Exception {
+        // given
+        given(storeQueryService.getSellerStore(99L)).willThrow(new StoreException(StoreErrorCode.STORE_NOT_FOUND));
+
+        // when · then
+        mockMvc.perform(seller(get("/api/seller/store")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        mockMvc.perform(seller(get("/api/seller/store")).header("X-Store-Id", "99"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"));
     }
 }

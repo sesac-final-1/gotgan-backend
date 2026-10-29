@@ -36,6 +36,8 @@ app:
       max-attempts: 10                       # 넘으면 ERROR 로그 (수동 확인)
   seller-docs:
     bucket: ${SELLER_DOCS_BUCKET:}          # 입점 서류 (비공개) — 신청 때 HeadObject 로 확인
+  images:
+    base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{key} (ConfigMap, product 와 같은 규칙)
   scheduler:
     zone: Asia/Seoul
 
