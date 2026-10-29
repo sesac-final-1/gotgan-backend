@@ -37,16 +37,17 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 방 열기 · 목록 · 메시지 · 읽음 · 상담 상태 (chat.md 1~5절) + 실시간 전송(6절, STOMP SEND → send).
  * 저장 · 읽음 · 상태 변경은 ChatEvents 로 알리고, 커밋 뒤 realtime 이 구독자에게 전달 · 알림을 보낸다.
  * 남의 방은 404(있는지 알려 주지 않음). 상대 이름은 user · store 조회(ChatDirectory, 실패하면 번호), 관리자 쪽은 "곳간 운영팀" 고정(D-2).
- * 정지 · 폐점 스토어는 새 스토어 톡을 막고 기존 방은 읽기만(D-1)
+ * 정지 · 폐점 스토어는 새 스토어 톡을 막고 기존 방은 읽기만(D-1).
+ * user · store · product · settlement 조회(ChatDirectory — HTTP)는 트랜잭션 밖에서, 저장만 TransactionTemplate 으로 짧게 — 상대 서비스가 느려도 DB 커넥션을 잡고 있지 않게
  */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class ChatRoomService {
 
     static final String ADMIN_NAME = "곳간 운영팀";
@@ -67,9 +68,9 @@ public class ChatRoomService {
     private final ChatReadRepository readRepository;
     private final ApplicationEventPublisher events;
     private final ChatDirectory directory;
+    private final TransactionTemplate transactions;
 
-    /** 1절 — 같은 방이 있으면 그 방(문맥 카드만 추가), 없으면 새로 */
-    @Transactional
+    /** 1절 — 같은 방이 있으면 그 방(문맥 카드만 추가), 없으면 새로. 스토어 상태 · 카드 제목 조회는 먼저, 방 · 카드 저장만 트랜잭션 */
     public Opened open(AuthUser user, ChatRequests.OpenRoom request) {
         Opening opening = opening(user, request);
         ChatRoom found = roomRepository.findByTypeAndBuyerIdAndStoreId(request.type(), opening.buyerId(), opening.storeId())
@@ -77,11 +78,15 @@ public class ChatRoomService {
         if (found == null && request.type() == ChatRoomType.STORE_INQUIRY && !directory.storeOpen(opening.storeId())) {
             throw new ChatException(ChatErrorCode.CHAT_STORE_INACTIVE);
         }
-        ChatRoom room = found != null ? found
-                : roomRepository.save(ChatRoom.open(request.type(), opening.buyerId(), opening.storeId()));
-        if (request.context() != null) {
-            appendContext(room, user, opening.seat(), request.context());
-        }
+        String title = request.context() == null ? null : contextTitle(request.type(), opening.storeId(), user, request.context());
+        ChatRoom room = transactions.execute(tx -> {
+            ChatRoom saved = found != null ? load(found.getId())
+                    : roomRepository.save(ChatRoom.open(request.type(), opening.buyerId(), opening.storeId()));
+            if (title != null) {
+                appendContext(saved, user, opening.seat(), request.context(), title);
+            }
+            return saved;
+        });
         return new Opened(view(room, opening.seat()), found == null);
     }
 
@@ -138,26 +143,27 @@ public class ChatRoomService {
 
     /**
      * 6절 SEND — 앞뒤 공백 제거 · 개행 3줄 이상은 2줄로, 1~1,000자. 읽기 전용 열람이면 CHAT_NOT_ALLOWED.
-     * 닫힌 상담방에 관리자가 아닌 쪽이 보내면 다시 OPEN
+     * 닫힌 상담방에 관리자가 아닌 쪽이 보내면 다시 OPEN. 스토어 상태 조회는 먼저, 저장만 트랜잭션
      */
-    @Transactional
     public void send(AuthUser user, Long roomId, String content) {
         Seated seated = seated(user, roomId);
         if (seated.seat().readOnly()) {
             throw new ChatException(ChatErrorCode.CHAT_NOT_ALLOWED);
         }
         String text = normalize(content);
-        ChatRoom room = seated.room();
-        if (room.getType() == ChatRoomType.STORE_INQUIRY && !directory.storeOpen(room.getStoreId())) {
+        if (seated.room().getType() == ChatRoomType.STORE_INQUIRY && !directory.storeOpen(seated.room().getStoreId())) {
             throw new ChatException(ChatErrorCode.CHAT_STORE_INACTIVE);   // D-1 — 기존 방은 읽기만
         }
-        if (room.getStatus() == ChatRoomStatus.RESOLVED && seated.seat().role() != SenderRole.ADMIN) {
-            room.changeStatus(ChatRoomStatus.OPEN);
-            events.publishEvent(new ChatEvents.StatusChanged(roomId, ChatRoomStatus.OPEN));
-        }
-        ChatMessage message = messageRepository.save(ChatMessage.text(roomId, user.userId(), seated.seat().role(), text));
-        room.touch(message);
-        events.publishEvent(new ChatEvents.MessageSaved(room, message));
+        transactions.executeWithoutResult(tx -> {
+            ChatRoom room = load(roomId);
+            if (room.getStatus() == ChatRoomStatus.RESOLVED && seated.seat().role() != SenderRole.ADMIN) {
+                room.changeStatus(ChatRoomStatus.OPEN);
+                events.publishEvent(new ChatEvents.StatusChanged(roomId, ChatRoomStatus.OPEN));
+            }
+            ChatMessage message = messageRepository.save(ChatMessage.text(roomId, user.userId(), seated.seat().role(), text));
+            room.touch(message);
+            events.publishEvent(new ChatEvents.MessageSaved(room, message));
+        });
     }
 
     /** 6절 SUBSCRIBE — 방 멤버(관리자 읽기 전용 열람 포함)만. 아니면 404 */
@@ -165,25 +171,27 @@ public class ChatRoomService {
         return seated(user, roomId).seat();
     }
 
-    /** 5절 — 관리자만 · 상담방만. RESOLVED 로 바꾸면 SYSTEM 안내 */
-    @Transactional
+    /** 5절 — 관리자만 · 상담방만. RESOLVED 로 바꾸면 SYSTEM 안내. 응답의 상대 이름 조회는 커밋 뒤 */
     public Room changeStatus(AuthUser user, Long roomId, ChatRoomStatus status) {
         if (!user.hasRole(ADMIN)) {
             throw new ChatException(ChatErrorCode.CHAT_NOT_ALLOWED);
         }
-        ChatRoom room = roomRepository.findById(roomId).orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
-        if (!room.getType().isSupport()) {
-            throw new ChatException(ChatErrorCode.CHAT_INVALID_TYPE);
-        }
-        if (room.getStatus() != status) {
-            room.changeStatus(status);
-            events.publishEvent(new ChatEvents.StatusChanged(roomId, status));
-            if (status == ChatRoomStatus.RESOLVED) {
-                ChatMessage notice = messageRepository.save(ChatMessage.system(room.getId(), RESOLVED_NOTICE));
-                room.touch(notice);
-                events.publishEvent(new ChatEvents.MessageSaved(room, notice));
+        ChatRoom room = transactions.execute(tx -> {
+            ChatRoom changed = load(roomId);
+            if (!changed.getType().isSupport()) {
+                throw new ChatException(ChatErrorCode.CHAT_INVALID_TYPE);
             }
-        }
+            if (changed.getStatus() != status) {
+                changed.changeStatus(status);
+                events.publishEvent(new ChatEvents.StatusChanged(roomId, status));
+                if (status == ChatRoomStatus.RESOLVED) {
+                    ChatMessage notice = messageRepository.save(ChatMessage.system(changed.getId(), RESOLVED_NOTICE));
+                    changed.touch(notice);
+                    events.publishEvent(new ChatEvents.MessageSaved(changed, notice));
+                }
+            }
+            return changed;
+        });
         return view(room, ChatSeat.admin(false));
     }
 
@@ -218,11 +226,11 @@ public class ChatRoomService {
         };
     }
 
-    /** 문맥 카드 — 마지막 카드와 같은 대상이면 생략. CHAT_ROOM 은 고객 상담에만, 내 스토어 톡만 */
-    private void appendContext(ChatRoom room, AuthUser user, ChatSeat seat, ChatRequests.Context context) {
+    /** 문맥 카드 제목 (트랜잭션 밖 — 이름 조회). CHAT_ROOM 은 고객 상담에만, 내 스토어 톡만 */
+    private String contextTitle(ChatRoomType roomType, Long storeId, AuthUser user, ChatRequests.Context context) {
         String title = context.type().fallbackTitle(context.id());
         if (context.type() == ContextType.CHAT_ROOM) {
-            if (room.getType() != ChatRoomType.BUYER_SUPPORT) {
+            if (roomType != ChatRoomType.BUYER_SUPPORT) {
                 throw new BusinessException(CommonErrorCode.INVALID_INPUT, "스토어 톡 도움 요청은 고객센터 상담에서만 할 수 있습니다.");
             }
             ChatRoom inquiry = roomRepository.findById(context.id())
@@ -239,9 +247,14 @@ public class ChatRoomService {
         } else if (context.type() == ContextType.ORDER) {
             title = "주문 " + orderNo(context.id());
         } else if (context.type() == ContextType.SETTLEMENT) {
-            title = settlementTitle(room, context.id(), title);
+            title = settlementTitle(roomType, storeId, context.id(), title);
         }
-        boolean same = messageRepository.findFirstByChatRoomIdAndKindOrderByIdDesc(room.getId(), MessageKind.CONTEXT)
+        return title;
+    }
+
+    /** 문맥 카드 저장 — 마지막 카드와 같은 대상이면 생략 */
+    private void appendContext(ChatRoom room, AuthUser user, ChatSeat seat, ChatRequests.Context context, String title) {
+        boolean same =messageRepository.findFirstByChatRoomIdAndKindOrderByIdDesc(room.getId(), MessageKind.CONTEXT)
                 .filter(last -> last.sameContext(context.type(), context.id()))
                 .isPresent();
         if (!same) {
@@ -251,9 +264,13 @@ public class ChatRoomService {
         }
     }
 
+    private ChatRoom load(Long roomId) {
+        return roomRepository.findById(roomId).orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+    }
+
     /** 방 + 내 자리 — 자리가 없으면 404 */
     private Seated seated(AuthUser user, Long roomId) {
-        ChatRoom room = roomRepository.findById(roomId).orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+        ChatRoom room = load(roomId);
         ChatSeat seat = seatOf(room, user);
         if (seat == null) {
             throw new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND);
@@ -347,15 +364,15 @@ public class ChatRoomService {
     }
 
     /** 정산 카드 — 판매자 운영 상담에만 · 그 스토어 정산만. 제목 "정산 2026-W43 · 1,234,000원", 조회 실패면 번호 */
-    private String settlementTitle(ChatRoom room, Long settlementId, String fallback) {
-        if (room.getType() != ChatRoomType.SELLER_SUPPORT) {
+    private String settlementTitle(ChatRoomType roomType, Long storeId, Long settlementId, String fallback) {
+        if (roomType != ChatRoomType.SELLER_SUPPORT) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT, "정산 문의는 판매자 운영 상담에서만 할 수 있습니다.");
         }
         ChatDirectory.SettlementInfo info = directory.settlement(settlementId);
         if (info == null) {
             return fallback;
         }
-        if (!info.storeId().equals(room.getStoreId())) {
+        if (!info.storeId().equals(storeId)) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT, "이 스토어의 정산만 문의할 수 있습니다.");
         }
         return "정산 " + info.week() + " · " + String.format("%,d원", info.payoutAmt());

@@ -267,6 +267,34 @@ class ChatRoomApiTest {
     }
 
     @Test
+    @DisplayName("user · store · product · settlement 조회(HTTP)는 트랜잭션 밖 — 방 열기 · 보내기 · 상태 변경 · 목록 모두")
+    void directoryCallsRunOutsideTransaction(@Autowired ChatRoomService chatRoomService) throws Exception {
+        List<Boolean> inTx = new java.util.concurrent.CopyOnWriteArrayList<>();
+        org.mockito.stubbing.Answer<Object> record = invocation -> {
+            inTx.add(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+            return invocation.getMethod().getReturnType() == boolean.class ? true : null;
+        };
+        org.mockito.BDDMockito.willAnswer(record).given(directory).storeOpen(any());
+        org.mockito.BDDMockito.willAnswer(record).given(directory).storeName(any());
+        org.mockito.BDDMockito.willAnswer(record).given(directory).userName(any());
+        org.mockito.BDDMockito.willAnswer(record).given(directory).productName(any());
+        org.mockito.BDDMockito.willAnswer(record).given(directory).settlement(any());
+        AuthUser buyer = new AuthUser(BUYER_ID, List.of("BUYER"), null);
+        AuthUser admin = new AuthUser(ADMIN_ID, List.of("ADMIN"), null);
+
+        long inquiry = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5,\"context\":{\"type\":\"PRODUCT\",\"id\":101}}"));
+        chatRoomService.send(buyer, inquiry, "안녕하세요");
+        long support = id(open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"CHAT_ROOM\",\"id\":" + inquiry + "}}"));
+        open(seller(post("/api/chats/rooms")), "{\"type\":\"SELLER_SUPPORT\",\"context\":{\"type\":\"SETTLEMENT\",\"id\":31}}");
+        chatRoomService.changeStatus(admin, support, com.sesac.gojigi.chat.room.entity.ChatRoomStatus.RESOLVED);
+        chatRoomService.rooms(admin, null, null);
+
+        org.assertj.core.api.Assertions.assertThat(inTx).isNotEmpty().containsOnly(false);
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM chat_message WHERE kind = 'TEXT'", Integer.class))
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("주문 카드는 주문번호 모양으로, 정산 카드는 주차 · 지급액 — 정산은 판매자 상담 · 그 스토어 것만")
     void orderAndSettlementCards() throws Exception {
         open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"ORDER\",\"id\":20261027000001}}")
