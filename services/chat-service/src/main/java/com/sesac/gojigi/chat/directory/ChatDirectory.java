@@ -17,7 +17,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 채팅에 보이는 이름 · 스토어 상태 · 정산 카드 — user GET /internal/users/{id} · store GET /internal/stores/{id} (chat.md 1 · 7절, D-1)
- * · settlement GET /internal/settlements/{id}(정산 카드 제목 · 내 스토어 정산인지).
+ * · settlement GET /internal/settlements/{id}(정산 카드 제목 · 내 스토어 정산인지) · product GET /api/products/{id}(상품 카드 제목).
  * 방 목록을 열 때마다 방 수만큼 부르지 않게 짧게 기억한다: 이름은 {@value #NAME_TTL_MINUTES}분, 스토어(정지 · 폐점 반영)는 1분, 조회 실패는 10초.
  * 실패하면 null — 화면은 번호("스토어 #5")로, 스토어 상태는 막지 않는 쪽(fail-open)으로
  */
@@ -33,16 +33,20 @@ public class ChatDirectory {
     private final RestClient userClient;
     private final RestClient storeClient;
     private final RestClient settlementClient;
+    private final RestClient productClient;
     private final Clock clock;
     private final Map<Long, Cached<String>> users = new ConcurrentHashMap<>();
     private final Map<Long, Cached<StoreInfo>> stores = new ConcurrentHashMap<>();
     private final Map<Long, Cached<SettlementInfo>> settlements = new ConcurrentHashMap<>();
+    private final Map<Long, Cached<String>> products = new ConcurrentHashMap<>();
 
     public ChatDirectory(@Qualifier("userRestClient") RestClient userClient, @Qualifier("storeRestClient") RestClient storeClient,
-            @Qualifier("settlementRestClient") RestClient settlementClient, Clock clock) {
+            @Qualifier("settlementRestClient") RestClient settlementClient, @Qualifier("productRestClient") RestClient productClient,
+            Clock clock) {
         this.userClient = userClient;
         this.storeClient = storeClient;
         this.settlementClient = settlementClient;
+        this.productClient = productClient;
         this.clock = clock;
     }
 
@@ -62,6 +66,12 @@ public class ChatDirectory {
     public boolean storeOpen(Long storeId) {
         StoreInfo info = store(storeId);
         return info == null || info.open();
+    }
+
+    /** 상품 카드 제목 — product 공개 상세 GET /api/products/{id} 의 name. 없거나(404 · 삭제) 조회 실패면 null */
+    public String productName(Long productId) {
+        return cached(products, productId, Duration.ofMinutes(NAME_TTL_MINUTES), id -> data(productClient, "/api/products/{id}", id)
+                .map(d -> d.path("name").asString(null)).orElse(null));
     }
 
     /** 정산 카드 — 스토어 · 주차 · 지급액. 없거나 조회 실패면 null (상태가 바뀌어도 이 값들은 그대로라 이름과 같이 10분) */
