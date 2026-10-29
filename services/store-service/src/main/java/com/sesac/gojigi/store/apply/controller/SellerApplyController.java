@@ -6,7 +6,9 @@ import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.store.apply.dto.request.DocumentPresignRequest;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest;
 import com.sesac.gojigi.store.apply.dto.response.DocumentPresignResponse;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
+import com.sesac.gojigi.store.apply.service.ApplicationQueryService;
 import com.sesac.gojigi.store.apply.service.SellerApplyService;
 import com.sesac.gojigi.store.apply.service.SellerDocumentPresignService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +20,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SellerApplyController {
 
     private final SellerApplyService sellerApplyService;
+    private final ApplicationQueryService applicationQueryService;
     private final SellerDocumentPresignService sellerDocumentPresignService;
 
     @Operation(summary = "입점 신청", description = """
@@ -71,5 +75,19 @@ public class SellerApplyController {
             @Parameter(hidden = true) @CurrentUser AuthUser user, @Valid @RequestBody DocumentPresignRequest request) {
         return ResponseEntity.ok(ApiResponse.success("업로드 주소를 발급했습니다.",
                 sellerDocumentPresignService.presign(user.userId(), request)));
+    }
+
+    @Operation(summary = "내 입점 신청 상태",
+            description = """
+            인가: BUYER (X-User-Id 본인 신청만). 가장 최근 신청 1건 — 접수번호 · 상태 · 반려 · 보완요청 사유 · 상태 이력(타임라인).
+            보완요청이면 supplementDueAt(보완요청 + 7일, 지나면 자동 반려), 반려면 reapplyAvailableAt(반려 + 30일), 승인이면 storeId.
+            신청한 적이 없으면 200 data null(화면은 신청 폼). 에러: 401 UNAUTHORIZED""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 신청이 없으면 data null"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED")
+    })
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<MyApplicationResponse>> getMine(@Parameter(hidden = true) @CurrentUser AuthUser user) {
+        return ResponseEntity.ok(ApiResponse.success("내 입점 신청을 조회했습니다.", applicationQueryService.getMine(user.userId())));
     }
 }

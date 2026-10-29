@@ -10,6 +10,7 @@ import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailRespon
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SameStore;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SettlementAccount;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationSummaryResponse;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
 import com.sesac.gojigi.store.apply.entity.ApplicationDocument;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
@@ -33,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 관리자 입점 심사 조회 (담당 박지연, docs/api/store.md 3 · 4절) */
+/** 입점 신청 조회 (담당 박지연) — 관리자 심사 목록 · 상세 (docs/api/store.md 3 · 4절) · 신청자 내 신청 상태 (2-2절) */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -53,6 +54,42 @@ public class ApplicationQueryService {
                 ? storeApplicationRepository.findAllByOrderByTermsAgreedAtDescIdDesc()
                 : storeApplicationRepository.findAllByStatusOrderByTermsAgreedAtDescIdDesc(status);
         return applications.stream().map(InternalApplicationSummaryResponse::from).toList();
+    }
+
+    /**
+     * 내 입점 신청 상태 (2-2절, STR-08) — 가장 최근 신청 1건, 신청한 적이 없으면 null(오류 아님 — 화면은 신청 폼).
+     * 보완 기한 · 재신청 가능 시각은 상태 변경 시각에서 계산(보완 +7일 · 반려 +30일, 신청 검사 · 자동 반려와 같은 기준)
+     */
+    public MyApplicationResponse getMine(Long userId) {
+        return storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(userId)
+                .map(this::toMine)
+                .orElse(null);
+    }
+
+    private MyApplicationResponse toMine(StoreApplication application) {
+        Long applicationId = application.getId();
+        ApplicationStatus status = application.getStatus();
+        return new MyApplicationResponse(
+                applicationId,
+                SellerApplyResponse.applicationNo(applicationId, application.getTermsAgreedAt()),
+                status,
+                application.getStoreName(),
+                application.getSlug(),
+                application.getStatusReason(),
+                kst(application.getTermsAgreedAt()),
+                kst(application.getStatusChangedAt()),
+                status == ApplicationStatus.SUPPLEMENT ? kst(application.supplementDueAt()) : null,
+                status == ApplicationStatus.REJECTED
+                        ? kst(application.getStatusChangedAt().plusDays(SellerApplyService.REAPPLY_RESTRICTION_DAYS)) : null,
+                status == ApplicationStatus.APPROVED
+                        ? storeRepository.findByStoreApplicationId(applicationId).map(Store::getId).orElse(null) : null,
+                histories(applicationId));
+    }
+
+    private List<History> histories(Long applicationId) {
+        return applicationHistoryRepository.findAllByStoreApplicationIdOrderByIdAsc(applicationId).stream()
+                .map(h -> new History(h.getFromStatus(), h.getToStatus(), h.getActorType(), h.getReason(), kst(h.getCreatedAt())))
+                .toList();
     }
 
     /** 상태와 상관없이 상세, 없으면 APPLY_NOT_FOUND. 서류 열람 주소 발급이 실패해도 상세는 돌려준다(url null) */
@@ -88,10 +125,7 @@ public class ApplicationQueryService {
                 application.isMarketingAgreed(),
                 kst(application.getTermsAgreedAt()),
                 documents(applicationId),
-                applicationHistoryRepository.findAllByStoreApplicationIdOrderByIdAsc(applicationId).stream()
-                        .map(h -> new History(h.getFromStatus(), h.getToStatus(), h.getActorType(), h.getReason(),
-                                kst(h.getCreatedAt())))
-                        .toList(),
+                histories(applicationId),
                 sameBizRegNo(application));
     }
 
