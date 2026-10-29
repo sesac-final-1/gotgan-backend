@@ -15,9 +15,11 @@ import com.sesac.gojigi.common.web.exception.ErrorCode;
 import com.sesac.gojigi.review.TestcontainersConfiguration;
 import com.sesac.gojigi.review.inquiry.client.InquirySnapshotReader;
 import com.sesac.gojigi.review.inquiry.client.InquirySnapshotReader.InquirySnapshot;
+import com.sesac.gojigi.review.inquiry.dto.request.InquiryAnswerRequest;
 import com.sesac.gojigi.review.inquiry.dto.request.InquiryCreateRequest;
 import com.sesac.gojigi.review.inquiry.dto.request.InquiryUpdateRequest;
 import com.sesac.gojigi.review.inquiry.dto.request.SellerInquiryTab;
+import com.sesac.gojigi.review.inquiry.dto.response.InquiryAnswerResponse;
 import com.sesac.gojigi.review.inquiry.dto.response.InquiryResponse;
 import com.sesac.gojigi.review.inquiry.dto.response.ProductInquiryResponse;
 import com.sesac.gojigi.review.inquiry.dto.response.SellerInquiryResponse;
@@ -402,6 +404,48 @@ class InquiryServiceIntegrationTest {
         void withoutStore_forbidden() {
             assertCode(catchThrowable(() -> inquiryService.listForSeller(null, SellerInquiryTab.ALL, 0, 10)), CommonErrorCode.FORBIDDEN);
             assertCode(catchThrowable(() -> inquiryService.summarizeForSeller(null)), CommonErrorCode.FORBIDDEN);
+            assertCode(catchThrowable(() -> inquiryService.answer(null, 1L, new InquiryAnswerRequest("답변"))), CommonErrorCode.FORBIDDEN);
+        }
+
+        @Test
+        @DisplayName("답변 — 정화해 저장 · 시각, 다시 쓰면 덮어쓰고 미답변에서 빠진다 · 구매자 수정은 막힌다")
+        void answer_savesAndOverwrites() {
+            // given
+            long storeId = SEQ.incrementAndGet();
+            ProductInquiry inquiry = saveFor(BUYER, 101L, storeId, true, "배송지 변경 가능할까요?");
+
+            // when
+            InquiryAnswerResponse first = inquiryService.answer(storeId, inquiry.getId(), new InquiryAnswerRequest("<b>변경</b>해 드렸습니다"));
+            InquiryAnswerResponse second = inquiryService.answer(storeId, inquiry.getId(), new InquiryAnswerRequest("변경해 드렸습니다. 감사합니다"));
+
+            // then
+            assertThat(first.answerContent()).isEqualTo("변경해 드렸습니다");
+            assertThat(second.inquiryId()).isEqualTo(inquiry.getId());
+            assertThat(second.answerContent()).isEqualTo("변경해 드렸습니다. 감사합니다");
+            assertThat(second.answeredAt()).isEqualTo(NOW.atZone(KST).toOffsetDateTime());
+            assertThat(reload(inquiry.getId()).getAnswerContent()).isEqualTo("변경해 드렸습니다. 감사합니다");
+            assertThat(inquiryService.summarizeForSeller(storeId)).isEqualTo(new SellerInquirySummaryResponse(0, 1, 1));
+            assertCode(catchThrowable(() -> inquiryService.edit(BUYER, inquiry.getId(), new InquiryUpdateRequest("바꿀래요", false))),
+                    InquiryErrorCode.INQUIRY_ALREADY_ANSWERED);
+        }
+
+        @Test
+        @DisplayName("답변 — 다른 스토어 · 삭제된 · 없는 문의 404, 태그만 있으면 400")
+        void answer_rejected() {
+            long storeId = SEQ.incrementAndGet();
+            ProductInquiry others = saveFor(BUYER, 101L, SEQ.incrementAndGet(), false, "다른 스토어 문의");
+            ProductInquiry deleted = saveFor(BUYER, 101L, storeId, false, "지운 문의");
+            softDelete(deleted);
+            ProductInquiry mine = saveFor(BUYER, 101L, storeId, false, "재입고 되나요?");
+            InquiryAnswerRequest request = new InquiryAnswerRequest("네");
+
+            for (long inquiryId : new long[] { others.getId(), deleted.getId(), Long.MAX_VALUE }) {
+                assertCode(catchThrowable(() -> inquiryService.answer(storeId, inquiryId, request)), InquiryErrorCode.INQUIRY_NOT_FOUND);
+            }
+            assertCode(catchThrowable(() -> inquiryService.answer(storeId, mine.getId(), new InquiryAnswerRequest("<script>x</script>"))),
+                    CommonErrorCode.INVALID_INPUT);
+            assertThat(reload(others.getId()).isAnswered()).isFalse();
+            assertThat(reload(mine.getId()).isAnswered()).isFalse();
         }
     }
 }
