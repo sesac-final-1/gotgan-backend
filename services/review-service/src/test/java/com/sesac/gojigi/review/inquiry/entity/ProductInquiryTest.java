@@ -12,7 +12,8 @@ class ProductInquiryTest {
 
     private static ProductInquiry inquiry(boolean secret) {
         return ProductInquiry.builder()
-                .userId(4L).productId(101L).storeId(1L).content("M이랑 L 중 어떤 걸 추천하시나요?").secret(secret)
+                .userId(4L).productId(101L).storeId(1L).productName("린넨 오버핏 셔츠").writerDisplayName("곳간러버")
+                .content("M이랑 L 중 어떤 걸 추천하시나요?").secret(secret)
                 .build();
     }
 
@@ -31,6 +32,21 @@ class ProductInquiryTest {
         assertThat(inquiry.isAnswered()).isTrue();
         assertThat(inquiry.getAnswerContent()).isEqualTo("M 추천드립니다! 오버핏이에요");
         assertThat(inquiry.getAnsweredAt()).isEqualTo(NOW.plusHours(1));
+    }
+
+    @Test
+    @DisplayName("수정하면 본문 · 비밀글 여부만 바뀐다")
+    void edit_changesContentAndSecret() {
+        // given
+        ProductInquiry inquiry = inquiry(false);
+
+        // when
+        inquiry.edit("어깨가 넓은 편인데 L 이 나을까요?", true);
+
+        // then
+        assertThat(inquiry.getContent()).isEqualTo("어깨가 넓은 편인데 L 이 나을까요?");
+        assertThat(inquiry.isSecret()).isTrue();
+        assertThat(inquiry.getProductName()).isEqualTo("린넨 오버핏 셔츠");
     }
 
     @Test

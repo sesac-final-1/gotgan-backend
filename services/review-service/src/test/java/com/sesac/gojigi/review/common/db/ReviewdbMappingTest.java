@@ -62,17 +62,21 @@ class ReviewdbMappingTest {
     }
 
     @Test
-    @DisplayName("V5 까지 적용되고 helpful_count · review_image.file_size 는 없다")
-    void migrate_upToV5_dropsUnusedColumns() {
+    @DisplayName("V6 까지 적용되고 helpful_count · review_image.file_size 는 없다, 문의 스냅샷 칼럼은 있다")
+    void migrate_upToV6_dropsUnusedColumns() {
         assertThat(jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1", Integer.class))
-                .isEqualTo(5);
+                .isEqualTo(6);
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'review_image' AND COLUMN_NAME = 'file_size'",
                 Integer.class)).isZero();
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'review' AND COLUMN_NAME = 'helpful_count'",
                 Integer.class)).isZero();
+        assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'product_inquiry'"
+                        + " AND COLUMN_NAME IN ('product_name', 'thumbnail_url', 'writer_display_name')",
+                Integer.class)).isEqualTo(3);
     }
 
     @Test
@@ -134,7 +138,8 @@ class ReviewdbMappingTest {
     void saveInquiry_roundTrip() {
         // given
         ProductInquiry inquiry = inquiryRepository.save(ProductInquiry.builder()
-                .userId(4L).productId(101L).storeId(1L).content("재입고 언제 되나요?").secret(true)
+                .userId(4L).productId(101L).storeId(1L).productName("린넨 오버핏 셔츠").thumbnailUrl("https://cdn/p.jpg")
+                .writerDisplayName("곳간러버").content("재입고 언제 되나요?").secret(true)
                 .build());
         inquiry.answer("다음 주 예정입니다", NOW);
         em.flush();
@@ -147,6 +152,9 @@ class ReviewdbMappingTest {
         assertThat(found.isSecret()).isTrue();
         assertThat(found.isAnswered()).isTrue();
         assertThat(found.getAnswerContent()).isEqualTo("다음 주 예정입니다");
+        assertThat(found.getProductName()).isEqualTo("린넨 오버핏 셔츠");
+        assertThat(found.getThumbnailUrl()).isEqualTo("https://cdn/p.jpg");
+        assertThat(found.getWriterDisplayName()).isEqualTo("곳간러버");
         assertThat(found.getCreatedAt()).isNotNull();
     }
 
