@@ -478,6 +478,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | `STORE_INVALID_STATUS_TRANSITION` | 409 | `StoreErrorCode` | 폐점 스토어 정지 · 해제 (9절) |
 | `STORE_ORDERS_IN_PROGRESS` | 409 | `StoreErrorCode` | 폐점 — order 진행 중 상품주문 1건 이상, 메시지에 건수 (12절) |
 | `STORE_SETTLEMENT_OUTSTANDING` | 409 | `StoreErrorCode` | 폐점 — settlement 미정산(집계 전 · 지급 예정 · 보류), 메시지에 금액 합 (12절) |
+| `STORE_CLOSED` | 409 | `StoreErrorCode` | 폐점 스토어 설정 수정 (13-2절) |
 | `APPLY_NOT_FOUND` | 404 | `ApplyErrorCode` | 없는 입점 신청 (4~7절) |
 | `APPLY_INVALID_STATUS` | 409 | `ApplyErrorCode` | 승인 · 반려 · 보완요청을 할 수 없는 신청 상태, 동시 저장에서 진 쪽 (5~7절) |
 | `APPLY_STORE_ALREADY_EXISTS` | 409 | `ApplyErrorCode` | 신청자에게 이미 스토어가 있음 — 폐점 포함 (2 · 5절) |
@@ -486,7 +487,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | `APPLY_SLUG_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어 주소가 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
 | `APPLY_STORE_NAME_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어명이 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
 | `APPLY_DOCUMENT_INVALID` | 400 | `ApplyErrorCode` | 서류 종류 · 개수 · 형식 · 크기 · 키 위반, S3 에 없는 파일 (2절), 업로드 주소 발급의 개수 · 형식 · 크기 위반 (2-1절) |
-| `INVALID_INPUT` (공통) | 400 | `CommonErrorCode` | 경로 · 요청 형식 오류, 사유 누락 · 255자 초과 (6 · 7 · 9절) |
+| `INVALID_INPUT` (공통) | 400 | `CommonErrorCode` | 경로 · 요청 형식 오류, 사유 누락 · 255자 초과 (6 · 7 · 9절), 설정 형식 · 남의 이미지 키 (13-2절) |
 | `UNAUTHORIZED` (공통) | 401 | `CommonErrorCode` | 사용자 헤더 없음 (2 · 2-1 · 12절) |
 | `FORBIDDEN` (공통) | 403 | `CommonErrorCode` | `X-Store-Id` 없음 — 스토어가 없는 판매자 (12절) |
 | `EXTERNAL_API_ERROR` (공통) | 502 | `CommonErrorCode` | S3 확인 실패 (2절), 업로드 주소 발급 실패 — 자격 증명 (2-1절), order · settlement 확인 실패 · 서킷 OPEN (12절) |
@@ -535,9 +536,11 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 - **정지 중에도 폐점 가능** — 막으면 정지된 판매자는 탈퇴할 수 없음. 정지 사유는 폐점하면서 지웁니다(이력에는 남음).
 - 발행 `StoreStatusChanged{storeId, status: "CLOSED"}` — 9절과 같은 규칙(`eventId` 매번 새 값 · `occurredAt` = 폐점 시각). product 는 상품 숨김(#169), settlement 는 지급 보류.
 
-## 13. 판매자 내 스토어 — `GET /api/seller/store` (STR-06)
+## 13. 판매자 내 스토어 — `GET` · `PUT /api/seller/store` (STR-06)
 
-판매자 스토어 설정 화면이 부릅니다. 스토어 = `X-Store-Id`. 수정(`PUT /api/seller/store`) · 대표 이미지 업로드 주소는 다음 PR 에서 이 절에 이어 붙입니다.
+판매자 스토어 설정 화면이 부릅니다. 스토어 = `X-Store-Id`. 대표 이미지 업로드 주소는 다음 PR 에서 이 절에 이어 붙입니다.
+
+### 13-1. 조회 — `GET /api/seller/store`
 
 ```json
 {
@@ -565,6 +568,36 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | `csPhone` | 승인 때 신청서 담당자 휴대폰을 복사, 이후 판매자가 수정(신청서 기록은 그대로) |
 | `shippingFee` · `freeShippingThreshold` · `courier` · `dispatchNote` | 1절 배송 정책과 같은 값 — 승인 직후 3,000원 · `null` · `null` · `null` → 화면은 "배송 정책을 확인해 주세요" 안내 |
 | `ownerName` · `bizRegNo` | 원래 신청서(store 에 없음) — 바뀌면 새 사업자라 재심사 |
+
+### 13-2. 수정 — `PUT /api/seller/store`
+
+설정 **전체**를 보냅니다(조회 응답 값을 고쳐 그대로). 응답은 13-1 과 같은 모양(바뀐 값).
+
+```json
+{ "intro": "<p>리넨 의류를 만듭니다.</p>", "imageKey": "stores/1/7f3c9e2a.jpg", "color": "#5b6b4a", "csPhone": "02-0000-1234",
+  "shippingFee": 3000, "freeShippingThreshold": 50000, "courier": "CJ대한통운", "dispatchNote": "평일 14시 이전 결제 시 당일 출고" }
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `intro` | 선택, 5000자 이하 — 저장 전 서버 정화(2절 신청서와 같은 정책: 서식 · 문단 · 링크만). 비면 `null` |
+| `imageKey` | `null` = 이미지 없음 · **지금 키 그대로** = 유지 · 새 키는 업로드 주소 발급으로 받은 **`stores/{내 storeId}/{영숫자-}.(jpg·png·webp)`** 모양만(S3 존재는 확인 안 함 — product 와 같음). 그 밖은 400 |
+| `color` | 필수, `#RRGGBB` — 화면은 6색 중 선택(서버는 형식만: 시드 색이 팔레트 밖이라). 소문자로 저장 |
+| `csPhone` | 필수, `0X-XXXX-XXXX` 형식(휴대 · 지역 · 070) |
+| `shippingFee` | 필수, 0 ~ 100,000원 (0 = 무료) |
+| `freeShippingThreshold` | `null` = 무료배송 없음, 있으면 1 ~ 10,000,000원 |
+| `courier` · `dispatchNote` | 선택, 30자 · 100자 이하. 공백뿐이면 `null` |
+
+| 경우 | 응답 |
+|---|---|
+| 운영 중 · 정지 중 | **200** 바뀐 설정 |
+| 폐점 스토어 | **409** `STORE_CLOSED` |
+| 형식 오류 · 남의 이미지 키 | **400** `INVALID_INPUT` |
+| `X-Store-Id` 없음 / 사용자 헤더 없음 / 없는 스토어 | **403** · **401** · **404** `STORE_NOT_FOUND` |
+
+- 스토어명 · 주소 · 상태 · 등급은 바꾸지 않습니다.
+- **이미 들어온 주문의 배송비는 그대로**입니다 — order 가 주문 때 1절을 읽어 `order_store_shipment` 에 스냅샷. 그래서 이벤트를 발행하지 않습니다.
+- 스토어 행을 잠그고 바꿉니다(9절과 같은 `FOR UPDATE`) — `store` 에 버전 컬럼이 없어, 그 사이 관리자가 바꾼 상태를 판매자 저장이 덮어쓰지 않게.
 
 ## 10/20 설계 정리
 
@@ -641,3 +674,15 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 2 | 여러 건 | 가장 최근 1건(제출 시각 · ID 역순). 지난 반려 이력이 필요하면 그때 목록으로 |
 | 3 | 기한 · 재신청 시각 | 서버가 계산해 내려 줌 — 화면이 7일 · 30일 규칙을 따로 갖지 않게 |
 | 4 | 서류 | 넣지 않음 — 재제출(STR-09) 때 |
+
+## 10/29 설계 정리 (판매자 스토어 설정)
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | PR 범위 | STR-06 을 조회(13-1) · 수정(13-2) · 대표 이미지 업로드 주소(다음)로 나눔 — 엔드포인트 하나씩 |
+| 2 | 색 | 형식(`#RRGGBB`)만 — 시드 색(`#d0701f` 등)이 화면 6색 팔레트 밖이라 팔레트로 막으면 시드 스토어가 저장 불가. 팔레트는 화면 몫 |
+| 3 | 연락처 | 휴대 · 지역 · 070 모두 — 시드가 유선(`064-…` · `02-…`), 신청서 담당자 휴대폰(휴대만)과 다름 |
+| 4 | 이미지 키 | 모양 검사만(내 `stores/{storeId}/`) + 지금 키 유지 — product 와 같은 방식, 업로드 검사 Lambda 가 위장 파일을 지움 |
+| 5 | 폐점 스토어 | 409 `STORE_CLOSED`(새 코드) — 닫힌 스토어 설정은 의미 없음. 정지 중은 수정 가능 |
+| 6 | 동시 수정 | 행 잠금 — 버전 컬럼 없는 테이블이라 판매자 저장(전체 컬럼 UPDATE)이 관리자 상태 변경을 덮어쓰지 않게 |
+| 7 | 이벤트 | 없음 — 배송비는 주문 때 스냅샷 |
