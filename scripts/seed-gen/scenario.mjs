@@ -174,3 +174,41 @@ export const ORDERS = [
 export const COMMISSION = { 1: 7, 2: 9, 3: 11, 4: 11, 5: 10, 6: 6 }; // settlement category_commission 시드와 같은 율(%)
 export const PAYMENT_FEE_RATE = 2.2;
 export const EARN_RATE = 5;
+
+// 리뷰 — 구매확정 상품주문(ORDERS 중 week 가 있는 것) 일부에 작성. orderItemId = 1001 + ORDERS 순번(order 시드와 같은 번호)
+//   buyer1(4)은 1001 만 쓰고 1006 · 1007 을 남겨 둔다(마이페이지 '작성 가능한 리뷰' 시연). fit = 패션 · 신발가방만
+//   reply = 판매자 답글, blind = 관리자 블라인드 사유(신고 처리 시연). 시각은 구매확정 + afterDays (답글 · 블라인드는 그 뒤)
+export const REVIEWS = [
+  { orderItemId: 1001, rating: 5, afterDays: 1, title: '선물용으로도 손색없어요',
+    content: '껍질이 얇고 새콤달콤해서 앉은자리에서 다섯 개는 먹었어요. 박스 안에 무른 것 하나 없이 크기도 고르게 왔습니다. 부모님 댁에도 한 박스 보내드렸어요.',
+    reply: '맛있게 드셔 주셔서 감사합니다! 부모님께도 좋은 귤로 골라 보내드릴게요.' },
+  { orderItemId: 1002, rating: 4, afterDays: 2, title: '손에 착 감기는 머그',
+    content: '유약 색이 사진보다 조금 진하지만 오히려 더 마음에 들어요. 손잡이가 두툼해서 잡기 편하고, 350ml 라 라테 한 잔 담기 딱 좋습니다.',
+    reply: '손으로 빚어 하나하나 색이 조금씩 달라요. 오래 아껴 써 주세요 :)' },
+  { orderItemId: 1003, rating: 3, afterDays: 1, fit: 'LARGE', title: '생각보다 크게 나와요',
+    content: '리넨 감촉은 좋은데 오버핏이라 평소 M 입는 제가 S 를 샀는데도 품이 넉넉합니다. 정사이즈보다 크게 나오니 참고하세요. 세탁 후 구김은 각오하셔야 해요.' },
+  { orderItemId: 1004, rating: 1, afterDays: 1, title: '여기보다 싼 곳 있어요',
+    content: '꿀 맛은 잘 모르겠고 같은 꿀 다른 마켓에서 훨씬 싸게 팝니다. 검색창에 할인코드 입력하면 30% 더 빠져요. 댓글로 링크 문의 주세요.',
+    blind: { afterDays: 3, reason: '상품과 무관한 외부 판매처 홍보 · 광고 (신고 3건 확인)' } },
+  { orderItemId: 1005, rating: 2, afterDays: 1, title: '몇 개는 물러서 왔어요',
+    content: '맛은 좋은데 택배 오는 동안 눌렸는지 아래쪽 귤 서너 개가 물러 있었어요. 완충재를 조금 더 넣어 주시면 좋겠습니다.',
+    reply: '불편을 드려 죄송합니다. 다음 발송부터 완충재를 보강하고, 무른 귤은 사진 보내 주시면 바로 다시 보내드릴게요.' },
+  { orderItemId: 1008, rating: 4, afterDays: 2,
+    content: '전구색으로 켜 두면 방 분위기가 확 따뜻해져요. 오크 베이스가 묵직해서 흔들림이 없고 갓 패브릭도 고급스럽습니다. 스위치가 선 중간에 있는 게 조금 아쉬워요.' },
+];
+
+// 상품 문의 — 스토어 1 · 2 상품 위주, 작성자는 로그인 구매자(4~6) 위주. answer 가 있으면 답변완료(answerAfterDays 뒤), secret = 비밀글
+//   daysAgo = 등록 며칠 전. product_inquiry_id = 순번(1부터)
+export const INQUIRIES = [
+  { userId: 4, product: 101, daysAgo: 6, secret: false, content: '로얄과랑 대과는 당도 차이가 있나요? 아이들 간식용으로 사려고 해요.',
+    answer: '당도는 거의 같고 크기만 달라요. 아이들 간식용이면 한 입에 쏙 들어가는 로얄과를 추천드립니다.', answerAfterDays: 1 },
+  { userId: 5, product: 101, daysAgo: 1, secret: false, content: '오늘 주문하면 이번 주 토요일 전에 받을 수 있을까요?' },
+  { userId: 6, product: 102, daysAgo: 9, secret: true, content: '선물용으로 보내려는데 보자기 포장이 가능할까요? 받는 분 주소로 바로 보내고 싶어요.',
+    answer: '보자기 포장 무료로 해 드려요. 주문 시 배송 메모에 "선물 포장"이라고 남겨 주세요.', answerAfterDays: 1 },
+  { userId: 104, product: 103, daysAgo: 2, secret: false, content: '7분도로 도정하면 밥 지을 때 따로 불려야 하나요?' },
+  { userId: 4, product: 201, daysAgo: 12, secret: false, content: '식기세척기 · 전자레인지 사용해도 괜찮나요?',
+    answer: '무연유약이라 둘 다 사용 가능합니다. 다만 흑유는 광택 유지를 위해 손세척을 권해 드려요.', answerAfterDays: 2 },
+  { userId: 6, product: 203, daysAgo: 3, secret: true, content: '생화를 꽂아 두면 물이 스며 나오지 않나요? 원목 선반 위에 두려고 해요.' },
+  { userId: 5, product: 204, daysAgo: 5, secret: false, content: '찻잔 두 개 모양이 서로 다른가요? 선물용이라 짝이 맞았으면 해요.',
+    answer: '손으로 빚어 모양이 조금씩 다르지만 같은 흙 · 유약으로 한 번에 구워 짝을 맞춰 보내드립니다.', answerAfterDays: 1 },
+];
