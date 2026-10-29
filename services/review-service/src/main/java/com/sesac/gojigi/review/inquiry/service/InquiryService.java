@@ -6,9 +6,11 @@ import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.review.common.util.TextSanitizer;
 import com.sesac.gojigi.review.inquiry.client.InquirySnapshotReader;
 import com.sesac.gojigi.review.inquiry.client.InquirySnapshotReader.InquirySnapshot;
+import com.sesac.gojigi.review.inquiry.dto.request.InquiryAnswerRequest;
 import com.sesac.gojigi.review.inquiry.dto.request.InquiryCreateRequest;
 import com.sesac.gojigi.review.inquiry.dto.request.InquiryUpdateRequest;
 import com.sesac.gojigi.review.inquiry.dto.request.SellerInquiryTab;
+import com.sesac.gojigi.review.inquiry.dto.response.InquiryAnswerResponse;
 import com.sesac.gojigi.review.inquiry.dto.response.InquiryCreateResponse;
 import com.sesac.gojigi.review.inquiry.dto.response.InquiryResponse;
 import com.sesac.gojigi.review.inquiry.dto.response.ProductInquiryResponse;
@@ -28,7 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 상품 문의 등록 · 수정 · 삭제 · 조회 (REV-07 ~ 09, docs/api/review.md 13 ~ 19절). 담당 이경석.
+ * 상품 문의 등록 · 수정 · 삭제 · 조회 · 판매자 답변 (REV-07 ~ 09, docs/api/review.md 13 ~ 20절). 담당 이경석.
  * 등록 때 product · user 를 동기 조회해 스토어 · 상품명 · 작성자 이름을 저장한다 — 트랜잭션 밖에서 부른다(DB 커넥션을 잡고 기다리지 않게).
  * 조회는 저장한 스냅샷만 읽는다 — 다른 서비스를 부르지 않는다.
  */
@@ -109,6 +111,27 @@ public class InquiryService {
         long all = inquiryRepository.countByStoreIdAndDeletedAtIsNull(storeId);
         long unanswered = inquiryRepository.countByStoreIdAndAnsweredAtIsNullAndDeletedAtIsNull(storeId);
         return new SellerInquirySummaryResponse(unanswered, all - unanswered, all);
+    }
+
+    /**
+     * 판매자 답변 작성 · 수정 (REV-09) — 문의당 1개, 있으면 덮어쓴다. 없음 · 삭제됨 · 다른 스토어 문의는 같은 404.
+     * 답변이 달리면 구매자 수정이 막힌다(edit 의 INQUIRY_ALREADY_ANSWERED).
+     */
+    @Transactional
+    public InquiryAnswerResponse answer(Long storeId, Long inquiryId, InquiryAnswerRequest request) {
+        requireStore(storeId);
+        ProductInquiry inquiry = inquiryRepository.findById(inquiryId)
+                .filter(i -> !i.isDeleted() && i.belongsToStore(storeId))
+                .orElseThrow(() -> new InquiryException(InquiryErrorCode.INQUIRY_NOT_FOUND));
+        String content = TextSanitizer.plainText(request.content());
+        if (content == null) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "답변을 입력해 주세요.");
+        }
+
+        boolean edited = inquiry.isAnswered();
+        inquiry.answer(content, LocalDateTime.now(clock));
+        log.info("판매자 답변 {} inquiryId={} storeId={}", edited ? "수정" : "작성", inquiry.getId(), storeId);
+        return InquiryAnswerResponse.from(inquiry);
     }
 
     /** 없음 · 삭제됨 · 남의 문의는 같은 404 — 다른 회원 문의의 존재를 드러내지 않는다 */
