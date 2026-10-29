@@ -121,15 +121,17 @@ class ChatDirectoryTest {
     }
 
     @Test
-    @DisplayName("상품 카드 — 공개 상세의 name, 없으면(404) null")
+    @DisplayName("상품 카드 — 공개 상세의 name, 없으면(404) "삭제된 상품", 장애면 null")
     void productName() {
         products.expect(once(), requestTo("http://product/api/products/101")).andRespond(withSuccess(
                 "{\"data\":{\"productId\":101,\"storeId\":5,\"name\":\"햇사과 5kg\"}}", MediaType.APPLICATION_JSON));
         products.expect(once(), requestTo("http://product/api/products/102")).andRespond(withResourceNotFound());
+        products.expect(once(), requestTo("http://product/api/products/103")).andRespond(withServerError());
 
         assertThat(directory.productName(101L)).isEqualTo("햇사과 5kg");
         assertThat(directory.productName(101L)).isEqualTo("햇사과 5kg");   // 캐시
-        assertThat(directory.productName(102L)).isNull();
+        assertThat(directory.productName(102L)).isEqualTo("삭제된 상품");
+        assertThat(directory.productName(103L)).isNull();
         products.verify();
     }
 

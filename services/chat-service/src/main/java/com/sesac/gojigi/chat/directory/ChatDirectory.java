@@ -26,6 +26,7 @@ import tools.jackson.databind.JsonNode;
 public class ChatDirectory {
 
     static final long NAME_TTL_MINUTES = 10;
+    static final String DELETED_PRODUCT = "삭제된 상품";
     static final Duration STORE_TTL = Duration.ofMinutes(1);
     static final Duration FAILURE_TTL = Duration.ofSeconds(10);
     static final int MAX_ENTRIES = 10_000;
@@ -68,10 +69,15 @@ public class ChatDirectory {
         return info == null || info.open();
     }
 
-    /** 상품 카드 제목 — product 공개 상세 GET /api/products/{id} 의 name. 없거나(404 · 삭제) 조회 실패면 null */
+    /** 상품 카드 제목 — product 공개 상세 GET /api/products/{id} 의 name. 없거나 삭제(404)면 "삭제된 상품", 조회 실패면 null */
     public String productName(Long productId) {
-        return cached(products, productId, Duration.ofMinutes(NAME_TTL_MINUTES), id -> data(productClient, "/api/products/{id}", id)
-                .map(d -> d.path("name").asString(null)).orElse(null));
+        return cached(products, productId, Duration.ofMinutes(NAME_TTL_MINUTES), id -> {
+            try {
+                return data(productClient, "/api/products/{id}", id).map(d -> d.path("name").asString(null)).orElse(null);
+            } catch (HttpClientErrorException.NotFound e) {
+                return DELETED_PRODUCT;
+            }
+        });
     }
 
     /** 정산 카드 — 스토어 · 주차 · 지급액. 없거나 조회 실패면 null (상태가 바뀌어도 이 값들은 그대로라 이름과 같이 10분) */
