@@ -8,13 +8,13 @@ import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
 import com.sesac.gojigi.order.claim.entity.ClaimType;
 import com.sesac.gojigi.order.claim.service.ClaimRefundPolicy.Refund;
 import com.sesac.gojigi.order.claim.service.ClaimTxService.ClaimTarget;
-import com.sesac.gojigi.order.order.client.ShippingPolicyClient;
+import com.sesac.gojigi.order.order.client.StoreClientAdapter;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 반품 · 교환 신청 (CLM-03 · 04) · 클레임 환불 예정액 — 스토어 배송비 정책(store)을 트랜잭션 밖에서 읽고 ClaimTxService 에 넘긴다.
+ * 반품 · 교환 신청 (CLM-03 · 04) · 클레임 환불 예정액 — 스토어 기본 배송비(store)를 트랜잭션 밖에서 읽고 ClaimTxService 에 넘긴다.
  * 취소(CLM-01)는 Saga 라 CancelOrderItemSaga 가 맡는다.
  */
 @Service
@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 public class ClaimService {
 
     private final ClaimTxService claimTx;
-    private final ShippingPolicyClient shippingPolicy;
+    private final StoreClientAdapter store;
 
     /** 환불 예정액 — 신청과 같은 조건으로 계산 (같은 주문의 다른 클레임이 끼면 실제 접수 금액은 달라질 수 있음) */
     public ClaimPreviewResponse preview(Long buyerId, String orderNo, Long orderItemId, ClaimType type,
@@ -55,9 +55,8 @@ public class ClaimService {
 
     private long returnShippingFee(OrderItem item, ClaimReasonCode reasonCode) {
         if (ClaimRefundPolicy.sellerFault(reasonCode)) {
-            return 0L;   // 판매자 귀책이면 스토어 정책을 부를 필요도 없다
+            return 0L;   // 판매자 귀책이면 store 를 부를 필요도 없다
         }
-        return ClaimRefundPolicy.returnShippingFee(reasonCode,
-                shippingPolicy.getShippingPolicy(item.getStoreId()).baseFee());
+        return ClaimRefundPolicy.returnShippingFee(reasonCode, store.getStore(item.getStoreId()).shippingFee());
     }
 }
