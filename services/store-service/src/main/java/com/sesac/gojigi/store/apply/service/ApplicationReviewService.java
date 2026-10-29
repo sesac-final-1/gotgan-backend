@@ -1,12 +1,17 @@
 package com.sesac.gojigi.store.apply.service;
 
+import com.sesac.gojigi.common.web.exception.BusinessException;
+import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.store.apply.dto.event.StoreApplicationRejectedPayload;
+import com.sesac.gojigi.store.apply.dto.event.StoreApplicationSupplementRequestedPayload;
 import com.sesac.gojigi.store.apply.dto.event.StoreApprovedPayload;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationApproveResponse;
 import com.sesac.gojigi.store.apply.dto.response.ApplicationRejectResponse;
+import com.sesac.gojigi.store.apply.dto.response.ApplicationSupplementResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
+import com.sesac.gojigi.store.apply.entity.DocType;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
 import com.sesac.gojigi.store.apply.exception.ApplyErrorCode;
 import com.sesac.gojigi.store.apply.exception.ApplyException;
@@ -22,7 +27,10 @@ import com.sesac.gojigi.store.store.repository.StoreStatusHistoryRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.HashSet;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +40,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 관리자 입점 심사 — 승인 · 반려 (docs/api/store.md 5 · 6절). 보완요청도 이 서비스에 붙인다.
+ * 관리자 입점 심사 — 승인 · 반려 · 보완요청 (docs/api/store.md 5 · 6 · 7절).
  * 동시 처리는 미리 검사한 뒤에도 저장 순간에 다시 걸릴 수 있어, saveAndFlush 로 그 자리에서 실행해 보고 409 로 바꾼다.
  * 이벤트는 같은 트랜잭션에서 아웃박스에 남기고 커밋 뒤 발행한다 — 발행이 실패해도 승인은 그대로, 발행기가 다시 보낸다.
  */
@@ -43,6 +51,7 @@ public class ApplicationReviewService {
 
     static final String STORE_APPROVED = "StoreApproved";
     static final String STORE_APPLICATION_REJECTED = "StoreApplicationRejected";
+    static final String STORE_APPLICATION_SUPPLEMENT_REQUESTED = "StoreApplicationSupplementRequested";
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final StoreApplicationRepository storeApplicationRepository;
@@ -93,10 +102,42 @@ public class ApplicationReviewService {
         eventOutboxService.enqueue(STORE_APPLICATION_REJECTED, String.valueOf(applicationId),
                 applicationEventId(STORE_APPLICATION_REJECTED, applicationId), now,
                 new StoreApplicationRejectedPayload(applicationId, application.getUserId(), application.getStoreName(),
-                        application.getManagerEmail(), reason, now.atZone(KST).toOffsetDateTime()));
+                        application.getManagerEmail(), reason, kst(now)));
 
         log.info("입점 반려 - applicationId={}, userId={}", applicationId, application.getUserId());
         return ApplicationRejectResponse.of(applicationId, application.getStatus(), now);
+    }
+
+    /** 신청을 SUPPLEMENT 로 + 이력(메시지) + StoreApplicationSupplementRequested 아웃박스 행을 한 트랜잭션으로. requestedDocs 는 저장하지 않음 */
+    @Transactional
+    public ApplicationSupplementResponse requestSupplement(Long applicationId, String message, List<DocType> requestedDocs) {
+        if (new HashSet<>(requestedDocs).size() != requestedDocs.size()) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "보완 요청 서류가 중복됐습니다.");
+        }
+        StoreApplication application = storeApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
+        LocalDateTime now = LocalDateTime.now(clock);
+
+        application.requestSupplement(message, now);
+        flushApplication(application);
+        LocalDateTime dueAt = application.supplementDueAt();
+
+        applicationHistoryRepository.save(ApplicationHistory.of(applicationId, ApplicationStatus.PENDING,
+                ApplicationStatus.SUPPLEMENT, ActorType.ADMIN, message));
+        // 보완 → 재제출 → 다시 보완으로 한 신청에 여러 번 생길 수 있어 신청 ID 로 고정하지 않는다 — 다시 보낼 때는 아웃박스에 저장된 값
+        eventOutboxService.enqueue(STORE_APPLICATION_SUPPLEMENT_REQUESTED, String.valueOf(applicationId),
+                UUID.randomUUID().toString(), now,
+                new StoreApplicationSupplementRequestedPayload(applicationId, application.getUserId(),
+                        application.getStoreName(), application.getManagerEmail(),
+                        requestedDocs.stream().map(DocType::getLabel).toList(), message, kst(dueAt)));
+
+        log.info("입점 보완요청 - applicationId={}, userId={}, requestedDocs={}", applicationId, application.getUserId(),
+                requestedDocs);
+        return new ApplicationSupplementResponse(applicationId, application.getStatus(), kst(dueAt));
+    }
+
+    private static OffsetDateTime kst(LocalDateTime dateTime) {
+        return dateTime.atZone(KST).toOffsetDateTime();
     }
 
     /** StoreApproved:{applicationId} 의 이름 기반 UUID (v3) — 신청 하나에 항상 같은 값 (store.md 5절, 노션 10/23 user 요청) */
