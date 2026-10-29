@@ -210,6 +210,41 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 
 ---
 
+## 2-2. 내 입점 신청 상태 — `GET /api/seller/apply/me` (STR-08)
+
+신청자(구매자)가 자기 신청의 진행 상황을 봅니다 — 접수 타임라인 · 보완요청 · 반려 사유. `X-User-Id` 본인의 **가장 최근 신청 1건**(진행 중 신청은 1건뿐이고, 반려 뒤 재신청하면 새 신청이 최신).
+
+```json
+{
+  "applicationId": 27, "applicationNo": "AP-2610-027", "status": "SUPPLEMENT",
+  "storeName": "곳간상회", "slug": "gotgan-store",
+  "statusReason": "통신판매업 신고증 사본이 흐려 확인이 어렵습니다",
+  "submittedAt": "2026-10-22T14:05:11+09:00", "statusChangedAt": "2026-10-23T10:00:00+09:00",
+  "supplementDueAt": "2026-10-30T10:00:00+09:00", "reapplyAvailableAt": null, "storeId": null,
+  "history": [
+    { "fromStatus": null, "toStatus": "PENDING", "actor": "APPLICANT", "reason": null, "changedAt": "2026-10-22T14:05:11+09:00" },
+    { "fromStatus": "PENDING", "toStatus": "SUPPLEMENT", "actor": "ADMIN", "reason": "통신판매업 신고증 사본이 흐려 확인이 어렵습니다", "changedAt": "2026-10-23T10:00:00+09:00" }
+  ]
+}
+```
+
+| 경우 | 응답 | 화면 권장 처리 |
+|---|---|---|
+| 신청 있음 | **200** 위 응답 | `status` 별 안내 + `history` 로 타임라인 |
+| 신청한 적 없음 | **200** `data: null` | 신청 폼 — 오류가 아니라 정상 상태라 404 로 두지 않음(구매자가 들어올 때마다 경고 로그가 쌓이지 않게) |
+| 사용자 헤더 없음 | **401** `UNAUTHORIZED` | — |
+
+| 필드 | 값 |
+|---|---|
+| `statusReason` | 반려 · 보완요청 사유, 그 밖에는 `null` |
+| `supplementDueAt` | `SUPPLEMENT` 일 때만 — 보완요청 시각 + 7일(7절, 지나면 자동 반려) |
+| `reapplyAvailableAt` | `REJECTED` 일 때만 — 반려 시각 + 30일(2절 재신청 제한과 같은 기준) |
+| `storeId` | `APPROVED` 일 때만 — 판매자 권한은 다음 토큰부터(5절) |
+| `history` | 4절과 같은 모양, 오래된 순 |
+
+- 서류 · 사업자 정보는 넣지 않습니다 — 보완 서류 재제출(STR-09) 화면을 만들 때 필요한 만큼 추가합니다(필드는 추가만).
+- 게이트웨이 `/api/seller/apply/**` 는 BUYER — 승인된 판매자도 BUYER 역할을 갖고 있어 승인 뒤에도 조회됩니다.
+
 ## 관리자 내부 API 공통 (3~9절, 호출자 admin-service)
 
 admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받아 그대로 부르는 API 입니다. 관리자 인가는 게이트웨이 · admin 이 끝냈다고 보고 store 는 다시 확인하지 않습니다.
@@ -566,3 +601,12 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 5 | 확인 위치 | order · settlement 확인은 잠금 · 트랜잭션 밖, 통과 뒤 행 잠금 안에서 다시 상태 확인(동시 요청은 한쪽만 이력 · 이벤트) |
 | 6 | 장애 응답 | 502 `EXTERNAL_API_ERROR` — 스펙 "장애 · 타임아웃이면 거절". 서킷 이름은 설정의 `orderClient` · `settlementClient` 를 `order` · `settlement` 로 바꿈 |
 | 7 | 응답 필드 호환 | store 가 order · settlement 응답의 일부 필드만 읽어도 됨 — `RestClient.builder()` 기본 변환기가 모르는 필드를 무시(어댑터 테스트로 확인). 1절 확장으로 store 응답 필드가 늘어도 order · user · chat 은 같은 이유로 영향 없음 |
+
+## 10/29 설계 정리 (내 신청 상태)
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | 신청 없음 | 200 `data: null` — 정상 상태라 404 로 두지 않음(공통 핸들러가 업무 예외마다 warn 을 남김) |
+| 2 | 여러 건 | 가장 최근 1건(제출 시각 · ID 역순). 지난 반려 이력이 필요하면 그때 목록으로 |
+| 3 | 기한 · 재신청 시각 | 서버가 계산해 내려 줌 — 화면이 7일 · 30일 규칙을 따로 갖지 않게 |
+| 4 | 서류 | 넣지 않음 — 재제출(STR-09) 때 |
