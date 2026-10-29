@@ -12,12 +12,13 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.jdbc.test.autoconfigure.JdbcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * productdb 마이그레이션 검증 — 실제 MySQL(Testcontainers)에 Flyway V1 · V2 적용 (담당 박지연).
- * V2: 카테고리 영문명(선택) · 상품정보 제공고시 소재 · 원산지(필수).
+ * productdb 마이그레이션 검증 — 실제 MySQL(Testcontainers)에 Flyway V1 · V2 · V3 적용 (담당 박지연).
+ * V2: 카테고리 영문명(선택) · 상품정보 제공고시 소재 · 원산지(필수). V3: 스토어 상태 스냅샷 store_status.
  * 마이그레이션을 추가하면 컬럼 순서 기대값을 함께 고칠 것.
  */
 @JdbcTest
@@ -30,11 +31,11 @@ class FlywayMigrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    @DisplayName("V2 까지 적용되고 새 컬럼이 컨벤션 3-9 순서 자리에 들어간다")
-    void migrate_upToV2_addsColumnsInConventionOrder() {
+    @DisplayName("V3 까지 적용되고 V2 새 컬럼이 컨벤션 3-9 순서 자리에 들어간다")
+    void migrate_upToV3_addsColumnsInConventionOrder() {
         assertThat(jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1", Integer.class))
-                .isEqualTo(2);
+                .isEqualTo(3);
         assertThat(columns("category")).containsExactly(
                 "category_id", "parent_id", "name", "name_en", "sort_order", "is_active", "created_at", "updated_at");
         assertThat(columns("product")).containsSubsequence(
@@ -72,5 +73,18 @@ class FlywayMigrationTest {
                 "SELECT COLUMN_NAME FROM information_schema.COLUMNS"
                         + " WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
                 String.class, table);
+    }
+
+    @Test
+    @DisplayName("V3 store_status — 스토어 ID 가 PK(스토어당 1행), 상태 · 변경 시각은 필수")
+    void migrate_v3_createsStoreStatus() {
+        assertThat(columns("store_status")).containsExactly("store_id", "status", "status_changed_at", "created_at", "updated_at");
+        jdbc.update("INSERT INTO store_status (store_id, status, status_changed_at) VALUES (1, 'SUSPENDED', NOW(6))");
+
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO store_status (store_id, status, status_changed_at) VALUES (1, 'ACTIVE', NOW(6))"))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO store_status (store_id, status) VALUES (2, 'ACTIVE')"))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("Field 'status_changed_at' doesn't have a default value");
     }
 }

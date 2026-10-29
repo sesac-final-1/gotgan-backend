@@ -29,6 +29,7 @@ app:
   client:
     connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
     read-timeout: 3s
+    store-url: ${STORE_SERVICE_URI:http://localhost:8082}   # 판매자 탈퇴 전 폐점 확인 (StoreClientAdapter)
   keycloak:
     base-url: ${KEYCLOAK_URI:http://localhost:8180}          # 클러스터: http://keycloak:8080 — 서버 간 호출(토큰 · Admin API)
     public-url: ${KEYCLOAK_PUBLIC_URL:${app.keycloak.base-url}}  # 브라우저가 가는 Keycloak 주소 — 클러스터: https://api.gotgan.click (gateway 가 /realms/gotgan/** 를 Keycloak 으로)
@@ -47,8 +48,6 @@ app:
       result-url: ${SOCIAL_RESULT_URL:http://localhost:5173/auth/callback}                 # 로그인 후 프론트 페이지 (실패면 ?error=코드)
       cookie-name: social_login                                                            # state · PKCE 를 담는 10분짜리 쿠키 (Path=/api/auth/social, SameSite=Lax)
     blocked-user-ttl: 30m                                     # 차단 목록 TTL = Keycloak realm Access Token 수명(accessTokenLifespan 1800초) — realm 을 바꾸면 같이
-  store:
-    mock-closed-store-ids:                                    # TODO(store 개발 완료 시 삭제) MockStoreClient — 폐점으로 볼 store_id (기본: 없음 = 전부 ACTIVE)
   point:
     earn-rate: 0.05                                           # 실결제금액의 5% 적립 (정리 문서 8-5) — 참고값, 실제 적립액은 order 가 계산해 OrderItemConfirmed.earnedPoint 로 보냄
   user:
@@ -75,11 +74,14 @@ resilience4j:
           - com.sesac.gojigi.common.web.exception.BusinessException
     instances:
       keycloak: { base-config: default }    # KeycloakClientAdapter — 토큰 요청(POST)은 재시도 없음
+      store: { base-config: default }       # StoreClientAdapter#getStoreStatus
   retry:
     configs:
       default:
         max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST 는 재시도 금지)
         wait-duration: 200ms
+    instances:
+      store: { base-config: default }       # StoreClientAdapter#getStoreStatus (GET)
 
 management:
   endpoints:

@@ -27,7 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
  * ① enqueue: 업무 트랜잭션 안에서만(MANDATORY) — 업무가 롤백되면 이벤트도 남지 않는다
  * ② 커밋 직후 바로 한 번 발행(AFTER_COMMIT) — 정상일 때 지연 없음
  * ③ 실패 · 미발행은 발행기(publish-interval, ShedLock)가 다시 — SNS 가 죽어도 지급은 진행되고 복구되면 자동으로 나간다
- * 최소 1회 전달: 같은 행을 두 번 보낼 수 있으나 eventId 가 같아 소비자가 거른다. 시도 한도를 넘으면 ERROR 로그(수동 확인).
+ * 최소 1회 전달: 같은 행을 두 번 보낼 수 있으나 eventId 가 같아 소비자가 거른다. 시도 한도에 닿으면 ERROR 로그 한 번(수동 확인), 그 뒤 실패는 한 줄 WARN.
  */
 @Slf4j
 @Service
@@ -102,10 +102,13 @@ public class EventOutboxService {
             snsEventPublisher.send(row.getEventType(), row.getAggregateId(), row.getEventId(), row.getPayload());
         } catch (RuntimeException e) {
             int attempts = record(outboxId, e.toString());
-            if (attempts >= maxAttempts) {
-                // 사람이 봐야 하는 실패 — error + 스택트레이스 (컨벤션 2-8)
+            if (attempts == maxAttempts) {
+                // 사람이 봐야 하는 실패 — error + 스택트레이스는 한도에 닿은 한 번만 (컨벤션 2-8 반복 실패는 첫 회만 스택, store 와 같은 방식)
                 log.error("이벤트 발행이 {}회 실패 — 수동 확인 필요 eventType={} aggregateId={} eventId={}",
                         attempts, row.getEventType(), row.getAggregateId(), row.getEventId(), e);
+            } else if (attempts > maxAttempts) {
+                log.warn("이벤트 발행 계속 실패 — 수동 확인 필요 eventType={} eventId={} attempt={} cause={}",
+                        row.getEventType(), row.getEventId(), attempts, e.toString());
             } else {
                 log.warn("이벤트 발행 실패 — 발행기가 다시 보냄 eventType={} aggregateId={} attempt={} cause={}",
                         row.getEventType(), row.getAggregateId(), attempts, e.toString());

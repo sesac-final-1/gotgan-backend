@@ -15,8 +15,8 @@ import tools.jackson.databind.json.JsonMapper;
 class StoreApprovedListenerTest {
 
     /**
-     * TODO(store 개발 완료 시): store 의 StoreApproved 발행이 아직 main 에 없어 docs/events.md 계약대로 만든 목 메시지.
-     * 값은 시드 구매자3(user_id 6) · 스토어 3 — 발행이 들어오면 실제 메시지 모양과 맞춰 본다.
+     * store 입점 승인(ApplicationReviewService · #166)이 아웃박스로 보내는 봉투와 같은 모양 — eventId 는 "StoreApproved:{신청 ID}"
+     * 이름 기반 UUID(다시 보내도 같음), occurredAt 은 승인 시각(+09:00), payload 는 events.md 이름 그대로. 값은 시드 구매자3(user_id 6) · 스토어 3.
      */
     static final String MOCK_STORE_APPROVED = """
             {"eventId":"6c1f0a6e-0b0e-4c5b-9a8b-2f3c8e7d1a10","eventType":"StoreApproved",

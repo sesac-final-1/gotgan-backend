@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, STORES, VIEW_BUYERS,
+  APPLICATIONS, CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, STORES, VIEW_BUYERS,
   combos, salePrice, subCategoryId,
 } from './scenario.mjs';
 
@@ -102,16 +102,23 @@ const storeSql = `${header('VoC-100', `-- 목업 스토어 9개(프론트 mocks/
 --   store_id = 10 + 목업 번호. 단 시연 판매자 로그인 스토어 1 · 2 는 Keycloak 시드 · settlement 시드와 번호가 같아야 해서
 --   seller1 user 2 → store 1 (산골농부 박씨네, 식품) · seller2 user 3 → store 2 (토담공방, 리빙). 나머지 대표자는 user 200 + 목업 번호(조회용)
 -- category_id = productdb 카테고리 시드(1~6). 신청서 id = 스토어 id, 이력 id = 스토어 id × 10 + 순번. 볕드는집(15)은 정지
+-- 심사 시연용 신청 101(심사대기, buyer3 user 6) · 102(보완요청, buyer2 user 5 — 4일 전 신청 · 2일 전 보완요청). 스토어 없음
 -- 사업자 · 계좌는 가짜 값. 서류(application_document)는 S3 객체가 없어 넣지 않는다. 이벤트는 발행되지 않는다`)}
 ${insert('store_application', ['store_application_id', 'user_id', 'category_id', 'biz_type', 'company_name', 'owner_name', 'biz_reg_no', 'ecommerce_reg_no',
   'manager_phone', 'manager_email', 'business_address', 'store_name', 'slug', 'intro', 'representative_products', 'expected_monthly_sales', 'sales_channel',
-  'bank_name', 'account_no', 'account_holder', 'status', 'marketing_agreed', 'terms_agreed_at', 'status_changed_at', 'created_at'],
+  'bank_name', 'account_no', 'account_holder', 'status', 'status_reason', 'marketing_agreed', 'terms_agreed_at', 'status_changed_at', 'created_at'],
 STORES.map((s) => [s.storeId, s.userId, CATEGORY[s.cat], "'INDIVIDUAL'", q(s.name), q(s.owner), q(s.bizNo), q(`2026-시연-${String(s.storeId).padStart(4, '0')}`),
   q(s.phone), q(s.email), q(`서울 성동구 성수이로 ${s.storeId}`), q(s.name), q(s.slug), q(`<p>${s.intro}</p>`), json(REPRESENTATIVE[s.cat]), "'FROM_5M_TO_20M'", 'NULL',
-  "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), "'APPROVED'", 'FALSE', ago(s.since + 3), ago(s.since), ago(s.since + 3)]))}
+  "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), "'APPROVED'", 'NULL', 'FALSE', ago(s.since + 3), ago(s.since), ago(s.since + 3)])
+  .concat(APPLICATIONS.map((a) => [a.applicationId, a.userId, CATEGORY[a.cat], "'INDIVIDUAL'", q(a.name), q(a.owner), q(a.bizNo), q(`2026-시연-${a.applicationId}`),
+    q(a.phone), q(a.email), q(`서울 성동구 성수이로 ${a.applicationId}`), q(a.name), q(a.slug), q(`<p>${a.intro}</p>`), json(REPRESENTATIVE[a.cat]), "'UNDER_5M'", 'NULL',
+    "'곳간은행'", q(`100-0000-${String(a.applicationId).padStart(6, '0')}`), q(a.owner), q(a.status), q(a.supplement?.reason ?? null), 'FALSE',
+    ago(a.submittedDaysAgo), ago(a.supplement?.daysAgo ?? a.submittedDaysAgo), ago(a.submittedDaysAgo)])))}
 ${insert('application_history', ['application_history_id', 'store_application_id', 'from_status', 'to_status', 'actor_type', 'reason', 'created_at'],
   STORES.flatMap((s) => [[s.storeId * 10 + 1, s.storeId, 'NULL', "'PENDING'", "'APPLICANT'", 'NULL', ago(s.since + 3)],
-    [s.storeId * 10 + 2, s.storeId, "'PENDING'", "'APPROVED'", "'ADMIN'", 'NULL', ago(s.since)]]))}
+    [s.storeId * 10 + 2, s.storeId, "'PENDING'", "'APPROVED'", "'ADMIN'", 'NULL', ago(s.since)]])
+  .concat(APPLICATIONS.flatMap((a) => [[a.applicationId * 10 + 1, a.applicationId, 'NULL', "'PENDING'", "'APPLICANT'", 'NULL', ago(a.submittedDaysAgo)],
+    ...(a.supplement ? [[a.applicationId * 10 + 2, a.applicationId, "'PENDING'", "'SUPPLEMENT'", "'ADMIN'", q(a.supplement.reason), ago(a.supplement.daysAgo)]] : [])])))}
 ${insert('store', ['store_id', 'store_application_id', 'user_id', 'store_name', 'slug', 'intro', 'color', 'cs_phone', 'shipping_fee', 'free_shipping_threshold',
   'courier', 'dispatch_note', 'grade', 'status', 'status_reason', 'created_at'],
 STORES.map((s) => [s.storeId, s.storeId, s.userId, q(s.name), q(s.slug), q(`<p>${s.intro}</p>`), q(s.color), q(s.phone), s.shipFee, q(s.freeOver),
@@ -214,7 +221,8 @@ const inactiveStores = STORES.filter((s) => s.status !== 'ACTIVE').map((s) => s.
 const productSql = `${header('VoC-100', `-- 카테고리 = product.md "시드 카테고리 ID"(10/20 확정) — 상위 ID 1~6 은 settlement 수수료 · store 신청서와 같은 번호,
 --   하위 ID = 상위 × 100 + 순번. 시드가 603 까지 넣으므로 관리자가 새로 만드는 카테고리는 604 부터
 -- 상품 = 프론트 목업 39개 — product_id = 스토어 × 100 + 순번(order 시드 상품주문과 같은 번호 · 이름 · 판매가), 옵션 = 상품 × 100 + 조합 순번,
---   이미지 = 상품 × 10 + 순번 · S3 키 products/seed/…(프론트 public/images/p 파일을 images 버킷에 올려 둠). 정지 스토어(${inactiveStores}) 상품은 is_store_active FALSE`)}
+--   이미지 = 상품 × 10 + 순번 · S3 키 products/seed/…(프론트 public/images/p 파일을 images 버킷에 올려 둠). 정지 스토어(${inactiveStores}) 상품은 is_store_active FALSE
+--   store_status = 운영 중이 아닌 스토어만(행이 없으면 운영 중) — 정지 스토어가 새로 등록하는 상품도 숨김으로 시작`)}
 ${insert('category', ['category_id', 'parent_id', 'name', 'name_en', 'sort_order', 'is_active'],
   CATEGORY_TREE.map((c) => [c.id, 'NULL', q(c.name), q(c.en), c.sort, 'TRUE']))}
 ${insert('category', ['category_id', 'parent_id', 'name', 'sort_order', 'is_active'],
@@ -229,6 +237,8 @@ CATALOG.map((p) => {
     q(p.options[0]?.[0] ?? null), q(p.options[1]?.[0] ?? null), q(p.status ?? 'ON_SALE'), inactive ? 'FALSE' : 'TRUE',
     inactive ? ago(store.suspendedDaysAgo) : 'NULL', ago(p.created)];
 }))}
+${insert('store_status', ['store_id', 'status', 'status_changed_at'],
+  STORES.filter((s) => s.status !== 'ACTIVE').map((s) => [s.storeId, q(s.status), ago(s.suspendedDaysAgo)]))}
 ${insert('product_option', ['product_option_id', 'product_id', 'option1_value', 'option2_value', 'extra_price', 'stock', 'created_at'],
   CATALOG.flatMap((p) => combos(p).map((c, i, all) => [p.id * 100 + i + 1, p.id, q(c[0] ?? null), q(c[1] ?? null), 0, stockOf(p, i, all.length), ago(p.created)])))}
 ${insert('product_image', ['product_image_id', 'product_id', 's3_key', 'sort_order', 'created_at'],

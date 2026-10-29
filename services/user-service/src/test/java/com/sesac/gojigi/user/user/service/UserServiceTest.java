@@ -14,7 +14,7 @@ import static org.mockito.Mockito.verify;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.user.auth.service.AuthService;
-import com.sesac.gojigi.user.user.client.StoreClient;
+import com.sesac.gojigi.user.user.client.StoreClientAdapter;
 import com.sesac.gojigi.user.user.client.StoreStatus;
 import com.sesac.gojigi.user.user.entity.User;
 import com.sesac.gojigi.user.user.exception.UserErrorCode;
@@ -49,7 +49,7 @@ class UserServiceTest {
     private AuthService authService;
 
     @Mock
-    private StoreClient storeClient;
+    private StoreClientAdapter storeClient;
 
     @Mock
     private BlockedUserRedisRepository blockedUserRedisRepository;

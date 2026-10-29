@@ -36,7 +36,6 @@ app:
     user-url: ${USER_SERVICE_URI:http://localhost:8081}
     order-url: ${ORDER_SERVICE_URI:http://localhost:8084}
     review-url: ${REVIEW_SERVICE_URI:http://localhost:8087}
-    review-mock: ${REVIEW_CLIENT_MOCK:true}  # review 내부 API(GET · PATCH /internal/reviews/{id}) 배포 전 — true 면 MockReviewClient (10/26 확인 요청 4-2)
   notification:                             # 알림 센터 (NTF-08, 10/27)
     inbox-table: ${INBOX_TABLE:sesac-gojigi-inbox}
     realtime: ${NOTIFICATION_REALTIME:redis} # redis = 파드 간 전달 · local = 이 파드에 연결된 화면에만(테스트 · 로컬)

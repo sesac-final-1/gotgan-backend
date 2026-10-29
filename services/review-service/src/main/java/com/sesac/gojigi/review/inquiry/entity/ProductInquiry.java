@@ -38,6 +38,16 @@ public class ProductInquiry extends BaseTimeEntity {
     @Column(name = "store_id", nullable = false, updatable = false)
     private Long storeId;
 
+    /** 등록 시점 스냅샷 (V6) — 조회 화면은 product · user 를 다시 부르지 않는다 */
+    @Column(name = "product_name", nullable = false, length = 200, updatable = false)
+    private String productName;
+
+    @Column(name = "thumbnail_url", length = 500, updatable = false)
+    private String thumbnailUrl;
+
+    @Column(name = "writer_display_name", nullable = false, length = 50, updatable = false)
+    private String writerDisplayName;
+
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
@@ -54,10 +64,20 @@ public class ProductInquiry extends BaseTimeEntity {
     private LocalDateTime deletedAt;
 
     @Builder
-    private ProductInquiry(Long userId, Long productId, Long storeId, String content, boolean secret) {
+    private ProductInquiry(Long userId, Long productId, Long storeId, String productName, String thumbnailUrl,
+            String writerDisplayName, String content, boolean secret) {
         this.userId = userId;
         this.productId = productId;
         this.storeId = storeId;
+        this.productName = productName;
+        this.thumbnailUrl = thumbnailUrl;
+        this.writerDisplayName = writerDisplayName;
+        this.content = content;
+        this.secret = secret;
+    }
+
+    /** 작성자 수정 — 본문 · 비밀글 여부만 (답변 전에만, 서비스가 검사) */
+    public void edit(String content, boolean secret) {
         this.content = content;
         this.secret = secret;
     }

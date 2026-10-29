@@ -71,7 +71,7 @@ class StoreApplicationRepositoryIntegrationTest {
 
         // when · then
         assertThat(storeApplicationRepository.existsByUserIdAndStatusIn(4L, IN_PROGRESS)).isTrue();
-        assertThat(storeApplicationRepository.existsByUserIdAndStatusIn(5L, IN_PROGRESS)).isFalse();
+        assertThat(storeApplicationRepository.existsByUserIdAndStatusIn(7L, IN_PROGRESS)).isFalse();   // 5 · 6 은 시드의 심사 시연 신청자
         assertThat(storeApplicationRepository.existsBySlugAndStatusIn("linen-lab", IN_PROGRESS)).isTrue();
         assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusIn("linenlab", IN_PROGRESS)).isTrue();
         // 시드의 승인된 신청서(산골농부 박씨네)는 진행 중이 아니라 신청서 쪽 검사에는 걸리지 않는다 — 스토어 쪽 검사가 막음
@@ -112,7 +112,7 @@ class StoreApplicationRepositoryIntegrationTest {
     @Test
     @DisplayName("상태 필터 목록은 그 상태의 신청만 돌려준다")
     void findAllByStatus_pendingFilter_returnsOnlyPending() {
-        // given — 시드 신청서는 모두 승인이라 심사대기는 새로 넣은 한 건뿐
+        // given — 시드의 심사대기는 101(1일 전 제출) 한 건, 지금 제출한 새 신청이 그보다 먼저
         Long pending = storeApplicationRepository.saveAndFlush(application(4L, "새 스토어", "new-store", LocalDateTime.now())).getId();
 
         // when
@@ -120,7 +120,7 @@ class StoreApplicationRepositoryIntegrationTest {
         List<StoreApplication> approved = storeApplicationRepository.findAllByStatusOrderByTermsAgreedAtDescIdDesc(ApplicationStatus.APPROVED);
 
         // then
-        assertThat(pendings).extracting(StoreApplication::getId).containsExactly(pending);
+        assertThat(pendings).extracting(StoreApplication::getId).containsExactly(pending, 101L);
         assertThat(approved).isNotEmpty().allMatch(a -> a.getStatus() == ApplicationStatus.APPROVED);
     }
 

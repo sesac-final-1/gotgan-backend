@@ -1,11 +1,16 @@
 package com.sesac.gojigi.user.user.client;
 
-/**
- * store-service 조회 — 판매자 탈퇴 전 스토어 폐점 여부 확인용.
- * TODO(store 개발 완료 시): store-service 내부 API(예: GET /internal/stores/{storeId})가 생기면
- * @HttpExchange 클라이언트 + 어댑터(서킷 브레이커 "store", 장애 시 탈퇴 차단)로 바꾸고 MockStoreClient 를 지운다.
- */
+import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.user.user.client.dto.StoreResponse;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.service.annotation.GetExchange;
+import org.springframework.web.service.annotation.HttpExchange;
+
+/** store-service 내부 API (docs/api/store.md 1절) — 직접 쓰지 않고 StoreClientAdapter(서킷 브레이커 "store")를 거친다 */
+@HttpExchange("/internal/stores")
 public interface StoreClient {
 
-    StoreStatus getStoreStatus(Long storeId);
+    /** 스토어 상세 — 상태 무관(CLOSED 포함), 없거나 소프트 삭제면 404 */
+    @GetExchange("/{storeId}")
+    ApiResponse<StoreResponse> getStore(@PathVariable Long storeId);
 }

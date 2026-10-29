@@ -26,6 +26,7 @@ class ChatDirectoryTest {
     private MockRestServiceServer users;
     private MockRestServiceServer stores;
     private MockRestServiceServer settlements;
+    private MockRestServiceServer products;
     private Instant now = Instant.parse("2026-10-27T05:00:00Z");
     private ChatDirectory directory;
 
@@ -37,6 +38,8 @@ class ChatDirectoryTest {
         stores = MockRestServiceServer.bindTo(storeBuilder).build();
         RestClient.Builder settlementBuilder = RestClient.builder().baseUrl("http://settlement");
         settlements = MockRestServiceServer.bindTo(settlementBuilder).build();
+        RestClient.Builder productBuilder = RestClient.builder().baseUrl("http://product");
+        products = MockRestServiceServer.bindTo(productBuilder).build();
         Clock clock = new Clock() {
             @Override
             public ZoneId getZone() {
@@ -53,7 +56,7 @@ class ChatDirectoryTest {
                 return now;
             }
         };
-        directory = new ChatDirectory(userBuilder.build(), storeBuilder.build(), settlementBuilder.build(), clock);
+        directory = new ChatDirectory(userBuilder.build(), storeBuilder.build(), settlementBuilder.build(), productBuilder.build(), clock);
     }
 
     @Test
@@ -115,6 +118,21 @@ class ChatDirectoryTest {
         assertThat(directory.settlement(31L).week()).isEqualTo("2026-W43");   // 캐시
         assertThat(directory.settlement(32L)).isNull();
         settlements.verify();
+    }
+
+    @Test
+    @DisplayName("상품 카드 — 공개 상세의 name, 없으면(404) '삭제된 상품', 장애면 null")
+    void productName() {
+        products.expect(once(), requestTo("http://product/api/products/101")).andRespond(withSuccess(
+                "{\"data\":{\"productId\":101,\"storeId\":5,\"name\":\"햇사과 5kg\"}}", MediaType.APPLICATION_JSON));
+        products.expect(once(), requestTo("http://product/api/products/102")).andRespond(withResourceNotFound());
+        products.expect(once(), requestTo("http://product/api/products/103")).andRespond(withServerError());
+
+        assertThat(directory.productName(101L)).isEqualTo("햇사과 5kg");
+        assertThat(directory.productName(101L)).isEqualTo("햇사과 5kg");   // 캐시
+        assertThat(directory.productName(102L)).isEqualTo("삭제된 상품");
+        assertThat(directory.productName(103L)).isNull();
+        products.verify();
     }
 
     @Test

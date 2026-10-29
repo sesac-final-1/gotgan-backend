@@ -30,6 +30,10 @@
 
 `is_store_active` 는 `StoreStatusChanged` 의 `status` 가 **`ACTIVE` 일 때만 TRUE** 입니다. 그 밖의 값(`SUSPENDED` · `CLOSED`, 나중에 생길 수 있는 값 포함)은 모두 FALSE.
 
+- product 는 `sesac-gojigi-product-store-events` 큐로 이 이벤트를 받아 **스토어 상태 스냅샷(`store_status`, V3)** 에 먼저 남기고, 그 스토어의 상품 전부에 반영합니다. 상품이 하나도 없을 때 온 이벤트도 스냅샷에 남습니다.
+- 순서: 스냅샷의 마지막 `occurredAt` 보다 같거나 오래된 이벤트는 무시합니다(events.md 순서 규칙 A안). 같은 `eventId` 는 `processed_event` 로 한 번만.
+- 상품 등록 때 `is_store_active` 는 스냅샷 값으로 시작합니다 — 이벤트를 받은 적 없는 스토어(스냅샷 없음)는 운영 중.
+
 ---
 
 ## 1. 재고 예약 — `POST /internal/stock/reservations` (PRD-08)
@@ -354,7 +358,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | `imageKeys` | 1~5개 · 중복 없음, 순서대로 저장(첫 번째가 대표) · 17절에서 받은 **내 스토어 키** 모양(`products/{storeId}/{UUID}.{jpg\|png\|webp}`)만. S3 에 실제로 있는지는 보지 않음 | **400** `PRODUCT_IMAGE_INVALID` |
 | `status` | 등록 때만 `ON_SALE`(기본) · `STOPPED`(`BLOCKED` 는 거절). 수정 때는 무시 | **400** `INVALID_INPUT` |
 
-**등록 (POST)** → **201** 12절 응답(같은 DTO). 정지 · 폐점 스토어의 등록 처리는 `StoreStatusChanged` 소비 때 정함 — 지금은 운영 중으로 시작. 화면의 "상품 복사"는 12절로 읽은 내용을 `status: STOPPED` 로 다시 등록하면 됩니다(이미지 키 재사용 가능).
+**등록 (POST)** → **201** 12절 응답(같은 DTO). 정지 · 폐점 스토어도 등록은 받고 **숨김으로 시작**합니다(`store_status` 스냅샷 기준 — 위 "노출 · 구매 가능"). 해제되면 별도 작업 없이 보입니다. 화면의 "상품 복사"는 12절로 읽은 내용을 `status: STOPPED` 로 다시 등록하면 됩니다(이미지 키 재사용 가능).
 
 **수정 (PUT)** — 옵션은 `productOptionId` 로 맞춥니다.
 
@@ -522,6 +526,18 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | 14 | 옵션 없는 상품 | 값이 `null` 인 옵션 1개 — 장바구니 · 주문은 언제나 옵션 ID |
 | 15 | 공개 상세의 재고 수 | 비공개, `soldOut` 만 |
 | 16 | 스토어 운영 중 | `StoreStatusChanged.status = ACTIVE` 일 때만 (값이 늘어도 자동으로 숨김) |
+
+### 10/28 설계 정리 (`StoreStatusChanged` 소비)
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | 스토어 상태 저장 위치 | 상품 행(`is_store_active`)만으로는 상품이 없을 때 온 이벤트를 기억할 곳이 없어, 정지 뒤 새로 등록한 상품이 노출됨 → **`store_status` 스냅샷 테이블(V3)** 을 두고 등록 때 초기값으로 씀. store 를 동기 호출하는 방법(B)은 등록이 store 장애에 묶여 채택 안 함 |
+| 2 | 옛 이벤트 | 스냅샷 `status_changed_at` 과 비교(같거나 오래되면 무시, 처리 기록은 남김). 상품 UPDATE 도 `store_status_changed_at` 조건을 그대로 둠 |
+| 3 | "0행" | 상품이 없어 0행이든 옛 이벤트라 0행이든 바꿀 상품이 없다는 점은 같음 — 구분 · 재시도 없이 처리 완료 |
+| 4 | 동시 수신 | 스냅샷 행 잠금(`FOR UPDATE`). 같은 스토어 첫 이벤트가 동시에 오면 한쪽이 PK 위반으로 실패 → 재전달 때 다시 비교 |
+| 5 | 정지 스토어의 상품 등록 | 막지 않음(판매자 화면 흐름 유지) — 숨김으로 시작 |
+| 6 | 수신 틀 | settlement `SqsEventPoller` 와 같은 틀(큐 1개) · `processed_event`(V1 에 있던 테이블) |
+| 7 | 시드 | 운영 중이 아닌 스토어(15)만 `store_status` 행 — `scripts/seed-gen` 으로 생성 |
 
 **스펙 반영 필요 (가이드 PR, 박지연)**: CAT-02 상위 비활성 생성 · PRD-04 전체 조회 · PRD-06 정렬 3종 · 검색 범위 · PRD-06~08 노출 · 구매 규칙 · PRD-10 응답에 `topCategoryId` · `imageUrl` · `stock` · PRD-13 관리자 상품 목록(6-1).
 

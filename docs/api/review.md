@@ -12,6 +12,7 @@
 | 시각 | ISO-8601 오프셋 포함 (Asia/Seoul) |
 | 작성 자격 | `OrderItemConfirmed` 를 받아 저장한 `review_eligibility` 만 본다 — order 를 호출하지 않는다 (REV-01) |
 | 상품 표시값 | 상품명 · 옵션명 · 대표 사진은 구매확정 시점 스냅샷(자격에 저장) — review 는 product 를 호출하지 않는다. `OrderItemConfirmed` 에 `optionName` · `thumbnailUrl` · `buyerDisplayName` 추가 필요(order) |
+| 문의 표시값 | 상품문의는 구매와 무관해 자격이 없으므로 **등록 때만** product(`GET /api/products/{id}` — 스토어 · 상품명 · 대표 사진) · user(`GET /internal/users/{id}` — 표시 이름)를 동기 호출해 저장한다(V6). 목록 · 답변은 호출하지 않는다 |
 | 본문 | 일반 텍스트. 저장 전 OWASP sanitizer 로 태그를 모두 지운다(엔티티로 쓴 태그 포함). 화면은 React 기본 이스케이프로 출력 |
 
 ---
@@ -336,3 +337,140 @@ API 가 아니라 이벤트 소비입니다. 구매확정(구매자 버튼 · �
 - 리뷰 사진 크기는 저장하지 않습니다 (V5 에서 `review_image.file_size` 삭제 — 제한은 presign 서명이 막음).
 - 리뷰를 지워도 S3 파일은 남습니다 (공개 URL 이지만 화면에서 더는 보이지 않음).
 
+## 13. 상품 문의 등록 — `POST /api/inquiries` (REV-07)
+
+상품 상세 Q&A 탭의 "문의하기" 모달(`ShopProductQna`)에서 씁니다. 구매하지 않아도 로그인만 하면 문의할 수 있습니다.
+
+```json
+{ "productId": 101, "content": "키 165에 55kg인데 M이랑 L 중 어떤 걸 추천하시나요?", "secret": false }
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `productId` | 필수. 판매중지 · 품절 상품도 문의 가능, **없는 · 삭제된 상품만** 404 |
+| `content` | 필수, 일반 텍스트 1~1,000자 — 태그는 지우고 저장(공통 "본문") |
+| `secret` | 선택, 생략하면 공개. `true` 면 작성자 · 그 스토어 판매자만 내용을 봅니다(16절) |
+
+- 스토어는 요청으로 받지 않고 **상품에서** 가져옵니다(판매자 문의 목록 키).
+- 상품명 · 대표 사진 · 작성자 표시 이름(닉네임, 없으면 가운데 가린 실명 — 리뷰와 같은 규칙)은 **등록 시점 값**으로 저장합니다. 상품명이 바뀌어도 문의 목록은 그대로입니다.
+- 문의 유형(상품 · 배송 · 교환/반품 · 기타)은 받지 않습니다 — 화면 목업에만 있고 표시하는 곳이 없음 (프론트 연동 때 결정).
+
+응답 **201** `{ "inquiryId": 12 }`
+
+| 경우 | 응답 |
+|---|---|
+| 형식 위반 · 태그를 지우니 내용이 빔 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 없는 · 삭제된 상품 | 404 `INQUIRY_PRODUCT_NOT_FOUND` |
+| product · user 호출 실패(장애 · 3초 초과) — 저장하지 않음 | 502 `EXTERNAL_API_ERROR` |
+
+## 14. 내 문의 수정 — `PUT /api/inquiries/{inquiryId}` (REV-07)
+
+```json
+{ "content": "어깨가 넓은 편인데 L 이 나을까요?", "secret": true }
+```
+
+- 등록과 같은 규칙으로 **내용 · 비밀글 여부를 통째로** 바꿉니다. 상품은 바꿀 수 없습니다.
+- **판매자가 답변한 뒤에는 수정할 수 없습니다** — 답변과 질문이 어긋나지 않게. 삭제는 됩니다.
+
+응답 **200** `{ "inquiryId": 12, "productId": 101, "productName": "린넨 오버핏 셔츠", "thumbnailUrl": "https://…", "content": "…(태그를 지운 값)", "secret": true, "answerContent": null, "answeredAt": null, "createdAt": "2026-10-29T10:00:00+09:00" }`
+
+| 경우 | 응답 |
+|---|---|
+| 형식 위반 · 태그를 지우니 내용이 빔 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 없는 · 삭제된 · 다른 회원의 문의 (구분하지 않음) | 404 `INQUIRY_NOT_FOUND` |
+| 판매자가 답변한 문의 | 409 `INQUIRY_ALREADY_ANSWERED` |
+
+## 15. 내 문의 삭제 — `DELETE /api/inquiries/{inquiryId}` (REV-07)
+
+**소프트 삭제**(`deleted_at`) — 상품 문의 목록 · 판매자 문의 목록 · 미답변 수에서 빠집니다. 답변이 달린 문의도 지울 수 있습니다.
+
+응답 **200** `{ "code": "SUCCESS", "message": "상품 문의를 삭제했습니다.", "data": null }`
+
+| 경우 | 응답 |
+|---|---|
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 없는 · 이미 삭제된 · 다른 회원의 문의 (구분하지 않음) | 404 `INQUIRY_NOT_FOUND` |
+
+## 16. 상품 문의 목록 (공개) — `GET /api/inquiries?productId=&page=0&size=10` (REV-08)
+
+상품 상세 Q&A 탭(`ShopProductQna`)에서 씁니다. 로그인하지 않아도 되고, 로그인 상태면 게이트웨이가 토큰에서 넣은 `X-User-Id` · `X-Store-Id` 로 **비밀글을 엽니다**.
+
+- 삭제 제외, 최신 등록순. 탭 숫자 `Q&A n` 은 `totalElements`.
+- **비밀글**: 작성자 · 그 스토어 판매자가 아니면 `content` · `answerContent` 가 `null` — 화면은 "비밀글입니다". 작성자 이름 · 답변 여부(`answered`)는 보입니다.
+- `mine` = 내가 쓴 문의 → 수정 · 삭제 버튼(14 · 15절). 답변이 있으면 수정 버튼은 숨겨 주세요(409).
+- `page`(0부터) · `size`(1~50, 기본 10). 없는 상품은 빈 목록.
+
+```json
+{ "content": [ { "inquiryId": 12, "writerDisplayName": "곳간러버", "secret": false, "mine": false,
+                 "content": "M이랑 L 중 어떤 걸 추천하시나요?", "answered": true, "answerContent": "M 추천드립니다.",
+                 "answeredAt": "2026-10-29T11:00:00+09:00", "createdAt": "2026-10-29T10:00:00+09:00" } ],
+  "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "hasNext": false }
+```
+
+| 경우 | 응답 |
+|---|---|
+| `productId` 없음 · 숫자 아님 · `page` · `size` 범위 밖 | 400 `INVALID_INPUT` |
+
+## 17. 내 문의 — `GET /api/inquiries/me?page=0&size=10` (REV-08)
+
+마이페이지 상품 문의(`/mypage/qna`, `MyQna`)에서 씁니다. 내가 쓴 문의(삭제 제외 · 비밀글 포함) 최신 등록순, 항목은 14절 수정 응답과 같습니다 — 상품명 · 대표 사진은 등록 시점 값, 판매자 답변 포함.
+
+| 경우 | 응답 |
+|---|---|
+| `page` · `size` 범위 밖 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+
+## 18. 판매자 문의 목록 — `GET /api/seller/inquiries?tab=ALL&page=0&size=10` (REV-09)
+
+판매자센터 상품 문의(`SellerQnaList`)에서 씁니다. 스토어는 `X-Store-Id`.
+
+- 내 스토어 상품 문의(삭제 제외) 최신 등록순. **비밀글도 내용을 보여 줍니다** — `secret` 은 자물쇠 표시용.
+- `tab`: `ALL`(기본) · `UNANSWERED`(미답변) · `ANSWERED`(답변완료). `page` · `size`(1~50, 기본 10).
+- 작성자는 `writerDisplayName`(닉네임, 없으면 가운데 가린 실명) — 구매자 목업 조회는 필요 없습니다.
+
+```json
+{ "content": [ { "inquiryId": 12, "productId": 101, "productName": "린넨 오버핏 셔츠", "writerDisplayName": "곳간러버",
+                 "content": "배송지 변경 가능할까요?", "secret": true, "answerContent": null, "answeredAt": null,
+                 "createdAt": "2026-10-29T10:00:00+09:00" } ],
+  "page": 0, "size": 10, "totalElements": 1, "totalPages": 1, "hasNext": false }
+```
+
+| 경우 | 응답 |
+|---|---|
+| 모르는 `tab` · `page` · `size` 범위 밖 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 스토어 정보 없음(`X-Store-Id` 없음) | 403 `FORBIDDEN` |
+
+## 19. 판매자 문의 탭 숫자 — `GET /api/seller/inquiries/summary` (REV-09)
+
+문의 화면 탭 숫자, 판매자 메뉴 "상품 문의" 배지 · 대시보드 "미답변 문의"(`SellerLayout` · `SellerDashboard`)에서 씁니다. 삭제 제외.
+
+응답 **200** `{ "unanswered": 3, "answered": 12, "all": 15 }`
+
+| 경우 | 응답 |
+|---|---|
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 스토어 정보 없음 | 403 `FORBIDDEN` |
+
+## 20. 판매자 답변 작성 · 수정 — `PUT /api/seller/inquiries/{inquiryId}/answer` (REV-09)
+
+판매자센터 상품 문의(`SellerQnaList`)의 답변 입력칸에서 씁니다. 인가는 SELLER(게이트웨이 `/api/seller/**`), 스토어는 `X-Store-Id`.
+
+```json
+{ "content": "M 추천드립니다! 오버핏이라 L 은 많이 클 수 있어요." }
+```
+
+- 문의당 답변 1개 — 없으면 작성, **있으면 덮어씁니다**(삭제 없음). 리뷰 답글(7절)과 같은 방식입니다.
+- 일반 텍스트 1,000자 이하, 태그는 지우고 저장합니다.
+- 답변이 달리면 구매자는 그 문의를 **수정할 수 없습니다**(14절 409, 삭제는 가능). 비밀글도 답변할 수 있습니다.
+
+응답 **200** `{ "inquiryId": 12, "answerContent": "M 추천드립니다! …(태그를 지운 값)", "answeredAt": "2026-10-29T11:00:00+09:00" }`
+
+| 경우 | 응답 |
+|---|---|
+| 형식 위반 · 태그를 지우니 답변이 빔 | 400 `INVALID_INPUT` |
+| `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| SELLER 아님(게이트웨이) · 스토어 정보 없음 | 403 `FORBIDDEN` |
+| 없는 · 삭제된 · 다른 스토어의 문의 (구분하지 않음) | 404 `INQUIRY_NOT_FOUND` |

@@ -27,8 +27,10 @@ app:
   images:
     base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{s3Key} (ConfigMap)
     bucket: ${IMAGES_BUCKET:}                 # 업로드 presigned PUT 대상 (ConfigMap) — products/{storeId}/… 만 IRSA PutObject
-  sqs:
-    queue-url: ${PRODUCT_EVENTS_QUEUE_URL:}   # 구독 큐 (sesac-gojigi-product-{도메인}-events)
+  sqs:                                       # 구독 큐 1개 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
+    store-events-queue-url: ${PRODUCT_STORE_EVENTS_QUEUE_URL:}   # StoreStatusChanged (ConfigMap app-config)
+    wait-seconds: 20                         # 롱폴링 (비어 있어도 20초 기다렸다 돌아옴 — 빈 요청 비용 절감)
+    max-messages: 10
 
 management:
   endpoints:
