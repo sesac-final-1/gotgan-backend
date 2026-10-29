@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.sesac.gojigi.common.web.dto.PageResponse;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.common.web.exception.ErrorCode;
@@ -16,7 +17,11 @@ import com.sesac.gojigi.review.inquiry.client.InquirySnapshotReader;
 import com.sesac.gojigi.review.inquiry.client.InquirySnapshotReader.InquirySnapshot;
 import com.sesac.gojigi.review.inquiry.dto.request.InquiryCreateRequest;
 import com.sesac.gojigi.review.inquiry.dto.request.InquiryUpdateRequest;
+import com.sesac.gojigi.review.inquiry.dto.request.SellerInquiryTab;
 import com.sesac.gojigi.review.inquiry.dto.response.InquiryResponse;
+import com.sesac.gojigi.review.inquiry.dto.response.ProductInquiryResponse;
+import com.sesac.gojigi.review.inquiry.dto.response.SellerInquiryResponse;
+import com.sesac.gojigi.review.inquiry.dto.response.SellerInquirySummaryResponse;
 import com.sesac.gojigi.review.inquiry.entity.ProductInquiry;
 import com.sesac.gojigi.review.inquiry.exception.InquiryErrorCode;
 import com.sesac.gojigi.review.inquiry.exception.InquiryException;
@@ -24,6 +29,7 @@ import com.sesac.gojigi.review.inquiry.repository.ProductInquiryRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -50,6 +56,8 @@ class InquiryServiceIntegrationTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 29, 10, 0);
     private static final long BUYER = 4L;
     private static final long OTHER = 5L;
+    /** 조회 테스트끼리 · 다른 실행과 상품 · 스토어 · 회원 ID 가 겹치지 않게 (테스트마다 커밋) */
+    private static final AtomicLong SEQ = new AtomicLong(System.nanoTime() % 1_000_000_000L);
 
     @TestConfiguration(proxyBeanMethods = false)
     static class FixedClock {
@@ -222,6 +230,178 @@ class InquiryServiceIntegrationTest {
             assertCode(catchThrowable(() -> inquiryService.delete(BUYER, deleted)),
                     InquiryErrorCode.INQUIRY_NOT_FOUND);
             assertThat(reload(others).isDeleted()).isFalse();
+        }
+    }
+
+    /** 조회용 문의 — 저장 순서대로 created_at 이 늘어난다 */
+    private ProductInquiry saveFor(long userId, long productId, long storeId, boolean secret, String content) {
+        return inquiryRepository.saveAndFlush(ProductInquiry.builder()
+                .userId(userId).productId(productId).storeId(storeId).productName("린넨 오버핏 셔츠")
+                .thumbnailUrl("https://cdn/p.jpg").writerDisplayName("곳간러버").content(content).secret(secret)
+                .build());
+    }
+
+    private void answer(ProductInquiry inquiry, String answer) {
+        inquiry.answer(answer, NOW);
+        inquiryRepository.save(inquiry);
+    }
+
+    private void softDelete(ProductInquiry inquiry) {
+        inquiry.softDelete(NOW);
+        inquiryRepository.save(inquiry);
+    }
+
+    @Nested
+    @DisplayName("상품 문의 목록 (공개)")
+    class ListForProduct {
+
+        @Test
+        @DisplayName("삭제 제외 최신순, 비밀글은 비로그인 · 남에게 내용 · 답변을 비우고 상태 · 이름만")
+        void list_masksSecretForOthers() {
+            // given
+            long productId = SEQ.incrementAndGet();
+            long writer = SEQ.incrementAndGet();
+            ProductInquiry open = saveFor(writer, productId, 7L, false, "세탁기 사용 가능한가요?");
+            answer(open, "네, 울코스로 가능합니다");
+            ProductInquiry secret = saveFor(writer, productId, 7L, true, "배송지 변경 가능할까요?");
+            answer(secret, "변경해 드렸습니다");
+            softDelete(saveFor(writer, productId, 7L, false, "지운 문의"));
+            saveFor(writer, SEQ.incrementAndGet(), 7L, false, "다른 상품 문의");
+
+            // when
+            PageResponse<ProductInquiryResponse> anonymous = inquiryService.listForProduct(productId, null, null, 0, 10);
+            PageResponse<ProductInquiryResponse> other = inquiryService.listForProduct(productId, OTHER, 99L, 0, 10);
+
+            // then
+            assertThat(anonymous.totalElements()).isEqualTo(2);
+            assertThat(anonymous.content()).extracting(ProductInquiryResponse::inquiryId).containsExactly(secret.getId(), open.getId());
+            ProductInquiryResponse masked = anonymous.content().getFirst();
+            assertThat(masked.secret()).isTrue();
+            assertThat(masked.content()).isNull();
+            assertThat(masked.answerContent()).isNull();
+            assertThat(masked.answered()).isTrue();
+            assertThat(masked.answeredAt()).isNotNull();
+            assertThat(masked.writerDisplayName()).isEqualTo("곳간러버");
+            assertThat(masked.mine()).isFalse();
+            assertThat(anonymous.content().get(1).content()).isEqualTo("세탁기 사용 가능한가요?");
+            assertThat(anonymous.content().get(1).answerContent()).isEqualTo("네, 울코스로 가능합니다");
+            assertThat(other.content().getFirst().content()).isNull();
+        }
+
+        @Test
+        @DisplayName("비밀글 — 작성자(mine) · 그 스토어 판매자는 내용 · 답변을 본다")
+        void list_secretReadableByWriterAndStore() {
+            // given
+            long productId = SEQ.incrementAndGet();
+            long writer = SEQ.incrementAndGet();
+            ProductInquiry secret = saveFor(writer, productId, 7L, true, "배송지 변경 가능할까요?");
+            answer(secret, "변경해 드렸습니다");
+
+            // when
+            ProductInquiryResponse byWriter = inquiryService.listForProduct(productId, writer, null, 0, 10).content().getFirst();
+            ProductInquiryResponse bySeller = inquiryService.listForProduct(productId, 900L, 7L, 0, 10).content().getFirst();
+
+            // then
+            assertThat(byWriter.mine()).isTrue();
+            assertThat(byWriter.content()).isEqualTo("배송지 변경 가능할까요?");
+            assertThat(byWriter.answerContent()).isEqualTo("변경해 드렸습니다");
+            assertThat(bySeller.mine()).isFalse();
+            assertThat(bySeller.content()).isEqualTo("배송지 변경 가능할까요?");
+        }
+
+        @Test
+        @DisplayName("페이지 — size 만큼, 없는 상품은 빈 목록")
+        void list_paging() {
+            long productId = SEQ.incrementAndGet();
+            for (int i = 0; i < 3; i++) {
+                saveFor(BUYER, productId, 7L, false, "문의 " + i);
+            }
+
+            PageResponse<ProductInquiryResponse> second = inquiryService.listForProduct(productId, null, null, 1, 2);
+
+            assertThat(second.content()).extracting(ProductInquiryResponse::content).containsExactly("문의 0");
+            assertThat(second.totalElements()).isEqualTo(3);
+            assertThat(second.hasNext()).isFalse();
+            assertThat(inquiryService.listForProduct(Long.MAX_VALUE, null, null, 0, 10).content()).isEmpty();
+        }
+    }
+
+    @Test
+    @DisplayName("내 문의 — 내 것만(비밀글 · 답변 포함), 삭제 제외 최신순, 상품 스냅샷")
+    void listMine_ownOnly() {
+        // given
+        long me = SEQ.incrementAndGet();
+        ProductInquiry first = saveFor(me, 101L, 7L, true, "배송지 변경 가능할까요?");
+        answer(first, "변경해 드렸습니다");
+        ProductInquiry second = saveFor(me, 102L, 8L, false, "재입고 언제 되나요?");
+        softDelete(saveFor(me, 103L, 8L, false, "지운 문의"));
+        saveFor(SEQ.incrementAndGet(), 101L, 7L, false, "남의 문의");
+
+        // when
+        PageResponse<InquiryResponse> page = inquiryService.listMine(me, 0, 10);
+
+        // then
+        assertThat(page.content()).extracting(InquiryResponse::inquiryId).containsExactly(second.getId(), first.getId());
+        InquiryResponse answered = page.content().get(1);
+        assertThat(answered.secret()).isTrue();
+        assertThat(answered.content()).isEqualTo("배송지 변경 가능할까요?");
+        assertThat(answered.answerContent()).isEqualTo("변경해 드렸습니다");
+        assertThat(answered.productName()).isEqualTo("린넨 오버핏 셔츠");
+        assertThat(answered.thumbnailUrl()).isEqualTo("https://cdn/p.jpg");
+    }
+
+    @Nested
+    @DisplayName("판매자 문의")
+    class Seller {
+
+        @Test
+        @DisplayName("탭 — 미답변 · 답변완료 · 전체, 내 스토어 · 삭제 제외, 비밀글도 내용을 보여 준다 · 숫자")
+        void listAndSummary_byTab() {
+            // given
+            long storeId = SEQ.incrementAndGet();
+            ProductInquiry unanswered = saveFor(BUYER, 101L, storeId, true, "배송지 변경 가능할까요?");
+            ProductInquiry answeredOne = saveFor(BUYER, 102L, storeId, false, "재입고 언제 되나요?");
+            answer(answeredOne, "다음 주 예정입니다");
+            softDelete(saveFor(BUYER, 101L, storeId, false, "지운 문의"));
+            saveFor(BUYER, 101L, SEQ.incrementAndGet(), false, "다른 스토어 문의");
+
+            // when
+            PageResponse<SellerInquiryResponse> all = inquiryService.listForSeller(storeId, SellerInquiryTab.ALL, 0, 10);
+            PageResponse<SellerInquiryResponse> open = inquiryService.listForSeller(storeId, SellerInquiryTab.UNANSWERED, 0, 10);
+            PageResponse<SellerInquiryResponse> done = inquiryService.listForSeller(storeId, SellerInquiryTab.ANSWERED, 0, 10);
+            SellerInquirySummaryResponse summary = inquiryService.summarizeForSeller(storeId);
+
+            // then
+            assertThat(all.content()).extracting(SellerInquiryResponse::inquiryId).containsExactly(answeredOne.getId(), unanswered.getId());
+            assertThat(open.content()).singleElement().satisfies(r -> {
+                assertThat(r.inquiryId()).isEqualTo(unanswered.getId());
+                assertThat(r.secret()).isTrue();
+                assertThat(r.content()).isEqualTo("배송지 변경 가능할까요?");
+                assertThat(r.writerDisplayName()).isEqualTo("곳간러버");
+                assertThat(r.productName()).isEqualTo("린넨 오버핏 셔츠");
+                assertThat(r.answerContent()).isNull();
+            });
+            assertThat(done.content()).singleElement().satisfies(r -> {
+                assertThat(r.answerContent()).isEqualTo("다음 주 예정입니다");
+                assertThat(r.answeredAt()).isNotNull();
+            });
+            assertThat(summary).isEqualTo(new SellerInquirySummaryResponse(1, 1, 2));
+        }
+
+        @Test
+        @DisplayName("문의 없는 스토어 — 빈 목록 · 숫자 0")
+        void emptyStore_zero() {
+            long storeId = SEQ.incrementAndGet();
+
+            assertThat(inquiryService.listForSeller(storeId, SellerInquiryTab.ALL, 0, 10).content()).isEmpty();
+            assertThat(inquiryService.summarizeForSeller(storeId)).isEqualTo(new SellerInquirySummaryResponse(0, 0, 0));
+        }
+
+        @Test
+        @DisplayName("스토어 정보 없음 — 403 FORBIDDEN")
+        void withoutStore_forbidden() {
+            assertCode(catchThrowable(() -> inquiryService.listForSeller(null, SellerInquiryTab.ALL, 0, 10)), CommonErrorCode.FORBIDDEN);
+            assertCode(catchThrowable(() -> inquiryService.summarizeForSeller(null)), CommonErrorCode.FORBIDDEN);
         }
     }
 }
