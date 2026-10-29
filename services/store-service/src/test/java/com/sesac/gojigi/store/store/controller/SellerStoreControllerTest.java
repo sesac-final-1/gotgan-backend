@@ -1,11 +1,14 @@
 package com.sesac.gojigi.store.store.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,12 +16,14 @@ import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.store.store.dto.request.SellerStoreUpdateRequest;
 import com.sesac.gojigi.store.store.dto.response.SellerStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.StoreCloseResponse;
 import com.sesac.gojigi.store.store.entity.StoreGrade;
 import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
 import com.sesac.gojigi.store.store.exception.StoreException;
+import com.sesac.gojigi.store.store.service.SellerStoreService;
 import com.sesac.gojigi.store.store.service.StoreQueryService;
 import com.sesac.gojigi.store.store.service.StoreStatusService;
 import java.time.OffsetDateTime;
@@ -26,8 +31,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -39,13 +47,16 @@ class SellerStoreControllerTest {
     private StoreQueryService storeQueryService;
 
     @Mock
+    private SellerStoreService sellerStoreService;
+
+    @Mock
     private StoreStatusService storeStatusService;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new SellerStoreController(storeQueryService, storeStatusService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new SellerStoreController(storeQueryService, sellerStoreService, storeStatusService))
                 .setCustomArgumentResolvers(new CurrentUserArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -142,5 +153,61 @@ class SellerStoreControllerTest {
         mockMvc.perform(seller(get("/api/seller/store")).header("X-Store-Id", "99"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"));
+    }
+
+    private static final String VALID_BODY = """
+            {"intro":"<p>소개</p>","imageKey":null,"color":"#5b6b4a","csPhone":"02-0000-1234","shippingFee":3000,
+             "freeShippingThreshold":50000,"courier":"CJ대한통운","dispatchNote":"당일 출고"}""";
+
+    @Test
+    @DisplayName("설정 수정 — 200, 본문을 X-Store-Id 스토어에 넘기고 바뀐 설정을 돌려준다")
+    void updateMyStore_whenValid_returns200() throws Exception {
+        // given
+        given(sellerStoreService.update(eq(1L), any(SellerStoreUpdateRequest.class))).willReturn(new SellerStoreResponse(1L, "곳간상회",
+                "gotgan", StoreStatus.ACTIVE, null, "<p>소개</p>", null, null, "#5b6b4a", "02-0000-1234", 3000L, 50000L, "CJ대한통운",
+                "당일 출고", StoreGrade.SPROUT, "홍길동", "000-00-00001", OffsetDateTime.parse("2026-10-15T09:00:00+09:00")));
+
+        // when · then
+        mockMvc.perform(seller(put("/api/seller/store")).header("X-Store-Id", "1").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("스토어 설정을 저장했습니다."))
+                .andExpect(jsonPath("$.data.csPhone").value("02-0000-1234"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "\"color\":\"#5b6b4a\"|\"color\":\"green\"",
+            "\"csPhone\":\"02-0000-1234\"|\"csPhone\":\"0212341234\"",
+            "\"shippingFee\":3000|\"shippingFee\":-1",
+            "\"shippingFee\":3000|\"shippingFee\":100001",
+            "\"shippingFee\":3000|\"shippingFee\":null",
+            "\"freeShippingThreshold\":50000|\"freeShippingThreshold\":0",
+            "\"courier\":\"CJ대한통운\"|\"courier\":\"가나다라마바사아자차카타파하가나다라마바사아자차카타파하가나다\""
+    })
+    @DisplayName("설정 수정 형식 오류(색 · 연락처 · 배송비 음수 · 상한 · 없음 · 무료배송 기준 0 · 택배사 31자) — 400, 서비스를 부르지 않는다")
+    void updateMyStore_whenInvalid_returns400(String replace) throws Exception {
+        // given
+        String[] fromTo = replace.split("\\|");
+        String body = VALID_BODY.replace(fromTo[0], fromTo[1]);
+
+        // when · then
+        mockMvc.perform(seller(put("/api/seller/store")).header("X-Store-Id", "1").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        verifyNoInteractions(sellerStoreService);
+    }
+
+    @Test
+    @DisplayName("설정 수정 — 폐점 409 STORE_CLOSED · X-Store-Id 없음 403")
+    void updateMyStore_whenClosedOrNoStore_rejects() throws Exception {
+        // given
+        given(sellerStoreService.update(eq(2L), any(SellerStoreUpdateRequest.class))).willThrow(new StoreException(StoreErrorCode.STORE_CLOSED));
+
+        // when · then
+        mockMvc.perform(seller(put("/api/seller/store")).header("X-Store-Id", "2").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STORE_CLOSED"));
+        mockMvc.perform(seller(put("/api/seller/store")).contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
+                .andExpect(status().isForbidden());
     }
 }

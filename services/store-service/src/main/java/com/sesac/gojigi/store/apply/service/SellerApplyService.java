@@ -16,6 +16,7 @@ import com.sesac.gojigi.store.apply.exception.ApplyException;
 import com.sesac.gojigi.store.apply.repository.ApplicationDocumentRepository;
 import com.sesac.gojigi.store.apply.repository.ApplicationHistoryRepository;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
+import com.sesac.gojigi.store.common.html.IntroHtml;
 import com.sesac.gojigi.store.store.repository.StoreRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -28,8 +29,6 @@ import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.owasp.html.PolicyFactory;
-import org.owasp.html.Sanitizers;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -48,7 +47,6 @@ public class SellerApplyService {
     static final int MIN_PRODUCT_PHOTOS = 3;
     static final int MAX_PRODUCT_PHOTOS = 10;
 
-    private static final PolicyFactory INTRO_POLICY = Sanitizers.FORMATTING.and(Sanitizers.BLOCKS).and(Sanitizers.LINKS);
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     private final StoreRepository storeRepository;
@@ -157,7 +155,7 @@ public class SellerApplyService {
                 .businessAddress(request.businessAddress().trim())
                 .storeName(request.storeName().trim())
                 .slug(request.slug())
-                .intro(sanitizeIntro(request.intro()))
+                .intro(IntroHtml.sanitize(request.intro()))
                 .representativeProducts(request.toRepresentativeProducts())
                 .expectedMonthlySales(request.expectedMonthlySales())
                 .salesChannel(blankToNull(request.salesChannel()))
@@ -180,11 +178,6 @@ public class SellerApplyService {
     /** 스토어명 중복 비교 규칙 — 공백 제거 + 소문자 (저장소 쿼리의 lower(replace(name, ' ', '')) 와 같게) */
     static String normalizeStoreName(String storeName) {
         return storeName.replace(" ", "").toLowerCase(Locale.ROOT);
-    }
-
-    private static String sanitizeIntro(String intro) {
-        String value = blankToNull(intro);
-        return value == null ? null : blankToNull(INTRO_POLICY.sanitize(value));
     }
 
     private static String blankToNull(String value) {

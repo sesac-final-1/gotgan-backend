@@ -79,4 +79,24 @@ class StoreTest {
         assertThat(store.getStatusReason()).isNull();
         assertThat(store.close()).isFalse();
     }
+
+    @Test
+    @DisplayName("설정 수정 — 값이 들어가고 색은 소문자, 공백뿐인 택배사 · 출고 안내는 null, 폐점이면 409")
+    void updateSettings_setsValuesAndRejectsClosed() {
+        // given
+        Store store = Store.open(27L, 4L, "곳간상회", "gotgan", null, "010-0000-1234");
+
+        // when
+        store.updateSettings("<p>소개</p>", "stores/1/a.jpg", "#5B6B4A", "02-0000-1234", 0L, null, "  ", " 당일 출고 ");
+
+        // then
+        assertThat(store.getColor()).isEqualTo("#5b6b4a");
+        assertThat(store.getCourier()).isNull();
+        assertThat(store.getDispatchNote()).isEqualTo("당일 출고");
+        assertThat(store.getShippingFee()).isZero();
+        assertThat(store.getStoreName()).isEqualTo("곳간상회");   // 이름은 그대로
+        store.close();
+        assertThatThrownBy(() -> store.updateSettings(null, null, "#5b6b4a", "02-0000-1234", 0L, null, null, null))
+                .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(StoreErrorCode.STORE_CLOSED);
+    }
 }

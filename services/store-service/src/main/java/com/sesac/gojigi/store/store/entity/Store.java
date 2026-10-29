@@ -119,6 +119,29 @@ public class Store extends BaseTimeEntity {
      * 대상이 ACTIVE · SUSPENDED 인지는 호출하는 쪽이 검사한다(CLOSED 요청은 400)
      */
     /**
+     * 판매자 스토어 설정 수정 (STR-06, store.md 13절) — 값 검사 · 정화는 호출하는 쪽, 폐점 스토어는 409.
+     * 스토어명 · 주소 · 상태 · 등급은 바꾸지 않는다. 비어 있는 택배사 · 출고 안내는 null 로
+     */
+    public void updateSettings(String intro, String imageKey, String color, String csPhone, long shippingFee,
+            Long freeShippingThreshold, String courier, String dispatchNote) {
+        if (status == StoreStatus.CLOSED) {
+            throw new StoreException(StoreErrorCode.STORE_CLOSED);
+        }
+        this.intro = intro;
+        this.imageKey = imageKey;
+        this.color = color.toLowerCase();
+        this.csPhone = csPhone;
+        this.shippingFee = shippingFee;
+        this.freeShippingThreshold = freeShippingThreshold;
+        this.courier = blankToNull(courier);
+        this.dispatchNote = blankToNull(dispatchNote);
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /**
      * 판매자 폐점 (STR-13) — 되돌릴 수 없음. 정지 중이어도 폐점할 수 있다(판매자 탈퇴는 폐점이 먼저).
      * 이미 폐점이면 false(멱등). 정지 사유가 폐점 뒤에도 남아 보이지 않게 사유는 비운다
      */
