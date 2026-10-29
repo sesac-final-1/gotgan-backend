@@ -1,4 +1,4 @@
-// 시연 시드 생성 — node scripts/seed-gen/gen.mjs → 서비스별 db/seed/R__demo_seed.sql (user · store · product · order · payment · settlement)
+// 시연 시드 생성 — node scripts/seed-gen/gen.mjs → 서비스별 db/seed/R__demo_seed.sql (user · store · product · order · payment · settlement · review)
 // 직접 고치지 말고 scenario.mjs 를 고친 뒤 다시 생성한다. 담당 구지훈 (각 파일 주인이 리뷰)
 // 금액 · 수수료 · 포인트는 서버 규칙 그대로 계산: 판매수수료(상위 카테고리율) · 결제수수료 2.2% 를 상품주문마다 원 단위 내림,
 // 적립 = (상품주문 금액 − 사용 포인트) × 5% 내림, 배송비는 스토어 정책(무료 기준 이상이면 0)
@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  APPLICATIONS, CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, STORES, VIEW_BUYERS,
+  APPLICATIONS, CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, INQUIRIES, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, REVIEWS,
+  STORES, VIEW_BUYERS,
   combos, salePrice, subCategoryId,
 } from './scenario.mjs';
 
@@ -244,9 +245,39 @@ ${insert('product_option', ['product_option_id', 'product_id', 'option1_value', 
 ${insert('product_image', ['product_image_id', 'product_id', 's3_key', 'sort_order', 'created_at'],
   CATALOG.flatMap((p) => [1, 2, 3].map((n) => [p.id * 10 + n - 1, p.id, q(`products/seed/${p.mock}-${n}.jpg`), n - 1, ago(p.created)])))}`;
 
+// ── review — 작성 자격 = 구매확정 상품주문 전부(OrderItemConfirmed 로 받는 값 그대로), 리뷰 · 문의 = scenario REVIEWS · INQUIRIES
+const orderById = Object.fromEntries(orders.map((o) => [o.id, o]));
+const reviews = REVIEWS.map((r) => {
+  const o = orderById[r.orderItemId];
+  if (o?.t.status !== 'CONFIRMED') throw new Error(`리뷰 ${r.orderItemId}: 구매확정 상품주문이 아님`);
+  if (r.content.length < 20 || r.content.length > 2000) throw new Error(`리뷰 ${r.orderItemId}: 본문 20~2,000자`);
+  return { ...r, o, at: `${o.t.confirmed} + INTERVAL ${r.afterDays} DAY + INTERVAL 5 HOUR` };
+});
+const catalogById = Object.fromEntries(CATALOG.map((p) => [p.id, p]));
+const nickById = Object.fromEntries([...LOGIN_BUYERS, ...VIEW_BUYERS].map((b) => [b.userId, b.nick ?? mask(b.name)]));
+const reviewSql = `${header('perish95', `-- 작성 자격 = order 시드의 구매확정 상품주문 전부(review_eligibility_id = order_item_id), 값은 OrderItemConfirmed payload 와 같게
+--   buyer_display_name = order 시드 orderer_display_name(마스킹 실명), option_name = order_item.option_name, thumbnail_url = order_item.thumbnail_url(시드는 NULL)
+-- 리뷰 id = 상품주문 id. buyer1(user 4)은 1001 만 작성 — 1006 · 1007 은 '작성 가능한 리뷰'로 남김. 블라인드 1건(신고 처리 시연) · 판매자 답글 일부
+-- 상품 문의 = 스토어 1 · 2 상품 위주(공개 · 비밀글, 답변완료 · 미답변 섞음). 작성자 표시 이름 = 닉네임, thumbnail_url 은 NULL(조회 URL 이 환경마다 달라 비움)
+-- 리뷰 사진(review_image)은 S3 reviews/ 객체가 없어 넣지 않는다. 평균 · 리뷰 수는 조회 때 집계(요약 테이블 없음). 이벤트 멱등(processed_event) 행 없음`)}
+${insert('review_eligibility', ['review_eligibility_id', 'order_item_id', 'user_id', 'product_id', 'store_id', 'buyer_display_name', 'product_name', 'option_name',
+  'thumbnail_url', 'confirmed_at', 'expires_at', 'created_at'],
+confirmed.map((o) => [o.id, o.id, o.buyer, o.product, o.store.storeId, q(mask(o.buyerInfo.name)), q(o.p.name), q(o.p.optionName), 'NULL', o.t.confirmed,
+  `${o.t.confirmed} + INTERVAL 30 DAY`, o.t.confirmed]))}
+${insert('review', ['review_id', 'review_eligibility_id', 'order_item_id', 'user_id', 'product_id', 'store_id', 'writer_display_name', 'rating', 'title', 'content',
+  'fit', 'reply_content', 'is_blinded', 'blind_reason', 'replied_at', 'blinded_at', 'created_at'],
+reviews.map((r) => [r.o.id, r.o.id, r.o.id, r.o.buyer, r.o.product, r.o.store.storeId, q(mask(r.o.buyerInfo.name)), r.rating, q(r.title ?? null), q(r.content),
+  q(r.fit ?? null), q(r.reply ?? null), r.blind ? 'TRUE' : 'FALSE', q(r.blind?.reason ?? null), r.reply ? `${r.at} + INTERVAL 1 DAY` : 'NULL',
+  r.blind ? `${r.o.t.confirmed} + INTERVAL ${r.blind.afterDays} DAY` : 'NULL', r.at]))}
+${insert('product_inquiry', ['product_inquiry_id', 'user_id', 'product_id', 'store_id', 'product_name', 'thumbnail_url', 'writer_display_name', 'content',
+  'answer_content', 'is_secret', 'answered_at', 'created_at'],
+INQUIRIES.map((n, i) => [i + 1, n.userId, n.product, Math.floor(n.product / 100), q(catalogById[n.product].name), 'NULL', q(nickById[n.userId]), q(n.content),
+  q(n.answer ?? null), n.secret ? 'TRUE' : 'FALSE', n.answer ? ago(n.daysAgo - n.answerAfterDays, '16:00:00') : 'NULL', ago(n.daysAgo, '13:00:00')]))}`;
+
 for (const [service, sql] of [['user', userSql], ['store', storeSql], ['product', productSql], ['order', orderSql], ['payment', paymentSql],
-  ['settlement', settlementSql]]) {
+  ['settlement', settlementSql], ['review', reviewSql]]) {
   console.log(write(service, sql));
 }
 console.log(`회원 ${userRows.length + 3} · 스토어 ${STORES.length} · 상품 ${CATALOG.length} · 주문 ${orders.length}(구매확정 ${confirmed.length}) · 정산서 ${groups.length}`
-  + ` (${groups.map((g) => `${g.storeId}:W-${g.week}:${g.status}:${g.sum('payout')}`).join(' ')})`);
+  + ` (${groups.map((g) => `${g.storeId}:W-${g.week}:${g.status}:${g.sum('payout')}`).join(' ')})`
+  + ` · 리뷰 자격 ${confirmed.length} · 리뷰 ${reviews.length} · 문의 ${INQUIRIES.length}`);
