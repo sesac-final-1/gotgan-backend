@@ -265,9 +265,9 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 
 | 항목 | 규칙 |
 |---|---|
-| 고칠 수 있는 항목 | `bizType` · `ownerName` · `bizRegNo`(아래 사업자 정보) · `companyName` · `ecommerceRegNo` · `managerPhone` · `managerEmail` · `businessAddress` · `categoryId` · `intro` · `representativeProducts`(보내면 목록 전체 교체) · `settlementAccount`(보내면 세 값 모두) — 형식은 2절과 같고 빈 문자열로 지울 수 없음(`intro` 만 `""` 로 소개 없음) |
+| 고칠 수 있는 항목 | `bizType` · `ownerName` · `bizRegNo`(아래 사업자 정보) · `storeName` · `slug`(아래 스토어명 · 주소) · `companyName` · `ecommerceRegNo` · `managerPhone` · `managerEmail` · `businessAddress` · `categoryId` · `intro` · `representativeProducts`(보내면 목록 전체 교체) · `settlementAccount`(보내면 세 값 모두) — 형식은 2절과 같고 빈 문자열로 지울 수 없음(`intro` 만 `""` 로 소개 없음) |
 | 사업자 정보 | `bizType` · `ownerName` · `bizRegNo` 중 하나라도 **실제로 바뀌면 사업자등록증(`BUSINESS_REG`)도 다시** — 보완요청에 없어도 받고, 없으면 400. 지금 값 그대로 보내면 바뀐 것이 아님 |
-| 고칠 수 없는 항목 | `storeName` · `slug`(중복 검사 · 심사 기준) — 본문에 넣어도 무시. 바꾸려면 반려 뒤 새 신청 |
+| 스토어명 · 주소 | 바꾸면 신청(2절)과 같은 중복 확인 — 스토어(폐점 포함) · **자기를 뺀** 진행 중 신청과 겹치면 409. 승인 때 이름이 겹쳐 보완요청된 신청(5절)이 이 길로 바꿉니다. 지금 값 그대로면 확인 안 함 |
 | `documents` | 보완요청 서류(`requestedDocs`)를 **모두** 다시, 그 밖의 종류는 안 됨. 낸 종류마다 2절 규칙(한 장 서류 1개 · 상품 사진 3~10장 — 사진은 묶음 전체 교체) · 내 `applications/{userId}/` 키 · S3 에서 형식 · 크기 확인(2-1절 presign 으로 올림) |
 | 내용 보완(`requestedDocs: []`) | `documents` 없이 고친 항목만 보내면 됨. 아무 항목도 없는 `{}` 도 "확인했다" 로 접수 |
 
@@ -275,6 +275,7 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 |---|---|---|---|
 | 보완요청 중 · 기한 전 · 규칙 통과 | 신청 `PENDING`(사유 · 요청 서류 비움) + 같은 종류 이전 서류는 이전 제출본(`current: false`) + 새 서류 + 이력 `APPLICANT` | **200** | 2-2절 다시 조회(타임라인에 재제출) |
 | 보완요청 중이 아님 / 기한(보완요청 + 7일)이 지남 | — | **409** `APPLY_INVALID_STATUS`(문구로 구분) | 2-2절 다시 조회 |
+| 바꾼 주소 · 스토어명이 겹침 | — | **409** `APPLY_SLUG_DUPLICATED` · `APPLY_STORE_NAME_DUPLICATED` | 다른 값 입력 |
 | 저장 순간 자동 반려 · 관리자 처리가 먼저 끝남(`@Version`) | 한쪽만 반영 | **409** `APPLY_INVALID_STATUS` | 2-2절 다시 조회 |
 | 요청 서류 빠짐 · 요청 밖 종류 · 사업자 정보를 바꾸고 사업자등록증 없음 · 개수 · 남의 키 · S3 에 없음 · 형식 · 크기 | — | **400** `APPLY_DOCUMENT_INVALID` | 안내 문구 그대로, 해당 서류 다시 올리기 |
 | 형식 오류(위 규칙) | — | **400** `INVALID_INPUT` | 입력 안내 |
@@ -746,7 +747,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | # | 항목 | 정한 내용 |
 |---|---|---|
 | 1 | 경로 | 시트 "Api 명세서" 그대로 `PATCH /api/seller/apply/{applicationId}/resubmit` — 남의 신청 ID 는 404 |
-| 2 | 고칠 수 있는 범위 | 서류 + 신청서 일부 항목(시트 "신청 본문 중 수정 필드"). 내용 보완(`requestedDocs: []`)이 반려 → 30일 뒤 재신청으로 가지 않게. 스토어명 · 주소는 고정 — 바꾸려면 중복 검사를 다시 해야 함 |
+| 2 | 고칠 수 있는 범위 | 서류 + 신청서 일부 항목(시트 "신청 본문 중 수정 필드"). 내용 보완(`requestedDocs: []`)이 반려 → 30일 뒤 재신청으로 가지 않게. 고정 항목 없음 — 스토어명 · 주소 · 사업자 정보도 아래 9 · 10 규칙으로 고침 |
 | 3 | 요청 서류 저장 | storedb V5 `requested_docs` JSON — 10/26 결정(저장 안 함)을 바꿈. 화면 표시 · 재제출 검사에 필요. V5 전 보완요청(`null`)은 낸 종류의 개수만 검사 |
 | 4 | 서류 검사 | 신청(2절)과 같은 코드 — 개수 규칙을 종류별로 나눠 재제출은 낸 종류만, S3 확인은 트랜잭션 밖 |
 | 5 | 기한 | 보완요청 + 7일이 지나면 자동 반려 전이라도 409 — 스케줄러 주기 사이에 늦은 재제출이 들어오지 않게 |
@@ -754,6 +755,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 7 | 이벤트 | 없음 — `events.md` 에 재제출 이벤트가 없고 관리자는 심사대기 목록으로 확인. 알림이 필요하면 지훈 님과 이벤트부터 정함 |
 | 8 | 이력 사유 | 바뀐 서류 · 항목 이름을 남김 — 관리자가 무엇이 바뀌었는지 상세에서 바로 봄 |
 | 9 | 사업자 정보 수정 | 사업자 구분 · 대표자 · 사업자등록번호도 고칠 수 있음, 단 바뀌면 사업자등록증 필수. 승인 전이라 어차피 재심사이고 사업자번호는 중복 검사 대상이 아님(`sameBizRegNo` 는 조회 때 계산). 실제 번호 변경(법인 전환 등)은 드물고 오타 · 다른 사업장 번호가 주된 경우 — 그것 때문에 반려 → 30일 재신청까지 가지 않게. 서류를 같이 받아 관리자가 새 번호를 확인 |
+| 10 | 스토어명 · 주소 수정 | 바꾸면 신청과 같은 중복 확인(자기 신청 제외). 스펙 STR-04 "겹치면 보완요청으로 변경 후 재제출" · STR-01 "신청 · 재제출 때 다시 확인" 그대로 — 막으면 그 신청자는 반려 → 30일 재신청뿐. 확인과 저장 사이에 다른 신청이 같은 값을 가져가면 승인 때 UNIQUE 로 다시 막힘(5절) |
 
 ## 10/29 설계 정리 (판매자 스토어 설정)
 
