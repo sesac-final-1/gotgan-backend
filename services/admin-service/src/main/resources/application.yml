@@ -17,6 +17,7 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}        # 알림 센터 — 파드 간 실시간 전달(Pub/Sub 채널 notify:{받는 쪽})
+      timeout: 500ms                        # 늦으면 기다리지 않음(기본 60초) — 실시간 전달만 빠지고 알림함에는 저장된다
 
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
