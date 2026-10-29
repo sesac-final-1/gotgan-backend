@@ -18,9 +18,12 @@ import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
-import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest;
 import software.amazon.awssdk.services.dynamodb.model.QueryResponse;
+import software.amazon.awssdk.services.dynamodb.model.Put;
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest;
+import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 
 /** 알림함 DynamoDB 요청 모양 — 조건부 쓰기(멱등) · 최신순 조회 · 안 읽은 수(페이지 넘김) · 읽음 */
@@ -31,30 +34,31 @@ class InboxRepositoryTest {
     private final DynamoDbClient dynamo = mock(DynamoDbClient.class);
     private final InboxRepository repository = new InboxRepository(dynamo, "sesac-gojigi-inbox");
 
-    private static PutItemRequest put(Consumer<PutItemRequest.Builder> c) {
-        PutItemRequest.Builder b = PutItemRequest.builder();
-        c.accept(b);
-        return b.build();
-    }
-
     @Test
-    @DisplayName("저장 — 키 · 내용 · 안 읽음 · TTL 90일, 같은 키가 있으면(재전달) false")
+    @DisplayName("저장 — 표식(SRC#sourceId)과 알림을 한 트랜잭션으로 · 키 · 내용 · 안 읽음 · TTL 90일, 같은 sourceId 가 있으면(재전달 · 재시도) false")
     void saveIfAbsent() {
         NewNotification n = new NewNotification("USER#4", "e-1", "ORDER_PAID", "결제가 완료됐어요", "머그 · 28,000원", "/mypage/orders/N1", AT);
-        ArgumentCaptor<Consumer<PutItemRequest.Builder>> captor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Consumer<TransactWriteItemsRequest.Builder>> captor = ArgumentCaptor.forClass(Consumer.class);
 
         assertThat(repository.saveIfAbsent(n)).isTrue();
-        verify(dynamo).putItem(captor.capture());
-        PutItemRequest req = put(captor.getValue());
-        assertThat(req.tableName()).isEqualTo("sesac-gojigi-inbox");
-        assertThat(req.conditionExpression()).isEqualTo("attribute_not_exists(SK)");
-        assertThat(req.item().get("PK").s()).isEqualTo("USER#4");
-        assertThat(req.item().get("SK").s()).isEqualTo("1793062800000#e-1");
-        assertThat(req.item().get("read").bool()).isFalse();
-        assertThat(req.item().get("ttl").n()).isEqualTo(String.valueOf(AT.plusSeconds(90L * 24 * 3600).getEpochSecond()));
+        verify(dynamo).transactWriteItems(captor.capture());
+        TransactWriteItemsRequest.Builder b = TransactWriteItemsRequest.builder();
+        captor.getValue().accept(b);
+        List<Put> puts = b.build().transactItems().stream().map(TransactWriteItem::put).toList();
+        assertThat(puts).allSatisfy(p -> {
+            assertThat(p.tableName()).isEqualTo("sesac-gojigi-inbox");
+            assertThat(p.conditionExpression()).isEqualTo("attribute_not_exists(SK)");
+        });
+        assertThat(puts.get(0).item().get("SK").s()).isEqualTo("SRC#e-1");
+        Map<String, AttributeValue> item = puts.get(1).item();
+        assertThat(item.get("PK").s()).isEqualTo("USER#4");
+        assertThat(item.get("SK").s()).isEqualTo("1793062800000#e-1");
+        assertThat(item.get("read").bool()).isFalse();
+        assertThat(item.get("ttl").n()).isEqualTo(String.valueOf(AT.plusSeconds(90L * 24 * 3600).getEpochSecond()));
+        assertThat(puts.get(0).item().get("ttl")).isEqualTo(item.get("ttl"));
 
-        given(dynamo.putItem(any(Consumer.class))).willThrow(ConditionalCheckFailedException.builder().build());
-        assertThat(repository.saveIfAbsent(new NewNotification("USER#4", "e-1", "ORDER_PAID", "t", null, null, AT))).isFalse();
+        given(dynamo.transactWriteItems(any(Consumer.class))).willThrow(TransactionCanceledException.builder().build());
+        assertThat(repository.saveIfAbsent(new NewNotification("USER#4", "e-1", "ORDER_PAID", "t", null, null, AT.plusSeconds(5)))).isFalse();
     }
 
     @Test
@@ -81,7 +85,8 @@ class InboxRepositoryTest {
 
         repository.latest("STORE#1", null, 5);
         verify(dynamo, times(2)).query(q.capture());
-        assertThat(q.getValue().keyConditionExpression()).isEqualTo("PK = :pk");
+        assertThat(q.getValue().keyConditionExpression()).isEqualTo("PK = :pk AND SK < :end");   // 표식 행(SRC#…) 제외
+        assertThat(q.getValue().expressionAttributeValues().get(":end").s()).isEqualTo("A");
     }
 
     @Test

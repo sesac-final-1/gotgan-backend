@@ -106,6 +106,160 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApiResponseListDocumentPresignResponse"
+  /internal/stores/{storeId}/status:
+    patch:
+      tags:
+      - 스토어 (내부)
+      summary: 스토어 정지 · 해제 (관리자)
+      description: "인가: 내부. 본문 {status(SUSPENDED · ACTIVE), reason(필수, 255자 이하)} —\
+        \ CLOSED · 그 밖의 값, 사유 누락 · 255자 초과는 400 INVALID_INPUT. 상태 · statusReason 변\
+        경 + 스토어 이력(ADMIN) + StoreStatusChanged 를 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 발행. 이미 그\
+        \ 상태면 바꾸지 않고 200(멱등, 이벤트 없음). 폐점 스토어는 409 STORE_INVALID_STATUS_TRANSITION,\
+        \ 없거나 소프트 삭제된 스토어는 404 STORE_NOT_FOUND. 응답은 1절 스토어 상세"
+      operationId: changeStatus
+      parameters:
+      - name: storeId
+        in: path
+        description: 스토어 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 15
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreStatusChangeRequest"
+        required: true
+      responses:
+        "200":
+          description: 변경 · 이미 그 상태 — 스토어 상세
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+        "400":
+          description: INVALID_INPUT — status · 사유 · storeId 형식 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+        "404":
+          description: STORE_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+        "409":
+          description: STORE_INVALID_STATUS_TRANSITION — 폐점 스토어
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+  /internal/applications/{applicationId}/supplement:
+    patch:
+      tags:
+      - 입점 심사 (내부)
+      summary: 입점 보완요청
+      description: "인가: 내부. 본문 {message(필수, 255자 이하), requestedDocs(BUSINESS_REG ·\
+        \ ECOMMERCE_REG · BANK_COPY · PRODUCT_PHOTO 0~4개, 중복 금지 — 내용 보완이면 [])}, 형식\
+        \ 오류는 400 INVALID_INPUT. 심사대기 신청만 SUPPLEMENT 로, 기한 dueAt = 보완요청 시각 + 7일(서버\
+        \ 계산, 지나면 자동 반려). StoreApplicationSupplementRequested(서류는 한글 이름)는 같은 트랜잭션에\
+        서 아웃박스에 남겨 커밋 직후 발행. 이미 보완요청 중 · 승인 · 반려됐거나 동시 처리에서 지면 409 APPLY_INVALID_STATUS,\
+        \ 없는 신청은 404 APPLY_NOT_FOUND"
+      operationId: supplement
+      parameters:
+      - name: applicationId
+        in: path
+        description: 신청 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 27
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationSupplementRequest"
+        required: true
+      responses:
+        "200":
+          description: 보완요청 — dueAt
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationSupplementResponse"
+        "400":
+          description: "INVALID_INPUT — 메시지 누락 · 255자 초과, 서류 5개 이상 · 중복 · 모르는 종류,\
+            \ applicationId 형식 오류"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationSupplementResponse"
+        "404":
+          description: APPLY_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationSupplementResponse"
+        "409":
+          description: APPLY_INVALID_STATUS
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationSupplementResponse"
+  /internal/applications/{applicationId}/reject:
+    patch:
+      tags:
+      - 입점 심사 (내부)
+      summary: 입점 반려
+      description: "인가: 내부. 본문 {reason}(필수, 255자 이하 — 비거나 길면 400 INVALID_INPUT). 심\
+        사대기 · 보완요청 신청을 REJECTED 로, 30일 재신청 제한은 이 시각부터. StoreApplicationRejected 는\
+        \ 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 발행(실패해도 200 — 발행기가 다시 보냄). 이미 승인 · 반려됐거나 동시 처리에\
+        서 지면 409 APPLY_INVALID_STATUS, 없는 신청은 404 APPLY_NOT_FOUND"
+      operationId: reject
+      parameters:
+      - name: applicationId
+        in: path
+        description: 신청 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 27
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationRejectRequest"
+        required: true
+      responses:
+        "200":
+          description: 반려 — decidedAt
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationRejectResponse"
+        "400":
+          description: INVALID_INPUT — 사유 누락 · 255자 초과 · applicationId 형식 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationRejectResponse"
+        "404":
+          description: APPLY_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationRejectResponse"
+        "409":
+          description: APPLY_INVALID_STATUS
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationRejectResponse"
   /internal/applications/{applicationId}/approve:
     patch:
       tags:
@@ -153,6 +307,40 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApiResponseApplicationApproveResponse"
+  /internal/stores:
+    get:
+      tags:
+      - 스토어 (내부)
+      summary: 스토어 목록 (관리자)
+      description: "인가: 내부. admin 스토어 관리 — 페이징 없이 전체 배열, 소프트 삭제 제외, 개설 최신순. status(ACTIVE\
+        \ · SUSPENDED · CLOSED)를 생략하면 전체, 모르는 값이면 400 INVALID_INPUT. 대표자 · 사업자번호는\
+        \ 원래 신청서 값"
+      operationId: list
+      parameters:
+      - name: status
+        in: query
+        description: 스토어 상태 필터 (ACTIVE · SUSPENDED · CLOSED)
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+        example: SUSPENDED
+      responses:
+        "200":
+          description: 조회 성공 (없으면 빈 배열)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListInternalStoreSummaryResponse"
+        "400":
+          description: INVALID_INPUT — status 값 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseListInternalStoreSummaryResponse"
   /internal/stores/{storeId}:
     get:
       tags:
@@ -191,7 +379,7 @@ paths:
       summary: 입점 신청 목록
       description: "인가: 내부. 페이징 없이 전체 배열, 제출 최신순. status 를 생략하면 전체, 모르는 값이면 400 INVALID_INPUT.\
         \ 카테고리 이름은 내려 주지 않음(categoryId 만)"
-      operationId: list
+      operationId: list_1
       parameters:
       - name: status
         in: query
@@ -574,6 +762,156 @@ components:
           format: date-time
           description: 주소 만료 시각 (10분)
           example: 2026-10-26T15:10:00+09:00
+    StoreStatusChangeRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          description: 바꿀 상태 — SUSPENDED(정지) · ACTIVE(해제)만
+          enum:
+          - SUSPENDED
+          - ACTIVE
+          example: SUSPENDED
+        reason:
+          type: string
+          description: "정지 · 해제 사유 (필수, 255자 이하)"
+          example: 허위 광고 신고 3건 확인
+          maxLength: 255
+          minLength: 0
+      required:
+      - reason
+      - status
+    ApiResponseInternalStoreResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/InternalStoreResponse"
+    InternalStoreResponse:
+      type: object
+      properties:
+        storeId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        storeName:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+        shippingFee:
+          type: integer
+          format: int64
+        freeShippingThreshold:
+          type: integer
+          format: int64
+        courier:
+          type: string
+    ApplicationSupplementRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          description: "보완 안내 (필수, 255자 이하) — 신청자 화면 · 메일에 그대로 보임"
+          example: 사본이 흐려 확인이 어렵습니다
+          maxLength: 255
+          minLength: 0
+        requestedDocs:
+          type: array
+          description: "다시 낼 서류 0~4개 · 중복 금지 — 서류가 아닌 내용 보완이면 []"
+          items:
+            type: string
+            enum:
+            - BUSINESS_REG
+            - ECOMMERCE_REG
+            - BANK_COPY
+            - PRODUCT_PHOTO
+          maxItems: 4
+          minItems: 0
+      required:
+      - message
+      - requestedDocs
+    ApiResponseApplicationSupplementResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/ApplicationSupplementResponse"
+    ApplicationSupplementResponse:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID
+          example: 27
+        status:
+          type: string
+          description: 신청 상태 — 항상 SUPPLEMENT
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: SUPPLEMENT
+        dueAt:
+          type: string
+          format: date-time
+          description: "재제출 기한 — 보완요청 시각 + 7일, 지나면 자동 반려"
+          example: 2026-11-04T14:30:00+09:00
+    ApplicationRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: "반려 사유 (필수, 255자 이하)"
+          example: 사업자등록증 정보가 신청서와 다릅니다
+          maxLength: 255
+          minLength: 0
+      required:
+      - reason
+    ApiResponseApplicationRejectResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/ApplicationRejectResponse"
+    ApplicationRejectResponse:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID
+          example: 27
+        status:
+          type: string
+          description: 신청 상태 — 항상 REJECTED
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: REJECTED
+        decidedAt:
+          type: string
+          format: date-time
+          description: 반려 시각 — 30일 재신청 제한의 기준
+          example: 2026-10-28T14:30:00+09:00
     ApiResponseApplicationApproveResponse:
       type: object
       properties:
@@ -610,7 +948,7 @@ components:
           format: date-time
           description: 승인 시각
           example: 2026-10-28T14:30:00+09:00
-    ApiResponseInternalStoreResponse:
+    ApiResponseListInternalStoreSummaryResponse:
       type: object
       properties:
         code:
@@ -618,32 +956,63 @@ components:
         message:
           type: string
         data:
-          $ref: "#/components/schemas/InternalStoreResponse"
-    InternalStoreResponse:
+          type: array
+          items:
+            $ref: "#/components/schemas/InternalStoreSummaryResponse"
+    InternalStoreSummaryResponse:
       type: object
       properties:
         storeId:
           type: integer
           format: int64
+          description: 스토어 ID
+          example: 1
+        storeName:
+          type: string
+          description: 스토어명
+          example: 곳간상회
+        slug:
+          type: string
+          description: 스토어 주소
+          example: gotgan-store
         userId:
           type: integer
           format: int64
-        storeName:
+          description: 판매자 회원 ID
+          example: 2
+        ownerName:
           type: string
+          description: 대표자명 — 원래 신청서
+          example: 홍길동
+        bizRegNo:
+          type: string
+          description: 사업자등록번호 — 원래 신청서
+          example: 000-00-00001
+        grade:
+          type: string
+          description: 판매자 등급
+          enum:
+          - SPROUT
+          - POWER
+          - BIG_POWER
+          example: SPROUT
         status:
           type: string
+          description: 스토어 상태
           enum:
           - ACTIVE
           - SUSPENDED
           - CLOSED
-        shippingFee:
-          type: integer
-          format: int64
-        freeShippingThreshold:
-          type: integer
-          format: int64
-        courier:
+          example: ACTIVE
+        statusReason:
           type: string
+          description: 정지 · 폐점 사유 (없으면 null)
+          example: "null"
+        createdAt:
+          type: string
+          format: date-time
+          description: 개설 시각(승인 시각)
+          example: 2026-10-15T09:00:00+09:00
     ApiResponseListInternalApplicationSummaryResponse:
       type: object
       properties:

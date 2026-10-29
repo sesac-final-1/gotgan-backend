@@ -65,13 +65,14 @@ class ChatRoomApiTest {
     @Test
     @DisplayName("스토어 톡: 처음 201 · 같은 방 200, 같은 문맥은 카드를 다시 붙이지 않고 다른 문맥만 추가")
     void storeInquiryReusesRoomAndContext() throws Exception {
+        given(directory.productName(101L)).willReturn("햇사과 5kg");
         long roomId = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5,\"context\":{\"type\":\"PRODUCT\",\"id\":101}}")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.counterpart.name").value("스토어 #5"))
                 .andExpect(jsonPath("$.data.counterpart.role").value("SELLER"))
                 .andExpect(jsonPath("$.data.buyerId").value(BUYER_ID))
                 .andExpect(jsonPath("$.data.status").value(nullValue()))
-                .andExpect(jsonPath("$.data.lastMessage.preview").value("상품 #101")));
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("햇사과 5kg")));
 
         open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5,\"context\":{\"type\":\"PRODUCT\",\"id\":101}}")
                 .andExpect(status().isOk())

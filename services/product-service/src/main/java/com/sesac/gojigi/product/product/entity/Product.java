@@ -108,7 +108,7 @@ public class Product extends BaseTimeEntity {
     @OrderBy("sortOrder ASC")
     private List<ProductImage> images = new ArrayList<>();
 
-    /** 등록 — 판매 상태는 ON_SALE · STOPPED 중 요청 값, 스토어는 운영중으로 시작 */
+    /** 등록 — 판매 상태는 ON_SALE · STOPPED 중 요청 값, 스토어는 운영중으로 시작(정지 · 폐점 스토어는 startWithStoreStatus) */
     @Builder
     private Product(Long storeId, Long categoryId, String name, long price, int discountRate, String description,
             String material, String origin, String option1Name, String option2Name, ProductStatus status) {
@@ -123,6 +123,12 @@ public class Product extends BaseTimeEntity {
         this.status = status;
         this.storeActive = true;
         changePrice(price, discountRate);
+    }
+
+    /** 등록 직전 — 스토어가 이미 정지 · 폐점이면 그 상태로 시작 (store_status 스냅샷, 행이 없으면 호출하지 않음) */
+    public void startWithStoreStatus(boolean storeActive, LocalDateTime storeStatusChangedAt) {
+        this.storeActive = storeActive;
+        this.storeStatusChangedAt = storeStatusChangedAt;
     }
 
     public void addOption(ProductOption option) {

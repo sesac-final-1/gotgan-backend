@@ -189,12 +189,25 @@ export function createHandler({ ddb, ses, env, log = console, now = () => new Da
       throw e;
     }
 
-    // ② 메일
-    await ses.send(new SendEmailCommand({
-      FromEmailAddress: env.FROM_EMAIL,
-      Destination: { ToAddresses: [to] },
-      Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
-    }));
+    // ② 메일 — SES 가 받는 주소를 거절하면(MessageRejected: 샌드박스의 미인증 주소 등) 다시 보내도 같으므로 재전달하지 않고 REJECTED 로 남긴다
+    try {
+      await ses.send(new SendEmailCommand({
+        FromEmailAddress: env.FROM_EMAIL,
+        Destination: { ToAddresses: [to] },
+        Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
+      }));
+    } catch (e) {
+      if (e?.name !== 'MessageRejected') throw e;
+      await ddb.send(new UpdateCommand({
+        TableName: env.TABLE,
+        Key: keys,
+        UpdateExpression: 'SET #s = :rejected, updatedAt = :t',
+        ExpressionAttributeNames: { '#s': 'status' },
+        ExpressionAttributeValues: { ':rejected': 'REJECTED', ':t': now().toISOString() },
+      }));
+      log.warn(JSON.stringify({ msg: 'SES 가 받는 주소를 거절 — 재전달 안 함', eventType: envelope.eventType, eventId: envelope.eventId, detail: e?.message }));
+      return;
+    }
 
     // ③ 발송 완료
     await ddb.send(new UpdateCommand({

@@ -31,10 +31,10 @@ class DemoSeedTest {
     private JdbcTemplate jdbc;
 
     @Test
-    @DisplayName("시드가 신청서 · 이력 · 스토어 · 상태 이력을 빠짐없이 넣는다 (목업 스토어 9개, 그중 정지 1)")
+    @DisplayName("시드가 신청서 · 이력 · 스토어 · 상태 이력을 빠짐없이 넣는다 (목업 스토어 9개, 그중 정지 1 + 심사 시연 신청 2)")
     void seed_afterV2_insertsAllRows() {
-        assertThat(count("store_application")).isEqualTo(9);
-        assertThat(count("application_history")).isEqualTo(18);
+        assertThat(count("store_application")).isEqualTo(11);   // 승인 9 + 심사대기 101 · 보완요청 102
+        assertThat(count("application_history")).isEqualTo(21);  // 승인 9 × 2 + 101 신청 + 102 신청 · 보완요청
         assertThat(count("store")).isEqualTo(9);
         assertThat(count("store_status_history")).isEqualTo(10);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM store WHERE status = 'SUSPENDED'", Integer.class)).isEqualTo(1);
