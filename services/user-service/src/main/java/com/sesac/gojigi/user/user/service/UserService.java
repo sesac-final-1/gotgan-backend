@@ -2,7 +2,7 @@ package com.sesac.gojigi.user.user.service;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.user.auth.service.AuthService;
-import com.sesac.gojigi.user.user.client.StoreClient;
+import com.sesac.gojigi.user.user.client.StoreClientAdapter;
 import com.sesac.gojigi.user.user.dto.request.ChangePasswordRequest;
 import com.sesac.gojigi.user.user.dto.request.UpdateMyInfoRequest;
 import com.sesac.gojigi.user.user.dto.response.MyInfoResponse;
@@ -34,7 +34,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class UserService {
     private final UserRepository userRepository;
     private final AuthService authService;
-    private final StoreClient storeClient;
+    private final StoreClientAdapter storeClient;
     private final BlockedUserRedisRepository blockedUserRedisRepository;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
