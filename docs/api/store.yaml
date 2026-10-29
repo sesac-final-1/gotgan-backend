@@ -106,6 +106,109 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApiResponseListDocumentPresignResponse"
+  /internal/applications/{applicationId}/supplement:
+    patch:
+      tags:
+      - 입점 심사 (내부)
+      summary: 입점 보완요청
+      description: "인가: 내부. 본문 {message(필수, 255자 이하), requestedDocs(BUSINESS_REG ·\
+        \ ECOMMERCE_REG · BANK_COPY · PRODUCT_PHOTO 0~4개, 중복 금지 — 내용 보완이면 [])}, 형식\
+        \ 오류는 400 INVALID_INPUT. 심사대기 신청만 SUPPLEMENT 로, 기한 dueAt = 보완요청 시각 + 7일(서버\
+        \ 계산, 지나면 자동 반려). StoreApplicationSupplementRequested(서류는 한글 이름)는 같은 트랜잭션에\
+        서 아웃박스에 남겨 커밋 직후 발행. 이미 보완요청 중 · 승인 · 반려됐거나 동시 처리에서 지면 409 APPLY_INVALID_STATUS,\
+        \ 없는 신청은 404 APPLY_NOT_FOUND"
+      operationId: supplement
+      parameters:
+      - name: applicationId
+        in: path
+        description: 신청 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 27
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationSupplementRequest"
+        required: true
+      responses:
+        "200":
+          description: 보완요청 — dueAt
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationSupplementResponse"
+        "400":
+          description: "INVALID_INPUT — 메시지 누락 · 255자 초과, 서류 5개 이상 · 중복 · 모르는 종류,\
+            \ applicationId 형식 오류"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationSupplementResponse"
+        "404":
+          description: APPLY_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationSupplementResponse"
+        "409":
+          description: APPLY_INVALID_STATUS
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationSupplementResponse"
+  /internal/applications/{applicationId}/reject:
+    patch:
+      tags:
+      - 입점 심사 (내부)
+      summary: 입점 반려
+      description: "인가: 내부. 본문 {reason}(필수, 255자 이하 — 비거나 길면 400 INVALID_INPUT). 심\
+        사대기 · 보완요청 신청을 REJECTED 로, 30일 재신청 제한은 이 시각부터. StoreApplicationRejected 는\
+        \ 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 발행(실패해도 200 — 발행기가 다시 보냄). 이미 승인 · 반려됐거나 동시 처리에\
+        서 지면 409 APPLY_INVALID_STATUS, 없는 신청은 404 APPLY_NOT_FOUND"
+      operationId: reject
+      parameters:
+      - name: applicationId
+        in: path
+        description: 신청 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 27
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationRejectRequest"
+        required: true
+      responses:
+        "200":
+          description: 반려 — decidedAt
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationRejectResponse"
+        "400":
+          description: INVALID_INPUT — 사유 누락 · 255자 초과 · applicationId 형식 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationRejectResponse"
+        "404":
+          description: APPLY_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationRejectResponse"
+        "409":
+          description: APPLY_INVALID_STATUS
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseApplicationRejectResponse"
   /internal/applications/{applicationId}/approve:
     patch:
       tags:
@@ -574,6 +677,103 @@ components:
           format: date-time
           description: 주소 만료 시각 (10분)
           example: 2026-10-26T15:10:00+09:00
+    ApplicationSupplementRequest:
+      type: object
+      properties:
+        message:
+          type: string
+          description: "보완 안내 (필수, 255자 이하) — 신청자 화면 · 메일에 그대로 보임"
+          example: 사본이 흐려 확인이 어렵습니다
+          maxLength: 255
+          minLength: 0
+        requestedDocs:
+          type: array
+          description: "다시 낼 서류 0~4개 · 중복 금지 — 서류가 아닌 내용 보완이면 []"
+          items:
+            type: string
+            enum:
+            - BUSINESS_REG
+            - ECOMMERCE_REG
+            - BANK_COPY
+            - PRODUCT_PHOTO
+          maxItems: 4
+          minItems: 0
+      required:
+      - message
+      - requestedDocs
+    ApiResponseApplicationSupplementResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/ApplicationSupplementResponse"
+    ApplicationSupplementResponse:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID
+          example: 27
+        status:
+          type: string
+          description: 신청 상태 — 항상 SUPPLEMENT
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: SUPPLEMENT
+        dueAt:
+          type: string
+          format: date-time
+          description: "재제출 기한 — 보완요청 시각 + 7일, 지나면 자동 반려"
+          example: 2026-11-04T14:30:00+09:00
+    ApplicationRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: "반려 사유 (필수, 255자 이하)"
+          example: 사업자등록증 정보가 신청서와 다릅니다
+          maxLength: 255
+          minLength: 0
+      required:
+      - reason
+    ApiResponseApplicationRejectResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/ApplicationRejectResponse"
+    ApplicationRejectResponse:
+      type: object
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          description: 신청 ID
+          example: 27
+        status:
+          type: string
+          description: 신청 상태 — 항상 REJECTED
+          enum:
+          - PENDING
+          - SUPPLEMENT
+          - APPROVED
+          - REJECTED
+          example: REJECTED
+        decidedAt:
+          type: string
+          format: date-time
+          description: 반려 시각 — 30일 재신청 제한의 기준
+          example: 2026-10-28T14:30:00+09:00
     ApiResponseApplicationApproveResponse:
       type: object
       properties:

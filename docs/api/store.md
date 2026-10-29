@@ -212,7 +212,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 처리자 | 상태를 바꾼 쪽은 `actor` = `APPLICANT`(신청자) · `ADMIN` · `SYSTEM`(7일 자동 반려) / 스토어는 `SELLER` · `ADMIN`. **관리자 개인은 저장하지 않음**(storedb V1) — 화면의 "곳간 운영팀 · 정다은" 같은 이름은 내려 주지 않습니다 |
 | 사유 | 반려 · 보완요청 · 정지 · 해제는 사유 필수, 255자 이하. 비거나 길면 400 `INVALID_INPUT` |
 | 이벤트 | 상태 변경과 같은 트랜잭션에서 아웃박스(storedb `outbox_event`)에 남기고 커밋 직후 발행. 발행이 실패해도 API 응답은 그대로이고 발행기가 30초마다 다시 보냄 — **최소 1회 전달**(같은 `eventId` 봉투가 두 번 올 수 있음, 구독자 `processed_event` 로 거름) |
-| 구현 시기 | 구현됨: 3 · 4 · 5절 / 3주차: 6절 / 4주차: 7 · 8 · 9절 · 1절 확장(배송 필드 3개는 구현됨). 그 전까지 admin 은 이 문서 기준으로 개발 |
+| 구현 시기 | 구현됨: 3 · 4 · 5 · 6 · 7절 / 4주차: 8 · 9절 · 1절 확장(배송 필드 3개는 구현됨). 그 전까지 admin 은 이 문서 기준으로 개발 |
 
 ### 입점 신청 상태 `status`
 
@@ -382,6 +382,10 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 
 **발행 이벤트 `StoreApplicationSupplementRequested`** (구독 알림 Lambda — 보완요청 메일 · admin 알림 센터 — 화면 알림)
 `{applicationId, userId, storeName, sellerEmail, requestedDocs[], message, dueAt}`. 메일에 그대로 찍히므로 `requestedDocs` 는 **한글 이름**(`사업자등록증` · `통신판매업 신고증` · `통장 사본` · `상품 사진`)으로 바꿔 보냅니다. 요청 본문의 enum 과 다릅니다.
+
+- `aggregateId` = 신청 ID, `occurredAt` = 보완요청 시각, `dueAt` = 그 시각 + 7일(`+09:00`).
+- `eventId` 는 **보완요청마다 새 값**입니다 — 보완 → 재제출 → 다시 보완으로 한 신청에 여러 번 생길 수 있어 승인 · 반려처럼 신청 ID 로 고정하지 않습니다. 발행기가 다시 보낼 때는 아웃박스에 저장된 같은 값입니다.
+- 서류 중복(`["BANK_COPY", "BANK_COPY"]`)도 400 `INVALID_INPUT` 입니다.
 
 ## 8. 스토어 목록 (내부) — `GET /internal/stores?status=` (STR-14)
 
