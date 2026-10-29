@@ -121,7 +121,7 @@ class ChatDirectoryTest {
     }
 
     @Test
-    @DisplayName("상품 카드 — 공개 상세의 name, 없으면(404) "삭제된 상품", 장애면 null")
+    @DisplayName("상품 카드 — 공개 상세의 name, 없으면(404) '삭제된 상품', 장애면 null")
     void productName() {
         products.expect(once(), requestTo("http://product/api/products/101")).andRespond(withSuccess(
                 "{\"data\":{\"productId\":101,\"storeId\":5,\"name\":\"햇사과 5kg\"}}", MediaType.APPLICATION_JSON));
