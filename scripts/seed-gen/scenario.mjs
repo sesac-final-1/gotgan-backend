@@ -59,6 +59,15 @@ export const LOGIN_BUYERS = [
   { userId: 5, mock: 'u2', email: 'wlsgksvheh+buyer2@gmail.com', name: '이도현', nick: '도현', phone: '010-0000-0011', grade: 'GOLD', joined: 1400, login: 0 },
   { userId: 6, mock: 'u3', email: 'wlsgksvheh+buyer3@gmail.com', name: '박지민', nick: '지민찡', phone: '010-0000-0012', grade: 'SILVER', joined: 400, login: 2 },
 ];
+// 입점 심사 시연용 신청 (10/29) — 관리자가 승인 · 반려 · 보완요청을 눌러 볼 수 있게. 신청자는 Keycloak 에 있는 구매자(승인되면 user 가 SELLER 를 넣음)
+//   buyer1(4)은 메인 시연 구매자라 쓰지 않는다. 서류(application_document)는 S3 객체가 없어 없음 → 화면에 "미제출"
+export const APPLICATIONS = [
+  { applicationId: 101, userId: 6, status: 'PENDING', cat: 'beauty', name: '지민이네 수제비누', slug: 'jimin-soap', owner: '박지민', bizNo: '000-00-00101',
+    phone: '010-0000-0012', email: 'wlsgksvheh+buyer3@gmail.com', intro: '천연 오일로 저온 숙성한 수제 비누를 만듭니다.', submittedDaysAgo: 1 },
+  { applicationId: 102, userId: 5, status: 'SUPPLEMENT', cat: 'living', name: '도현 목공소', slug: 'dohyun-wood', owner: '이도현', bizNo: '000-00-00102',
+    phone: '010-0000-0011', email: 'wlsgksvheh+buyer2@gmail.com', intro: '원목 도마와 트레이를 하나씩 깎아 만듭니다.', submittedDaysAgo: 4,
+    supplement: { daysAgo: 2, reason: '통신판매업 신고증 사본이 흐려 확인이 어렵습니다. 다시 올려 주세요.' } },
+];
 export const VIEW_BUYERS = [
   { userId: 104, name: '최유나', nick: '유나', email: 'yuna.choi@example.com', phone: '010-0000-0013', grade: 'NORMAL', joined: 60, spent: 98000, point: 1200, login: 5 },
   { userId: 105, name: '정하준', nick: '하준아빠', email: 'hajun.dad@example.com', phone: '010-0000-0014', grade: 'GOLD', joined: 980, spent: 1210000, point: 8800, login: 1 },
