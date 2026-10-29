@@ -478,7 +478,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | `STORE_INVALID_STATUS_TRANSITION` | 409 | `StoreErrorCode` | 폐점 스토어 정지 · 해제 (9절) |
 | `STORE_ORDERS_IN_PROGRESS` | 409 | `StoreErrorCode` | 폐점 — order 진행 중 상품주문 1건 이상, 메시지에 건수 (12절) |
 | `STORE_SETTLEMENT_OUTSTANDING` | 409 | `StoreErrorCode` | 폐점 — settlement 미정산(집계 전 · 지급 예정 · 보류), 메시지에 금액 합 (12절) |
-| `STORE_CLOSED` | 409 | `StoreErrorCode` | 폐점 스토어 설정 수정 (13-2절) |
+| `STORE_CLOSED` | 409 | `StoreErrorCode` | 폐점 스토어 설정 수정 · 대표 이미지 업로드 주소 (13-2 · 13-3절) |
 | `APPLY_NOT_FOUND` | 404 | `ApplyErrorCode` | 없는 입점 신청 (4~7절) |
 | `APPLY_INVALID_STATUS` | 409 | `ApplyErrorCode` | 승인 · 반려 · 보완요청을 할 수 없는 신청 상태, 동시 저장에서 진 쪽 (5~7절) |
 | `APPLY_STORE_ALREADY_EXISTS` | 409 | `ApplyErrorCode` | 신청자에게 이미 스토어가 있음 — 폐점 포함 (2 · 5절) |
@@ -487,7 +487,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | `APPLY_SLUG_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어 주소가 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
 | `APPLY_STORE_NAME_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어명이 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
 | `APPLY_DOCUMENT_INVALID` | 400 | `ApplyErrorCode` | 서류 종류 · 개수 · 형식 · 크기 · 키 위반, S3 에 없는 파일 (2절), 업로드 주소 발급의 개수 · 형식 · 크기 위반 (2-1절) |
-| `INVALID_INPUT` (공통) | 400 | `CommonErrorCode` | 경로 · 요청 형식 오류, 사유 누락 · 255자 초과 (6 · 7 · 9절), 설정 형식 · 남의 이미지 키 (13-2절) |
+| `INVALID_INPUT` (공통) | 400 | `CommonErrorCode` | 경로 · 요청 형식 오류, 사유 누락 · 255자 초과 (6 · 7 · 9절), 설정 형식 · 남의 이미지 키 (13-2절), 이미지 형식 · 크기 (13-3절) |
 | `UNAUTHORIZED` (공통) | 401 | `CommonErrorCode` | 사용자 헤더 없음 (2 · 2-1 · 12절) |
 | `FORBIDDEN` (공통) | 403 | `CommonErrorCode` | `X-Store-Id` 없음 — 스토어가 없는 판매자 (12절) |
 | `EXTERNAL_API_ERROR` (공통) | 502 | `CommonErrorCode` | S3 확인 실패 (2절), 업로드 주소 발급 실패 — 자격 증명 (2-1절), order · settlement 확인 실패 · 서킷 OPEN (12절) |
@@ -536,9 +536,9 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 - **정지 중에도 폐점 가능** — 막으면 정지된 판매자는 탈퇴할 수 없음. 정지 사유는 폐점하면서 지웁니다(이력에는 남음).
 - 발행 `StoreStatusChanged{storeId, status: "CLOSED"}` — 9절과 같은 규칙(`eventId` 매번 새 값 · `occurredAt` = 폐점 시각). product 는 상품 숨김(#169), settlement 는 지급 보류.
 
-## 13. 판매자 내 스토어 — `GET` · `PUT /api/seller/store` (STR-06)
+## 13. 판매자 내 스토어 — `GET` · `PUT /api/seller/store` · 대표 이미지 업로드 주소 (STR-06)
 
-판매자 스토어 설정 화면이 부릅니다. 스토어 = `X-Store-Id`. 대표 이미지 업로드 주소는 다음 PR 에서 이 절에 이어 붙입니다.
+판매자 스토어 설정 화면이 부릅니다. 스토어 = `X-Store-Id`.
 
 ### 13-1. 조회 — `GET /api/seller/store`
 
@@ -598,6 +598,31 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 - 스토어명 · 주소 · 상태 · 등급은 바꾸지 않습니다.
 - **이미 들어온 주문의 배송비는 그대로**입니다 — order 가 주문 때 1절을 읽어 `order_store_shipment` 에 스냅샷. 그래서 이벤트를 발행하지 않습니다.
 - 스토어 행을 잠그고 바꿉니다(9절과 같은 `FOR UPDATE`) — `store` 에 버전 컬럼이 없어, 그 사이 관리자가 바꾼 상태를 판매자 저장이 덮어쓰지 않게.
+
+### 13-3. 대표 이미지 업로드 주소 — `POST /api/seller/store/image/presign`
+
+브라우저가 S3 에 **직접** 올립니다(입점 서류 2-1절 · product 17절과 같은 방식).
+
+```json
+{ "contentType": "image/jpeg", "size": 834512 }
+```
+
+**200** `{ "key": "stores/1/3f2a0c5e-7d1b-4c1e-9a1f-0b2c3d4e5f60.jpg", "uploadUrl": "https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/stores/1/…?X-Amz-…", "expiresAt": "2026-10-29T15:10:00+09:00" }`
+
+| 경우 | 응답 |
+|---|---|
+| `image/jpeg` · `image/png` · `image/webp`, 1바이트 ~ 10MB | **200** — 키 `stores/{storeId}/{UUID}.{jpg\|png\|webp}`(확장자는 형식으로 정함), 주소 10분 |
+| 형식 · 크기 위반, 값 없음 | **400** `INVALID_INPUT` |
+| 폐점 스토어 | **409** `STORE_CLOSED` |
+| `X-Store-Id` 없음 / 사용자 헤더 없음 / 없는 스토어 | **403** · **401** · **404** `STORE_NOT_FOUND` |
+| 서명용 자격 증명(IRSA)을 못 얻음 | **502** `EXTERNAL_API_ERROR` |
+
+**업로드 순서**: ① 이 API → ② 브라우저가 `uploadUrl` 로 `PUT`(요청 `Content-Type` 을 발급 때와 같게) → ③ 13-2절 `imageKey` 에 키를 넣어 저장.
+
+- `Content-Type` · 크기는 서명에 들어갑니다 — 발급 때 말한 형식 · 크기와 다른 파일은 S3 가 403. 화면은 `file.type` · `file.size` 를 그대로 보내면 됩니다.
+- 버킷 `sesac-gojigi-images-4380` 의 `stores/` 는 공개 읽기, 쓰기는 presigned PUT 만(store IRSA `s3:PutObject images/stores/*`). 주소는 리전 가상 호스트(`버킷.s3.ap-northeast-2.amazonaws.com`) — 프론트 CSP 가 허용하는 모양.
+- 올라온 파일은 Lambda `upload-guard` 가 앞부분 바이트로 실제 JPG · PNG · WEBP 인지 확인해 아니면 지웁니다(product 17절과 같음). 13-2절은 S3 존재를 확인하지 않으므로 지워진 키는 깨진 이미지로 보입니다.
+- 올리고 저장하지 않은 파일 · 교체 전 옛 이미지는 S3 에 남습니다(삭제 권한 없음 — product 와 같이 보류).
 
 ## 10/20 설계 정리
 
@@ -679,10 +704,11 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 
 | # | 항목 | 정한 내용 |
 |---|---|---|
-| 1 | PR 범위 | STR-06 을 조회(13-1) · 수정(13-2) · 대표 이미지 업로드 주소(다음)로 나눔 — 엔드포인트 하나씩 |
+| 1 | PR 범위 | STR-06 을 조회(13-1) · 수정(13-2) · 대표 이미지 업로드 주소(13-3)로 나눔 — 엔드포인트 하나씩 |
 | 2 | 색 | 형식(`#RRGGBB`)만 — 시드 색(`#d0701f` 등)이 화면 6색 팔레트 밖이라 팔레트로 막으면 시드 스토어가 저장 불가. 팔레트는 화면 몫 |
 | 3 | 연락처 | 휴대 · 지역 · 070 모두 — 시드가 유선(`064-…` · `02-…`), 신청서 담당자 휴대폰(휴대만)과 다름 |
 | 4 | 이미지 키 | 모양 검사만(내 `stores/{storeId}/`) + 지금 키 유지 — product 와 같은 방식, 업로드 검사 Lambda 가 위장 파일을 지움 |
 | 5 | 폐점 스토어 | 409 `STORE_CLOSED`(새 코드) — 닫힌 스토어 설정은 의미 없음. 정지 중은 수정 가능 |
 | 6 | 동시 수정 | 행 잠금 — 버전 컬럼 없는 테이블이라 판매자 저장(전체 컬럼 UPDATE)이 관리자 상태 변경을 덮어쓰지 않게 |
 | 7 | 이벤트 | 없음 — 배송비는 주문 때 스냅샷 |
+| 8 | 이미지 업로드 주소 | 한 장 `{contentType, size}` — 대표 이미지는 1장이라 배열 없음. 형식 · 크기 위반은 공통 `INVALID_INPUT`(파일 하나라 "n번째 파일" 전용 코드 불필요). 형식은 upload-guard `stores/` 허용(jpg · png · webp), 크기는 product 와 같은 10MB |
