@@ -1,6 +1,8 @@
 package com.sesac.gojigi.store.store.entity;
 
 import com.sesac.gojigi.store.common.entity.BaseTimeEntity;
+import com.sesac.gojigi.store.store.exception.StoreErrorCode;
+import com.sesac.gojigi.store.store.exception.StoreException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -97,5 +99,21 @@ public class Store extends BaseTimeEntity {
         store.status = StoreStatus.ACTIVE;
         store.shippingFee = DEFAULT_SHIPPING_FEE;
         return store;
+    }
+
+    /**
+     * 관리자 정지 · 해제 (store.md 9절). 폐점 스토어는 409, 이미 그 상태면 아무것도 바꾸지 않고 false(멱등 — 이력 · 이벤트 없음).
+     * 대상이 ACTIVE · SUSPENDED 인지는 호출하는 쪽이 검사한다(CLOSED 요청은 400)
+     */
+    public boolean changeStatusByAdmin(StoreStatus target, String reason) {
+        if (status == StoreStatus.CLOSED) {
+            throw new StoreException(StoreErrorCode.STORE_INVALID_STATUS_TRANSITION);
+        }
+        if (status == target) {
+            return false;
+        }
+        this.status = target;
+        this.statusReason = reason;
+        return true;
     }
 }

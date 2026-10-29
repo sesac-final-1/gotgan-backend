@@ -5,6 +5,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,14 +17,18 @@ import com.sesac.gojigi.store.store.entity.StoreStatus;
 import com.sesac.gojigi.store.store.exception.StoreErrorCode;
 import com.sesac.gojigi.store.store.exception.StoreException;
 import com.sesac.gojigi.store.store.service.StoreQueryService;
+import com.sesac.gojigi.store.store.service.StoreStatusService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -33,11 +38,14 @@ class InternalStoreControllerTest {
     @Mock
     private StoreQueryService storeQueryService;
 
+    @Mock
+    private StoreStatusService storeStatusService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new InternalStoreController(storeQueryService))
+        mockMvc = MockMvcBuilders.standaloneSetup(new InternalStoreController(storeQueryService, storeStatusService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -138,5 +146,65 @@ class InternalStoreControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
         then(storeQueryService).should(never()).getAdminList(any());
+    }
+
+    @Test
+    @DisplayName("정지 — 200 스토어 상세(1절), 상태 · 사유를 서비스에 넘긴다")
+    void changeStatus_whenSuspend_returns200Detail() throws Exception {
+        // given
+        given(storeStatusService.changeByAdmin(1L, StoreStatus.SUSPENDED, "허위 광고 신고 3건 확인"))
+                .willReturn(new InternalStoreResponse(1L, 2L, "곳간상회", StoreStatus.SUSPENDED, 3000L, null, null));
+
+        // when · then
+        mockMvc.perform(patch("/internal/stores/1/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SUSPENDED\",\"reason\":\"허위 광고 신고 3건 확인\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("스토어 상태를 변경했습니다."))
+                .andExpect(jsonPath("$.data.storeId").value(1))
+                .andExpect(jsonPath("$.data.status").value("SUSPENDED"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"reason\":\"사유\"}",
+            "{\"status\":\"DORMANT\",\"reason\":\"사유\"}",
+            "{\"status\":\"SUSPENDED\"}",
+            "{\"status\":\"SUSPENDED\",\"reason\":\" \"}"
+    })
+    @DisplayName("정지 · 해제 형식 오류(상태 없음 · 모르는 값, 사유 없음 · 공백) — 400 INVALID_INPUT 이고 서비스를 부르지 않는다")
+    void changeStatus_whenInvalidBody_returns400(String body) throws Exception {
+        mockMvc.perform(patch("/internal/stores/1/status").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        then(storeStatusService).should(never()).changeByAdmin(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("정지 · 해제 사유 256자 — 400 INVALID_INPUT")
+    void changeStatus_whenReasonTooLong_returns400() throws Exception {
+        mockMvc.perform(patch("/internal/stores/1/status").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SUSPENDED\",\"reason\":\"" + "가".repeat(256) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("폐점 스토어 — 409 STORE_INVALID_STATUS_TRANSITION / 없는 스토어 — 404 STORE_NOT_FOUND")
+    void changeStatus_whenClosedOrMissing_returnsDomainError() throws Exception {
+        // given
+        given(storeStatusService.changeByAdmin(2L, StoreStatus.ACTIVE, "사유"))
+                .willThrow(new StoreException(StoreErrorCode.STORE_INVALID_STATUS_TRANSITION));
+        given(storeStatusService.changeByAdmin(99L, StoreStatus.ACTIVE, "사유"))
+                .willThrow(new StoreException(StoreErrorCode.STORE_NOT_FOUND));
+        String body = "{\"status\":\"ACTIVE\",\"reason\":\"사유\"}";
+
+        // when · then
+        mockMvc.perform(patch("/internal/stores/2/status").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STORE_INVALID_STATUS_TRANSITION"));
+        mockMvc.perform(patch("/internal/stores/99/status").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"));
     }
 }

@@ -106,6 +106,57 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/ApiResponseListDocumentPresignResponse"
+  /internal/stores/{storeId}/status:
+    patch:
+      tags:
+      - 스토어 (내부)
+      summary: 스토어 정지 · 해제 (관리자)
+      description: "인가: 내부. 본문 {status(SUSPENDED · ACTIVE), reason(필수, 255자 이하)} —\
+        \ CLOSED · 그 밖의 값, 사유 누락 · 255자 초과는 400 INVALID_INPUT. 상태 · statusReason 변\
+        경 + 스토어 이력(ADMIN) + StoreStatusChanged 를 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 발행. 이미 그\
+        \ 상태면 바꾸지 않고 200(멱등, 이벤트 없음). 폐점 스토어는 409 STORE_INVALID_STATUS_TRANSITION,\
+        \ 없거나 소프트 삭제된 스토어는 404 STORE_NOT_FOUND. 응답은 1절 스토어 상세"
+      operationId: changeStatus
+      parameters:
+      - name: storeId
+        in: path
+        description: 스토어 ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 15
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreStatusChangeRequest"
+        required: true
+      responses:
+        "200":
+          description: 변경 · 이미 그 상태 — 스토어 상세
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+        "400":
+          description: INVALID_INPUT — status · 사유 · storeId 형식 오류
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+        "404":
+          description: STORE_NOT_FOUND
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
+        "409":
+          description: STORE_INVALID_STATUS_TRANSITION — 폐점 스토어
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiResponseInternalStoreResponse"
   /internal/applications/{applicationId}/supplement:
     patch:
       tags:
@@ -711,6 +762,59 @@ components:
           format: date-time
           description: 주소 만료 시각 (10분)
           example: 2026-10-26T15:10:00+09:00
+    StoreStatusChangeRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          description: 바꿀 상태 — SUSPENDED(정지) · ACTIVE(해제)만
+          enum:
+          - SUSPENDED
+          - ACTIVE
+          example: SUSPENDED
+        reason:
+          type: string
+          description: "정지 · 해제 사유 (필수, 255자 이하)"
+          example: 허위 광고 신고 3건 확인
+          maxLength: 255
+          minLength: 0
+      required:
+      - reason
+      - status
+    ApiResponseInternalStoreResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          $ref: "#/components/schemas/InternalStoreResponse"
+    InternalStoreResponse:
+      type: object
+      properties:
+        storeId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        storeName:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - CLOSED
+        shippingFee:
+          type: integer
+          format: int64
+        freeShippingThreshold:
+          type: integer
+          format: int64
+        courier:
+          type: string
     ApplicationSupplementRequest:
       type: object
       properties:
@@ -909,40 +1013,6 @@ components:
           format: date-time
           description: 개설 시각(승인 시각)
           example: 2026-10-15T09:00:00+09:00
-    ApiResponseInternalStoreResponse:
-      type: object
-      properties:
-        code:
-          type: string
-        message:
-          type: string
-        data:
-          $ref: "#/components/schemas/InternalStoreResponse"
-    InternalStoreResponse:
-      type: object
-      properties:
-        storeId:
-          type: integer
-          format: int64
-        userId:
-          type: integer
-          format: int64
-        storeName:
-          type: string
-        status:
-          type: string
-          enum:
-          - ACTIVE
-          - SUSPENDED
-          - CLOSED
-        shippingFee:
-          type: integer
-          format: int64
-        freeShippingThreshold:
-          type: integer
-          format: int64
-        courier:
-          type: string
     ApiResponseListInternalApplicationSummaryResponse:
       type: object
       properties:
