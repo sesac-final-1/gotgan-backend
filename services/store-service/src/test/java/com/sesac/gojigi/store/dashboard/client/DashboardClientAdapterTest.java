@@ -12,6 +12,8 @@ import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.store.store.client.StoreClientConfig;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import java.util.List;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -93,16 +95,46 @@ class DashboardClientAdapterTest {
     }
 
     @Test
-    @DisplayName("4xx 는 store 쪽 호출 버그 — 502 EXTERNAL_API_ERROR(BusinessException 이라 서킷 실패로 세지 않음)")
-    void productStats_whenClientError_throwsExternalApiError() {
+    @DisplayName("4xx 는 store 쪽 호출 버그 — 네 호출 모두 502 EXTERNAL_API_ERROR(BusinessException 이라 서킷 실패로 세지 않음)")
+    void stats_whenClientError_throwsExternalApiError() {
         // given
-        server.expect(requestTo("http://product/internal/stats/products?storeId=1"))
-                .andRespond(withBadRequest().contentType(MediaType.APPLICATION_JSON).body("{\"code\":\"INVALID_INPUT\"}"));
+        for (String url : List.of("http://order/internal/stats/orders?storeId=1", "http://order/internal/stats/orders/daily?storeId=1&days=30",
+                "http://product/internal/stats/products?storeId=1", "http://settlement/internal/stats/settlements?storeId=1")) {
+            server.expect(requestTo(url))
+                    .andRespond(withBadRequest().contentType(MediaType.APPLICATION_JSON).body("{\"code\":\"INVALID_INPUT\"}"));
+        }
+        List<ThrowingCallable> calls = List.of(() -> adapter.orderStats(1L), () -> adapter.orderDailyStats(1L, 30),
+                () -> adapter.productStats(1L), () -> adapter.settlementStats(1L));
 
         // when · then
-        assertThatThrownBy(() -> adapter.productStats(1L))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        for (ThrowingCallable call : calls) {
+            assertThatThrownBy(call)
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        }
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("빈 설정 — 서비스마다 자기 base URL 로 부르는 클라이언트를 만든다")
+    void dashboardClientConfig_createsClientPerServiceUrl() {
+        // given
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer configServer = MockRestServiceServer.bindTo(builder).build();
+        DashboardClientConfig config = new DashboardClientConfig();
+        String ok = "{\"code\":\"SUCCESS\",\"message\":\"ok\",\"data\":{}}";
+        configServer.expect(requestTo("http://order/internal/stats/orders?storeId=1")).andRespond(withSuccess(ok, MediaType.APPLICATION_JSON));
+        configServer.expect(requestTo("http://product/internal/stats/products?storeId=1")).andRespond(withSuccess(ok, MediaType.APPLICATION_JSON));
+        configServer.expect(requestTo("http://settlement/internal/stats/settlements?storeId=1"))
+                .andRespond(withSuccess(ok, MediaType.APPLICATION_JSON));
+
+        // when
+        config.orderStatsClient(builder, "http://order").orderStats(1L);
+        config.productStatsClient(builder, "http://product").productStats(1L);
+        config.settlementStatsClient(builder, "http://settlement").settlementStats(1L);
+
+        // then
+        configServer.verify();
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.sesac.gojigi.store.dashboard.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
@@ -10,6 +11,7 @@ import com.sesac.gojigi.store.dashboard.client.DashboardClientAdapter;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.List;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -84,5 +86,19 @@ class SellerDashboardServiceTest {
         assertThat(dashboard.product()).isEqualTo(OK);
         assertThat(dashboard.settlement()).isNull();
         assertThat(dashboard.unavailable()).containsExactly("order", "orderDaily", "settlement");
+    }
+
+    @Test
+    @DisplayName("다른 서비스 실패가 아닌 예외(store 버그)는 비우지 않고 그대로 올린다 — 500")
+    void dashboard_whenUnexpectedError_propagates() {
+        // given
+        IllegalStateException bug = new IllegalStateException("버그");
+        given(adapter.orderStats(STORE_ID)).willThrow(bug);
+        given(adapter.orderDailyStats(STORE_ID, SellerDashboardService.DAILY_DAYS)).willReturn(OK);
+        given(adapter.productStats(STORE_ID)).willReturn(OK);
+        given(adapter.settlementStats(STORE_ID)).willReturn(OK);
+
+        // when · then
+        assertThatThrownBy(() -> service.dashboard(STORE_ID)).isInstanceOf(CompletionException.class).hasCause(bug);
     }
 }
