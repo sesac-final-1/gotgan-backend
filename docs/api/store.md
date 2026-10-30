@@ -746,6 +746,41 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 
 - 정지가 풀리면 다시 홈 전체가 나옵니다. 상품은 정지 · 폐점 동안 product 가 숨깁니다(product 9절).
 
+## 15. 판매자 대시보드 — `GET /api/seller/dashboard` (STR-07)
+
+판매자센터 첫 화면(`/seller`)이 부릅니다. store `dashboard` 패키지가 order · product · settlement 통계를 **동시에** 불러 하위 응답을 **그대로** 담습니다(admin 대시보드 `GET /api/admin/dashboard` 와 같은 방식). 본문 없음.
+
+```json
+{
+  "order": { "storeId": 1, "toConfirmCount": 2, "toShipCount": 1, "claimCount": 0, "inProgressCount": 3, "todaySalesAmt": 52000 },
+  "orderDaily": [ { "date": "2026-10-01", "tradeAmt": 0, "orderCount": 0 }, "… 30일 …", { "date": "2026-10-30", "tradeAmt": 26980, "orderCount": 1 } ],
+  "product": { "onSaleCount": 5, "lowStockCount": 1, "soldOutCount": 0, "stoppedCount": 2,
+               "lowStockProducts": [ { "productId": 101, "name": "…", "stock": 3, "imageUrl": "…" } ] },
+  "settlement": { "pendingItemCount": 2, "pendingPayoutAmt": 48000, "nextPayout": null, "recentPaid": [] },
+  "unavailable": []
+}
+```
+
+| 경우 | 처리 | 응답 | 화면 권장 처리 |
+|---|---|---|---|
+| 모두 성공 | 네 영역 동시 호출 | **200** 위 응답, `unavailable: []` | 그대로 |
+| 일부 서비스 장애 · 타임아웃 · 서킷 OPEN · 4xx | 그 영역만 `null` | **200** `unavailable: ["order", …]` | 그 카드만 "일시적으로 불러올 수 없음" — 나머지는 정상 표시 |
+| 정지 · 폐점 스토어 | 상태를 보지 않고 그대로 | **200** | 내 스토어 조회(13-1) `status` 로 배너("정지 중 — 상품이 쇼핑몰에 노출되지 않습니다" · "폐점한 스토어입니다") |
+| `X-Store-Id` 없음 / 사용자 헤더 없음 | — | **403** `FORBIDDEN` / **401** `UNAUTHORIZED` | — |
+
+| 영역 | 출처 | 값 |
+|---|---|---|
+| `order` | order `GET /internal/stats/orders?storeId=` | 할 일(`toConfirmCount` 발주확인 대기 · `toShipCount` 송장 대기 · `claimCount` 진행 중 클레임) · `todaySalesAmt` 오늘(KST) 결제금액 · `inProgressCount`(폐점 조건, 12절) |
+| `orderDaily` | order `GET /internal/stats/orders/daily?storeId=&days=30` | 오늘 포함 최근 30일 결제일별, 오래된 날부터 · 빈 날 0 — 일별 결제금액 차트 · 전일 대비 · 30일 합계 |
+| `product` | product `GET /internal/stats/products?storeId=` 의 `store` | 판매중 · 재고 부족(1~19) · 품절 · 판매중지 수, 재고 적은 순 10개(product.md 5절) |
+| `settlement` | settlement `GET /internal/stats/settlements?storeId=` 의 `store` | 이번 주 정산 예정(`pendingItemCount` · `pendingPayoutAmt`) · 다음 지급(`nextPayout`, 없으면 `null`) · 최근 지급 8주 |
+
+- **`unavailable` 값**: `order` · `orderDaily` · `product` · `settlement`(응답 필드 이름 그대로, 필드 순서대로).
+- 하위 필드는 각 서비스 계약을 따릅니다 — 하위 응답에 필드가 늘면 store 를 고치지 않아도 그대로 나옵니다.
+- 서킷 브레이커 **`order` · `product` · `settlement`**(이름 = 대상 서비스, 폐점과 같은 인스턴스 공유), 모두 GET 이라 재시도 1회 · 타임아웃 연결 2초 · 읽기 3초. 응답 시간은 가장 느린 한 곳 기준.
+- **정지 중 상품 수**: product 는 상품 상태만 세므로 정지 스토어도 `onSaleCount` 가 그대로 나옵니다(실제로는 쇼핑몰에서 숨김) → 화면 배너로 안내.
+- 넣지 않은 것: 스토어 평점 · 새 리뷰(화면이 review `GET /api/seller/reviews/summary` · 리뷰 목록), 미답변 문의 · 톡(review · chat API), 최근 주문 목록(order 판매자 주문 API).
+
 ## 10/20 설계 정리
 
 | # | 항목 | 정한 내용 |
@@ -871,3 +906,14 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | 4 | 경로 키 | 숫자 `storeId`(스펙 경로 `{id}`, 상품 상세 채팅 버튼이 숫자 id 필요) — `slug` 는 응답에만 |
 | 5 | 정지 · 폐점 홈 | 200 + `{storeId, storeName, status}` 만 — 화면 안내에 이름이 필요한데 오류 응답은 `data: null`. 판매자 정보(대표자 · 사업자번호 · 연락처)는 내보내지 않음. 신청서도 읽지 않음 |
 | 6 | 필드 이름 | 표의 `openedAt` · `representativeName` 대신 기존 응답(8 · 13절)과 같은 `createdAt` · `ownerName` — 화면 변환 함수가 API 마다 달라지지 않게 |
+
+## 10/30 설계 정리 (판매자 대시보드)
+
+| # | 항목 | 정한 내용 |
+|---|---|---|
+| 1 | 응답 모양 | 하위 통계를 JsonNode 로 그대로(admin 대시보드와 같음) — store 가 필드를 골라 DTO 로 만들면 하위 API 가 바뀔 때마다 store 도 고쳐야 함 |
+| 2 | 부분 응답 | 한 곳이 실패해도 200 + 그 영역 `null` + `unavailable[]`(스펙 STR-07 · 시연 ②) — 4xx 도 같은 처리(store 쪽 버그라 warn 로그) |
+| 3 | 정지 · 폐점 | 상태를 보지 않음, storedb 도 읽지 않음 — 정지 중에도 남은 주문 · 정산을 처리해야 하고, 하위 통계는 없는 스토어도 0 으로 답함. 배너는 화면이 13-1 `status` 로 |
+| 4 | 범위 | order · product · settlement 만 — 평점 · 리뷰 · 문의 · 최근 주문은 화면이 각 서비스 API 를 직접(노션 10/28 별점 API 안내와 같음) |
+| 5 | 일별 기간 | 30일 고정 — 화면 차트 · "최근 30일 매출" 카드. 쿼리 파라미터로 열지 않음 |
+

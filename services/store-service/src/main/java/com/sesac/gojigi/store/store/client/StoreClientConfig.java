@@ -22,7 +22,7 @@ public class StoreClientConfig {
         return create(restClientBuilder, baseUrl, SettlementClient.class);
     }
 
-    static <T> T create(RestClient.Builder builder, String baseUrl, Class<T> type) {
+    public static <T> T create(RestClient.Builder builder, String baseUrl, Class<T> type) {
         RestClient client = builder.clone().baseUrl(baseUrl).build();
         return HttpServiceProxyFactory.builderFor(RestClientAdapter.create(client)).build().createClient(type);
     }
