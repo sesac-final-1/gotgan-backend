@@ -65,9 +65,9 @@ resilience4j:
         ignore-exceptions:                  # 4xx 변환(BusinessException)은 세지 않음
           - com.sesac.gojigi.common.web.exception.BusinessException
     instances:                              # 이름 = 대상 서비스 (컨벤션 · 스펙 STR-13)
-      order: { base-config: remote }        # OrderClientAdapter — 폐점 전 진행 중 주문
-      productClient: { base-config: default }
-      settlement: { base-config: remote }   # SettlementClientAdapter — 폐점 전 미정산
+      order: { base-config: remote }        # OrderClientAdapter — 폐점 전 진행 중 주문 · DashboardClientAdapter — 주문 통계
+      product: { base-config: remote }      # DashboardClientAdapter — 상품 통계
+      settlement: { base-config: remote }   # SettlementClientAdapter — 폐점 전 미정산 · DashboardClientAdapter — 정산 통계
   retry:
     retry-aspect-order: 2
     configs:
@@ -81,6 +81,7 @@ resilience4j:
           - com.sesac.gojigi.common.web.exception.BusinessException
     instances:
       order: { base-config: default }
+      product: { base-config: default }
       settlement: { base-config: default }
 
 management:

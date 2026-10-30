@@ -9,21 +9,21 @@ import org.springframework.web.client.HttpClientErrorException;
 /**
  * 다른 서비스 호출 실패를 store 예외로 바꾸는 공통 규칙 (order-service RemoteCalls 와 같은 규칙):
  * - 4xx: 호출 쪽(store) 버그라 warn + 502 — 서킷 실패로 세지 않음(BusinessException)
- * - 연결 실패 · 타임아웃 · 5xx · 서킷 OPEN: 폴백에서 502 — 폐점은 확인할 수 없으면 거절(STR-13)
+ * - 연결 실패 · 타임아웃 · 5xx · 서킷 OPEN: 폴백에서 502 — 폐점은 확인할 수 없으면 거절(STR-13), 대시보드는 그 영역만 비움(STR-07)
  */
 @Slf4j
-final class RemoteCalls {
+public final class RemoteCalls {
 
     private RemoteCalls() {
     }
 
-    static BusinessException rejected(String target, String action, HttpClientErrorException e) {
+    public static BusinessException rejected(String target, String action, HttpClientErrorException e) {
         log.warn("{} {} 거절 - status={}, body={}", target, action, e.getStatusCode(), e.getResponseBodyAsString());
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, target + " " + action + " 요청이 거절되었습니다.");
     }
 
     /** 서킷 폴백 — 이미 변환된 예외(BusinessException)는 그대로, 그 밖에는 502 */
-    static BusinessException unavailable(String target, String action, Throwable t) {
+    public static BusinessException unavailable(String target, String action, Throwable t) {
         if (t instanceof BusinessException business) {
             return business;
         }
