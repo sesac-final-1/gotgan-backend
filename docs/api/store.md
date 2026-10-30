@@ -242,8 +242,10 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 | `storeId` | `APPROVED` 일 때만 — 판매자 권한은 다음 토큰부터(5절) |
 | `history` | 4절과 같은 모양, 오래된 순 |
 | `requestedDocs` | `SUPPLEMENT` 일 때만 — 다시 낼 서류 종류(7절 요청 그대로, enum). 서류가 아닌 내용 보완이면 `[]`, 10/29(V5) 전 보완요청은 `null` |
+| `submitted` | **제출한 신청 내용(10/30 추가, 상태 무관)** — 재제출(2-3절)로 고칠 수 있는 항목의 지금 값: `bizType` · `companyName` · `ownerName` · `bizRegNo` · `ecommerceRegNo` · `managerPhone` · `managerEmail` · `businessAddress` · `categoryId` · `intro` · `representativeProducts` · `expectedMonthlySales` · `salesChannel` · `settlementAccount{bank, number, holder}` · `marketingAgreed` · `documents[{docType, originalName, uploadedAt}]`. 스토어명 · 주소는 위 `storeName` · `slug` |
 
-- 서류 · 사업자 정보는 넣지 않습니다 — 재제출 화면은 고칠 항목을 신청자가 다시 입력합니다(필드는 추가만).
+- `submitted` 는 재제출 화면이 지금 값을 채워 보여 주고 **바뀐 칸만 보내기** 위한 것입니다. 본인 신청만 조회되므로(`X-User-Id`) 계좌도 그대로 줍니다.
+- `submitted.documents` 는 지금 서류만(재제출로 바뀐 이전 제출본 제외), 종류별 · 올린 순서. 파일 열람 주소(presigned GET)는 넣지 않습니다 — 화면은 파일 이름만 보여 주고, 다시 올릴 때는 2-1절로 새로 받습니다.
 - 게이트웨이 `/api/seller/apply/**` 는 BUYER — 승인된 판매자도 BUYER 역할을 갖고 있어 승인 뒤에도 조회됩니다.
 
 ## 2-3. 보완 재제출 — `PATCH /api/seller/apply/{applicationId}/resubmit` (STR-09)

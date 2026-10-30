@@ -1,6 +1,7 @@
 package com.sesac.gojigi.store.apply.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -20,6 +21,8 @@ import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailRespon
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationSummaryResponse;
 import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse.SubmittedDocument;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse.Submitted;
 import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationDocument;
 import com.sesac.gojigi.store.apply.entity.ApplicationHistory;
@@ -282,6 +285,11 @@ class ApplicationQueryServiceTest {
         given(applicationHistoryRepository.findAllByStoreApplicationIdOrderByIdAsc(27L)).willReturn(List.of(
                 history(ApplicationStatus.PENDING, ActorType.APPLICANT, null, SUBMITTED_AT),
                 history(ApplicationStatus.SUPPLEMENT, ActorType.ADMIN, "사본이 흐립니다", LocalDateTime.of(2026, 10, 23, 10, 0))));
+        given(applicationDocumentRepository.findAllByStoreApplicationId(27L)).willReturn(List.of(
+                document(3L, DocType.PRODUCT_PHOTO, "p1.jpg", true),
+                document(2L, DocType.ECOMMERCE_REG, "old.pdf", false),   // 재제출로 바뀐 이전 서류 — 빠짐
+                document(1L, DocType.BUSINESS_REG, "biz.pdf", true),
+                document(4L, DocType.ECOMMERCE_REG, "new.pdf", true)));
 
         // when
         MyApplicationResponse mine = applicationQueryService.getMine(4L);
@@ -296,6 +304,38 @@ class ApplicationQueryServiceTest {
         assertThat(mine.history()).extracting(History::toStatus).containsExactly(ApplicationStatus.PENDING, ApplicationStatus.SUPPLEMENT);
         assertThat(mine.requestedDocs()).containsExactly(DocType.ECOMMERCE_REG);
         then(storeRepository).should(never()).findByStoreApplicationId(any());
+    }
+
+    @Test
+    @DisplayName("내 신청 — submitted 에 고칠 수 있는 항목의 지금 값과 지금 서류만(이전 제출본 제외, 종류 순), 열람 주소 발급 없음")
+    void getMine_returnsSubmittedValuesAndCurrentDocuments() {
+        // given
+        StoreApplication application = application(27L, "000-00-00001", SUBMITTED_AT);
+        application.requestSupplement("사본이 흐립니다", List.of(DocType.ECOMMERCE_REG), LocalDateTime.of(2026, 10, 23, 10, 0));
+        given(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(4L)).willReturn(Optional.of(application));
+        given(applicationDocumentRepository.findAllByStoreApplicationId(27L)).willReturn(List.of(
+                document(3L, DocType.PRODUCT_PHOTO, "p1.jpg", true),
+                document(2L, DocType.ECOMMERCE_REG, "old.pdf", false),
+                document(1L, DocType.BUSINESS_REG, "biz.pdf", true),
+                document(4L, DocType.ECOMMERCE_REG, "new.pdf", true)));
+
+        // when
+        Submitted submitted = applicationQueryService.getMine(4L).submitted();
+
+        // then
+        assertThat(submitted.bizType()).isEqualTo(BizType.INDIVIDUAL);
+        assertThat(submitted.companyName()).isEqualTo("곳간상회");
+        assertThat(submitted.bizRegNo()).isEqualTo("000-00-00001");
+        assertThat(submitted.managerEmail()).isEqualTo("seller@example.com");
+        assertThat(submitted.categoryId()).isEqualTo(1L);
+        assertThat(submitted.representativeProducts()).extracting(RepresentativeProduct::name).containsExactly("리넨 셔츠", "리넨 팬츠");
+        assertThat(submitted.expectedMonthlySales()).isEqualTo(ExpectedMonthlySales.FROM_5M_TO_20M);
+        assertThat(submitted.settlementAccount()).isEqualTo(new SettlementAccount("국민", "000000-00-000000", "홍길동"));
+        assertThat(submitted.marketingAgreed()).isFalse();
+        assertThat(submitted.documents()).extracting(SubmittedDocument::docType, SubmittedDocument::originalName).containsExactly(
+                tuple(DocType.BUSINESS_REG, "biz.pdf"), tuple(DocType.ECOMMERCE_REG, "new.pdf"), tuple(DocType.PRODUCT_PHOTO, "p1.jpg"));
+        assertThat(submitted.documents().get(0).uploadedAt()).isEqualTo(OffsetDateTime.parse("2026-10-22T14:05:11+09:00"));
+        then(sellerDocumentClient).should(never()).presignDownload(any());
     }
 
     @Test

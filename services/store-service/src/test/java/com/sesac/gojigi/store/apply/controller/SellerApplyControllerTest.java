@@ -23,6 +23,11 @@ import com.sesac.gojigi.store.apply.dto.response.ApplicationResubmitResponse;
 import com.sesac.gojigi.store.apply.dto.response.DocumentPresignResponse;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.History;
 import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse.Submitted;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse.SubmittedDocument;
+import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SettlementAccount;
+import com.sesac.gojigi.store.apply.entity.BizType;
+import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
 import com.sesac.gojigi.store.apply.entity.ActorType;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
@@ -246,7 +251,12 @@ class SellerApplyControllerTest {
                 "곳간상회", "gotgan", "사본이 흐립니다", submitted, supplemented, OffsetDateTime.parse("2026-10-30T10:00:00+09:00"), null, null,
                 List.of(new History(null, ApplicationStatus.PENDING, ActorType.APPLICANT, null, submitted),
                         new History(ApplicationStatus.PENDING, ApplicationStatus.SUPPLEMENT, ActorType.ADMIN, "사본이 흐립니다", supplemented)),
-                List.of(DocType.ECOMMERCE_REG)));
+                List.of(DocType.ECOMMERCE_REG),
+                new Submitted(BizType.INDIVIDUAL, "곳간상회", "홍길동", "000-00-00001", "2026-서울성동-0000", "010-0000-1234",
+                        "seller@example.com", "서울시 성동구", 1L, "<p>소개</p>",
+                        List.of(new RepresentativeProduct("리넨 셔츠", "셔츠", 39000), new RepresentativeProduct("리넨 팬츠", "팬츠", 45000)),
+                        null, null, new SettlementAccount("국민", "000000-00-000000", "홍길동"), false,
+                        List.of(new SubmittedDocument(DocType.ECOMMERCE_REG, "통신판매업신고증.pdf", submitted)))));
 
         // when · then
         mockMvc.perform(get("/api/seller/apply/me").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
@@ -257,7 +267,13 @@ class SellerApplyControllerTest {
                 .andExpect(jsonPath("$.data.supplementDueAt").value("2026-10-30T10:00:00+09:00"))
                 .andExpect(jsonPath("$.data.reapplyAvailableAt").value(nullValue()))
                 .andExpect(jsonPath("$.data.history[1].toStatus").value("SUPPLEMENT"))
-                .andExpect(jsonPath("$.data.requestedDocs[0]").value("ECOMMERCE_REG"));
+                .andExpect(jsonPath("$.data.requestedDocs[0]").value("ECOMMERCE_REG"))
+                .andExpect(jsonPath("$.data.submitted.bizRegNo").value("000-00-00001"))
+                .andExpect(jsonPath("$.data.submitted.settlementAccount.number").value("000000-00-000000"))
+                .andExpect(jsonPath("$.data.submitted.representativeProducts[1].price").value(45000))
+                .andExpect(jsonPath("$.data.submitted.expectedMonthlySales").value(nullValue()))
+                .andExpect(jsonPath("$.data.submitted.documents[0].originalName").value("통신판매업신고증.pdf"))
+                .andExpect(jsonPath("$.data.submitted.documents[0].uploadedAt").value("2026-10-22T14:05:11+09:00"));
     }
 
     @Test

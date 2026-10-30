@@ -11,6 +11,8 @@ import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailRespon
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationDetailResponse.SettlementAccount;
 import com.sesac.gojigi.store.apply.dto.response.InternalApplicationSummaryResponse;
 import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse.Submitted;
+import com.sesac.gojigi.store.apply.dto.response.MyApplicationResponse.SubmittedDocument;
 import com.sesac.gojigi.store.apply.dto.response.SellerApplyResponse;
 import com.sesac.gojigi.store.apply.entity.ApplicationDocument;
 import com.sesac.gojigi.store.apply.entity.ApplicationStatus;
@@ -85,7 +87,24 @@ public class ApplicationQueryService {
                 status == ApplicationStatus.APPROVED
                         ? storeRepository.findByStoreApplicationId(applicationId).map(Store::getId).orElse(null) : null,
                 histories(applicationId),
-                status == ApplicationStatus.SUPPLEMENT ? application.getRequestedDocs() : null);
+                status == ApplicationStatus.SUPPLEMENT ? application.getRequestedDocs() : null,
+                submitted(application));
+    }
+
+    /** 재제출 화면이 채울 지금 값 — 서류는 지금 것만(current), 종류별 · 올린 순서. 열람 주소는 만들지 않는다(S3 서명 없음) */
+    private Submitted submitted(StoreApplication application) {
+        List<SubmittedDocument> documents = applicationDocumentRepository.findAllByStoreApplicationId(application.getId()).stream()
+                .filter(ApplicationDocument::isCurrent)
+                .sorted(Comparator.comparing(ApplicationDocument::getDocType).thenComparing(ApplicationDocument::getId))
+                .map(d -> new SubmittedDocument(d.getDocType(), d.getOriginalName(), kst(d.getCreatedAt())))
+                .toList();
+        return new Submitted(
+                application.getBizType(), application.getCompanyName(), application.getOwnerName(), application.getBizRegNo(),
+                application.getEcommerceRegNo(), application.getManagerPhone(), application.getManagerEmail(),
+                application.getBusinessAddress(), application.getCategoryId(), application.getIntro(),
+                application.getRepresentativeProducts(), application.getExpectedMonthlySales(), application.getSalesChannel(),
+                new SettlementAccount(application.getBankName(), application.getAccountNo(), application.getAccountHolder()),
+                application.isMarketingAgreed(), documents);
     }
 
     private List<History> histories(Long applicationId) {
