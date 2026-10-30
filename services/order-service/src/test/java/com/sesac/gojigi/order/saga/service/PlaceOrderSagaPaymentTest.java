@@ -85,15 +85,21 @@ class PlaceOrderSagaPaymentTest {
         given(orderTx.getItems(1L)).willReturn(List.of(OrderFixtures.item(order)));
     }
 
-    /** 결제 준비까지 시도했다고 보고 전부 역순 보상 → 주문 FAILED */
+    private void givenCompensable() {
+        givenItems();
+        given(orderTx.claimForCompensation(1L)).willReturn(OrderStatus.FAILED);
+    }
+
+    /** 주문을 FAILED 로 선점한 뒤 전부 역순 보상 */
     private void verifyCompensatedAll() {
-        InOrder back = inOrder(sagaTx, payment, product, user, orderTx);
+        InOrder back = inOrder(sagaTx, orderTx, payment, product, user);
         back.verify(sagaTx).startCompensating(eq(7L), anyString());
+        back.verify(orderTx).claimForCompensation(1L);                     // ← markFailed(1L) 대신, 맨 앞으로
         back.verify(payment).cancel(ORDER_NO, PaymentCancelRequest.full(SAGA_ID, "주문 처리 실패"));
         back.verify(product).release(SAGA_ID, new StockReleaseRequest(List.of(new StockItem(11L, 2))));
         back.verify(user).restorePoints(SAGA_ID);
-        back.verify(orderTx).markFailed(1L);
         back.verify(sagaTx).compensated(7L);
+        verify(orderTx, never()).markFailed(any());
     }
 
     @Nested
@@ -338,6 +344,59 @@ class PlaceOrderSagaPaymentTest {
             // then
             verify(sagaTx).complete(7L);
             verifyNoInteractions(payment, product, user);
+        }
+
+        @Nested
+        @DisplayName("결제 확인 ↔ 만료 보상 경합 (A-경-1)")
+        class Race {
+
+            @Test
+            @DisplayName("만료가 미결제를 본 뒤 결제 확인이 먼저 PAID — 보상은 선점에 져서 아무것도 되돌리지 않고 Saga 완료")
+            void expire_losesToConfirm_revertsNothing() {
+                // given
+                givenItems();
+                willThrow(new OrderException(OrderErrorCode.ORDER_PAYMENT_NOT_COMPLETED)).given(payment).verify(VERIFY);
+                given(orderTx.claimForCompensation(1L)).willReturn(OrderStatus.PAID);        // 그 사이 결제 확인이 이김
+
+                // when
+                saga.expire(instance);
+
+                // then
+                verify(sagaTx).complete(7L);
+                verify(payment, never()).cancel(anyString(), any());                          // ← 지금 코드는 여기서 환불해 버림
+                verifyNoInteractions(product, user);
+                verify(sagaTx, never()).compensated(any());
+            }
+
+            @Test
+            @DisplayName("보상이 먼저 선점 — 결제 확인의 PAID 는 409, Saga 를 완료로 덮지 않는다")
+            void confirm_losesToCompensation_invalidStatus() {
+                // given
+                given(orderTx.getMine(BUYER_ID, ORDER_NO)).willReturn(order);
+                given(sagaTx.getPlaceOrder(1L)).willReturn(instance);
+                given(payment.verify(VERIFY)).willReturn(paid());
+                willThrow(new OrderException(OrderErrorCode.ORDER_INVALID_STATUS)).given(orderTx).markPaid(1L);   // 이미 FAILED
+
+                // when · then
+                assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
+                        .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATUS);
+                verify(sagaTx, never()).complete(any());                                      // 결제 환불은 보상 쪽 payment.cancel 이 맡음
+            }
+        }
+
+        @Test
+        @DisplayName("Saga 복구 — 주문 FAILED(선점) + Saga COMPENSATING 이면 되돌리기를 마저 한다 (3번)")
+        void recover_failedButCompensating_resumes() {
+            // given
+            order.markFailed();                                    // 이전 보상이 선점했지만
+            instance.startCompensating("PAYMENT_CANCEL_PENDING");  // 되돌리기 도중 실패해 재시도 대기
+            givenCompensable();
+
+            // when
+            saga.recover(instance);
+
+            // then
+            verifyCompensatedAll();                                // finishedAlready 가 false → 전부 되돌리고 COMPENSATED
         }
     }
 }

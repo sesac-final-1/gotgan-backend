@@ -196,6 +196,10 @@ public class PlaceOrderSaga {
             return true;
         }
         if (order.getStatus() == OrderStatus.FAILED) {
+            if (saga.getStatus() == SagaStatus.COMPENSATING) {
+                // 보상중이면 결제실패가 아님
+                return false;
+            }
             sagaTx.compensated(saga.getId());
             return true;
         }
@@ -219,7 +223,12 @@ public class PlaceOrderSaga {
                             RuntimeException cause) {
         String sagaId = saga.getSagaId();
         sagaTx.startCompensating(saga.getId(), reason(cause));
-        try {
+        if (orderTx.claimForCompensation(order.getId()) == OrderStatus.PAID) {   // ① 선점 — 결제 확인이 먼저 이겼다
+            sagaTx.complete(saga.getId());
+            log.warn("주문 Saga 보상 취소 — 결제 확인이 먼저 PAID 로 확정, 원인={}", reason(cause));
+            return;
+        }
+        try {                                                                    // ② 주문은 FAILED — 참여자 되돌리기
             if (reached(attempted, SagaStep.PAYMENT_READY)) {
                 payment.cancel(order.getOrderNo(), PaymentCancelRequest.full(sagaId, CANCEL_REASON));
             }
@@ -229,8 +238,7 @@ public class PlaceOrderSaga {
             if (reached(attempted, SagaStep.POINT_USED) && order.getUsedPoint() > 0) {
                 user.restorePoints(sagaId);
             }
-            orderTx.markFailed(order.getId());
-            sagaTx.compensated(saga.getId());
+            sagaTx.compensated(saga.getId());                                    // ③ markFailed() 는 없음 — ①에서 이미 FAILED
             log.info("주문 Saga 보상 완료 - 원인={}", reason(cause));
         } catch (RuntimeException again) {
             log.error("주문 Saga 보상 미완료 - 복구 스케줄러가 같은 sagaId 로 다시 시도, 원인={}", reason(cause), again);

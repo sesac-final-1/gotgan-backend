@@ -1,6 +1,7 @@
 package com.sesac.gojigi.order.order.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sesac.gojigi.order.TestcontainersConfiguration;
 import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
@@ -34,9 +35,13 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** 주문 PENDING 저장(주문번호 · 스냅샷 · 배송비) · 상태 변경 · Saga 기록 — MySQL 8.4 + Flyway */
 @DataJpaTest
@@ -136,6 +141,62 @@ class OrderTxServiceIntegrationTest {
         sagaTx.complete(done.getId());
         assertThat(sagaInstanceRepository.findById(saga.getId()).orElseThrow().getStatus()).isEqualTo(SagaStatus.COMPENSATED);
         assertThat(sagaInstanceRepository.findById(done.getId()).orElseThrow().getStatus()).isEqualTo(SagaStatus.COMPLETED);
+    }
+
+    @Autowired private PlatformTransactionManager txManager;
+
+    @Test
+    @DisplayName("보상 선점 — PENDING 이면 FAILED 로 바꾸고 버전을 올린다, 다시 부르면 0행이라 현재 상태(FAILED)를 돌려준다")
+    void claimForCompensation_pending_failsAndBumpsVersion() {
+        // given
+        Order order = create(null).order();
+        long before = orderRepository.findById(order.getId()).orElseThrow().getVersion();
+
+        // when
+        OrderStatus first = orderTx.claimForCompensation(order.getId());
+        OrderStatus again = orderTx.claimForCompensation(order.getId());   // 복구 재시도
+
+        // then
+        assertThat(first).isEqualTo(OrderStatus.FAILED);
+        assertThat(again).isEqualTo(OrderStatus.FAILED);
+        Order found = orderRepository.findById(order.getId()).orElseThrow();
+        assertThat(found.getStatus()).isEqualTo(OrderStatus.FAILED);
+        assertThat(found.getVersion()).isEqualTo(before + 1);              // 두 번째는 0행 — 한 번만 올라감
+    }
+
+    @Test
+    @DisplayName("결제 확인이 먼저 PAID — 선점은 0행, PAID 를 돌려주고 주문은 그대로")
+    void claimForCompensation_alreadyPaid_returnsPaid() {
+        // given
+        Order order = create(null).order();
+        orderTx.markPaid(order.getId());
+
+        // when
+        OrderStatus result = orderTx.claimForCompensation(order.getId());
+
+        // then
+        assertThat(result).isEqualTo(OrderStatus.PAID);
+        assertThat(orderRepository.findById(order.getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("A-경-1 — 결제 확인이 PENDING 을 읽은 뒤 보상이 선점하면, 늦게 커밋하는 PAID 는 낙관 락으로 실패한다")
+    void claimForCompensation_beatsStaleMarkPaid() {
+        // given
+        Order created = create(null).order();
+        TransactionTemplate confirmTx = new TransactionTemplate(txManager);
+        TransactionTemplate compensateTx = new TransactionTemplate(txManager);
+        compensateTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        // when · then
+        assertThatThrownBy(() -> confirmTx.executeWithoutResult(status -> {
+            Order stale = orderRepository.findById(created.getId()).orElseThrow();      // ① 결제 확인: PENDING 으로 읽음
+            compensateTx.executeWithoutResult(s ->                                       // ② 그 사이 보상이 선점 · 커밋
+                    orderRepository.claimForCompensation(created.getId(), OrderStatus.PENDING, OrderStatus.FAILED));
+            stale.markPaid(LocalDateTime.of(2026, 10, 22, 12, 0));                       // ③ 읽어 둔 PENDING 이라 통과
+        }))                                                                              // ④ 커밋: WHERE version = 읽은 값 → 0행
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        assertThat(orderRepository.findById(created.getId()).orElseThrow().getStatus()).isEqualTo(OrderStatus.FAILED);
     }
 
     @Test

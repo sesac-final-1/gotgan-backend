@@ -41,6 +41,8 @@ import com.sesac.gojigi.order.order.service.OrderTxService.PendingOrder;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
 import java.util.List;
+
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -214,11 +216,16 @@ class PlaceOrderSagaTest {
     }
 
     @Nested
-    @DisplayName("실패 — 시도한 단계만 역순 보상 후 주문 FAILED")
+    @DisplayName("실패 — 주문을 FAILED 로 선점한 뒤 시도한 단계만 역순 보상")
     class Compensation {
 
+        @BeforeEach
+        void givenClaimed() {
+            given(orderTx.claimForCompensation(1L)).willReturn(OrderStatus.FAILED);   // 생성 중 실패는 결제 확인이 끼어들 수 없어 선점이 항상 성공
+        }
+
         @Test
-        @DisplayName("재고 예약 실패 — 재고 해제 · 포인트 환원, 결제 취소는 부르지 않음 · 결제창 정보 없이 409")
+        @DisplayName("재고 예약 실패 — 선점 → 재고 해제 · 포인트 환원, 결제 취소는 부르지 않음 · 결제창 정보 없이 409")
         void place_outOfStock_compensatesStockAndPoints() {
             // given
             givenPending(2_000L);
@@ -227,12 +234,13 @@ class PlaceOrderSagaTest {
             // when · then
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(2_000L, item(11L, 2))))
                     .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_OUT_OF_STOCK);
-            InOrder back = inOrder(sagaTx, product, user, orderTx);
+            InOrder back = inOrder(sagaTx, orderTx, product, user);
             back.verify(sagaTx).startCompensating(eq(7L), anyString());
+            back.verify(orderTx).claimForCompensation(1L);                 // ← 되돌리기보다 먼저
             back.verify(product).release(SAGA_ID, new StockReleaseRequest(STOCK));
             back.verify(user).restorePoints(SAGA_ID);
-            back.verify(orderTx).markFailed(1L);
             back.verify(sagaTx).compensated(7L);
+            verify(orderTx, never()).markFailed(any());                     // ← 보상 경로에서 빠짐
             verify(payment, never()).prepare(any());
             verify(payment, never()).cancel(anyString(), any());
         }
@@ -250,7 +258,7 @@ class PlaceOrderSagaTest {
             verify(user).restorePoints(SAGA_ID);
             verify(product, never()).reserve(any());
             verify(product, never()).release(anyString(), any());
-            verify(orderTx).markFailed(1L);
+            verify(orderTx).claimForCompensation(1L);                       // markFailed(1L) → 교체
         }
 
         @Test
@@ -263,11 +271,11 @@ class PlaceOrderSagaTest {
             // when · then
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(2_000L, item(11L, 2))))
                     .isInstanceOf(BusinessException.class);
-            InOrder back = inOrder(payment, product, user, orderTx);
+            InOrder back = inOrder(orderTx, payment, product, user);
+            back.verify(orderTx).claimForCompensation(1L);                 // ← 맨 앞으로
             back.verify(payment).cancel("20261022-000123", PaymentCancelRequest.full(SAGA_ID, "주문 처리 실패"));
             back.verify(product).release(SAGA_ID, new StockReleaseRequest(STOCK));
             back.verify(user).restorePoints(SAGA_ID);
-            back.verify(orderTx).markFailed(1L);
         }
 
         @Test
@@ -282,8 +290,9 @@ class PlaceOrderSagaTest {
             // when · then
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 2))))
                     .isInstanceOf(BusinessException.class);
+            verify(orderTx).claimForCompensation(1L);
             verify(sagaTx).scheduleRetry(eq(7L), anyString());
-            verify(orderTx, never()).markFailed(any());
+            //verify(orderTx, never()).markFailed(any());
             verify(sagaTx, never()).compensated(any());
         }
 
@@ -298,7 +307,7 @@ class PlaceOrderSagaTest {
             assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 2))))
                     .isInstanceOf(IllegalStateException.class);
             verify(sagaTx).startCompensating(7L, "IllegalStateException: boom");
-            verify(orderTx).markFailed(1L);
+            verify(orderTx).claimForCompensation(1L);
         }
     }
 
