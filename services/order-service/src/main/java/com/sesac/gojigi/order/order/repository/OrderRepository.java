@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -27,4 +28,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from Order o where o.orderNo = :orderNo and o.buyerId = :buyerId")
     Optional<Order> findMineForUpdate(@Param("orderNo") String orderNo, @Param("buyerId") Long buyerId);
+
+    /**
+     * 보상 선점 — 결제 대기(PENDING) 주문만 FAILED 로 바꾼다. 결제 확인(markPaid)과 동시에 와도 한쪽만 성공.
+     * 벌크 UPDATE 는 @Version 을 올리지 않으므로 직접 올린다 — 먼저 읽어 둔 markPaid 가 낙관 락으로 실패하게.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update Order o set o.status = :failed, o.version = o.version + 1 "
+            + "where o.id = :orderId and o.status = :pending")
+    int claimForCompensation(@Param("orderId") Long orderId,
+                             @Param("pending") OrderStatus pending,
+                             @Param("failed") OrderStatus failed);
 }

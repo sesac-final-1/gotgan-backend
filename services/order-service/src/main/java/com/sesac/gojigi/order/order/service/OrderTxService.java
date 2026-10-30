@@ -5,6 +5,7 @@ import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
 import com.sesac.gojigi.order.order.entity.OrderItem;
+import com.sesac.gojigi.order.order.entity.OrderStatus;
 import com.sesac.gojigi.order.order.entity.OrderStoreShipment;
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
 import com.sesac.gojigi.order.order.exception.OrderException;
@@ -100,6 +101,15 @@ public class OrderTxService {
     @Transactional(readOnly = true)
     public List<OrderItem> getItems(Long orderId) {
         return orderItemRepository.findByOrderIdOrderByIdAsc(orderId);
+    }
+
+    /** 보상 선점 — true 면 이 보상이 주문을 FAILED 로 확정했다. false 면 결제 확인이 먼저 PAID 로 만들었거나 이미 FAILED */
+    @Transactional
+    public OrderStatus claimForCompensation(Long orderId) {
+        if (orderRepository.claimForCompensation(orderId, OrderStatus.PENDING, OrderStatus.FAILED) == 1) {
+            return OrderStatus.FAILED;
+        }
+        return getOrder(orderId).getStatus();
     }
 
     private Order getOrder(Long orderId) {
