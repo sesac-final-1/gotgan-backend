@@ -49,6 +49,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             group by o.product.id""")
     List<Object[]> sumStockByProductIds(@Param("productIds") Collection<Long> productIds);
 
+    /** 요청 키 중 이 스토어의 삭제 안 된 상품에 이미 붙어 있는 것 — 등록(복사) · 수정 때 시드 이미지 등 발급 키 모양이 아닌 내 이미지를 다시 쓰려고 (13절) */
+    @Query("select distinct i.s3Key from ProductImage i where i.product.storeId = :storeId and i.product.deletedAt is null and i.s3Key in :keys")
+    List<String> findAttachedImageKeys(@Param("storeId") Long storeId, @Param("keys") Collection<String> keys);
+
     /** 대표 이미지 키 (sortOrder 0) — 결과 [productId, s3Key] */
     @Query("select i.product.id, i.s3Key from ProductImage i where i.product.id in :productIds and i.sortOrder = 0")
     List<Object[]> findMainImageKeys(@Param("productIds") Collection<Long> productIds);

@@ -111,7 +111,7 @@ public class SellerProductService {
                 .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_CATEGORY_INVALID));
         List<String> optionNames = optionNames(request.option1Name(), request.option2Name());
         List<OptionSpec> options = checkOptions(optionNames.size(), request.options());
-        List<String> imageKeys = checkImageKeys(storeId, request.imageKeys(), Set.of());
+        List<String> imageKeys = checkImageKeys(storeId, request.imageKeys(), attachedKeys(storeId, request.imageKeys()));
         ProductStatus status = initialStatus(request.status());
 
         Product product = Product.builder()
@@ -141,7 +141,7 @@ public class SellerProductService {
     /**
      * 수정 (13절 PUT) — 등록과 같은 본문 · 같은 검사, status 는 무시하고 재고 · 판매 상태는 바꾸지 않는다(BLOCKED 도 수정 가능, 상태 그대로).
      * 옵션은 productOptionId 로 맞춘다: 있으면 추가금만 · 없으면 새 조합 · 요청에 없는 기존 조합은 소프트 삭제.
-     * 이미지는 요청 순서대로 다시 저장 — 이 상품에 이미 붙어 있는 키(시드 이미지 포함)는 모양 검사 없이 받는다.
+     * 이미지는 요청 순서대로 다시 저장 — 내 스토어 상품에 이미 붙어 있는 키(이 상품 · 시드 이미지 포함)는 모양 검사 없이 받는다.
      */
     @Transactional
     public SellerProductDetailResponse update(Long storeId, Long productId, ProductCreateRequest request) {
@@ -152,8 +152,7 @@ public class SellerProductService {
                 .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_CATEGORY_INVALID));
         List<String> optionNames = optionNames(request.option1Name(), request.option2Name());
         List<OptionSpec> options = checkOptions(optionNames.size(), request.options());
-        Set<String> currentKeys = product.getImages().stream().map(ProductImage::getS3Key).collect(Collectors.toSet());
-        List<String> imageKeys = checkImageKeys(storeId, request.imageKeys(), currentKeys);
+        List<String> imageKeys = checkImageKeys(storeId, request.imageKeys(), attachedKeys(storeId, request.imageKeys()));
 
         applyOptions(product, options);
         product.update(category.getId(), request.name().strip(), request.price(), request.discountRate(),
@@ -338,16 +337,22 @@ public class SellerProductService {
         return options;
     }
 
+    /** 요청 키 중 내 스토어의 삭제 안 된 상품에 이미 붙어 있는 키 — 상품 복사(12절 → 13절 등록)가 시드 이미지(products/seed/…)도 다시 쓸 수 있게 */
+    private Set<String> attachedKeys(Long storeId, List<String> keys) {
+        List<String> candidates = keys == null ? List.of() : keys.stream().filter(Objects::nonNull).toList();
+        return candidates.isEmpty() ? Set.of() : new HashSet<>(productRepository.findAttachedImageKeys(storeId, candidates));
+    }
+
     /**
-     * 1~5개 · 중복 없음 · presign 이 발급하는 내 스토어 키 모양(products/{storeId}/{UUID}.{jpg|png|webp}) 또는 이 상품에 이미 붙어 있는 키(수정).
-     * S3 존재 확인은 하지 않는다.
+     * 1~5개 · 중복 없음 · presign 이 발급하는 내 스토어 키 모양(products/{storeId}/{UUID}.{jpg|png|webp}) 또는 내 스토어 상품에 이미 붙어 있는 키.
+     * S3 존재 확인은 하지 않는다. 남의 스토어 상품에 붙은 키 · 삭제된 상품의 키는 모양이 아니면 거절.
      */
-    private static List<String> checkImageKeys(Long storeId, List<String> keys, Set<String> currentKeys) {
+    private static List<String> checkImageKeys(Long storeId, List<String> keys, Set<String> attachedKeys) {
         if (keys == null || keys.isEmpty() || keys.size() > MAX_IMAGES) {
             throw invalidImage("상품 이미지는 1~5장이어야 합니다.");
         }
         Pattern ownKey = Pattern.compile("products/" + storeId + "/[A-Za-z0-9-]{1,64}\\.(jpg|png|webp)");
-        if (keys.stream().anyMatch(key -> key == null || !(currentKeys.contains(key) || ownKey.matcher(key).matches()))) {
+        if (keys.stream().anyMatch(key -> key == null || !(attachedKeys.contains(key) || ownKey.matcher(key).matches()))) {
             throw invalidImage("업로드 주소 발급으로 받은 내 스토어 이미지만 사용할 수 있습니다.");
         }
         if (new HashSet<>(keys).size() != keys.size()) {
