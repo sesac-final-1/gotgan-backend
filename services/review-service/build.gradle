@@ -37,6 +37,9 @@ dependencies {
     runtimeOnly    'com.mysql:mysql-connector-j'
     // XSS — 사용자 입력 HTML 을 저장 전 정화 (가이드라인 12장)
     implementation "com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:${htmlSanitizerVersion}"
+    // 복원력 — 모든 동기 호출의 표준: 타임아웃 · 서킷 브레이커 · 폴백 (가이드라인 06장 · 13장)
+    implementation "io.github.resilience4j:resilience4j-spring-boot4:${resilience4jVersion}"
+    implementation 'org.springframework.boot:spring-boot-starter-aspectj'
     // AWS SDK v2 — sqs · s3 (버전은 BOM)
     implementation 'software.amazon.awssdk:sqs'
     implementation 'software.amazon.awssdk:s3'
