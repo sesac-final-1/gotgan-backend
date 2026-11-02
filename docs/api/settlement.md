@@ -62,7 +62,7 @@
 `Summary` = `{id, storeId, storeName, week, weekStart, weekEnd, itemCount, carriedOverCount, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt, status, holdReason, scheduledPayDate, paidAt, bank{bankName, accountNumber, accountHolder}}`
 
 **집계 규칙**
-- 매주 월 03:00(KST) 자동 + **앱 기동 시 지난주 따라잡기**(10/20) — 클러스터가 07~21시에만 떠 있어 03:00 은 돌지 않으므로, 매일 아침 기동할 때 지난주를 한 번 집계(멱등 · ShedLock 같은 잠금). 바로 확인할 때는 "지금 집계"(`aggregate`)
+- 매주 월 03:00(KST) 자동 + **앱 기동 시 지난주 따라잡기**(10/20) — 클러스터가 08~22시에만 떠 있어 03:00 은 돌지 않으므로, 매일 아침 기동할 때 지난주를 한 번 집계(멱등 · ShedLock 같은 잠금). 바로 확인할 때는 "지금 집계"(`aggregate`)
 - **늦게 들어온 구매확정**(10/20 결정 2번 A안) — 집계 때 지난 주차의 안 묶인 구매확정을 함께 처리
   - 원래 주 정산서가 지급 전 → 거기에 더해 다시 계산
   - 지급 완료 · 정산서 없음 → **이번 주 정산서로 이월** (항목의 구매확정일은 그대로). 정산서 `carriedOverCount` · 항목 `carriedOver` 로 "이월 n건" 표시
