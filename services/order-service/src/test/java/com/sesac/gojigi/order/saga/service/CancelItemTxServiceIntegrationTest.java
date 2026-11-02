@@ -31,6 +31,7 @@ import com.sesac.gojigi.order.saga.entity.SagaStep;
 import com.sesac.gojigi.order.saga.entity.SagaType;
 import com.sesac.gojigi.order.saga.repository.SagaInstanceRepository;
 import com.sesac.gojigi.order.saga.service.CancelItemTxService.CancelContext;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -55,7 +56,7 @@ import org.springframework.transaction.annotation.Transactional;
 /** 결제완료 단계 취소 접수 · 완료 — 환불 금액(현금 · 포인트 · 배송비) · 상태 · 이력 · 접수 거절 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, OrderTxService.class, CancelItemTxService.class, OrderSagaTxService.class,
+@Import({ TestcontainersConfiguration.class, OrderTxService.class, CancelItemTxService.class, OrderSagaTxService.class, SimpleMeterRegistry.class,
         ClaimTxService.class,
         CancelItemTxServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")

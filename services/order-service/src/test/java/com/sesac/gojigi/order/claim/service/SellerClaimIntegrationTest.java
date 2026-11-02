@@ -48,6 +48,7 @@ import com.sesac.gojigi.order.saga.service.CancelOrderItemSaga;
 import com.sesac.gojigi.order.saga.service.ClaimEventRecorder;
 import com.sesac.gojigi.order.common.event.OutboxEventRepository;
 import com.sesac.gojigi.order.saga.service.OrderSagaTxService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -79,7 +80,7 @@ import tools.jackson.databind.json.JsonMapper;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, ClaimTxService.class, SellerClaimTxService.class,
-        ClaimQueryService.class, CancelItemTxService.class, CancelOrderItemSaga.class, OrderSagaTxService.class,
+        ClaimQueryService.class, CancelItemTxService.class, CancelOrderItemSaga.class, OrderSagaTxService.class, SimpleMeterRegistry.class,
         DeliveryTxService.class, EventOutboxService.class, SchedulingConfig.class, ClaimEventRecorder.class,
         SellerClaimIntegrationTest.Beans.class })
 @ActiveProfiles("test")

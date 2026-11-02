@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -43,6 +44,7 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** 결제 확인 [요청 2] · 결제 대기 만료 · Saga 복구 — 검증 결과별 확정 · 보상 · 결제 대기 유지 */
@@ -211,6 +213,53 @@ class PlaceOrderSagaPaymentTest {
             assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
                     .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATUS);
             verifyNoInteractions(payment);
+        }
+
+        @Nested
+        @DisplayName("두 번 클릭 (A-경-2)")
+        class DoubleClick {
+
+            /** 다른 요청이 먼저 PAID 로 커밋한 뒤 다시 읽은 주문 */
+            private Order paidByOther() {
+                Order paid = OrderFixtures.order();
+                paid.markPaid(LocalDateTime.of(2026, 10, 22, 12, 0));
+                return paid;
+            }
+
+            @Test
+            @DisplayName("먼저 커밋된 PAID(409) · 동시 갱신(낙관 락) — 다시 읽어 PAID 면 같은 성공 응답, Saga 단계를 완료로 다시 맞춘다")
+            void confirm_paidByOther_sameResponse() {
+                // given
+                given(orderTx.getMine(BUYER_ID, ORDER_NO)).willReturn(order, paidByOther(), order, paidByOther());
+                given(sagaTx.getPlaceOrder(1L)).willReturn(instance);
+                given(payment.verify(VERIFY)).willReturn(paid());
+                willThrow(new OrderException(OrderErrorCode.ORDER_INVALID_STATUS))
+                        .willThrow(new ObjectOptimisticLockingFailureException(Order.class, 1L))
+                        .given(orderTx).markPaid(1L);
+
+                // when
+                OrderPaymentConfirmResponse first = saga.confirm(BUYER_ID, ORDER_NO);
+                OrderPaymentConfirmResponse second = saga.confirm(BUYER_ID, ORDER_NO);
+
+                // then
+                assertThat(first).isEqualTo(new OrderPaymentConfirmResponse(ORDER_NO, OrderStatus.PAID, 65_000L));
+                assertThat(second).isEqualTo(first);
+                verify(sagaTx, times(2)).complete(7L);
+            }
+
+            @Test
+            @DisplayName("동시 갱신이지만 다시 읽어도 PAID 가 아님(보상이 선점) — 예외 그대로")
+            void confirm_lockConflict_notPaid_rethrows() {
+                // given
+                given(sagaTx.getPlaceOrder(1L)).willReturn(instance);
+                given(payment.verify(VERIFY)).willReturn(paid());
+                willThrow(new ObjectOptimisticLockingFailureException(Order.class, 1L)).given(orderTx).markPaid(1L);
+
+                // when · then
+                assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
+                        .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+                verify(sagaTx, never()).complete(any());
+            }
         }
     }
 
