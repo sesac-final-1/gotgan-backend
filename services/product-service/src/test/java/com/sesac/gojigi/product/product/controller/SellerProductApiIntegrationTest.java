@@ -646,6 +646,24 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
+        @DisplayName("다른 내 상품에 붙은 키도 받음 — 수정 때 내 다른 상품의 시드 이미지를 다시 쓸 수 있음")
+        void update_keyAttachedToAnotherOwnProduct_accepted() throws Exception {
+            // given — 다른 내 상품에 시드 이미지
+            long productId = registerOk();
+            long otherProductId = registerOk();
+            jdbc.update("UPDATE product_image SET s3_key = 'products/seed/p101-1.jpg' WHERE product_id = ? AND sort_order = 0", otherProductId);
+            List<Long> ids = optionIds(productId);
+            Map<String, Object> request = validRequest();
+            request.put("options", List.of(keptOption(ids.get(0), "오트밀", "M", 0, 30), keptOption(ids.get(1), "오트밀", "L", 2000, 0)));
+            request.put("imageKeys", List.of("products/seed/p101-1.jpg"));
+
+            // when · then
+            update(productId, String.valueOf(STORE_ID), request)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.images[0].key").value("products/seed/p101-1.jpg"));
+        }
+
+        @Test
         @DisplayName("기존 조합 값 변경 · 남의 상품 옵션 ID · 삭제된 옵션 ID — 400 PRODUCT_OPTION_INVALID, 아무것도 안 바뀜")
         void update_invalidOptionIds_rejected() throws Exception {
             // given
@@ -1091,5 +1109,48 @@ class SellerProductApiIntegrationTest {
         Map<String, Object> row = jdbc.queryForMap("SELECT is_store_active, store_status_changed_at FROM product WHERE product_id = ?", productId);
         assertThat(row.get("is_store_active")).isEqualTo(true);
         assertThat(row.get("store_status_changed_at")).isNull();
+    }
+
+    @Nested
+    @DisplayName("상품 복사 — 등록 때 내 스토어 상품에 붙은 이미지 키 다시 쓰기 (12 · 13절)")
+    class CopyImageKeys {
+
+        @Test
+        @DisplayName("내 상품의 시드 이미지 키로 등록 — 201, 같은 키 · 같은 URL")
+        void create_keyAttachedToOwnProduct_created() throws Exception {
+            // given — 시드 상품처럼 이미지가 products/seed/… 인 내 상품
+            long seedProductId = registerOk();
+            jdbc.update("UPDATE product_image SET s3_key = 'products/seed/p101-1.jpg' WHERE product_id = ? AND sort_order = 0", seedProductId);
+
+            // when · then
+            register(body -> {
+                body.put("status", "STOPPED");
+                body.put("imageKeys", List.of("products/seed/p101-1.jpg", "products/1/new-2.webp"));
+            })
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.images[0].key").value("products/seed/p101-1.jpg"))
+                    .andExpect(jsonPath("$.data.images[0].url")
+                            .value("https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/products/seed/p101-1.jpg"))
+                    .andExpect(jsonPath("$.data.status").value("STOPPED"));
+        }
+
+        @Test
+        @DisplayName("남의 스토어 상품 · 삭제된 내 상품에 붙은 키 — 400 PRODUCT_IMAGE_INVALID")
+        void create_keyAttachedToForeignOrDeletedProduct_imageInvalid() throws Exception {
+            // given — store 2 상품과 삭제된 내 상품에 각각 시드 이미지
+            long foreignProductId = registerOk();
+            jdbc.update("UPDATE product SET store_id = 2 WHERE product_id = ?", foreignProductId);
+            jdbc.update("UPDATE product_image SET s3_key = 'products/seed/p201-1.jpg' WHERE product_id = ? AND sort_order = 0", foreignProductId);
+            long deletedProductId = registerOk();
+            jdbc.update("UPDATE product_image SET s3_key = 'products/seed/p102-1.jpg' WHERE product_id = ? AND sort_order = 0", deletedProductId);
+            jdbc.update("UPDATE product SET deleted_at = NOW(6) WHERE product_id = ?", deletedProductId);
+
+            // when · then
+            for (String key : List.of("products/seed/p201-1.jpg", "products/seed/p102-1.jpg")) {
+                register(body -> body.put("imageKeys", List.of(key)))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.code").value("PRODUCT_IMAGE_INVALID"));
+            }
+        }
     }
 }
