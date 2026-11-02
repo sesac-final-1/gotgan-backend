@@ -1,15 +1,23 @@
 package com.sesac.gojigi.order.saga.service;
 
+import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
+import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.service.OrderPricing;
+import com.sesac.gojigi.order.order.service.OrderTxService;
+import com.sesac.gojigi.order.order.service.OrderTxService.PendingOrder;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
 import com.sesac.gojigi.order.saga.entity.SagaStatus;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
 import com.sesac.gojigi.order.saga.entity.SagaType;
 import com.sesac.gojigi.order.saga.repository.SagaInstanceRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +40,25 @@ public class OrderSagaTxService {
             SagaStep.STOCK_RESERVED);
 
     private final SagaInstanceRepository sagaInstanceRepository;
+    private final OrderTxService orderTx;
+    private final MeterRegistry meterRegistry;
     private final Clock clock;
+
+    /** 주문 PENDING 과 주문 Saga — Saga 가 있어야 스케줄러가 찾으므로 */
+    public record PlacedOrder(PendingOrder pending, SagaInstance saga) {
+    }
+
+    /**
+     * 주문 PENDING + 주문 Saga 를 한 트랜잭션으로 (A-경-4) — 따로 커밋하면 사이에 파드가 죽었을 때
+     * Saga 없는 PENDING 주문이 남고, 결제 대기 만료 · 복구 스케줄러는 saga_instance 만 보므로 영원히 PENDING 이다.
+     * 주문번호 충돌(DataIntegrityViolationException)이면 둘 다 롤백 — 호출 쪽이 다시 부른다.
+     */
+    @Transactional
+    public PlacedOrder startPlaceOrder(UserSummaryResponse buyer, OrderCreateRequest request, OrderPricing.Result priced,
+                                       Map<Long, String> storeNames) {
+        PendingOrder pending = orderTx.createPending(buyer, request, priced, storeNames);
+        return new PlacedOrder(pending, startPlaceOrder(pending.order()));
+    }
 
     @Transactional
     public SagaInstance startPlaceOrder(Order order) {
@@ -56,13 +82,23 @@ public class OrderSagaTxService {
 
     @Transactional
     public void compensated(Long sagaInstanceId) {
-        get(sagaInstanceId).compensated();
+        SagaInstance saga = get(sagaInstanceId);
+        saga.compensated();
+        count("saga.compensated", saga);   // Prometheus: saga_compensated_total{type}
     }
 
     /** 보상이 끝나지 않음 — Saga 복구 스케줄러가 nextRetryAt 에 같은 sagaId 로 다시 시도 (한도 넘으면 FAILED) */
     @Transactional
     public void scheduleRetry(Long sagaInstanceId, String reason) {
-        get(sagaInstanceId).scheduleRetry(reason, LocalDateTime.now(clock));
+        SagaInstance saga = get(sagaInstanceId);
+        saga.scheduleRetry(reason, LocalDateTime.now(clock));
+        // saga_failed_total = 재시도 한도를 넘어 사람이 확인해야 함 (알림 대상) · saga_retry_total = 재시도 예약
+        count(saga.getStatus() == SagaStatus.FAILED ? "saga.failed" : "saga.retry", saga);
+    }
+
+    /** 보상 · 복구 지표 (B-경-1) — 알림 규칙은 이 이름으로 건다 */
+    private void count(String name, SagaInstance saga) {
+        Counter.builder(name).tag("type", saga.getSagaType().name()).register(meterRegistry).increment();
     }
 
     /** 주문의 주문 생성 Saga */
