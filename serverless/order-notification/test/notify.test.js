@@ -1,7 +1,7 @@
 // 핸들러 단위 테스트 — node --test (담당 jihoon-devstu). AWS 클라이언트는 가짜로 넣는다
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TEMPLATES, createHandler, displayDateTime } from '../src/notify.js';
+import { TEMPLATES, createHandler, displayDateTime, esc } from '../src/notify.js';
 
 const ENV = { TABLE: 'sesac-gojigi-notifications', FROM_EMAIL: 'from@example.com', FRONT_URL: 'https://gotgan-ashy.vercel.app' };
 const FRONT = ENV.FRONT_URL;
@@ -132,6 +132,64 @@ test('NTF-02 배송 시작 — 상품명 · 택배사 · 송장번호, buyerId �
   assert.match(text, /· 송장번호 123456789012/);
   assert.equal(TEMPLATES.OrderItemShipped.owner(p), 'ORDER#20261021-000123');
   assert.equal(TEMPLATES.OrderItemShipped.owner({ ...p, buyerId: 4 }), 'USER#4');
+});
+
+// 11/02 이경석 요청 — order DeliveryTxService.deliver · 자동 배송완료 · 교환 재배송 배송완료
+const delivered = {
+  orderItemId: 1, orderNo: '20261102-000001', buyerId: 4, ordererEmail: 'buyer@example.com', ordererName: '김구매',
+  productName: '제철 사과 3kg', optionName: '특', courier: 'CJ대한통운', trackingNo: '123456789012',
+  deliveredAt: '2026-11-02T15:00:00+09:00', autoConfirmAt: '2026-11-09T15:00:00+09:00',
+};
+
+test('DLV-04 배송 완료 — 상품 · 택배 · 배송완료 시각 · 자동 구매확정 예정일 · 반품 7일 · 주문 상세 링크', () => {
+  const { subject, text, html } = TEMPLATES.OrderItemDelivered.mail(delivered, FRONT);
+
+  assert.equal(subject, '[곳간] 배송이 완료되었습니다 — 제철 사과 3kg');
+  assert.ok(text.startsWith('김구매님, 주문하신 상품이 도착했습니다.'));
+  assert.ok(text.includes('· 상품 제철 사과 3kg (특)'));
+  assert.match(text, /· 택배 CJ대한통운 · 123456789012/);
+  assert.match(text, /· 배송완료 2026-11-02 15:00/);
+  assert.match(text, /2026-11-09 15:00에 자동으로 구매확정됩니다/);
+  assert.match(text, /반품 · 교환은 배송완료 후 7일 안에/);
+  assert.ok(text.includes('주문 상세: https://gotgan-ashy.vercel.app/mypage/orders/20261102-000001'));
+  // HTML — 같은 내용 + 버튼 링크
+  assert.match(html, /^<!doctype html>/);
+  assert.match(html, /배송이 완료되었습니다/);
+  assert.match(html, /김구매님, 주문하신 상품이 도착했어요/);
+  assert.ok(html.includes('제철 사과 3kg (특)'));
+  assert.match(html, /2026-11-09 15:00에 자동으로 구매확정됩니다/);
+  assert.ok(html.includes('href="https://gotgan-ashy.vercel.app/mypage/orders/20261102-000001"'));
+  assert.equal(TEMPLATES.OrderItemDelivered.owner(delivered), 'USER#4');
+  assert.equal(TEMPLATES.OrderItemDelivered.to(delivered), 'buyer@example.com');
+});
+
+test('DLV-04 배송 완료 — 옵션 · 상품명 · 예정일이 없어도 보내고, HTML 에는 글자를 이스케이프해서 넣는다', () => {
+  const p = { ...delivered, optionName: null, autoConfirmAt: undefined, ordererName: '<b>김</b>', productName: undefined, buyerId: undefined };
+  const { subject, text, html } = TEMPLATES.OrderItemDelivered.mail(p, FRONT);
+
+  assert.equal(subject, '[곳간] 주문하신 상품의 배송이 완료되었습니다 — 20261102-000001');
+  assert.doesNotMatch(text, /· 상품/);
+  assert.match(text, /배송완료 7일 뒤 자동으로 구매확정됩니다/);
+  assert.ok(html.includes('&lt;b&gt;김&lt;/b&gt;님'));
+  assert.ok(!html.includes('<b>김</b>'));
+  assert.equal(TEMPLATES.OrderItemDelivered.owner(p), 'ORDER#20261102-000001');
+
+  const named = TEMPLATES.OrderItemDelivered.mail({ ...delivered, productName: '사과 <script>', optionName: null }, FRONT);
+  assert.match(named.html, /사과 &lt;script&gt;/);
+  assert.equal(esc(`"a" & 'b'`), '&quot;a&quot; &amp; &#39;b&#39;');
+});
+
+test('HTML 이 있는 이벤트만 SES 본문에 Html 을 함께 — 다른 이벤트는 텍스트만(기존 그대로)', async () => {
+  const { calls, deps } = fake();
+  await createHandler(deps)({ Records: [record(envelope('OrderItemDelivered', delivered), 'm-1'), record(envelope('OrderPaid', orderPaid, 'e-2'), 'm-2')] });
+
+  const mails = calls.filter((c) => c.type === 'SendEmailCommand').map((c) => c.input.Content.Simple.Body);
+  assert.equal(mails.length, 2);
+  assert.ok(mails[0].Html.Data.startsWith('<!doctype html>'));
+  assert.equal(mails[0].Html.Charset, 'UTF-8');
+  assert.match(mails[0].Text.Data, /주문하신 상품이 도착했습니다/);
+  assert.equal(mails[1].Html, undefined);
+  assert.match(mails[1].Text.Data, /주문이 완료되었습니다/);
 });
 
 test('NTF-03 취소 · 반품 완료 — 환불 금액 · 돌려드린 포인트 · 회수된 적립 포인트', () => {

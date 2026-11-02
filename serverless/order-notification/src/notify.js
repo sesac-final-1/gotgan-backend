@@ -13,6 +13,7 @@ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 
 const TTL_DAYS = 90;
 const REAPPLY_DAYS = 30;   // 반려 후 재신청 제한 (스펙 STR-05)
+const RETURN_WINDOW_DAYS = 7; // 배송완료 후 반품 · 교환 신청 기한 (order return-window)
 
 const won = (n) => `${Number(n ?? 0).toLocaleString('ko-KR')}원`;
 const point = (n) => `${Number(n ?? 0).toLocaleString('ko-KR')}P`;
@@ -31,6 +32,11 @@ function plusDays(iso, days) {
   if (!m) return null;
   const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + days));
   return d.toISOString().slice(0, 10);
+}
+
+/** HTML 본문에 넣는 값은 모두 이스케이프 — 상품명 · 이름은 판매자 · 구매자가 쓴 글자다 */
+export function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
 /** 주문 이벤트 공통 — 인사 · 주문 상세 링크 */
@@ -81,6 +87,91 @@ export const TEMPLATES = {
     }),
   },
 };
+
+/**
+ * 배송 완료 (DLV-04 · 11/02 이경석 요청) — 상품주문마다, 교환 재배송이 배송완료되면 같은 상품주문에 한 번 더(eventId 다름 → 메일도 한 번 더)
+ * HTML(브랜드 카드) + 텍스트(HTML 을 못 여는 메일 앱용) 둘 다 보낸다
+ */
+TEMPLATES.OrderItemDelivered = {
+  to: (p) => p.ordererEmail,
+  owner: (p) => (has(p.buyerId) ? `USER#${p.buyerId}` : `ORDER#${p.orderNo}`),
+  mail: (p, front) => {
+    const detail = [
+      ...(has(p.productName) ? [['상품', productLabel(p)]] : []),
+      ...(has(p.courier) || has(p.trackingNo) ? [['택배', [p.courier, p.trackingNo].filter(has).join(' · ')]] : []),
+      ...(has(p.deliveredAt) ? [['배송완료', displayDateTime(p.deliveredAt)]] : []),
+    ];
+    const confirm = has(p.autoConfirmAt)
+      ? `${displayDateTime(p.autoConfirmAt)}에 자동으로 구매확정됩니다. 그 전에 직접 구매확정할 수 있습니다.`
+      : '배송완료 7일 뒤 자동으로 구매확정됩니다. 그 전에 직접 구매확정할 수 있습니다.';
+    const returns = `반품 · 교환은 배송완료 후 ${RETURN_WINDOW_DAYS}일 안에 신청할 수 있습니다.`;
+    const url = `${front}/mypage/orders/${p.orderNo}`;
+    return {
+      subject: has(p.productName) ? `[곳간] 배송이 완료되었습니다 — ${p.productName}` : `[곳간] 주문하신 상품의 배송이 완료되었습니다 — ${p.orderNo}`,
+      text: [
+        `${hello(p)} 주문하신 상품이 도착했습니다.`, '',
+        ...detail.map(([k, v]) => `· ${k} ${v}`),
+        '', confirm, returns, '',
+        orderLink(p, front),
+      ].join('\n'),
+      html: deliveredHtml({ name: has(p.ordererName) ? p.ordererName : '고객', orderNo: p.orderNo, detail, confirm, returns, url }),
+    };
+  },
+};
+
+/** 배송 완료 메일 HTML — 메일 앱 호환을 위해 표(table) + 인라인 스타일만(외부 CSS · 이미지 없음). 색은 쇼핑몰 화면과 같은 값 */
+function deliveredHtml({ name, orderNo, detail, confirm, returns, url }) {
+  const C = { ink: '#141414', ink2: '#3b3b3b', mute: '#8a8780', line: '#e6e3dc', cream: '#f6f4ef', point: '#ff5a1f', moss: '#3f6b4f', mossSoft: '#e5eee7' };
+  const font = "font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;";
+  const rows = detail.map(([k, v], i) => `
+            <tr>
+              <td style="${font}padding:12px 0;${i ? `border-top:1px solid ${C.line};` : ''}width:76px;font-size:13px;color:${C.mute};vertical-align:top;">${esc(k)}</td>
+              <td style="${font}padding:12px 0;${i ? `border-top:1px solid ${C.line};` : ''}font-size:14px;color:${C.ink};font-weight:600;">${esc(v)}</td>
+            </tr>`).join('');
+  return `<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>배송이 완료되었습니다</title></head>
+<body style="margin:0;padding:0;background:${C.cream};">
+  <div style="display:none;max-height:0;overflow:hidden;">주문하신 상품이 도착했습니다 — 주문번호 ${esc(orderNo)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.cream};">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid ${C.line};">
+        <tr><td style="${font}padding:24px 32px;border-bottom:3px solid ${C.ink};">
+          <span style="font-size:24px;font-weight:900;letter-spacing:-1px;color:${C.ink};">곳간</span>
+          <span style="font-size:10px;letter-spacing:3px;color:${C.mute};padding-left:6px;">GOTGAN</span>
+        </td></tr>
+        <tr><td style="${font}padding:32px 32px 8px;">
+          <span style="display:inline-block;padding:4px 10px;background:${C.mossSoft};color:${C.moss};font-size:12px;font-weight:700;">● 배송완료</span>
+          <h1 style="margin:16px 0 0;font-size:24px;line-height:1.35;color:${C.ink};letter-spacing:-0.5px;">배송이 완료되었습니다</h1>
+          <p style="margin:8px 0 0;font-size:15px;line-height:1.6;color:${C.ink2};">${esc(name)}님, 주문하신 상품이 도착했어요.<br>받아 보신 상품은 마음에 드셨나요?</p>
+        </td></tr>
+        <tr><td style="padding:16px 32px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${C.ink};border-bottom:1px solid ${C.line};">
+            <tr><td colspan="2" style="${font}padding:12px 0 0;font-size:12px;color:${C.mute};">주문번호 ${esc(orderNo)}</td></tr>${rows}
+          </table>
+        </td></tr>
+        <tr><td style="padding:20px 32px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.cream};">
+            <tr><td style="${font}padding:16px 18px;font-size:13px;line-height:1.7;color:${C.ink2};">
+              <b style="color:${C.ink};">구매확정 안내</b><br>${esc(confirm)}<br><br>
+              <b style="color:${C.ink};">반품 · 교환</b><br>${esc(returns)}
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td align="center" style="padding:28px 32px 32px;">
+          <a href="${esc(url)}" style="${font}display:inline-block;padding:14px 32px;background:${C.ink};color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">주문 상세 보기 →</a>
+          <p style="${font}margin:12px 0 0;font-size:12px;color:${C.mute};">구매확정하면 적립 예정 포인트가 바로 들어와요.</p>
+        </td></tr>
+        <tr><td style="${font}padding:18px 32px;border-top:1px solid ${C.line};font-size:11px;line-height:1.6;color:${C.mute};">
+          이 메일은 발신 전용입니다. 문의는 곳간 마이페이지의 1:1 상담을 이용해 주세요.<br>
+          <span style="color:${C.point};font-weight:700;">곳간</span> — 작은 가게들의 큰 장터
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
 
 /** 취소 · 반품 완료 (NTF-03) — 문구만 다르고 같은 틀. done: 조사까지 붙인 "취소가" · "반품이" */
 function refundTemplate(done) {
@@ -168,7 +259,7 @@ export function createHandler({ ddb, ses, env, log = console, now = () => new Da
       throw new Error(`받는 주소 없음 — ${envelope.eventType} payload 확인`);
     }
     const keys = { PK: template.owner(p), SK: `${envelope.occurredAt}#${envelope.eventId}` };
-    const { subject, text } = template.mail(p, env.FRONT_URL);
+    const { subject, text, html } = template.mail(p, env.FRONT_URL);
     const at = now();
 
     // ① 선점 — 없거나 SENT 가 아닐 때만
@@ -194,7 +285,10 @@ export function createHandler({ ddb, ses, env, log = console, now = () => new Da
       await ses.send(new SendEmailCommand({
         FromEmailAddress: env.FROM_EMAIL,
         Destination: { ToAddresses: [to] },
-        Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
+        Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: {
+          Text: { Data: text, Charset: 'UTF-8' },
+          ...(html ? { Html: { Data: html, Charset: 'UTF-8' } } : {}), // HTML 템플릿이 있는 이벤트만 — 메일 앱이 HTML 을 고르고, 못 열면 텍스트
+        } } },
       }));
     } catch (e) {
       if (e?.name !== 'MessageRejected') throw e;
