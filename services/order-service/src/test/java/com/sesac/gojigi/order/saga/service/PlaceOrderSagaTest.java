@@ -40,6 +40,7 @@ import com.sesac.gojigi.order.order.service.OrderTxService;
 import com.sesac.gojigi.order.order.service.OrderTxService.PendingOrder;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
+import com.sesac.gojigi.order.saga.service.OrderSagaTxService.PlacedOrder;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +74,7 @@ class PlaceOrderSagaTest {
     private PlaceOrderSaga saga;
 
     private Order order;
+    private PlacedOrder placed;
 
     private static OrderCreateRequest request(long usePoint, OrderCreateRequest.Item... items) {
         return new OrderCreateRequest(List.of(items), "김구매", "010-1234-5678", "06236", "서울 강남구 테헤란로 1", null,
@@ -101,8 +103,8 @@ class PlaceOrderSagaTest {
         given(product.getOptions(List.of(11L))).willReturn(List.of(option(11L, true)));
         given(user.getUser(BUYER_ID)).willReturn(new UserSummaryResponse(BUYER_ID, "buyer@example.com", "김구매", null));
         given(store.getStore(1L)).willReturn(new StoreResponse(1L, 2L, "곳간상회", "ACTIVE", 3_000L, 50_000L));
-        given(orderTx.createPending(any(), any(), any(), any())).willReturn(new PendingOrder(order, List.of(item)));
-        given(sagaTx.startPlaceOrder(order)).willReturn(instance);
+        placed = new PlacedOrder(new PendingOrder(order, List.of(item)), instance);
+        given(sagaTx.startPlaceOrder(any(), any(), any(), any())).willReturn(placed);
     }
 
     @Nested
@@ -170,9 +172,9 @@ class PlaceOrderSagaTest {
         void place_orderNoCollision_retries() {
             // given
             givenPending(0L);
-            given(orderTx.createPending(any(), any(), any(), any()))
+            given(sagaTx.startPlaceOrder(any(), any(), any(), any()))
                     .willThrow(new DataIntegrityViolationException("uk_orders_order_no"))
-                    .willReturn(new PendingOrder(order, List.of(OrderFixtures.item(order))));
+                    .willReturn(placed);
             given(payment.prepare(any())).willReturn(new PaymentResponse("20261022-000123", "pay-1", "READY",
                     64_000L, 0L, null, null));
 
@@ -180,7 +182,7 @@ class PlaceOrderSagaTest {
             saga.place(BUYER_ID, request(0L, item(11L, 2)));
 
             // then
-            verify(orderTx, times(2)).createPending(any(), any(), any(), any());
+            verify(sagaTx, times(2)).startPlaceOrder(any(), any(), any(), any());
         }
     }
 
