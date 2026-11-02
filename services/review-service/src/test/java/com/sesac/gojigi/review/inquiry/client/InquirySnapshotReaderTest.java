@@ -1,38 +1,33 @@
 package com.sesac.gojigi.review.inquiry.client;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.review.inquiry.client.InquirySnapshotReader.InquirySnapshot;
 import com.sesac.gojigi.review.inquiry.client.dto.ProductSummaryResponse;
 import com.sesac.gojigi.review.inquiry.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.review.inquiry.exception.InquiryErrorCode;
+import com.sesac.gojigi.review.inquiry.exception.InquiryException;
 import java.util.List;
-import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.ResourceAccessException;
 
 @ExtendWith(MockitoExtension.class)
 class InquirySnapshotReaderTest {
 
     @Mock
-    private ProductClient productClient;
+    private ProductClientAdapter productClient;
 
     @Mock
-    private UserClient userClient;
+    private UserClientAdapter userClient;
 
     private InquirySnapshotReader reader;
 
@@ -44,24 +39,18 @@ class InquirySnapshotReaderTest {
     @Test
     @DisplayName("상품의 스토어 · 이름 · 첫 사진과 회원 표시 이름을 모은다")
     void read_collectsProductAndWriter() {
-        // given
-        given(productClient.getProduct(101L)).willReturn(ApiResponse.success("ok",
-                new ProductSummaryResponse(101L, 7L, "린넨 오버핏 셔츠", List.of("https://cdn/p1.jpg", "https://cdn/p2.jpg"))));
-        given(userClient.getUser(4L)).willReturn(ApiResponse.success("ok", new UserSummaryResponse(4L, "홍길동", "곳간러버")));
+        given(productClient.getProduct(101L))
+                .willReturn(new ProductSummaryResponse(101L, 7L, "린넨 오버핏 셔츠", List.of("https://cdn/p1.jpg", "https://cdn/p2.jpg")));
+        given(userClient.getUser(4L)).willReturn(new UserSummaryResponse(4L, "홍길동", "곳간러버"));
 
-        // when
-        InquirySnapshot snapshot = reader.read(4L, 101L);
-
-        // then
-        assertThat(snapshot).isEqualTo(new InquirySnapshot(7L, "린넨 오버핏 셔츠", "https://cdn/p1.jpg", "곳간러버"));
+        assertThat(reader.read(4L, 101L)).isEqualTo(new InquirySnapshot(7L, "린넨 오버핏 셔츠", "https://cdn/p1.jpg", "곳간러버"));
     }
 
     @Test
-    @DisplayName("사진이 없는 상품은 대표 사진 null")
+    @DisplayName("사진이 없는 상품은 대표 사진 null, 닉네임 없으면 가린 실명")
     void read_productWithoutImages_nullThumbnail() {
-        given(productClient.getProduct(101L)).willReturn(ApiResponse.success("ok",
-                new ProductSummaryResponse(101L, 7L, "수제 딸기잼", List.of())));
-        given(userClient.getUser(4L)).willReturn(ApiResponse.success("ok", new UserSummaryResponse(4L, "홍길동", null)));
+        given(productClient.getProduct(101L)).willReturn(new ProductSummaryResponse(101L, 7L, "수제 딸기잼", List.of()));
+        given(userClient.getUser(4L)).willReturn(new UserSummaryResponse(4L, "홍길동", null));
 
         InquirySnapshot snapshot = reader.read(4L, 101L);
 
@@ -71,39 +60,22 @@ class InquirySnapshotReaderTest {
     }
 
     @Test
-    @DisplayName("없는 · 삭제된 상품(404) — INQUIRY_PRODUCT_NOT_FOUND, 회원은 조회하지 않는다")
-    void read_productNotFound_throwsInquiryError() {
-        given(productClient.getProduct(101L)).willThrow(HttpClientErrorException.create(HttpStatus.NOT_FOUND, "Not Found", null, null, null));
+    @DisplayName("없는 상품 — 어댑터 예외 그대로, 회원은 조회하지 않는다")
+    void read_productNotFound_skipsUser() {
+        given(productClient.getProduct(999L)).willThrow(new InquiryException(InquiryErrorCode.INQUIRY_PRODUCT_NOT_FOUND));
 
-        assertThatThrownBy(() -> reader.read(4L, 101L))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(InquiryErrorCode.INQUIRY_PRODUCT_NOT_FOUND));
+        assertThat(catchThrowable(() -> reader.read(4L, 999L))).isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(InquiryErrorCode.INQUIRY_PRODUCT_NOT_FOUND));
         verifyNoInteractions(userClient);
     }
 
     @Test
-    @DisplayName("상품 서비스 오류 · 시간 초과 — 502 EXTERNAL_API_ERROR")
-    void read_productFailure_throwsExternalError() {
-        given(productClient.getProduct(101L))
-                .willThrow(HttpServerErrorException.create(HttpStatus.INTERNAL_SERVER_ERROR, "boom", null, null, null))
-                .willThrow(new ResourceAccessException("timeout"));
+    @DisplayName("회원 조회 장애 — 어댑터의 502 그대로")
+    void read_userUnavailable_externalError() {
+        given(productClient.getProduct(101L)).willReturn(new ProductSummaryResponse(101L, 7L, "린넨 오버핏 셔츠", List.of()));
+        given(userClient.getUser(4L)).willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "회원 정보를 불러오지 못했습니다."));
 
-        assertExternalError(() -> reader.read(4L, 101L));
-        assertExternalError(() -> reader.read(4L, 101L));
-    }
-
-    @Test
-    @DisplayName("회원 조회 실패 — 502 EXTERNAL_API_ERROR")
-    void read_userFailure_throwsExternalError() {
-        given(productClient.getProduct(101L)).willReturn(ApiResponse.success("ok",
-                new ProductSummaryResponse(101L, 7L, "린넨 오버핏 셔츠", List.of())));
-        given(userClient.getUser(4L)).willThrow(HttpClientErrorException.create(HttpStatus.NOT_FOUND, "Not Found", null, null, null));
-
-        assertExternalError(() -> reader.read(4L, 101L));
-    }
-
-    private static void assertExternalError(ThrowingCallable call) {
-        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+        assertThat(catchThrowable(() -> reader.read(4L, 101L))).isInstanceOfSatisfying(BusinessException.class,
                 e -> assertThat(e.getErrorCode()).isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR));
     }
 }
