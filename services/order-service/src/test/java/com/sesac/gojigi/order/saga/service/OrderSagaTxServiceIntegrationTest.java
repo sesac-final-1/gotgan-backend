@@ -2,6 +2,8 @@ package com.sesac.gojigi.order.saga.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.willThrow;
 
 import com.sesac.gojigi.order.TestcontainersConfiguration;
 import com.sesac.gojigi.order.order.client.dto.ProductOptionResponse;
@@ -14,7 +16,13 @@ import com.sesac.gojigi.order.order.exception.OrderException;
 import com.sesac.gojigi.order.order.service.OrderPricing;
 import com.sesac.gojigi.order.order.service.OrderTxService;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
+import com.sesac.gojigi.order.saga.entity.SagaStatus;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
+import com.sesac.gojigi.order.saga.repository.SagaInstanceRepository;
+import com.sesac.gojigi.order.saga.service.OrderSagaTxService.PlacedOrder;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -31,13 +39,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 결제 대기 만료 · Saga 복구 대상 고르기 · 결제 확인용 조회 — MySQL 8.4 + Flyway */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderSagaTxService.class,
+@Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderSagaTxService.class, SimpleMeterRegistry.class,
         OrderSagaTxServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 서비스 메서드마다 실제로 커밋 (스케줄러와 같은 조건)
@@ -59,15 +68,75 @@ class OrderSagaTxServiceIntegrationTest {
     @Autowired private OrderTxService orderTx;
     @Autowired private OrderSagaTxService sagaTx;
     @Autowired private JdbcTemplate jdbc;
+    @MockitoSpyBean private SagaInstanceRepository sagaInstanceRepository;
+    @Autowired private MeterRegistry meterRegistry;
 
-    private Order order() {
-        OrderCreateRequest request = new OrderCreateRequest(List.of(new OrderCreateRequest.Item(81L, 1)), "김구매",
-                "010-1234-5678", "06236", "서울 강남구 테헤란로 1", null, null, 0L);
-        OrderPricing.Result priced = OrderPricing.calculate(List.of(new OrderPricing.Line(new ProductOptionResponse(81L,
+    private static final UserSummaryResponse BUYER_SUMMARY = new UserSummaryResponse(BUYER, "buyer@example.com", "홍길동", null);
+    private static final OrderCreateRequest REQUEST = new OrderCreateRequest(List.of(new OrderCreateRequest.Item(81L, 1)),
+            "김구매", "010-1234-5678", "06236", "서울 강남구 테헤란로 1", null, null, 0L);
+    private static final Map<Long, String> STORE_NAMES = Map.of(801L, "곳간상회");
+
+    private static OrderPricing.Result priced() {
+        return OrderPricing.calculate(List.of(new OrderPricing.Line(new ProductOptionResponse(81L,
                         81L, "상품 81", null, 801L, 301L, 3L, 10_000L, 0L, 10_000L, 100, true, null), 1)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), 0L);
-        return orderTx.createPending(new UserSummaryResponse(BUYER, "buyer@example.com", "홍길동", null), request,
-                priced, Map.of(801L, "곳간상회")).order();
+    }
+
+    private Order order() {
+        return orderTx.createPending(BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES).order();
+    }
+
+    private long orderCount() {
+        return jdbc.queryForObject("select count(*) from orders", Long.class);
+    }
+
+    @Test
+    @DisplayName("보상 · 복구 지표 (B-경-1) — 보상 완료 · 재시도 예약 · 한도 초과 FAILED 를 type 별로 센다")
+    void counters() {
+        // given
+        double compensated = count("saga.compensated");
+        double retry = count("saga.retry");
+        double failed = count("saga.failed");
+        SagaInstance done = saga(SagaStep.PAYMENT_READY);
+        SagaInstance stuck = saga(SagaStep.PAYMENT_READY);
+
+        // when — 보상 완료 1건, 다른 1건은 재시도 한도까지
+        sagaTx.compensated(done.getId());
+        int attempts = 0;
+        while (sagaInstanceRepository.findById(stuck.getId()).orElseThrow().getStatus() != SagaStatus.FAILED) {
+            sagaTx.scheduleRetry(stuck.getId(), "PAYMENT_CANCEL_PENDING");
+            attempts++;
+        }
+
+        // then
+        assertThat(count("saga.compensated")).isEqualTo(compensated + 1);
+        assertThat(count("saga.retry")).isEqualTo(retry + attempts - 1);
+        assertThat(count("saga.failed")).isEqualTo(failed + 1);
+    }
+
+    private double count(String name) {
+        Counter counter = meterRegistry.find(name).tag("type", "PLACE_ORDER").counter();
+        return counter == null ? 0 : counter.count();
+    }
+
+    @Test
+    @DisplayName("주문 PENDING + Saga 는 한 트랜잭션 (A-경-4) — 함께 저장되고, Saga 저장이 실패하면 주문도 남지 않는다")
+    void startPlaceOrder_savesOrderAndSagaTogether() {
+        // when
+        PlacedOrder placed = sagaTx.startPlaceOrder(BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES);
+
+        // then
+        assertThat(sagaTx.getPlaceOrder(placed.pending().order().getId()).getSagaId())
+                .isEqualTo(placed.saga().getSagaId());
+
+        // given — Saga 저장 직전에 파드가 죽은 것과 같은 실패
+        long before = orderCount();
+        willThrow(new IllegalStateException("Saga 저장 실패")).given(sagaInstanceRepository).save(any());
+
+        // when · then
+        assertThatThrownBy(() -> sagaTx.startPlaceOrder(BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(orderCount()).isEqualTo(before);
     }
 
     /** step 까지 진행한 STARTED Saga */

@@ -14,6 +14,79 @@ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 
 const won = (n) => `${Number(n).toLocaleString('ko-KR')}원`;
 
+// ── 메일 HTML 틀 — order-notification/src/notify.js 의 mailHtml 과 같은 코드(Lambda 가 따로 배포돼 복사). 바꾸면 둘 다 바꾼다
+
+/** HTML 본문에 넣는 값은 모두 이스케이프 — 스토어명은 판매자가 쓴 글자다 */
+export function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+const COLOR = { ink: '#141414', ink2: '#3b3b3b', mute: '#8a8780', line: '#e6e3dc', cream: '#f6f4ef', point: '#ff5a1f', moss: '#3f6b4f', mossSoft: '#e5eee7', rust: '#b4371f', rustSoft: '#f8e4de', pointSoft: '#ffe9df' };
+// 배지 색 — good: 완료 · 승인 · 출발 / info: 주문 · 보완요청 / bad: 취소 · 반품 · 반려
+const TONE = { good: [COLOR.mossSoft, COLOR.moss], info: [COLOR.pointSoft, COLOR.point], bad: [COLOR.rustSoft, COLOR.rust] };
+const FONT = "font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;";
+export const FOOTNOTE = { buyer: '문의는 곳간 마이페이지의 1:1 채팅을 이용해 주세요.', seller: '문의는 판매자 센터 채팅의 "운영팀에 문의"를 이용해 주세요.' };
+
+/**
+ * 곳간 메일 공통 HTML — 메일 앱 호환을 위해 표(table) + 인라인 스타일만(외부 CSS · 이미지 · 웹폰트 없음). 색은 쇼핑몰 화면과 같은 값
+ * 값은 전부 글자로 받아 여기서 이스케이프한다. rows: [[이름, 값, 강조?]] · notes: [[제목, 문장]] · cta: { label, url }
+ */
+export function mailHtml({ badge, tone = 'good', title, intro = [], caption, rows = [], notes = [], cta, ctaHint, footnote = FOOTNOTE.buyer }) {
+  const C = COLOR;
+  const [badgeBg, badgeFg] = TONE[tone];
+  const rowHtml = rows.map(([k, v, strong], i) => `
+            <tr>
+              <td style="${FONT}padding:12px 0;${i ? `border-top:1px solid ${C.line};` : ''}width:96px;font-size:13px;color:${C.mute};vertical-align:top;">${esc(k)}</td>
+              <td style="${FONT}padding:12px 0;${i ? `border-top:1px solid ${C.line};` : ''}font-size:${strong ? 17 : 14}px;color:${strong ? C.point : C.ink};font-weight:${strong ? 800 : 600};">${esc(v)}</td>
+            </tr>`).join('');
+  const table = rows.length ? `
+        <tr><td style="padding:16px 32px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid ${C.ink};border-bottom:1px solid ${C.line};">
+            ${caption ? `<tr><td colspan="2" style="${FONT}padding:12px 0 0;font-size:12px;color:${C.mute};">${esc(caption)}</td></tr>` : ''}${rowHtml}
+          </table>
+        </td></tr>` : '';
+  const noteHtml = notes.length ? `
+        <tr><td style="padding:20px 32px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.cream};">
+            <tr><td style="${FONT}padding:16px 18px;font-size:13px;line-height:1.7;color:${C.ink2};">
+              ${notes.map(([h, body]) => `<b style="color:${C.ink};">${esc(h)}</b><br>${esc(body)}`).join('<br><br>\n              ')}
+            </td></tr>
+          </table>
+        </td></tr>` : '';
+  const ctaHtml = cta ? `
+        <tr><td align="center" style="padding:28px 32px 32px;">
+          <a href="${esc(cta.url)}" style="${FONT}display:inline-block;padding:14px 32px;background:${C.ink};color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">${esc(cta.label)} →</a>
+          ${ctaHint ? `<p style="${FONT}margin:12px 0 0;font-size:12px;color:${C.mute};">${esc(ctaHint)}</p>` : ''}
+        </td></tr>` : '<tr><td style="padding:16px 0 0;"></td></tr>';
+  return `<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title></head>
+<body style="margin:0;padding:0;background:${C.cream};">
+  <div style="display:none;max-height:0;overflow:hidden;">${esc(intro[0] ?? title)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.cream};">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid ${C.line};">
+        <tr><td style="${FONT}padding:24px 32px;border-bottom:3px solid ${C.ink};">
+          <span style="font-size:24px;font-weight:900;letter-spacing:-1px;color:${C.ink};">곳간</span>
+          <span style="font-size:10px;letter-spacing:3px;color:${C.mute};padding-left:6px;">GOTGAN</span>
+        </td></tr>
+        <tr><td style="${FONT}padding:32px 32px 8px;">
+          <span style="display:inline-block;padding:4px 10px;background:${badgeBg};color:${badgeFg};font-size:12px;font-weight:700;">● ${esc(badge)}</span>
+          <h1 style="margin:16px 0 0;font-size:24px;line-height:1.35;color:${C.ink};letter-spacing:-0.5px;">${esc(title)}</h1>
+          ${intro.length ? `<p style="margin:8px 0 0;font-size:15px;line-height:1.6;color:${C.ink2};">${intro.map(esc).join('<br>')}</p>` : ''}
+        </td></tr>${table}${noteHtml}${ctaHtml}
+        <tr><td style="${FONT}padding:18px 32px;border-top:1px solid ${C.line};font-size:11px;line-height:1.6;color:${C.mute};">
+          이 메일은 발신 전용입니다. ${esc(footnote)}<br>
+          <span style="color:${C.point};font-weight:700;">곳간</span> — 작은 가게들의 큰 장터
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+
 /** CSV 한 칸 — 쉼표 · 따옴표 · 줄바꿈이 있으면 따옴표로 감싸고 따옴표는 두 번 (RFC 4180) */
 export function csvCell(value) {
   const s = value == null ? '' : String(value);
@@ -50,7 +123,22 @@ export function buildEmail(p, frontUrl) {
     '',
     `정산 명세서(CSV)는 판매자 센터 정산 화면에서 받을 수 있습니다: ${frontUrl}/seller/settlements`,
   ].join('\n');
-  return { subject, text };
+  const count = (p.items ?? []).length;
+  const html = mailHtml({
+    badge: '지급완료', tone: 'good', title: '정산금이 지급되었습니다',
+    intro: [`${p.storeName} 판매자님, 이번 주 정산금이 지급되었습니다.`],
+    caption: `${p.week} (${p.weekStart} ~ ${p.weekEnd})`,
+    rows: [
+      ['판매금액', `${won(p.salesAmt)} (${count}건)`],
+      ['판매수수료', `- ${won(p.commissionAmt)}`],
+      ['결제수수료', `- ${won(p.paymentFeeAmt)}`],
+      ...(p.paidAt ? [['지급일시', displayDateTime(p.paidAt)]] : []),
+      ['지급액', won(p.payoutAmt), true],
+    ],
+    notes: [['정산 명세서', '상품주문별 명세서(CSV)는 판매자 센터 정산 화면에서 받을 수 있습니다.']],
+    cta: { label: '정산 내역 보기', url: `${frontUrl}/seller/settlements` }, footnote: FOOTNOTE.seller,
+  });
+  return { subject, text, html };
 }
 
 export function reportKey(p) {
@@ -95,12 +183,15 @@ export function createHandler({ ddb, s3, ses, env, log = console }) {
 
     // ③ 메일 — SES 가 받는 주소를 거절하면(MessageRejected: 샌드박스의 미인증 주소 등) 다시 보내도 같으므로 재전달하지 않고 REJECTED 로 남긴다
     //   (CSV 는 이미 올라가 있어 판매자 센터 정산 화면에서 받을 수 있다)
-    const { subject, text } = buildEmail(p, env.FRONT_URL);
+    const { subject, text, html } = buildEmail(p, env.FRONT_URL);
     try {
       await ses.send(new SendEmailCommand({
         FromEmailAddress: env.FROM_EMAIL,
         Destination: { ToAddresses: [p.sellerEmail] },
-        Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } },
+        Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: {
+          Text: { Data: text, Charset: 'UTF-8' },
+          Html: { Data: html, Charset: 'UTF-8' }, // 메일 앱이 HTML 을 고르고, 못 열면 텍스트
+        } } },
       }));
     } catch (e) {
       if (e?.name !== 'MessageRejected') throw e;

@@ -133,3 +133,31 @@ test('메일 — 제목에 주차 · 지급액, 본문에 판매자 정산 화�
   assert.match(text, /판매금액 59,000원 \(1건\)/);
   assert.equal(reportKey(payload), 'reports/3/2026-W44.csv');
 });
+
+test('메일 HTML — 주문 알림과 같은 틀(로고 · 배지 · 제목 · 금액 표 · 지급액 강조 · 정산 화면 버튼), 스토어명 이스케이프', () => {
+  const { html } = buildEmail({ ...payload, storeName: '곳간 & <상회>' }, ENV.FRONT_URL);
+
+  assert.ok(html.startsWith('<!doctype html>'));
+  assert.ok(html.includes('>곳간</span>'));
+  assert.ok(html.includes('● 지급완료</span>'));
+  assert.ok(html.includes('>정산금이 지급되었습니다</h1>'));
+  assert.ok(html.includes('곳간 &amp; &lt;상회&gt; 판매자님'));
+  assert.ok(!html.includes('<상회>'));
+  assert.ok(html.includes('2026-W44 (2026-10-26 ~ 2026-11-01)'));
+  assert.ok(html.includes('59,000원 (1건)'));
+  assert.ok(html.includes('- 6,490원'));
+  assert.ok(html.includes('2026-11-05 10:00'));
+  assert.match(html, /font-size:17px;color:#ff5a1f;font-weight:800;">51,212원</);
+  assert.ok(html.includes('href="https://gotgan-ashy.vercel.app/seller/settlements"'));
+  assert.ok(html.includes('판매자 센터 채팅'));
+});
+
+test('SES 본문은 HTML + 텍스트 둘 다', async () => {
+  const { calls, deps } = fake();
+  await createHandler(deps)({ Records: [record(envelope())] });
+
+  const body = calls.find((c) => c.type === 'SendEmailCommand').input.Content.Simple.Body;
+  assert.ok(body.Html.Data.startsWith('<!doctype html>'));
+  assert.equal(body.Html.Charset, 'UTF-8');
+  assert.ok(body.Text.Data.includes('정산금이 지급되었습니다'));
+});

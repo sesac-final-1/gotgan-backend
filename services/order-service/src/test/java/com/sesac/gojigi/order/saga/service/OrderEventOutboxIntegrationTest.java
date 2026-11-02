@@ -23,6 +23,7 @@ import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.service.OrderEventRecorder;
 import com.sesac.gojigi.order.order.service.OrderPricing;
 import com.sesac.gojigi.order.order.service.OrderTxService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -49,7 +50,7 @@ import tools.jackson.databind.json.JsonMapper;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderEventRecorder.class, CancelItemTxService.class,
-        ClaimEventRecorder.class, ClaimTxService.class, OrderSagaTxService.class, EventOutboxService.class,
+        ClaimEventRecorder.class, ClaimTxService.class, OrderSagaTxService.class, SimpleMeterRegistry.class, EventOutboxService.class,
         SchedulingConfig.class, OrderEventOutboxIntegrationTest.Beans.class })
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 서비스 메서드마다 실제로 커밋 (AFTER_COMMIT 발행이 돌게)

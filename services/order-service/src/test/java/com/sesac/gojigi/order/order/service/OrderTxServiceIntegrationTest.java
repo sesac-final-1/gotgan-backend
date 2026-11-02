@@ -21,6 +21,7 @@ import com.sesac.gojigi.order.saga.entity.SagaStatus;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
 import com.sesac.gojigi.order.saga.repository.SagaInstanceRepository;
 import com.sesac.gojigi.order.saga.service.OrderSagaTxService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -46,7 +47,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** 주문 PENDING 저장(주문번호 · 스냅샷 · 배송비) · 상태 변경 · Saga 기록 — MySQL 8.4 + Flyway */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderSagaTxService.class,
+@Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderSagaTxService.class, SimpleMeterRegistry.class,
         OrderTxServiceIntegrationTest.FixedClock.class })
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 서비스 메서드마다 실제로 커밋 (Saga 와 같은 조건)
