@@ -246,6 +246,7 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
 | `cart:{userId}` | order | 장바구니 Hash — **캐시**, 원본은 MySQL `orderdb.cart_item`. 쓰기는 MySQL 먼저 → Redis 갱신(실패 무시 · WARN), 읽기는 Redis → 미스 · 장애 시 MySQL. 서킷 인스턴스 `redisCart` (Must) |
 | `blacklist:{jti}` | gateway | 로그아웃한 Access Token 즉시 무효화 — Redis 전용, 원본 없음 (Could) |
 | `blocked:user:{userId}` | user(쓰기) · gateway(읽기) | 탈퇴 회원의 남은 Access Token 차단 — 값은 사유(`withdrawn`, 이용정지 시 `suspended` 예정), TTL = Keycloak Access Token 수명(`app.auth.blocked-user-ttl`, realm `accessTokenLifespan` 과 같이 바꿈). Redis 전용, 원본 없음. gateway 는 Redis 장애 시 확인 없이 통과(fail-open, 서킷 `redisBlocklist`), user 는 저장 실패해도 탈퇴 유지(WARN) |
+| `request_rate_limiter.{라우트.키}.tokens` · `.timestamp` | gateway | 요청 제한 토큰 버킷 — Spring Cloud Gateway `RedisRateLimiter` 가 만드는 이름(우리 규칙 밖, 라이브러리 고정). 키는 `RateLimitKeyResolver`(`user:{userId}` · `ip:{X-Vercel-Forwarded-For}` · `direct`), TTL 자동(버킷이 다 차는 시간의 2배). Redis 장애면 통과(fail-open) |
 
 - 한 Redis를 여러 서비스가 공유하므로 **다른 서비스의 키 접두어 사용 금지** — 예외는 표에 쓰기 · 읽기 서비스를 함께 적은 키(`blocked:user:`)만
 - 리프레시 토큰은 Keycloak이 관리 — Redis에 `refresh:` 키를 만들지 않음. 상품 캐시 키도 없음
@@ -351,7 +352,7 @@ return ResponseEntity.badRequest().body(ApiResponse.error(...));
 | 403 | 권한 부족(역할) — 게이트웨이 / 소유권 위반 — 서비스 |
 | 404 | 리소스 없음 |
 | 409 | 중복 · 상태 충돌 (이미 발주확인된 상품주문, 재고 부족) |
-| 429 | 요청 빈도 제한 |
+| 429 | 요청 빈도 제한 — 게이트웨이(`RequestRateLimiter`), 본문 없이 `X-RateLimit-*` 헤더만 |
 | 500 | 서버 오류 |
 | 502 / 504 | 다른 서비스 · 포트원 응답 실패 · 타임아웃 |
 
@@ -386,6 +387,7 @@ RuntimeException
 - `GlobalExceptionHandler`가 `BusinessException`을 `ApiResponse.error()`로 변환 → **서비스는 throw만, 컨트롤러는 try-catch 없음**
 - Spring 표준 예외(`MethodArgumentNotValidException` · `MethodArgumentTypeMismatchException` · `MissingServletRequestParameterException` · `HttpMessageNotReadableException`)도 400 `INVALID_INPUT`으로 변환
 - 게이트웨이의 401 · 403도 같은 봉투 형식(`UNAUTHORIZED` · `FORBIDDEN`)으로 응답
+- 예외: 게이트웨이 요청 제한 **429 는 본문이 없다**(내장 `RequestRateLimiter` 그대로) — 프론트는 상태 코드 429 로 "잠시 후 다시" 안내, 재시도하지 않음. 한도는 gateway `app.rate-limit`(로그인 · 가입 `/api/auth/**` 키당 분당 10회, 그 밖의 API 키당 초당 20회), 제외는 포트원 웹훅 · Keycloak 화면 · 채팅 WebSocket
 
 **에러 코드 네이밍**
 
