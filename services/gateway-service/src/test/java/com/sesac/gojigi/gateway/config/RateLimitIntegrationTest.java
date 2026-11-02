@@ -21,10 +21,13 @@ import org.testcontainers.containers.GenericContainer;
 
 /**
  * 요청 제한 — 실제 Redis(토큰 버킷 Lua) · 라우트 설정(yml 앵커) · 키 규칙까지. 라우팅 대상 서비스는 띄우지 않는다(429 가 아니면 통과한 것).
- * default 한도는 테스트에서 3회로 줄이고 충전을 아주 느리게 — 반복 중에 토큰이 다시 차서 결과가 흔들리지 않게.
+ * 충전을 아주 느리게(요청 1건 = 토큰 100개, 초당 1개 충전) — 반복 중에 토큰이 다시 차서 결과가 흔들리지 않게.
+ * auth 는 운영과 같은 30회(3000 ÷ 100), default 는 3회로 줄인다.
  */
 @SpringBootTest(properties = {"spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:1/realms/gotgan",
         "management.tracing.sampling.probability=0",
+        "app.rate-limit.auth.replenish-rate=1", "app.rate-limit.auth.burst-capacity=3000",
+        "app.rate-limit.auth.requested-tokens=100",
         "app.rate-limit.default.replenish-rate=1", "app.rate-limit.default.burst-capacity=300",
         "app.rate-limit.default.requested-tokens=100"})
 class RateLimitIntegrationTest {
@@ -71,23 +74,39 @@ class RateLimitIntegrationTest {
     }
 
     @Test
-    @DisplayName("로그인 — 같은 Vercel IP 는 10회까지 통과, 11번째 429 + X-RateLimit 헤더. 다른 IP · 직접 호출(direct)은 따로 센다")
-    void auth_perIp_tenPerMinute() {
-        List<HttpStatus> sameIp = login(10, "210.205.48.210");
+    @DisplayName("로그인 — 같은 Vercel IP 는 30회까지 통과, 31번째 429 + X-RateLimit 헤더. 다른 IP · 직접 호출(direct)은 따로 센다")
+    void auth_perIp_thirtyPerMinute() {
+        List<HttpStatus> sameIp = login(30, "210.205.48.210");
 
         assertThat(sameIp).doesNotContain(HttpStatus.TOO_MANY_REQUESTS);
         client.post().uri("/api/auth/login").header("X-Vercel-Forwarded-For", "210.205.48.210").exchange()
                 .expectStatus().isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
-                .expectHeader().exists("X-RateLimit-Remaining")   // 남은 "토큰" 수 — 요청 1건이 6개를 써서 6 미만이면 거절(그사이 충전돼 0 이 아닐 수 있음)
+                .expectHeader().exists("X-RateLimit-Remaining")   // 남은 "토큰" 수 — 요청 1건이 여러 개를 써서 모자라면 거절(그사이 충전돼 0 이 아닐 수 있음)
                 .expectHeader().exists("X-RateLimit-Burst-Capacity");
         assertThat(login(1, "203.0.113.7")).doesNotContain(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(login(1, null)).doesNotContain(HttpStatus.TOO_MANY_REQUESTS);
     }
 
     @Test
+    @DisplayName("가입은 로그인과 같은 엄격한 버킷, refresh · 로그아웃 · 이메일 확인은 따로(일반 한도) — 로그인을 다 써도 재발급은 된다")
+    void auth_strictOnlyForLoginAndSignup() {
+        login(30, "210.205.48.210");
+
+        client.post().uri("/api/auth/signup").header("X-Vercel-Forwarded-For", "210.205.48.210").exchange()
+                .expectStatus().isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        for (String path : List.of("/api/auth/refresh", "/api/auth/logout")) {
+            assertThat(client.post().uri(path).header("X-Vercel-Forwarded-For", "210.205.48.210").exchange()
+                    .returnResult(Void.class).getStatus()).as(path).isNotEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        }
+        assertThat(client.get().uri("/api/auth/email-availability?email=a@b.com")
+                .header("X-Vercel-Forwarded-For", "210.205.48.210").exchange()
+                .returnResult(Void.class).getStatus()).isNotEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @Test
     @DisplayName("X-Forwarded-For 를 바꿔 보내도 우회되지 않는다 — 직접 호출은 모두 공용 키 direct")
     void auth_forwardedForSpoof_doesNotBypass() {
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 30; i++) {
             client.post().uri("/api/auth/login").header("X-Forwarded-For", "1.2.3." + i).exchange();
         }
 
