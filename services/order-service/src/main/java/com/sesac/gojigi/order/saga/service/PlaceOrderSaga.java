@@ -32,6 +32,7 @@ import com.sesac.gojigi.order.order.service.OrderTxService.PendingOrder;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
 import com.sesac.gojigi.order.saga.entity.SagaStatus;
 import com.sesac.gojigi.order.saga.entity.SagaStep;
+import com.sesac.gojigi.order.saga.service.OrderSagaTxService.PlacedOrder;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -68,16 +70,17 @@ public class PlaceOrderSaga {
     private final PaymentClientAdapter payment;
 
     public OrderCreateResponse place(Long buyerId, OrderCreateRequest request) {
-        // ① 주문 PENDING — 가격 · 배송비 · 포인트 배분은 서버가 다시 계산 (여기서 실패하면 주문도 Saga 도 없음)
+        // ① 주문 PENDING + Saga — 가격 · 배송비 · 포인트 배분은 서버가 다시 계산 (여기서 실패하면 주문도 Saga 도 없음)
         // Mapping Product
         List<OrderPricing.Line> lines = lines(request);
         UserSummaryResponse buyer = user.getUser(buyerId);  // 회원 정보 가져오기
         Map<Long, StoreResponse> stores = stores(lines);   // 스토어 정보 가져오기(중복 제거) — 스토어명 · 배송비 정책
         OrderPricing.Result priced = OrderPricing.calculate(lines, id -> stores.get(id).shippingPolicy(), request.usePoint());
-        PendingOrder pending = createPending(buyer, request, priced, storeNames(stores));   // order tx
+        PlacedOrder placed = createPending(buyer, request, priced, storeNames(stores));   // 주문 + Saga 한 트랜잭션
         // Ready to Saga
+        PendingOrder pending = placed.pending();
         Order order = pending.order();
-        SagaInstance saga = sagaTx.startPlaceOrder(order);
+        SagaInstance saga = placed.saga();
         OrderLogContext.put(order.getOrderNo(), saga.getSagaId());  // Saga Log
 
         List<StockItem> stockItems = request.items().stream()   // Parse request to Product Object
@@ -130,9 +133,33 @@ public class PlaceOrderSaga {
             throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);   // 실패 · 보상 중인 주문
         }
         OrderLogContext.put(orderNo, saga.getSagaId());
-        settlePayment(saga, order);
+        try {
+            settlePayment(saga, order);
+        } catch (OrderException | OptimisticLockingFailureException e) {
+            if (!paidByOther(buyerId, orderNo, saga, e)) {
+                throw e;
+            }
+            log.info("결제 확인 — 다른 요청이 먼저 PAID 로 확정, 같은 응답");
+            return new OrderPaymentConfirmResponse(orderNo, OrderStatus.PAID, order.getPayAmt());
+        }
         log.info("결제 확인 · 주문 PAID - payAmt={}", order.getPayAmt());
         return new OrderPaymentConfirmResponse(orderNo, OrderStatus.PAID, order.getPayAmt());
+    }
+
+    /**
+     * 두 번 클릭 · 결제 대기 만료와 동시 (A-경-2) — 둘 다 PENDING 을 보고 들어와 나중 markPaid 가
+     * ORDER_INVALID_STATUS(먼저 커밋됨) · 낙관 락(동시)으로 실패한다. 다시 읽어 PAID 면 성공으로 본다.
+     * 나중 요청의 advance(PAYMENT_VERIFIED) 가 완료된 Saga 단계를 되돌렸을 수 있어 complete 로 다시 맞춘다.
+     */
+    private boolean paidByOther(Long buyerId, String orderNo, SagaInstance saga, RuntimeException e) {
+        if (e instanceof OrderException rejected && rejected.getErrorCode() != OrderErrorCode.ORDER_INVALID_STATUS) {
+            return false;   // 미결제 · 결제 실패는 그대로 응답
+        }
+        if (orderTx.getMine(buyerId, orderNo).getStatus() != OrderStatus.PAID) {
+            return false;   // 보상이 먼저 FAILED 로 선점 (A-경-1) — 409 그대로
+        }
+        sagaTx.complete(saga.getId());
+        return true;
     }
 
     /**
@@ -277,11 +304,11 @@ public class PlaceOrderSaga {
         return names;
     }
 
-    private PendingOrder createPending(UserSummaryResponse buyer, OrderCreateRequest request, OrderPricing.Result priced,
-                                       Map<Long, String> storeNames) {
+    private PlacedOrder createPending(UserSummaryResponse buyer, OrderCreateRequest request, OrderPricing.Result priced,
+                                      Map<Long, String> storeNames) {
         for (int attempt = 1; ; attempt++) {
             try {
-                return orderTx.createPending(buyer, request, priced, storeNames);
+                return sagaTx.startPlaceOrder(buyer, request, priced, storeNames);
             } catch (DataIntegrityViolationException e) {
                 if (attempt >= ORDER_NO_ATTEMPTS) {
                     throw e;
