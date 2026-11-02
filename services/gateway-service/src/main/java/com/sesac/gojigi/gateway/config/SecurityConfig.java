@@ -49,6 +49,10 @@ public class SecurityConfig {
                         .pathMatchers("/api/auth/**").permitAll()                                   // 가입 · 로그인 · refresh (user-service 가 Keycloak 대리 호출)
                         .pathMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()          // 포트원 웹훅 (서명은 payment 가 검증)
                         .pathMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
+                        // Keycloak 사용자 계정 콘솔 · 동적 클라이언트 등록은 막는다 (B-경-9) — 회원 정보 · 비밀번호는 user-service API 로만 바꾼다
+                        // (계정 콘솔에서 바꾸면 Keycloak 과 userdb 이메일이 어긋남). 아래 permitAll 보다 먼저 와야 한다
+                        .pathMatchers("/realms/gotgan/account", "/realms/gotgan/account/**",
+                                "/realms/gotgan/clients-registrations/**").denyAll()
                         .pathMatchers("/realms/gotgan/**", "/resources/**").permitAll()                // Keycloak 로그인 · 소셜 복귀 화면 (라우트 keycloak)
                         .pathMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**",
                                 "/api/stores/**", "/api/reviews/**", "/api/inquiries/**").permitAll()

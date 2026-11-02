@@ -21,6 +21,12 @@ public class GatewayErrorResponder {
 
     public static final String UNAUTHORIZED = "UNAUTHORIZED";
     public static final String FORBIDDEN = "FORBIDDEN";
+    // 아래는 GatewayErrorWebExceptionHandler — common-web CommonErrorCode 와 같은 코드 문자열 (gateway 는 WebFlux 라 common-web 을 쓰지 않음)
+    public static final String INVALID_INPUT = "INVALID_INPUT";
+    public static final String NOT_FOUND = "NOT_FOUND";
+    public static final String METHOD_NOT_ALLOWED = "METHOD_NOT_ALLOWED";
+    public static final String EXTERNAL_API_ERROR = "EXTERNAL_API_ERROR";
+    public static final String GLOBAL_ERROR = "GLOBAL_ERROR";
 
     private final JsonMapper jsonMapper;
 

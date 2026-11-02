@@ -9,6 +9,11 @@ spring:
     gateway:
       server:
         webflux:
+          # 업무 서비스 호출 타임아웃 (A-경-6c) — 응답이 없으면 계속 기다리지 않고 504, 연결이 안 되면 502 (GatewayErrorWebExceptionHandler 가 봉투로).
+          # 라우트 metadata 의 response-timeout(ms)이 이 값을 덮는다 — order 15초(주문 Saga 동기 호출 3개) · SSE 스트림 -1(끄기)
+          httpclient:
+            connect-timeout: 2000           # ms — 서비스 간 호출 공통 연결 2초와 같게
+            response-timeout: 10s           # 서비스 간 읽기 3초 + 재시도 여유
           # 실시간 알림(SSE, NTF-08 · 10/27)은 화면이 api.gotgan.click 에 직접 연결한다 — Vercel rewrite 는 장시간 스트리밍 응답에 맞지 않아서.
           # 그래서 이 경로만 프론트 출처(운영 · Vercel 미리보기 · 로컬 Vite)의 교차 출처 GET 을 허용(Authorization 헤더 → preflight, 보안 설정이 OPTIONS 통과).
           # 나머지 API 는 지금처럼 Vercel rewrite(같은 출처)라 CORS 를 열지 않는다
@@ -75,7 +80,9 @@ spring:
             - id: order-service
               uri: ${ORDER_SERVICE_URI:http://localhost:8084}
               predicates:
-                - Path=/api/carts/**,/api/orders/**,/api/seller/order-items/**,/api/seller/claims/**
+                - Path=/api/carts/**,/api/orders/**,/api/claims/**,/api/seller/order-items/**,/api/seller/claims/**   # /api/claims — 내 클레임 목록 · 철회 (A-경-7)
+              metadata:
+                response-timeout: 15000     # 주문 생성 Saga 가 포인트 → 재고 → 결제 준비를 차례로 동기 호출(각 3초) — 전체 10초보다 길게
               filters:
                 - *rate-limit-default
             - id: settlement-service
@@ -94,12 +101,20 @@ spring:
                 - Path=/api/reviews/**,/api/inquiries/**,/api/seller/reviews/**,/api/seller/inquiries/**
               filters:
                 - *rate-limit-default
+            - id: admin-notification-stream # 실시간 알림 SSE — 연결을 계속 유지하는 응답(하트비트 25초)이라 응답 타임아웃을 끈다. admin-service 보다 먼저
+              uri: ${ADMIN_SERVICE_URI:http://localhost:8088}
+              predicates:
+                - Path=/api/notifications/stream
+              metadata:
+                response-timeout: -1
+              filters:
+                - *rate-limit-default       # 연결 1번이 요청 1건이라 함께 세도 됨
             - id: admin-service
               uri: ${ADMIN_SERVICE_URI:http://localhost:8088}
               predicates:
                 - Path=/api/admin/**,/api/reports/**,/api/notifications/**   # 신고 접수(구매자 · 판매자) · 알림 센터(로그인한 누구나 — NTF-08, 10/27)도 admin-service
               filters:
-                - *rate-limit-default       # SSE 스트림은 연결 1번이 요청 1건이라 함께 세도 됨
+                - *rate-limit-default
             - id: keycloak                  # 소셜 로그인 — 브라우저가 Keycloak 로그인 · 제공자 복귀(broker) 화면으로 온다. gotgan realm 과 화면 리소스만 (관리 콘솔 · master realm 은 열지 않음)
               uri: ${KEYCLOAK_URI:http://localhost:8180}   # 요청 제한 없음 — 화면 리소스(js · css) 요청이 많고, 로그인 시도는 Keycloak 브루트포스 잠금이 막음
               predicates:
