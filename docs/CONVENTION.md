@@ -387,7 +387,7 @@ RuntimeException
 - `GlobalExceptionHandler`가 `BusinessException`을 `ApiResponse.error()`로 변환 → **서비스는 throw만, 컨트롤러는 try-catch 없음**
 - Spring 표준 예외(`MethodArgumentNotValidException` · `MethodArgumentTypeMismatchException` · `MissingServletRequestParameterException` · `HttpMessageNotReadableException`)도 400 `INVALID_INPUT`으로 변환
 - 게이트웨이의 401 · 403도 같은 봉투 형식(`UNAUTHORIZED` · `FORBIDDEN`)으로 응답
-- 예외: 게이트웨이 요청 제한 **429 는 본문이 없다**(내장 `RequestRateLimiter` 그대로) — 프론트는 상태 코드 429 로 "잠시 후 다시" 안내, 재시도하지 않음. 한도는 gateway `app.rate-limit`(로그인 · 가입 `/api/auth/**` 키당 분당 10회, 그 밖의 API 키당 초당 20회), 제외는 포트원 웹훅 · Keycloak 화면 · 채팅 WebSocket
+- 예외: 게이트웨이 요청 제한 **429 는 본문이 없다**(내장 `RequestRateLimiter` 그대로) — 프론트는 상태 코드 429 로 "잠시 후 다시" 안내, 재시도하지 않음. 한도는 gateway `app.rate-limit`(POST 로그인 · 가입 키당 분당 30회 — refresh · 로그아웃 · 소셜 등 나머지 `/api/auth/**` 와 그 밖의 API 는 키당 초당 20회), 제외는 포트원 웹훅 · Keycloak 화면 · 채팅 WebSocket
 
 **에러 코드 네이밍**
 
