@@ -42,6 +42,7 @@ dependencies {
     // 테스트 (Boot 4는 기술별 테스트 스타터)
     testImplementation 'org.springframework.boot:spring-boot-starter-webflux-test'
     testImplementation 'org.springframework.security:spring-security-test'   // mockJwt — 경로별 인가 테스트
+    testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testcontainersVersion}"   // 요청 제한 — 실제 Redis 토큰 버킷(Lua)
     testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
 }
 
