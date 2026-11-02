@@ -179,17 +179,68 @@ test('DLV-04 배송 완료 — 옵션 · 상품명 · 예정일이 없어도 보
   assert.equal(esc(`"a" & 'b'`), '&quot;a&quot; &amp; &#39;b&#39;');
 });
 
-test('HTML 이 있는 이벤트만 SES 본문에 Html 을 함께 — 다른 이벤트는 텍스트만(기존 그대로)', async () => {
+test('SES 본문은 HTML + 텍스트 둘 다 — 메일 앱이 HTML 을 고르고, 못 열면 텍스트', async () => {
   const { calls, deps } = fake();
   await createHandler(deps)({ Records: [record(envelope('OrderItemDelivered', delivered), 'm-1'), record(envelope('OrderPaid', orderPaid, 'e-2'), 'm-2')] });
 
   const mails = calls.filter((c) => c.type === 'SendEmailCommand').map((c) => c.input.Content.Simple.Body);
   assert.equal(mails.length, 2);
-  assert.ok(mails[0].Html.Data.startsWith('<!doctype html>'));
-  assert.equal(mails[0].Html.Charset, 'UTF-8');
-  assert.match(mails[0].Text.Data, /주문하신 상품이 도착했습니다/);
-  assert.equal(mails[1].Html, undefined);
-  assert.match(mails[1].Text.Data, /주문이 완료되었습니다/);
+  for (const body of mails) {
+    assert.ok(body.Html.Data.startsWith('<!doctype html>'));
+    assert.equal(body.Html.Charset, 'UTF-8');
+    assert.equal(body.Text.Charset, 'UTF-8');
+  }
+  assert.ok(mails[0].Text.Data.includes('주문하신 상품이 도착했습니다'));
+  assert.ok(mails[1].Text.Data.includes('주문이 완료되었습니다'));
+});
+
+// 11/02 — 메일 7종 모두 같은 HTML 틀(곳간 로고 · 배지 · 제목 · 버튼 · 발신 전용 안내)
+const allMails = () => {
+  const store = { userId: 9, applicationId: 3, storeName: '오롯이 & 리넨', sellerEmail: 's@example.com' };
+  return {
+    OrderPaid: [orderPaid, '주문이 완료되었습니다', '/mypage/orders/20261021-000123', '주문완료'],
+    OrderItemShipped: [{ ...delivered, deliveredAt: undefined, autoConfirmAt: undefined }, '상품이 출발했습니다', '/mypage/orders/20261102-000001', '배송시작'],
+    OrderItemDelivered: [delivered, '배송이 완료되었습니다', '/mypage/orders/20261102-000001', '배송완료'],
+    OrderItemCancelled: [{ ...delivered, refundAmt: 32000, restoredPoint: 500 }, '취소가 완료되었습니다', '/mypage/orders/20261102-000001', '취소완료'],
+    OrderItemReturned: [{ ...delivered, refundAmt: 32000, revokedPoint: 300 }, '반품이 완료되었습니다', '/mypage/orders/20261102-000001', '반품완료'],
+    StoreApproved: [store, '입점이 승인되었습니다', '/seller"', '입점승인'],
+    StoreApplicationRejected: [{ ...store, reason: '서류 <불일치>', decidedAt: '2026-10-21T12:00:00+09:00' }, '입점 신청 결과 안내', '/seller/apply"', '반려'],
+    StoreApplicationSupplementRequested: [{ ...store, requestedDocs: ['통신판매업 신고증'], message: '상호 확인', dueAt: '2026-10-28T12:00:00+09:00' }, '입점 서류 보완을 요청드립니다', '/seller/apply"', '보완요청'],
+  };
+};
+
+test('메일 7종 — 모두 HTML 이 있고 같은 틀(로고 · 배지 · 제목 · 버튼 링크 · 발신 전용), 텍스트 본문은 그대로', () => {
+  for (const [type, [p, title, link, badge]] of Object.entries(allMails())) {
+    const { subject, text, html } = TEMPLATES[type].mail(p, FRONT);
+    assert.ok(subject.startsWith('[곳간] '), type);
+    assert.ok(text.length > 0, type);
+    assert.ok(html.startsWith('<!doctype html>'), type);
+    assert.ok(html.includes('>곳간</span>'), `${type} 로고`);
+    assert.ok(html.includes(`● ${badge}</span>`), `${type} 배지`);
+    assert.ok(html.includes(`>${title}</h1>`), `${type} 제목`);
+    assert.ok(html.includes(`href="${FRONT}${link}`), `${type} 버튼 링크`);
+    assert.ok(html.includes('이 메일은 발신 전용입니다.'), `${type} 하단`);
+  }
+});
+
+test('HTML 은 판매자 · 관리자가 쓴 글자(스토어명 · 반려 사유)도 이스케이프 · 판매자 메일은 판매자용 문의 안내', () => {
+  const [p] = allMails().StoreApplicationRejected;
+  const { html, text } = TEMPLATES.StoreApplicationRejected.mail(p, FRONT);
+
+  assert.ok(html.includes('오롯이 &amp; 리넨 입점 신청을 승인하지 못했습니다.'));
+  assert.ok(html.includes('서류 &lt;불일치&gt;'));
+  assert.ok(!html.includes('<불일치>'));
+  assert.ok(text.includes('· 사유 서류 <불일치>')); // 텍스트 본문은 글자 그대로
+  assert.ok(html.includes('판매자 센터 채팅'));
+  assert.ok(html.includes('2026-11-20')); // 재신청 가능일 칸
+  assert.ok(TEMPLATES.OrderPaid.mail(orderPaid, FRONT).html.includes('마이페이지의 1:1 채팅'));
+});
+
+test('금액 강조 — 주문은 결제 금액, 취소 · 반품은 환불 금액 줄을 크게', () => {
+  const paid = TEMPLATES.OrderPaid.mail(orderPaid, FRONT).html;
+  assert.match(paid, /font-size:17px;color:#ff5a1f;font-weight:800;">64,400원</);
+  const cancelled = TEMPLATES.OrderItemCancelled.mail({ ...delivered, refundAmt: 32000 }, FRONT).html;
+  assert.match(cancelled, /font-size:17px;color:#ff5a1f;font-weight:800;">32,000원</);
 });
 
 test('NTF-03 취소 · 반품 완료 — 환불 금액 · 돌려드린 포인트 · 회수된 적립 포인트', () => {
