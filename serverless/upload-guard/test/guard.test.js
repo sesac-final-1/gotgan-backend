@@ -68,15 +68,15 @@ test('정상 파일 — 앞 16바이트만 읽고 아무것도 지우지 않음'
   assert.equal(calls[0].input.Range, 'bytes=0-15');
 });
 
-test('위장 파일 — 객체 삭제 후 알림 토픽에 버킷 · 키 · 이유', async () => {
+test('위장 파일 — 알림 토픽에 버킷 · 키 · 이유를 먼저 보내고 객체 삭제(삭제 뒤 알림 실패로 알림이 사라지지 않게)', async () => {
   const { calls, handler } = fake({ head: HTML });
   const r = await handler(created(ENV.SELLER_DOCS_BUCKET, 'applications/4/a.pdf'));
 
   assert.equal(r.deleted, true);
-  assert.deepEqual(calls.map((c) => c.type), ['GetObjectCommand', 'DeleteObjectCommand', 'PublishCommand']);
-  assert.deepEqual(calls[1].input, { Bucket: ENV.SELLER_DOCS_BUCKET, Key: 'applications/4/a.pdf' });
-  assert.equal(calls[2].input.TopicArn, ENV.ALERT_TOPIC_ARN);
-  assert.match(calls[2].input.Message, /applications\/4\/a\.pdf[\s\S]*내용이 pdf 형식이 아님/);
+  assert.deepEqual(calls.map((c) => c.type), ['GetObjectCommand', 'PublishCommand', 'DeleteObjectCommand']);
+  assert.deepEqual(calls[2].input, { Bucket: ENV.SELLER_DOCS_BUCKET, Key: 'applications/4/a.pdf' });
+  assert.equal(calls[1].input.TopicArn, ENV.ALERT_TOPIC_ARN);
+  assert.match(calls[1].input.Message, /applications\/4\/a\.pdf[\s\S]*내용이 pdf 형식이 아님/);
 });
 
 test('이미 없는 객체(재전달) · 다른 버킷은 건너뜀, 그 밖의 S3 오류는 던져서 재시도', async () => {

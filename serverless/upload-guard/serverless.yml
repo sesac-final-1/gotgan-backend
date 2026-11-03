@@ -13,9 +13,9 @@ provider:
   timeout: 10
   logRetentionInDays: 14
   environment:
-    IMAGES_BUCKET: ${ssm:/sesac-gojigi/dev/s3/images-bucket}
-    SELLER_DOCS_BUCKET: ${ssm:/sesac-gojigi/dev/s3/seller-docs-bucket}
-    ALERT_TOPIC_ARN: ${ssm:/sesac-gojigi/dev/sns/alerts-topic-arn}
+    IMAGES_BUCKET: ${ssm:/sesac-gojigi/${sls:stage}/s3/images-bucket}
+    SELLER_DOCS_BUCKET: ${ssm:/sesac-gojigi/${sls:stage}/s3/seller-docs-bucket}
+    ALERT_TOPIC_ARN: ${ssm:/sesac-gojigi/${sls:stage}/sns/alerts-topic-arn}
   iam:
     role:
       statements:
@@ -23,23 +23,23 @@ provider:
         - Effect: Allow
           Action: [s3:GetObject, s3:DeleteObject]
           Resource:
-            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/images-bucket}/products/*
-            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/images-bucket}/reviews/*
-            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/images-bucket}/stores/*
-            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/seller-docs-bucket}/applications/*
+            - arn:aws:s3:::${ssm:/sesac-gojigi/${sls:stage}/s3/images-bucket}/products/*
+            - arn:aws:s3:::${ssm:/sesac-gojigi/${sls:stage}/s3/images-bucket}/reviews/*
+            - arn:aws:s3:::${ssm:/sesac-gojigi/${sls:stage}/s3/images-bucket}/stores/*
+            - arn:aws:s3:::${ssm:/sesac-gojigi/${sls:stage}/s3/seller-docs-bucket}/applications/*
         # 없는 객체를 404(NoSuchKey)로 받으려면 ListBucket 이 있어야 한다(없으면 403) — 재전달 이벤트 건너뛰기용
         - Effect: Allow
           Action: [s3:ListBucket]
           Resource:
-            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/images-bucket}
-            - arn:aws:s3:::${ssm:/sesac-gojigi/dev/s3/seller-docs-bucket}
+            - arn:aws:s3:::${ssm:/sesac-gojigi/${sls:stage}/s3/images-bucket}
+            - arn:aws:s3:::${ssm:/sesac-gojigi/${sls:stage}/s3/seller-docs-bucket}
         # 삭제 알림 — 알림 토픽은 고객 관리형 KMS 키로 암호화돼 있어 키 사용 권한도 필요
         - Effect: Allow
           Action: [sns:Publish]
-          Resource: ${ssm:/sesac-gojigi/dev/sns/alerts-topic-arn}
+          Resource: ${ssm:/sesac-gojigi/${sls:stage}/sns/alerts-topic-arn}
         - Effect: Allow
           Action: [kms:GenerateDataKey, kms:Decrypt]
-          Resource: ${ssm:/sesac-gojigi/dev/kms/alerts-key-arn}
+          Resource: ${ssm:/sesac-gojigi/${sls:stage}/kms/alerts-key-arn}
 
 functions:
   guard:
@@ -52,5 +52,5 @@ functions:
             detail:
               bucket:
                 name:
-                  - ${ssm:/sesac-gojigi/dev/s3/images-bucket}
-                  - ${ssm:/sesac-gojigi/dev/s3/seller-docs-bucket}
+                  - ${ssm:/sesac-gojigi/${sls:stage}/s3/images-bucket}
+                  - ${ssm:/sesac-gojigi/${sls:stage}/s3/seller-docs-bucket}
