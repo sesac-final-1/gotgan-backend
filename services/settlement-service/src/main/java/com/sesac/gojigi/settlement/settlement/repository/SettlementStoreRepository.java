@@ -2,6 +2,8 @@ package com.sesac.gojigi.settlement.settlement.repository;
 
 import com.sesac.gojigi.settlement.settlement.entity.SettlementStore;
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -11,6 +13,9 @@ import org.springframework.data.repository.query.Param;
 public interface SettlementStoreRepository extends JpaRepository<SettlementStore, Long> {
 
     Optional<SettlementStore> findByStoreId(Long storeId);
+
+    /** 여러 스토어 스냅샷을 한 번에 — 정산 목록 · 대시보드 순위의 스토어명 (스토어마다 조회하던 N+1 대신) */
+    List<SettlementStore> findByStoreIdIn(Collection<Long> storeIds);
 
     boolean existsByStoreId(Long storeId);
 
