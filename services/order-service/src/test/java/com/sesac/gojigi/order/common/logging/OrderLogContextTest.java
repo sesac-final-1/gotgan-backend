@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
@@ -13,6 +14,12 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 /** 업무 키 MDC — payment(PaymentLogContext)와 같은 키 이름 */
 class OrderLogContextTest {
+
+    /** 사가를 직접 부르는 단위 테스트는 요청 필터가 없어 MDC(orderNo · sagaId)를 남긴 채 끝난다 — 같은 스레드의 앞 테스트 값에 흔들리지 않게 비우고 시작 */
+    @BeforeEach
+    void setUp() {
+        MDC.clear();
+    }
 
     @AfterEach
     void tearDown() {
