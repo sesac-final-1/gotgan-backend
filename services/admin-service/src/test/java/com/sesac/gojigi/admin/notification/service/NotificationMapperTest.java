@@ -38,6 +38,22 @@ class NotificationMapperTest {
     }
 
     @Test
+    @DisplayName("결제 완료 — 구매자 결제 알림 + 주문에 든 스토어마다 판매자 새 주문 알림(스토어 상품만 요약 · 합계), storeId 없는 항목은 건너뜀")
+    void orderPaidNotifiesEachStore() {
+        List<NewNotification> n = map("OrderPaid", """
+                {"orderNo":"20261103-000002","buyerId":4,"payAmt":110000,"items":[
+                  {"storeId":1,"productName":"햇감귤","itemAmt":26980},
+                  {"storeId":2,"productName":"머그","itemAmt":28000},
+                  {"storeId":1,"productName":"야생화 꿀","itemAmt":48000},
+                  {"productName":"옛 이벤트 항목","itemAmt":1000}]}""");
+
+        assertThat(n).extracting(NewNotification::recipient).containsExactly("USER#4", "STORE#1", "STORE#2");
+        assertThat(n.get(1)).extracting(NewNotification::type, NewNotification::title, NewNotification::body, NewNotification::link)
+                .containsExactly("ORDER_NEW", "새 주문이 들어왔어요", "햇감귤 외 1건 · 74,980원", "/seller/orders");
+        assertThat(n.get(2).body()).isEqualTo("머그 · 28,000원");
+    }
+
+    @Test
     @DisplayName("배송 시작 · 반품 완료 → 구매자, 정산 지급 → 스토어(판매자), 입점 결과 → 신청 회원")
     void otherEvents() {
         assertThat(map("OrderItemShipped", """
