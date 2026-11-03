@@ -33,6 +33,7 @@ class DemoSeedTest {
     void seed_insertsConsistentRows() {
         assertThat(count("COUNT(*) FROM users")).as("users").isEqualTo(24);
         assertThat(count("COUNT(*) FROM users WHERE user_id BETWEEN 1 AND 6")).as("로그인 계정 1~6").isEqualTo(6);
+        assertThat(count("COUNT(*) FROM address WHERE user_id BETWEEN 4 AND 6 AND is_default")).as("로그인 구매자 기본 배송지").isEqualTo(3);
         assertThat(count("COUNT(*) FROM users WHERE status = 'SUSPENDED' AND suspended_until IS NOT NULL")).as("이용정지 1").isEqualTo(1);
         assertThat(count("COUNT(*) FROM users u WHERE u.point_balance <> (SELECT COALESCE(SUM(p.amount), 0) FROM point_history p WHERE p.user_id = u.user_id) AND EXISTS (SELECT 1 FROM point_history p WHERE p.user_id = u.user_id)")).as("포인트 잔액 = 이력 합(이력이 있는 회원)").isEqualTo(0);
     }

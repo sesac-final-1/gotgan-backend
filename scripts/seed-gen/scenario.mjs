@@ -63,15 +63,28 @@ export const LOGIN_BUYERS = [
   { userId: 6, mock: 'u3', email: 'wlsgksvheh+buyer3@gmail.com', name: '박지민', nick: '지민찡', phone: '010-0000-0012', baseSpent: 150000, joined: 400, login: 2 },  // SILVER
 ];
 // 입점 심사 시연용 신청 (10/29) — 관리자가 승인 · 반려 · 보완요청을 눌러 볼 수 있게. 신청자는 Keycloak 에 있는 구매자(승인되면 user 가 SELLER 를 넣음)
-//   buyer1(4)은 메인 시연 구매자라 쓰지 않는다. 서류(application_document)는 S3 객체가 없어 없음 → 화면에 "미제출"
+//   buyer1(4)은 메인 시연 구매자라 쓰지 않는다. 서류는 승인 신청서까지 모두 같은 샘플(SAMPLE_DOCS — seller-docs applications/seed/, 11/3 QA Q-구-13)
+//   102 보완요청은 다시 낼 서류(requestedDocs)를 지정해 재제출 화면이 서류 칸을 보여 준다(Q-구-17)
 export const APPLICATIONS = [
   { applicationId: 101, userId: 6, status: 'PENDING', cat: 'beauty', name: '지민이네 수제비누', slug: 'jimin-soap', owner: '박지민', bizNo: '000-00-00101',
-    phone: '010-0000-0012', email: 'wlsgksvheh+buyer3@gmail.com', intro: '천연 오일로 저온 숙성한 수제 비누를 만듭니다.', submittedDaysAgo: 1 },
+    phone: '010-0000-0012', email: 'wlsgksvheh+buyer3@gmail.com', intro: '천연 오일로 저온 숙성한 수제 비누를 만듭니다.', submittedDaysAgo: 1,
+    products: [{ name: '올리브 저온숙성 비누 100g', subCategory: '바디·핸드', price: 12000 }, { name: '라벤더 핸드워시 비누 3입', subCategory: '바디·핸드', price: 18000 }] },
   { applicationId: 102, userId: 5, status: 'SUPPLEMENT', cat: 'living', name: '도현 목공소', slug: 'dohyun-wood', owner: '이도현', bizNo: '000-00-00102',
     phone: '010-0000-0011', email: 'wlsgksvheh+buyer2@gmail.com', intro: '원목 도마와 트레이를 하나씩 깎아 만듭니다.', submittedDaysAgo: 4,
     products: [{ name: '월넛 원목 도마', subCategory: '식기', price: 48000 }, { name: '오크 서빙 트레이', subCategory: '수납', price: 36000 }],
-    supplement: { daysAgo: 2, reason: '통신판매업 신고증 사본이 흐려 확인이 어렵습니다. 다시 올려 주세요.' } },
+    supplement: { daysAgo: 2, reason: '통신판매업 신고증 사본이 흐려 확인이 어렵습니다. 다시 올려 주세요.', docs: ['ECOMMERCE_REG'] } },
 ];
+// 입점 서류 샘플 — 시연용 가짜 서류(scripts/seed-gen/sample-docs) · 상품 사진은 시드 상품 이미지 복사. 신청서마다 같은 객체를 가리킨다
+export const SAMPLE_DOCS = [
+  { docType: 'BUSINESS_REG', key: 'applications/seed/business-reg.pdf', name: '사업자등록증_샘플.pdf', type: 'application/pdf', size: 840 },
+  { docType: 'ECOMMERCE_REG', key: 'applications/seed/ecommerce-reg.pdf', name: '통신판매업신고증_샘플.pdf', type: 'application/pdf', size: 845 },
+  { docType: 'BANK_COPY', key: 'applications/seed/bank-copy.pdf', name: '통장사본_샘플.pdf', type: 'application/pdf', size: 824 },
+  { docType: 'PRODUCT_PHOTO', key: 'applications/seed/photo-1.jpg', name: '상품사진1.jpg', type: 'image/jpeg', size: 150318 },
+  { docType: 'PRODUCT_PHOTO', key: 'applications/seed/photo-2.jpg', name: '상품사진2.jpg', type: 'image/jpeg', size: 129762 },
+  { docType: 'PRODUCT_PHOTO', key: 'applications/seed/photo-3.jpg', name: '상품사진3.jpg', type: 'image/jpeg', size: 98426 },
+];
+// 로그인 구매자 기본 배송지 — 시연 때마다 새로 입력하지 않게(11/3 QA Q-구-4). 주문 시드 배송지(왕십리로 1, {user}0{user}호)와 같게
+export const ADDRESS = { label: '집', zipcode: '04790', address1: '서울 성동구 왕십리로 1' };
 export const VIEW_BUYERS = [
   { userId: 104, name: '최유나', nick: '유나', email: 'yuna.choi@example.com', phone: '010-0000-0013', grade: 'NORMAL', joined: 60, spent: 98000, point: 1200, login: 5 },
   { userId: 105, name: '정하준', nick: '하준아빠', email: 'hajun.dad@example.com', phone: '010-0000-0014', grade: 'GOLD', joined: 980, spent: 1210000, point: 8800, login: 1 },

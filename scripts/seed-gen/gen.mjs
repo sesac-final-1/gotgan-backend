@@ -7,8 +7,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  APPLICATIONS, CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, INQUIRIES, LOGIN_BUYERS, MODERATIONS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS,
-  REPRESENTATIVE, REVIEWS, STORES, VIEW_BUYERS,
+  ADDRESS, APPLICATIONS, CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, INQUIRIES, LOGIN_BUYERS, MODERATIONS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS,
+  REPRESENTATIVE, REVIEWS, SAMPLE_DOCS, STORES, VIEW_BUYERS,
   combos, gradeOf, salePrice, subCategoryId,
 } from './scenario.mjs';
 
@@ -128,7 +128,10 @@ AS seed
 ON DUPLICATE KEY UPDATE email = seed.email, name = seed.name, nick = seed.nick, phone = seed.phone;
 
 ${insert('users', userCols, userRows)}
-${insert('point_history', ['point_history_id', 'user_id', 'order_item_id', 'order_no', 'type', 'amount', 'shortfall_amt', 'balance_after', 'ref_key', 'created_at'], pointRows)}`;
+${insert('point_history', ['point_history_id', 'user_id', 'order_item_id', 'order_no', 'type', 'amount', 'shortfall_amt', 'balance_after', 'ref_key', 'created_at'], pointRows)}
+-- 로그인 구매자 기본 배송지 1개(address_id = user_id) — 주문 시드 배송지와 같은 주소
+${insert('address', ['address_id', 'user_id', 'label', 'receiver_name', 'receiver_phone', 'zipcode', 'address1', 'address2', 'is_default', 'created_at'],
+  LOGIN_BUYERS.map((b) => [b.userId, b.userId, q(ADDRESS.label), q(b.name), q(b.phone), q(ADDRESS.zipcode), q(ADDRESS.address1), q(`${b.userId}0${b.userId}호`), 'TRUE', ago(b.joined)]))}`;
 
 // ── store
 const storeSql = `${header('VoC-100', `-- 목업 스토어 9개(프론트 mocks/fixtures/catalog.js) — 모두 승인된 입점 신청서에서 생긴 상태로 신청서 · 이력도 함께
@@ -136,17 +139,21 @@ const storeSql = `${header('VoC-100', `-- 목업 스토어 9개(프론트 mocks/
 --   seller1 user 2 → store 1 (산골농부 박씨네, 식품) · seller2 user 3 → store 2 (토담공방, 리빙). 나머지 대표자는 user 200 + 목업 번호(조회용)
 -- category_id = productdb 카테고리 시드(1~6). 신청서 id = 스토어 id, 이력 id = 스토어 id × 10 + 순번. 볕드는집(15)은 정지
 -- 심사 시연용 신청 101(심사대기, buyer3 user 6) · 102(보완요청, buyer2 user 5 — 4일 전 신청 · 2일 전 보완요청). 스토어 없음
--- 사업자 · 계좌는 가짜 값. 서류(application_document)는 S3 객체가 없어 넣지 않는다. 이벤트는 발행되지 않는다`)}
+-- 사업자 · 계좌는 가짜 값. 서류는 모든 신청서가 같은 샘플(seller-docs applications/seed/ — scripts/seed-gen/sample-docs), 문서 id = 신청서 id × 10 + 순번
+-- 102 보완요청은 다시 낼 서류(requested_docs) 지정. 이벤트는 발행되지 않는다`)}
 ${insert('store_application', ['store_application_id', 'user_id', 'category_id', 'biz_type', 'company_name', 'owner_name', 'biz_reg_no', 'ecommerce_reg_no',
   'manager_phone', 'manager_email', 'business_address', 'store_name', 'slug', 'intro', 'representative_products', 'expected_monthly_sales', 'sales_channel',
-  'bank_name', 'account_no', 'account_holder', 'status', 'status_reason', 'marketing_agreed', 'terms_agreed_at', 'status_changed_at', 'created_at'],
+  'bank_name', 'account_no', 'account_holder', 'status', 'status_reason', 'requested_docs', 'marketing_agreed', 'terms_agreed_at', 'status_changed_at', 'created_at'],
 STORES.map((s) => [s.storeId, s.userId, CATEGORY[s.cat], "'INDIVIDUAL'", q(s.name), q(s.owner), q(s.bizNo), q(`2026-시연-${String(s.storeId).padStart(4, '0')}`),
   q(s.phone), q(s.email), q(`서울 성동구 성수이로 ${s.storeId}`), q(s.name), q(s.slug), q(`<p>${s.intro}</p>`), json(REPRESENTATIVE[s.cat]), "'FROM_5M_TO_20M'", 'NULL',
-  "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), "'APPROVED'", 'NULL', 'FALSE', ago(s.since + 3), ago(s.since), ago(s.since + 3)])
+  "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), "'APPROVED'", 'NULL', 'NULL', 'FALSE', ago(s.since + 3), ago(s.since), ago(s.since + 3)])
   .concat(APPLICATIONS.map((a) => [a.applicationId, a.userId, CATEGORY[a.cat], "'INDIVIDUAL'", q(a.name), q(a.owner), q(a.bizNo), q(`2026-시연-${a.applicationId}`),
     q(a.phone), q(a.email), q(`서울 성동구 성수이로 ${a.applicationId}`), q(a.name), q(a.slug), q(`<p>${a.intro}</p>`), json(a.products ?? REPRESENTATIVE[a.cat]), "'UNDER_5M'", 'NULL',
-    "'곳간은행'", q(`100-0000-${String(a.applicationId).padStart(6, '0')}`), q(a.owner), q(a.status), q(a.supplement?.reason ?? null), 'FALSE',
+    "'곳간은행'", q(`100-0000-${String(a.applicationId).padStart(6, '0')}`), q(a.owner), q(a.status), q(a.supplement?.reason ?? null), a.supplement?.docs ? `JSON_ARRAY(${a.supplement.docs.map(q).join(', ')})` : 'NULL', 'FALSE',
     ago(a.submittedDaysAgo), ago(a.supplement?.daysAgo ?? a.submittedDaysAgo), ago(a.submittedDaysAgo)])))}
+${insert('application_document', ['application_document_id', 'store_application_id', 'doc_type', 's3_key', 'original_name', 'content_type', 'file_size', 'is_current', 'created_at'],
+  [...STORES.map((x) => [x.storeId, ago(x.since + 3)]), ...APPLICATIONS.map((a) => [a.applicationId, ago(a.submittedDaysAgo)])]
+    .flatMap(([id, at]) => SAMPLE_DOCS.map((d, i) => [id * 10 + i + 1, id, q(d.docType), q(d.key), q(d.name), q(d.type), d.size, 'TRUE', at])))}
 ${insert('application_history', ['application_history_id', 'store_application_id', 'from_status', 'to_status', 'actor_type', 'reason', 'created_at'],
   STORES.flatMap((s) => [[s.storeId * 10 + 1, s.storeId, 'NULL', "'PENDING'", "'APPLICANT'", 'NULL', ago(s.since + 3)],
     [s.storeId * 10 + 2, s.storeId, "'PENDING'", "'APPROVED'", "'ADMIN'", 'NULL', ago(s.since)]])
