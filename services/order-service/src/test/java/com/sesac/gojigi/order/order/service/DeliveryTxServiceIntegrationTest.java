@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
@@ -31,8 +34,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -202,18 +207,44 @@ class DeliveryTxServiceIntegrationTest {
         assertThat(failed.getAttemptCount()).isEqualTo(1);
         assertThat(failed.getLastError()).contains("sns down");
 
-        // when — 한 번 더 실패(한도 2 → ERROR 로그) 후 복구
-        outbox.publishPending();
-        willThrow(new IllegalStateException("still down")).willDoNothing().given(sns)
-                .send(eq("OrderItemShipped"), anyString(), anyString(), anyString());
-        outbox.publishPending();
+        // when — 복구 후 발행기 (한도 2 전이라 다시 보낸다)
+        willDoNothing().given(sns).send(eq("OrderItemShipped"), anyString(), anyString(), anyString());
         outbox.publishPending();
 
         // then
         OutboxEvent sent = outboxRepository.findById(failed.getId()).orElseThrow();
         assertThat(sent.isSent()).isTrue();
+        assertThat(sent.getAttemptCount()).isEqualTo(2);
         assertThat(sent.getLastError()).isNull();
         assertThat(sent.getSentAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("시도 한도(2)에 닿은 행은 발행기 대상에서 빠진다 — 영구 실패 행 50건이 앞에 있어도 뒤의 새 이벤트가 나간다")
+    void outbox_skipsRowsPastLimit() {
+        // given — 한도에 닿은 행 50건(발행기 1회 조회 분량) + 그 뒤에 쌓인 새 행
+        List<OutboxEvent> stuck = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            OutboxEvent row = OutboxEvent.of(UUID.randomUUID().toString(), OutboxEvent.AggregateType.ORDER_ITEM,
+                    "stuck-" + i, "OrderItemShipped", "{}");
+            row.markFailed("sns down");
+            row.markFailed("sns down");
+            stuck.add(row);
+        }
+        outboxRepository.saveAll(stuck);
+        OutboxEvent fresh = outboxRepository.save(OutboxEvent.of(UUID.randomUUID().toString(),
+                OutboxEvent.AggregateType.ORDER_ITEM, "fresh-1", "OrderItemShipped", "{}"));
+
+        // when
+        outbox.publishPending();
+
+        // then
+        verify(sns).send(eq("OrderItemShipped"), eq("fresh-1"), eq(fresh.getEventId()), anyString());
+        verify(sns, never()).send(anyString(), startsWith("stuck-"), anyString(), anyString());
+        assertThat(outboxRepository.findById(fresh.getId()).orElseThrow().isSent()).isTrue();
+        assertThat(outboxRepository.findAllById(stuck.stream().map(OutboxEvent::getId).toList()))
+                .hasSize(50).allSatisfy(r -> assertThat(r.isSent()).isFalse());
+        jdbc.update("DELETE FROM outbox_event WHERE aggregate_id LIKE 'stuck-%' OR aggregate_id = 'fresh-1'");
     }
 
     @Test
