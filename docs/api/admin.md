@@ -151,3 +151,20 @@
 
 - **202** `{recipients}` — 받는 쪽마다 쌓고 바로 보냄. `sourceId` 가 같으면 한 번만(재시도 멱등), 생략하면 매번 새 알림
 - **400** `NOTIFICATION_RECIPIENT_REQUIRED`(받는 쪽 없음) · `INVALID_INPUT`(type · title 없음, 길이 초과)
+
+## 6. 관리자 중계 API — 경로 목록 (11/3)
+
+> admin 은 관리자 화면의 입구(BFF). 아래 경로는 **하위 서비스 내부 API 를 그대로 중계**하므로 요청 · 응답 · 오류 계약은 각 서비스 문서가 정본이다.
+> 공통: 게이트웨이가 ADMIN 역할 확인 · 관리자 X-User-Id 를 그대로 전달, 동기 호출은 서킷 브레이커 · GET 재시도(1홉 규칙), 하위 서비스 장애는 502.
+
+| 영역 | 경로 (전부 ADMIN) | 하위 서비스 (정본 문서) |
+|---|---|---|
+| 대시보드 | `GET /api/admin/dashboard` — 영역별 병렬 조합 · 일부 실패해도 200 + `unavailable[]` | settlement · order · product 통계 |
+| 입점 심사 | `GET /api/admin/applications` · `/{id}` · `PATCH /{id}/approve` · `/reject` · `/supplement` | store (store.md 4절) |
+| 스토어 | `GET /api/admin/stores` · `/{storeId}` · `PATCH /{storeId}/status` | store (store.md 1절 확장) |
+| 스토어 상품 · 차단 | `GET /api/admin/stores/{storeId}/products` · `PATCH /api/admin/products/{productId}/block` | product (product.md 6절) |
+| 카테고리 | `GET · POST /api/admin/categories` · `PUT /{categoryId}` | product 7절 + settlement 수수료(상위 생성 · 활성화) |
+| 수수료 | `GET · PUT /api/admin/commissions` | settlement (settlement.md 2절) |
+| 정산 | `GET /api/admin/settlements` · `/{id}` · `POST /aggregate` · `/pay` · `PATCH /{id}/hold` · `GET /api/admin/stores/{storeId}/settlements` | settlement (settlement.md 3절) |
+| 회원 | `GET /api/admin/users` · `/{userId}` · `/{userId}/points` · `/{userId}/reviews` · `PATCH /{userId}/status` | user 내부 API · review 작성 리뷰 |
+| 신고 · 알림 | 1 ~ 5절 | admin 자체 (admindb · DynamoDB) |

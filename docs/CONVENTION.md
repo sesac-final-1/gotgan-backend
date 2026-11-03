@@ -16,7 +16,7 @@
 ### 0-1. 판단 원칙
 
 - **"어떻게 쓰나"는 팀 기존 규칙 우선** — 코드 스타일 · 네이밍 · 응답 형식 · 예외 구조 · DB 규칙
-- **"무엇을 만드나"는 프로젝트 스펙 유지** — 서비스 9개 + Keycloak · 엔드포인트 · 이벤트 · 인프라 구성
+- **"무엇을 만드나"는 프로젝트 스펙 유지** — 서비스 10개 + Keycloak · 엔드포인트 · 이벤트 · 인프라 구성
 - **MSA 전용 규칙 추가** — 서비스 간 호출 · Resilience4j · 대시보드 조합 · 이벤트 · Saga · 멱등성 · 인프라 네이밍
 - 규칙끼리 충돌하면 이 문서가 우선, 다른 문서는 이 문서에 맞춰 수정
 
@@ -56,8 +56,8 @@
 
 | 항목 | 확정 규칙 | 관련 절 |
 |---|---|---|
-| 서비스 구성 | Spring 9개(gateway · user · store · product · order · payment · review · settlement · admin) + Keycloak | 2-1 · 3-2 |
-| admin-service | DB 없는 조합 계층 — 관리자 API 진입점, 각 서비스 `/internal/**`을 호출해 조합만 | 2-1 · 2-4 · 2-7 |
+| 서비스 구성 | Spring 10개(gateway · user · store · product · order · payment · review · settlement · admin · chat — chat 은 10/27 추가) + Keycloak | 2-1 · 3-2 |
+| admin-service | 조합 계층 — 관리자 API 진입점, 각 서비스 `/internal/**`을 호출해 조합. 자기 DB는 신고 · 조치 이력(admindb, ADR-0001 예외 10/26)만 · 실시간 알림 센터(10/27) | 2-1 · 2-4 · 2-7 |
 | 카테고리 · 수수료 | 카테고리는 product-service, 카테고리별 수수료는 settlement-service | 2-1 · 3-2 |
 | 대시보드 | 판매자는 store, 관리자는 admin 안에서 조합 — 병렬 호출 + 실패 영역만 빼고 부분 응답 | 2-7 |
 | 서비스 간 호출 | Resilience4j 표준 (타임아웃 · 서킷 브레이커 · 멱등 GET만 재시도 · 폴백) | 2-7 |
@@ -154,9 +154,9 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
 ```
 
 - 해당 도메인에 필요 없는 패키지는 만들지 않음 (예: `cart`는 `entity` 없음)
-- **DB가 없는 서비스 두 곳**
+- **DB가 없는(또는 예외만 있는) 서비스 두 곳**
   - gateway-service: `config` · `filter` · `exception`만
-  - admin-service: 도메인 패키지에 `controller` · `service` · `client` · `dto`만 — **`entity` · `repository` 없음**, 데이터는 각 서비스 `/internal/**` 호출로만 다룸
+  - admin-service: 도메인 패키지에 `controller` · `service` · `client` · `dto`만 — **`entity` · `repository` 없음**, 데이터는 각 서비스 `/internal/**` 호출로만 다룸. 예외는 `report`(신고 · 조치 이력 — admindb entity · repository · Flyway, ADR-0001 예외 10/26) · `notification`(알림함 — DynamoDB `sesac-gojigi-inbox` repository, 10/27)뿐
 
 **서비스별 도메인**
 
@@ -170,7 +170,8 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
 | payment-service | paymentdb | `payment`(포트원 V2 검증 · 취소 · 웹훅) |
 | review-service | reviewdb | `review`(사진 · 별점 · 판매자 답글) · `inquiry`(상품문의 · 답변) · `eligibility`(리뷰 작성 자격) |
 | settlement-service | settlementdb | `settlement`(적재 · 집계 · 지급 · 보류) · `commission`(카테고리별 수수료) |
-| admin-service | 없음 | `application` · `store` · `category` · `settlement` · `user` · `dashboard` — 모두 `/internal/**` 호출 조합 |
+| admin-service | admindb(신고만) | `application` · `store` · `category` · `settlement` · `user` · `dashboard` · `review` — `/internal/**` 호출 조합, `report`(신고 · 조치 이력, 10/26) · `notification`(알림 센터 — SQS 3큐 · 알림함 · SSE, 10/27) |
+| chat-service (10/27) | chatdb | `room`(방 · 메시지 · 읽음 — 스토어 톡 · 판매자 운영 상담 · 고객센터 상담) · `realtime`(STOMP · Redis 중계 · 접속 중 · 입력 중) · `directory`(이름 · 스토어 상태 조회 캐시) · `retention`(90일 삭제) |
 
 **도메인 경계 기준**
 

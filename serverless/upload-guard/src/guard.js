@@ -75,13 +75,15 @@ export function createHandler({ s3, sns, env, log = console }) {
     const result = inspect(rule, key, bytes);
     if (result.ok) return { checked: true, deleted: false };
 
-    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
-    log.warn(JSON.stringify({ msg: '업로드 파일 삭제 — 형식 불일치', bucket, key, reason: result.reason }));
+    // 알림을 먼저 — 삭제 뒤 알림만 실패하면 재시도 때 객체가 없어(NoSuchKey) 알림이 영영 가지 않는다(11/3 점검).
+    // 반대로 알림 뒤 삭제가 실패하면 재시도에서 알림이 한 번 더 갈 수 있다 — 놓치는 것보다 낫다
     await sns.send(new PublishCommand({
       TopicArn: env.ALERT_TOPIC_ARN,
       Subject: '[곳간] 업로드 파일 삭제 — 형식 불일치',
       Message: `버킷: ${bucket}\n키: ${key}\n이유: ${result.reason}\n\n업로드한 쪽(화면 · presign 발급 기록)에서 같은 키를 쓰는 데이터가 있으면 깨진 파일로 보입니다.`,
     }));
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+    log.warn(JSON.stringify({ msg: '업로드 파일 삭제 — 형식 불일치', bucket, key, reason: result.reason }));
     return { checked: true, deleted: true, reason: result.reason };
   };
 }

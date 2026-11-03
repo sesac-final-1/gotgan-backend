@@ -22,15 +22,19 @@ import com.sesac.gojigi.settlement.settlement.repository.SettlementStoreReposito
 import com.sesac.gojigi.settlement.settlement.util.SettlementWeek;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -105,48 +109,41 @@ public class SettlementQueryService {
         if (storeId != null) {
             return new SettlementStatsResponse(storeStats(storeId, settlementRepository.findByStoreIdOrderByWeekStartDesc(storeId)), null);
         }
-        List<Settlement> unpaid = settlementRepository.findByStatusIn(EnumSet.of(SettlementStatus.SCHEDULED, SettlementStatus.HELD));
+        // 합계 · 그룹은 DB 에서 (11/3 점검 — 대시보드를 열 때마다 이번 달 · 8주치 행을 엔티티로 읽어 메모리에서 합산하던 것)
+        Map<SettlementStatus, long[]> unpaid = new EnumMap<>(SettlementStatus.class);
+        for (Object[] r : settlementRepository.sumByStatusIn(EnumSet.of(SettlementStatus.SCHEDULED, SettlementStatus.HELD))) {
+            unpaid.put((SettlementStatus) r[0], new long[] {((Number) r[1]).longValue(), ((Number) r[2]).longValue()});
+        }
+        long[] scheduled = unpaid.getOrDefault(SettlementStatus.SCHEDULED, new long[2]);
+        long[] held = unpaid.getOrDefault(SettlementStatus.HELD, new long[2]);
         LocalDate monthStart = LocalDate.now(clock).withDayOfMonth(1);
-        long paidThisMonth = settlementRepository.findByStatusAndPaidAtGreaterThanEqual(SettlementStatus.PAID, monthStart.atStartOfDay())
-                .stream().mapToLong(Settlement::getPayoutAmt).sum();
-        long commissionThisMonth = settlementItemRepository
-                .findByConfirmedAtGreaterThanEqualAndConfirmedAtLessThan(monthStart.atStartOfDay(), monthStart.plusMonths(1).atStartOfDay())
-                .stream().mapToLong(SettlementItem::getCommissionAmt).sum();
+        long paidThisMonth = settlementRepository.sumPaidSince(monthStart.atStartOfDay());
+        long commissionThisMonth = settlementItemRepository.sumCommission(monthStart.atStartOfDay(), monthStart.plusMonths(1).atStartOfDay());
         LocalDate salesFrom = SettlementWeek.of(LocalDate.now(clock)).minusWeeks(RECENT_WEEKS - 1L).start();
-        List<SettlementItem> recent = settlementItemRepository.findByConfirmedAtGreaterThanEqualAndConfirmedAtLessThan(
-                salesFrom.atStartOfDay(), LocalDate.now(clock).plusDays(1).atStartOfDay());
+        LocalDateTime from = salesFrom.atStartOfDay();
+        LocalDateTime until = LocalDate.now(clock).plusDays(1).atStartOfDay();
         return new SettlementStatsResponse(null, new SettlementStatsResponse.PlatformStats(
-                count(unpaid, SettlementStatus.SCHEDULED), sum(unpaid, SettlementStatus.SCHEDULED),
-                count(unpaid, SettlementStatus.HELD), sum(unpaid, SettlementStatus.HELD),
-                paidThisMonth, commissionThisMonth, salesFrom, categorySales(recent), topStores(recent)));
+                scheduled[0], scheduled[1], held[0], held[1],
+                paidThisMonth, commissionThisMonth, salesFrom, categorySales(from, until), topStores(from, until)));
     }
 
     /** 관리자 대시보드 "카테고리별 거래액" — 구매확정일 기준 (settlement.md 대시보드 기준) */
-    private static List<SettlementStatsResponse.CategorySales> categorySales(List<SettlementItem> items) {
-        return items.stream().collect(Collectors.groupingBy(SettlementItem::getCategoryId)).entrySet().stream()
-                .map(e -> new SettlementStatsResponse.CategorySales(e.getKey(), e.getValue().size(),
-                        itemAmt(e.getValue()), commissionAmt(e.getValue())))
-                .sorted(Comparator.comparingLong(SettlementStatsResponse.CategorySales::salesAmt).reversed())
+    private List<SettlementStatsResponse.CategorySales> categorySales(LocalDateTime from, LocalDateTime until) {
+        return settlementItemRepository.sumByCategory(from, until).stream()
+                .map(r -> new SettlementStatsResponse.CategorySales((Long) r[0], ((Number) r[1]).longValue(),
+                        ((Number) r[2]).longValue(), ((Number) r[3]).longValue()))
                 .toList();
     }
 
     /** 관리자 대시보드 "스토어 거래액 순위" — 매출 상위 TOP_STORES 개 */
-    private List<SettlementStatsResponse.StoreSales> topStores(List<SettlementItem> items) {
-        return items.stream().collect(Collectors.groupingBy(SettlementItem::getStoreId)).entrySet().stream()
-                .sorted(Comparator.comparingLong((Map.Entry<Long, List<SettlementItem>> e) -> itemAmt(e.getValue())).reversed())
-                .limit(TOP_STORES)
-                .map(e -> new SettlementStatsResponse.StoreSales(e.getKey(),
-                        settlementStoreRepository.findByStoreId(e.getKey()).map(SettlementStore::getStoreName).orElse(null),
-                        e.getValue().size(), itemAmt(e.getValue()), commissionAmt(e.getValue())))
+    private List<SettlementStatsResponse.StoreSales> topStores(LocalDateTime from, LocalDateTime until) {
+        List<Object[]> rows = settlementItemRepository.sumByStore(from, until, PageRequest.of(0, TOP_STORES));
+        Map<Long, SettlementStore> names = stores(rows.stream().map(r -> (Long) r[0]).collect(Collectors.toSet()));
+        return rows.stream()
+                .map(r -> new SettlementStatsResponse.StoreSales((Long) r[0],
+                        names.containsKey((Long) r[0]) ? names.get((Long) r[0]).getStoreName() : null,
+                        ((Number) r[1]).longValue(), ((Number) r[2]).longValue(), ((Number) r[3]).longValue()))
                 .toList();
-    }
-
-    private static long itemAmt(List<SettlementItem> items) {
-        return items.stream().mapToLong(SettlementItem::getItemAmt).sum();
-    }
-
-    private static long commissionAmt(List<SettlementItem> items) {
-        return items.stream().mapToLong(SettlementItem::getCommissionAmt).sum();
     }
 
     /** 스토어 미정산 현황 — 폐점 · 판매자 탈퇴 전 확인 (집계 전 구매확정 · 지급예정 · 보류가 모두 0 이어야 clear) */
@@ -198,8 +195,12 @@ public class SettlementQueryService {
     }
 
     private Map<Long, SettlementStore> stores(List<Settlement> rows) {
-        return rows.stream().map(Settlement::getStoreId).distinct()
-                .map(settlementStoreRepository::findByStoreId).flatMap(java.util.Optional::stream)
+        return stores(rows.stream().map(Settlement::getStoreId).collect(Collectors.toSet()));
+    }
+
+    /** 스토어 스냅샷을 IN 조회 한 번으로 (스토어마다 조회하던 N+1 — 11/3 점검) */
+    private Map<Long, SettlementStore> stores(Set<Long> storeIds) {
+        return storeIds.isEmpty() ? Map.of() : settlementStoreRepository.findByStoreIdIn(storeIds).stream()
                 .collect(Collectors.toMap(SettlementStore::getStoreId, Function.identity()));
     }
 
@@ -222,11 +223,4 @@ public class SettlementQueryService {
         }
     }
 
-    private static long count(List<Settlement> rows, SettlementStatus status) {
-        return rows.stream().filter(s -> s.getStatus() == status).count();
-    }
-
-    private static long sum(List<Settlement> rows, SettlementStatus status) {
-        return rows.stream().filter(s -> s.getStatus() == status).mapToLong(Settlement::getPayoutAmt).sum();
-    }
 }
