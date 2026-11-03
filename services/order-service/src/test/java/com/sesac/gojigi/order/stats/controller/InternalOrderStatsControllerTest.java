@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.common.web.exception.GlobalExceptionHandler;
+import com.sesac.gojigi.order.stats.dto.response.BuyerOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.DailyOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
@@ -61,6 +62,25 @@ class InternalOrderStatsControllerTest {
                 .andExpect(jsonPath("$.message").value("전체 주문 통계를 조회했습니다."))
                 .andExpect(jsonPath("$.data.totalTradeAmt").value(1250000))
                 .andExpect(jsonPath("$.data.orderCount").value(37));
+    }
+
+    @Test
+    @DisplayName("buyerId 가 있으면 구매자 통계 — 진행 중 상품주문 · 클레임 수, storeId 와 같이 오면 스토어 통계")
+    void buyerStats() throws Exception {
+        given(orderStatsService.getBuyerStats(4L)).willReturn(new BuyerOrderStatsResponse(4L, 2L, 1L));
+        given(orderStatsService.getStoreStats(1L)).willReturn(new StoreOrderStatsResponse(1L, 0L, 0L, 0L, 0L, 0L));
+
+        mockMvc.perform(get("/internal/stats/orders").param("buyerId", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("구매자 주문 통계를 조회했습니다."))
+                .andExpect(jsonPath("$.data.buyerId").value(4))
+                .andExpect(jsonPath("$.data.inProgressCount").value(2))
+                .andExpect(jsonPath("$.data.openClaimCount").value(1));
+        mockMvc.perform(get("/internal/stats/orders").param("storeId", "1").param("buyerId", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.storeId").value(1));
+        verify(orderStatsService).getBuyerStats(4L);
+        verify(orderStatsService, never()).getPlatformStats();
     }
 
     @Test

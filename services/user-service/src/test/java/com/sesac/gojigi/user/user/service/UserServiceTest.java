@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.user.auth.service.AuthService;
+import com.sesac.gojigi.user.user.client.OrderClientAdapter;
 import com.sesac.gojigi.user.user.client.StoreClientAdapter;
 import com.sesac.gojigi.user.user.client.StoreStatus;
 import com.sesac.gojigi.user.user.entity.User;
@@ -52,6 +53,9 @@ class UserServiceTest {
     private StoreClientAdapter storeClient;
 
     @Mock
+    private OrderClientAdapter orderClient;
+
+    @Mock
     private BlockedUserRedisRepository blockedUserRedisRepository;
 
     @Mock
@@ -61,7 +65,7 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, authService, storeClient, blockedUserRedisRepository, transactionTemplate, CLOCK);
+        userService = new UserService(userRepository, authService, storeClient, orderClient, blockedUserRedisRepository, transactionTemplate, CLOCK);
         // 트랜잭션 템플릿은 콜백을 그대로 실행
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(new SimpleTransactionStatus()));
@@ -204,5 +208,44 @@ class UserServiceTest {
 
         // then
         verify(blockedUserRedisRepository).block(7L, BlockedUserRedisRepository.WITHDRAWN);
+    }
+
+    @Test
+    @DisplayName("진행 중인 주문 · 교환 · 반품이 있으면 USER_ORDERS_IN_PROGRESS(건수 포함), 회원 · 계정은 그대로")
+    void withdraw_ordersInProgress_throws() {
+        // given
+        given(orderClient.countInProgress(7L)).willReturn(2L);
+
+        // when · then
+        assertThatThrownBy(() -> userService.withdraw(7L, null))
+                .isInstanceOf(UserException.class)
+                .hasMessage("진행 중인 주문 · 교환 · 반품이 2건 있어 탈퇴할 수 없습니다.")
+                .extracting("errorCode").isEqualTo(UserErrorCode.USER_ORDERS_IN_PROGRESS);
+        verify(userRepository, never()).findByIdAndDeletedAtIsNull(any());
+        verify(authService, never()).deleteAccount(any(), anyString());
+    }
+
+    @Test
+    @DisplayName("order 장애면 탈퇴를 막는다 — 502 그대로, 회원은 그대로")
+    void withdraw_orderDown_throws() {
+        // given
+        given(orderClient.countInProgress(7L)).willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR));
+
+        // when · then
+        assertThatThrownBy(() -> userService.withdraw(7L, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
+        verify(userRepository, never()).findByIdAndDeletedAtIsNull(any());
+    }
+
+    @Test
+    @DisplayName("판매자 — 폐점 확인이 먼저, 폐점하지 않았으면 주문은 확인하지 않는다")
+    void withdraw_sellerWithOpenStore_skipsOrderCheck() {
+        // given
+        given(storeClient.getStoreStatus(1L)).willReturn(StoreStatus.ACTIVE);
+
+        // when · then
+        assertThatThrownBy(() -> userService.withdraw(2L, 1L)).isInstanceOf(UserException.class);
+        verifyNoInteractions(orderClient);
     }
 }

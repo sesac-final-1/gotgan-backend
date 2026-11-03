@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 
@@ -189,7 +190,7 @@ class DeliveryTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("SNS 발행 실패 — 행은 NEW 로 남고 시도 횟수 · 사유를 기록, 발행기가 다시 보내면 SENT")
+    @DisplayName("SNS 발행 실패 — 한도 전이면 행은 NEW 로 남고 시도 횟수 · 사유를 기록, 발행기가 다시 보내면 SENT")
     void outbox_retriesFailedPublish() {
         // given — 커밋 직후 발행 실패
         OrderItem item = paidItem();
@@ -202,11 +203,8 @@ class DeliveryTxServiceIntegrationTest {
         assertThat(failed.getAttemptCount()).isEqualTo(1);
         assertThat(failed.getLastError()).contains("sns down");
 
-        // when — 한 번 더 실패(한도 2 → ERROR 로그) 후 복구
-        outbox.publishPending();
-        willThrow(new IllegalStateException("still down")).willDoNothing().given(sns)
-                .send(eq("OrderItemShipped"), anyString(), anyString(), anyString());
-        outbox.publishPending();
+        // when — 한도(2) 전에 복구 (한도째 실패하면 FAILED — EventOutboxFailedIntegrationTest)
+        willDoNothing().given(sns).send(eq("OrderItemShipped"), anyString(), anyString(), anyString());
         outbox.publishPending();
 
         // then

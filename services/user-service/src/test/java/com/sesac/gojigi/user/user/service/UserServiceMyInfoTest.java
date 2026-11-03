@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.sesac.gojigi.user.auth.service.AuthService;
+import com.sesac.gojigi.user.user.client.OrderClientAdapter;
 import com.sesac.gojigi.user.user.client.StoreClientAdapter;
 import com.sesac.gojigi.user.user.dto.request.ChangePasswordRequest;
 import com.sesac.gojigi.user.user.dto.request.UpdateMyInfoRequest;
@@ -50,6 +51,9 @@ class UserServiceMyInfoTest {
     private AuthService authService;
     @Mock
     private StoreClientAdapter storeClient;
+
+    @Mock
+    private OrderClientAdapter orderClient;
     @Mock
     private BlockedUserRedisRepository blockedUserRedisRepository;
     @Mock
@@ -59,7 +63,7 @@ class UserServiceMyInfoTest {
 
     @BeforeEach
     void setUp() {
-        userService = new UserService(userRepository, authService, storeClient, blockedUserRedisRepository, transactionTemplate, CLOCK);
+        userService = new UserService(userRepository, authService, storeClient, orderClient, blockedUserRedisRepository, transactionTemplate, CLOCK);
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
                 invocation.<TransactionCallback<?>>getArgument(0).doInTransaction(new SimpleTransactionStatus()));
     }
