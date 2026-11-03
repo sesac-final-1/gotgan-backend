@@ -2,3 +2,6 @@ rootProject.name = 'review-service'
 
 // 공통 모듈 (libs/common-web) — composite build 로 연결, 따로 배포하지 않는다
 includeBuild('../../libs/common-web')
+
+// 공통 logback 설정 (libs/common-logging) — composite build, 로그 형식 · Loki 전송은 이 모듈 한 벌
+includeBuild('../../libs/common-logging')

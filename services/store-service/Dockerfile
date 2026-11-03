@@ -5,11 +5,13 @@ FROM eclipse-temurin:21-jdk AS builder
 # settings.gradle 의 includeBuild('../../libs/common-web') 상대 경로가 컨테이너 안에서도 맞도록 저장소 구조(/app/libs · /app/services/<서비스>)를 유지한다
 WORKDIR /app/services/store-service
 COPY libs/common-web/settings.gradle libs/common-web/build.gradle /app/libs/common-web/
+COPY libs/common-logging/settings.gradle libs/common-logging/build.gradle /app/libs/common-logging/
 COPY services/store-service/gradlew services/store-service/settings.gradle services/store-service/build.gradle services/store-service/gradle.properties ./
 COPY services/store-service/gradle ./gradle
 # 소스보다 의존성을 먼저 받아 두면, 코드만 바뀔 때 이 레이어는 캐시를 재사용한다
 RUN chmod +x gradlew && ./gradlew dependencies --no-daemon > /dev/null
 COPY libs/common-web/src /app/libs/common-web/src
+COPY libs/common-logging/src /app/libs/common-logging/src
 COPY services/store-service/src ./src
 # 테스트는 CI 의 test 단계에서 이미 돌았으므로 여기서는 생략
 RUN ./gradlew bootJar -x test --no-daemon

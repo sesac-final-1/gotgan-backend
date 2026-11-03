@@ -2,12 +2,14 @@
 #   docker build -f services/gateway-service/Dockerfile .
 # ===== 1단계: 빌드 (로컬 JDK 없이도, CI 어디서든 같은 결과) =====
 FROM eclipse-temurin:21-jdk AS builder
-# gateway 는 WebFlux 라 libs/common-web 을 쓰지 않는다 — 컨텍스트만 다른 서비스와 같게 맞춘다
+# gateway 는 WebFlux 라 libs/common-web 은 쓰지 않고 libs/common-logging 만 쓴다 — includeBuild 상대 경로가 맞도록 저장소 구조(/app/libs · /app/services/<서비스>)를 유지한다
 WORKDIR /app/services/gateway-service
+COPY libs/common-logging/settings.gradle libs/common-logging/build.gradle /app/libs/common-logging/
 COPY services/gateway-service/gradlew services/gateway-service/settings.gradle services/gateway-service/build.gradle services/gateway-service/gradle.properties ./
 COPY services/gateway-service/gradle ./gradle
 # 소스보다 의존성을 먼저 받아 두면, 코드만 바뀔 때 이 레이어는 캐시를 재사용한다
 RUN chmod +x gradlew && ./gradlew dependencies --no-daemon > /dev/null
+COPY libs/common-logging/src /app/libs/common-logging/src
 COPY services/gateway-service/src ./src
 # 테스트는 CI 의 test 단계에서 이미 돌았으므로 여기서는 생략
 RUN ./gradlew bootJar -x test --no-daemon
