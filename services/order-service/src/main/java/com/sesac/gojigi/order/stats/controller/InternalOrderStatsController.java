@@ -1,6 +1,7 @@
 package com.sesac.gojigi.order.stats.controller;
 
 import com.sesac.gojigi.common.web.dto.ApiResponse;
+import com.sesac.gojigi.order.stats.dto.response.BuyerOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.DailyOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
@@ -15,8 +16,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 서비스 간 전용 (store 판매자 대시보드 · 폐점 검사, admin 관리자 대시보드) — 게이트웨이 라우트 없음, 클러스터 내부에서만 호출 */
-@Tag(name = "주문 통계 (내부)", description = "store-service · admin-service 대시보드 조합이 호출 — 인가: 내부")
+/** 서비스 간 전용 (store 판매자 대시보드 · 폐점 검사, admin 관리자 대시보드, user 탈퇴 검사) — 게이트웨이 라우트 없음, 클러스터 내부에서만 호출 */
+@Tag(name = "주문 통계 (내부)", description = "store-service · admin-service 대시보드 조합 · user-service 탈퇴 검사가 호출 — 인가: 내부")
 @RestController
 @RequiredArgsConstructor
 public class InternalOrderStatsController {
@@ -33,6 +34,15 @@ public class InternalOrderStatsController {
         return ApiResponse.success("스토어 주문 통계를 조회했습니다.", orderStatsService.getStoreStats(storeId));
     }
 
+    @Operation(summary = "구매자 주문 통계 (회원 탈퇴 검사)", description = """
+            inProgressCount = 구매자의 진행 중 상품주문 수 — 스토어 통계 inProgressCount 와 같은 기준.
+            openClaimCount = 진행 중 클레임(REQUESTED · APPROVED) 수. 둘 중 하나라도 1 이상이면 user 가 탈퇴를 거절한다.
+            주문이 없어도 0 으로 200. storeId 와 함께 보내면 스토어 통계로 간다.""")
+    @GetMapping(value = "/internal/stats/orders", params = { "buyerId", "!storeId" })
+    public ApiResponse<BuyerOrderStatsResponse> getBuyerStats(@RequestParam Long buyerId) {
+        return ApiResponse.success("구매자 주문 통계를 조회했습니다.", orderStatsService.getBuyerStats(buyerId));
+    }
+
     @Operation(summary = "결제일별 주문 통계 (일별 거래액 차트)", description = """
             오늘(KST) 포함 최근 days 일(기본 30, 1~90)의 결제일별 [{date, tradeAmt, orderCount}], 오래된 날부터 · 거래 없는 날도 0.
             tradeAmt = 그날 결제된 상품주문 금액 합계(배송비 · 포인트 차감 전, 결제 전 · 취소 · 반품 완료 제외) — totalTradeAmt 와 같은 기준.
@@ -45,9 +55,9 @@ public class InternalOrderStatsController {
     }
 
     @Operation(summary = "전체 주문 통계 (관리자 대시보드)", description = """
-            storeId 없이 호출. totalTradeAmt = 결제된 상품주문 금액 합계(배송비 · 포인트 차감 전, 결제 전 · 취소 · 반품 완료 제외).
+            storeId · buyerId 없이 호출. totalTradeAmt = 결제된 상품주문 금액 합계(배송비 · 포인트 차감 전, 결제 전 · 취소 · 반품 완료 제외).
             orderCount = 결제 완료(PAID) 주문 수.""")
-    @GetMapping(value = "/internal/stats/orders", params = "!storeId")
+    @GetMapping(value = "/internal/stats/orders", params = { "!storeId", "!buyerId" })
     public ApiResponse<PlatformOrderStatsResponse> getPlatformStats() {
         return ApiResponse.success("전체 주문 통계를 조회했습니다.", orderStatsService.getPlatformStats());
     }

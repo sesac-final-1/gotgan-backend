@@ -24,6 +24,16 @@ public interface OrderStatsRepository extends Repository<OrderItem, Long> {
     long countInProgress(@Param("storeId") Long storeId, @Param("statuses") Collection<OrderItemStatus> statuses,
                          @Param("claimStatuses") Collection<ClaimStatus> claimStatuses);
 
+    /** 구매자의 진행 중 상품주문 수 — countInProgress 와 같은 기준, 스토어 대신 주문의 buyer_id (user 탈퇴 검사) */
+    @Query("""
+            select count(i) from OrderItem i
+            where i.order.buyerId = :buyerId
+              and (i.status in :statuses
+                   or exists (select c.id from OrderClaim c where c.orderItem = i and c.status in :claimStatuses))
+            """)
+    long countBuyerInProgress(@Param("buyerId") Long buyerId, @Param("statuses") Collection<OrderItemStatus> statuses,
+                              @Param("claimStatuses") Collection<ClaimStatus> claimStatuses);
+
     /** 결제일(paid_at 은 KST)별 상품주문 금액 합계 [결제일, 합계] — excluded 상태 제외, storeId 가 null 이면 전체. 거래 없는 날은 행이 없다 */
     @Query("""
             select cast(i.order.paidAt as LocalDate), sum(i.itemAmt) from OrderItem i
