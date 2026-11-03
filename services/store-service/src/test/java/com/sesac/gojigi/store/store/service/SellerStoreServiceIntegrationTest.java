@@ -56,7 +56,7 @@ class SellerStoreServiceIntegrationTest {
         assertThat(row).containsEntry("intro", "<p>새 소개</p>").containsEntry("image_key", "stores/15/new-cover.jpg")
                 .containsEntry("color", "#2f5f8a").containsEntry("cs_phone", "070-0000-1234").containsEntry("shipping_fee", 0L)
                 .containsEntry("courier", "롯데택배").containsEntry("dispatch_note", "주문 후 2일 안 출고")
-                .containsEntry("status", "SUSPENDED").containsEntry("status_reason", "반품 미처리 3건 — 처리 완료 후 해제")
+                .containsEntry("status", "SUSPENDED").containsEntry("status_reason", "고객 문의 · 배송 지연 반복 — 개선 계획 제출 후 해제")
                 .containsEntry("grade", "SPROUT").containsEntry("store_name", "볕드는집").containsEntry("slug", "byeot-house");
         assertThat(row.get("free_shipping_threshold")).isNull();
         assertThat(response.imageUrl()).endsWith("/stores/15/new-cover.jpg");
