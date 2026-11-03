@@ -45,7 +45,7 @@ class StoreQueryServiceIntegrationTest {
         assertThat(detail.companyName()).isNotBlank();
         assertThat(detail.slug()).isEqualTo("byeot-house");
         assertThat(detail.grade()).isEqualTo(StoreGrade.SPROUT);
-        assertThat(detail.statusReason()).isEqualTo("반품 미처리 3건 — 처리 완료 후 해제");
+        assertThat(detail.statusReason()).isEqualTo("고객 문의 · 배송 지연 반복 — 개선 계획 제출 후 해제");
         assertThat(detail.applicationId()).isEqualTo(15L);
         assertThat(detail.createdAt().getOffset().getTotalSeconds()).isEqualTo(9 * 3600);
         assertThat(detail.statusHistory()).extracting(InternalStoreResponse.History::toStatus)
@@ -53,7 +53,7 @@ class StoreQueryServiceIntegrationTest {
         assertThat(detail.statusHistory().get(1)).satisfies(h -> {
             assertThat(h.fromStatus()).isEqualTo(StoreStatus.ACTIVE);
             assertThat(h.actor()).isEqualTo(StoreActorType.ADMIN);
-            assertThat(h.reason()).isEqualTo("반품 미처리 3건 — 처리 완료 후 해제");
+            assertThat(h.reason()).isEqualTo("고객 문의 · 배송 지연 반복 — 개선 계획 제출 후 해제");
             assertThat(h.changedAt()).isAfter(detail.createdAt());
         });
     }
