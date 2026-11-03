@@ -157,6 +157,10 @@ app:
       replenish-rate: ${RATE_LIMIT_DEFAULT_REPLENISH:20}
       burst-capacity: ${RATE_LIMIT_DEFAULT_BURST:40}
       requested-tokens: ${RATE_LIMIT_DEFAULT_TOKENS:1}
+  metrics:
+    # /actuator/prometheus 를 읽을 수 있는 접속 IP 대역 (MetricsAccessManager) — localhost + EKS 노드 프라이빗 서브넷(infra/terraform/vpc/main.tf private_subnets).
+    # NLB 는 퍼블릭 서브넷(10.0.1.0/24 · 10.0.2.0/24)이라 들지 않는다. VPC 대역을 바꾸면 같이
+    allowed-cidrs: ${METRICS_ALLOWED_CIDRS:127.0.0.1/32,::1/128,10.0.11.0/24,10.0.12.0/24}
 
 management:
   endpoints:
