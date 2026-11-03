@@ -73,7 +73,7 @@ public class NotificationEventPoller implements SmartLifecycle {
                 if (consecutiveFailures == 1) {
                     log.error("알림 이벤트 수신 실패 - queue={}", queueUrl, e);
                 } else if (consecutiveFailures % FAILURE_SUMMARY_EVERY == 0) {
-                    log.error("알림 이벤트 수신 연속 실패 {}회 - queue={}, cause={}", consecutiveFailures, queueUrl, e.toString());
+                    log.error("알림 이벤트 수신 연속 실패 {}회 - queue={}", consecutiveFailures, queueUrl, e);   // 사람이 봐야 하는 error 는 스택까지 (컨벤션 2-8)
                 }
                 sleepQuietly();   // 자격 증명 · 네트워크 오류가 계속될 때 로그 폭주 방지
             }
