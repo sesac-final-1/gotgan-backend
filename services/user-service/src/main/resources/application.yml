@@ -30,6 +30,7 @@ app:
     connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
     read-timeout: 3s
     store-url: ${STORE_SERVICE_URI:http://localhost:8082}   # 판매자 탈퇴 전 폐점 확인 (StoreClientAdapter)
+    order-url: ${ORDER_SERVICE_URI:http://localhost:8084}   # 탈퇴 전 진행 중 주문 · 클레임 확인 (OrderClientAdapter)
   keycloak:
     base-url: ${KEYCLOAK_URI:http://localhost:8180}          # 클러스터: http://keycloak:8080 — 서버 간 호출(토큰 · Admin API)
     public-url: ${KEYCLOAK_PUBLIC_URL:${app.keycloak.base-url}}  # 브라우저가 가는 Keycloak 주소 — 클러스터: https://api.gotgan.click (gateway 가 /realms/gotgan/** 를 Keycloak 으로)
@@ -76,6 +77,7 @@ resilience4j:
     instances:
       keycloak: { base-config: default }    # KeycloakClientAdapter — 토큰 요청(POST)은 재시도 없음
       store: { base-config: default }       # StoreClientAdapter#getStoreStatus
+      order: { base-config: default }       # OrderClientAdapter#countInProgress
   retry:
     retry-aspect-order: 2
     configs:
@@ -89,6 +91,7 @@ resilience4j:
           - com.sesac.gojigi.common.web.exception.BusinessException
     instances:
       store: { base-config: default }       # StoreClientAdapter#getStoreStatus (GET)
+      order: { base-config: default }       # OrderClientAdapter#countInProgress (GET)
 
 management:
   endpoints:

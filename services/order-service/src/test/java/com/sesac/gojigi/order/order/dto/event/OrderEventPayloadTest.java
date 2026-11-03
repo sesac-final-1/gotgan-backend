@@ -19,7 +19,7 @@ class OrderEventPayloadTest {
     private final OrderItem item = OrderFixtures.item(order);
 
     @Test
-    @DisplayName("OrderPaid — 주문 금액 · 주문자와 상품주문별 상품명 · 옵션 · 수량 · 금액 · 적립 포인트를 담는다")
+    @DisplayName("OrderPaid — 주문 금액 · 주문자와 상품주문별 스토어 · 상품명 · 옵션 · 수량 · 금액 · 적립 포인트를 담는다")
     void orderPaid_of_mapsOrderAndItems() {
         // when
         OrderPaidPayload payload = OrderPaidPayload.of(order, List.of(item));
@@ -32,7 +32,7 @@ class OrderEventPayloadTest {
         assertThat(payload.payAmt()).isEqualTo(65_000L);
         assertThat(payload.usedPoint()).isEqualTo(2_000L);
         assertThat(payload.items()).containsExactly(
-                new OrderPaidPayload.Item(null, 3_100L, "제철 사과 3kg", "특", 2, 64_000L));
+                new OrderPaidPayload.Item(null, 1L, 3_100L, "제철 사과 3kg", "특", 2, 64_000L));
     }
 
     @Test

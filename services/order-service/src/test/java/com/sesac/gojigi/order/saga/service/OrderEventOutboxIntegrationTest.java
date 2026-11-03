@@ -127,6 +127,7 @@ class OrderEventOutboxIntegrationTest {
         JsonNode first = payload.get("items").get(0);
         assertThat(payload.get("items")).hasSize(2);
         assertThat(first.get("orderItemId").asLong()).isEqualTo(items.get(0).getId());
+        assertThat(first.get("storeId").asLong()).isEqualTo(1_301L);
         assertThat(first.get("earnedPoint").asLong()).isEqualTo(items.get(0).getEarnedPoint());
         assertThat(first.get("productName").asString()).isEqualTo("사과");
         assertThat(first.get("optionName").asString()).isEqualTo("특");

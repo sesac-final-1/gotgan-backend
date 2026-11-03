@@ -2,6 +2,7 @@ package com.sesac.gojigi.user.user.service;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.user.auth.service.AuthService;
+import com.sesac.gojigi.user.user.client.OrderClientAdapter;
 import com.sesac.gojigi.user.user.client.StoreClientAdapter;
 import com.sesac.gojigi.user.user.dto.request.ChangePasswordRequest;
 import com.sesac.gojigi.user.user.dto.request.UpdateMyInfoRequest;
@@ -21,12 +22,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 회원 — 내 정보 조회 · 수정 · 비밀번호 변경 · 탈퇴.
- * 탈퇴 = (판매자면 스토어 폐점 확인) → ① users 소프트 삭제(deleted_at, 이메일은 그대로 → 같은 이메일 재가입 불가)
+ * 탈퇴 = (판매자면 스토어 폐점 확인) → (진행 중인 주문 · 교환 · 반품 확인) → ① users 소프트 삭제(deleted_at, 이메일은 그대로 → 같은 이메일 재가입 불가)
  *        → ② Keycloak 계정 삭제(새 로그인 · Refresh 불가) → ③ Redis 차단 목록(남은 Access Token 을 gateway 가 401).
  * ① 이 끝나면 탈퇴는 확정 — ② · ③ 은 실패해도 되돌리지 않고 warn 만 남긴다 (되돌릴 수 없고, 1차 방어선이 남아 있음):
  * - ② 실패: 남은 Keycloak 계정으로 로그인해도 토큰의 user_id 가 탈퇴 회원이라 AUTH_ACCOUNT_NOT_LINKED
  * - ③ 실패: 남은 Access Token 은 만료(최대 TTL)까지 다른 서비스 호출 가능 — user-service 는 deleted_at 으로 막는다
- * 외부 호출(store · Keycloak · Redis) 동안 DB 커넥션을 잡지 않도록 트랜잭션은 짧게 (TransactionTemplate).
+ * 외부 호출(store · order · Keycloak · Redis) 동안 DB 커넥션을 잡지 않도록 트랜잭션은 짧게 (TransactionTemplate).
  */
 @Slf4j
 @Service
@@ -35,6 +36,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final AuthService authService;
     private final StoreClientAdapter storeClient;
+    private final OrderClientAdapter orderClient;
     private final BlockedUserRedisRepository blockedUserRedisRepository;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
@@ -86,6 +88,11 @@ public class UserService {
         if (storeId != null && !storeClient.getStoreStatus(storeId).isClosed()) {
             throw new UserException(UserErrorCode.USER_SELLER_STORE_NOT_CLOSED);   // 판매자는 폐점 후 탈퇴
         }
+        long inProgress = orderClient.countInProgress(userId);   // order 장애면 502 로 막는다
+        if (inProgress > 0) {
+            throw new UserException(UserErrorCode.USER_ORDERS_IN_PROGRESS,
+                    "진행 중인 주문 · 교환 · 반품이 " + inProgress + "건 있어 탈퇴할 수 없습니다.");
+        }
         User user = transactionTemplate.execute(status -> softDelete(userId));
         boolean accountDeleted = deleteKeycloakAccount(user);
         boolean tokensBlocked = blockRemainingTokens(userId);
@@ -95,7 +102,6 @@ public class UserService {
 
     private User softDelete(Long userId) {
         User user = findActive(userId);
-        // TODO 진행 중인 주문 · 교환 · 반품이 있으면 탈퇴 불가 — order-service 내부 API 가 생기면 여기서 확인
         user.softDelete(LocalDateTime.now(clock));
         return user;   // 트랜잭션 커밋 때 변경 감지로 UPDATE
     }

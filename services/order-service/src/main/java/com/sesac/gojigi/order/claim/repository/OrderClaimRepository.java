@@ -17,6 +17,9 @@ public interface OrderClaimRepository extends JpaRepository<OrderClaim, Long> {
     /** 스토어의 그 상태 클레임 수 — 상품주문의 store_id 기준 */
     long countByOrderItemStoreIdAndStatusIn(Long storeId, Collection<ClaimStatus> statuses);
 
+    /** 구매자의 그 상태 클레임 수 — 주문의 buyer_id 기준 */
+    long countByOrderItemOrderBuyerIdAndStatusIn(Long buyerId, Collection<ClaimStatus> statuses);
+
     /** 이 상품주문에 진행 중 클레임이 있는지 — 한 상품주문에 진행 중 클레임 1개 (CLM-06) */
     boolean existsByOrderItemIdAndStatusIn(Long orderItemId, Collection<ClaimStatus> statuses);
 

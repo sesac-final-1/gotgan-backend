@@ -19,6 +19,7 @@ import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.service.OrderPricing;
 import com.sesac.gojigi.order.order.service.OrderTxService;
+import com.sesac.gojigi.order.stats.dto.response.BuyerOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.DailyOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
@@ -58,6 +59,8 @@ class OrderStatsServiceIntegrationTest {
     private static final long PLATFORM_STORE = 711L;
     /** 일별 통계 테스트 전용 */
     private static final long DAILY_STORE = 721L;
+    /** 구매자 통계 테스트 전용 — 스토어 통계 테스트의 STORE 건수에 섞이지 않게 */
+    private static final long BUYER_STORE = 731L;
 
     @TestConfiguration
     static class FixedClock {
@@ -85,12 +88,17 @@ class OrderStatsServiceIntegrationTest {
 
     /** store 상품주문 20,000원(첫 상품주문) + OTHER_STORE 상품주문 5,000원 */
     private Order order(long store, boolean paid) {
+        return order(store, paid, 4L);
+    }
+
+    /** buyer 가 산 store 상품주문 20,000원(첫 상품주문) + OTHER_STORE 상품주문 5,000원 */
+    private Order order(long store, boolean paid, long buyer) {
         OrderCreateRequest request = new OrderCreateRequest(List.of(new OrderCreateRequest.Item(71L, 2)), "김구매",
                 "010-1234-5678", "06236", "서울 강남구 테헤란로 1", null, null, 0L);
         OrderPricing.Result priced = OrderPricing.calculate(
                 List.of(line(71L, store, 10_000L, 2), line(72L, OTHER_STORE, 5_000L, 1)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), 0L);
-        Order order = orderTx.createPending(new UserSummaryResponse(4L, "buyer@example.com", "홍길동", null), request,
+        Order order = orderTx.createPending(new UserSummaryResponse(buyer, "buyer@example.com", "홍길동", null), request,
                 priced, Map.of(store, "곳간상회", OTHER_STORE, "들녘마켓")).order();
         if (paid) {
             orderTx.markPaid(order.getId());
@@ -217,5 +225,32 @@ class OrderStatsServiceIntegrationTest {
         // then
         assertThat(after.orderCount() - before.orderCount()).isEqualTo(2L);
         assertThat(after.totalTradeAmt() - before.totalTradeAmt()).isEqualTo(25_000L + 5_000L);
+    }
+
+    @Test
+    @DisplayName("구매자 통계 — 스토어 통계와 같은 진행 중 기준을 buyer_id 로, 진행 중 클레임 수 따로 · 다른 구매자 · 끝난 주문 · 결제 전은 빠진다")
+    void getBuyerStats() {
+        // given — 구매자 731
+        long buyer = 731L;
+        order(BUYER_STORE, true, buyer);                                          // 상품주문 2건 PAYMENT_DONE
+        Order refunding = order(BUYER_STORE, true, buyer);                        // 취소 완료 + 환불 진행 중(클레임 APPROVED)
+        setStatus(storeItem(refunding), OrderItemStatus.CANCELLED);
+        claim(refunding, ClaimStatus.APPROVED);
+        setStatus(orderItemRepository.findByOrderIdOrderByIdAsc(refunding.getId()).get(1), OrderItemStatus.CONFIRMED);
+        Order done = order(BUYER_STORE, true, buyer);                             // 끝난 주문 — 구매확정 · 반품 완료(클레임 완료)
+        setStatus(storeItem(done), OrderItemStatus.CONFIRMED);
+        setStatus(orderItemRepository.findByOrderIdOrderByIdAsc(done.getId()).get(1), OrderItemStatus.RETURNED);
+        claim(done, ClaimStatus.COMPLETED);
+        order(BUYER_STORE, false, buyer);                                         // 결제 전
+        order(BUYER_STORE, true, 732L);                                           // 다른 구매자
+
+        // when
+        BuyerOrderStatsResponse result = stats.getBuyerStats(buyer);
+
+        // then
+        assertThat(result.buyerId()).isEqualTo(buyer);
+        assertThat(result.inProgressCount()).isEqualTo(3L);
+        assertThat(result.openClaimCount()).isEqualTo(1L);
+        assertThat(stats.getBuyerStats(739L)).isEqualTo(new BuyerOrderStatsResponse(739L, 0L, 0L));
     }
 }

@@ -6,6 +6,7 @@ import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
 import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.repository.OrderRepository;
+import com.sesac.gojigi.order.stats.dto.response.BuyerOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.DailyOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.PlatformOrderStatsResponse;
 import com.sesac.gojigi.order.stats.dto.response.StoreOrderStatsResponse;
@@ -58,6 +59,14 @@ public class OrderStatsService {
                 // 취소 완료(CANCELLED)여도 환불이 끝나지 않았으면(클레임 APPROVED) 진행 중으로 센다
                 orderStatsRepository.countInProgress(storeId, IN_PROGRESS, OPEN_CLAIMS),
                 orderItemRepository.sumStoreSales(storeId, NOT_SALES, today, today.plusDays(1)));
+    }
+
+    /** 구매자 주문 통계 — user 탈퇴 검사. 진행 중 기준은 스토어 통계(IN_PROGRESS · OPEN_CLAIMS)와 같다 */
+    @Transactional(readOnly = true)
+    public BuyerOrderStatsResponse getBuyerStats(Long buyerId) {
+        return new BuyerOrderStatsResponse(buyerId,
+                orderStatsRepository.countBuyerInProgress(buyerId, IN_PROGRESS, OPEN_CLAIMS),
+                orderClaimRepository.countByOrderItemOrderBuyerIdAndStatusIn(buyerId, OPEN_CLAIMS));
     }
 
     /** 오늘(KST) 포함 최근 days 일의 결제일별 거래액 · 주문 수, 오래된 날부터 — 거래가 없는 날은 0. storeId 가 null 이면 전체 */
