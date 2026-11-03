@@ -36,7 +36,7 @@ public class SellerReviewController {
 
     @Operation(summary = "내 스토어 리뷰 목록", description = """
             인가: SELLER (X-Store-Id 의 스토어). 삭제 제외 · 블라인드 포함(blinded=true — '블라인드됨', 답글 불가), 최신 작성순.
-            tab: ALL(기본) · NO_REPLY(답글 없고 블라인드 아님) · LOW_RATING(1~2점). productId 로 상품 하나만. page(0부터) · size(1~50, 기본 10).
+            tab: ALL(기본) · NO_REPLY(답글 없고 블라인드 아님) · LOW_RATING(1~2점) · PHOTO(사진 리뷰). productId 로 상품 하나만. page(0부터) · size(1~50, 기본 10).
             에러: 400 INVALID_INPUT(tab · page · size) · 401 UNAUTHORIZED · 403 FORBIDDEN(스토어 정보 없음)""")
     @GetMapping
     public ApiResponse<PageResponse<SellerReviewResponse>> list(@Parameter(hidden = true) @CurrentUser AuthUser user,

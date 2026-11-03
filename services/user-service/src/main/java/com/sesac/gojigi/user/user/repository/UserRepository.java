@@ -25,8 +25,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByKeycloakId(String keycloakId);
 
-    Optional<User> findByEmailAndDeletedAtIsNull(String email);
-
     /** 가입 중복 검사 — uk_users_email 은 탈퇴 회원도 포함하므로 deleted_at 과 관계없이 본다 */
     boolean existsByEmail(String email);
 
@@ -69,9 +67,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u.id from User u where u.deletedAt is null and u.status = :status"
             + " and u.suspendedUntil is not null and u.suspendedUntil <= :now order by u.suspendedUntil")
     List<Long> findSuspensionExpiredIds(@Param("status") UserStatus status, @Param("now") LocalDateTime now);
-
-    /** 관리자 대시보드 — 상태별 회원 수 (GET /internal/stats/users) */
-    long countByStatusAndDeletedAtIsNull(UserStatus status);
 
     /** 관리자 대시보드 — 기간 내 신규 가입 수 [from, to) */
     long countByCreatedAtGreaterThanEqualAndCreatedAtLessThanAndDeletedAtIsNull(LocalDateTime from, LocalDateTime to);

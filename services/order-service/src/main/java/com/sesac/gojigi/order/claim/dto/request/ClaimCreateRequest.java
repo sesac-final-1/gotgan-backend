@@ -13,7 +13,7 @@ public record ClaimCreateRequest(
         @NotNull @Positive
         Long orderItemId,
 
-        @Schema(description = "유형 — CANCEL(취소) · RETURN(반품) · EXCHANGE(교환). 지금은 CANCEL 만", example = "CANCEL")
+        @Schema(description = "유형 — CANCEL(취소) · RETURN(반품) · EXCHANGE(교환)", example = "CANCEL")
         @NotNull
         ClaimType type,
 

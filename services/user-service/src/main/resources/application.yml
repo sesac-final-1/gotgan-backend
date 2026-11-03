@@ -35,9 +35,6 @@ app:
     base-url: ${KEYCLOAK_URI:http://localhost:8180}          # 클러스터: http://keycloak:8080 — 서버 간 호출(토큰 · Admin API)
     public-url: ${KEYCLOAK_PUBLIC_URL:${app.keycloak.base-url}}  # 브라우저가 가는 Keycloak 주소 — 클러스터: https://api.gotgan.click (gateway 가 /realms/gotgan/** 를 Keycloak 으로)
     realm: gotgan
-    token-uri: ${app.keycloak.base-url}/realms/gotgan/protocol/openid-connect/token
-    logout-uri: ${app.keycloak.base-url}/realms/gotgan/protocol/openid-connect/logout
-    admin-uri: ${app.keycloak.base-url}/admin/realms/gotgan
     client-id: gotgan-backend
     client-secret: ${KEYCLOAK_CLIENT_SECRET:}                 # 비밀 값은 환경 변수로만 (컨벤션 1-5)
   auth:
@@ -49,8 +46,7 @@ app:
       result-url: ${SOCIAL_RESULT_URL:http://localhost:5173/auth/callback}                 # 로그인 후 프론트 페이지 (실패면 ?error=코드)
       cookie-name: social_login                                                            # state · PKCE 를 담는 10분짜리 쿠키 (Path=/api/auth/social, SameSite=Lax)
     blocked-user-ttl: 30m                                     # 차단 목록 TTL = Keycloak realm Access Token 수명(accessTokenLifespan 1800초) — realm 을 바꾸면 같이
-  point:
-    earn-rate: 0.05                                           # 실결제금액의 5% 적립 (정리 문서 8-5) — 참고값, 실제 적립액은 order 가 계산해 OrderItemConfirmed.earnedPoint 로 보냄
+  # 포인트 적립률(실결제금액 5%, 정리 문서 8-5)은 order 가 계산해 OrderItemConfirmed.earnedPoint 로 보낸다 — user 는 받은 값만 적립
   user:
     suspension-expiry-interval: 1m                            # 이용정지 기간 만료 자동 해제 주기 (SuspensionExpiryScheduler, 기동 직후 1회 포함)
   sqs:                                                        # 구독 큐 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
