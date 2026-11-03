@@ -1,0 +1,37 @@
+// common-logging — 서비스 공통 logback 설정 (로깅 공통 모듈 B안, 10/23 노션 「로깅인프라 통합 모듈」) — 담당 박지연(관측성)
+// 각 서비스 settings.gradle 의 includeBuild('../../libs/common-logging') 로 연결되는 composite build — 따로 배포하지 않는다
+// 내용은 XML 한 벌(logback-base.xml) + loki4j 의존성. 서비스 logback-spring.xml 은 이 파일을 include 만 한다
+// gateway(WebFlux) 포함 10개 서비스가 쓴다 — Spring web 의존이 없어야 한다
+plugins {
+    id 'java-library'
+    id 'jacoco'
+    id 'org.springframework.boot' version '4.1.1' apply false   // BOM 좌표만 사용 — 서비스와 같은 버전
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.sesac.gojigi'
+version = '0.0.1'
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+repositories { mavenCentral() }
+
+dependencyManagement {
+    imports { mavenBom org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES }
+}
+
+dependencies {
+    // Loki 전송 appender — 서비스는 이 모듈만 의존하면 된다(서비스 build.gradle 의 loki4j 줄 · gradle.properties loki4jVersion 은 지움)
+    api 'com.github.loki4j:loki-logback-appender:2.1.0'
+
+    // 테스트 — Spring 컨텍스트 없이 Boot 의 LogbackLoggingSystem 으로 실제 XML 을 올린다(springProfile · springProperty 포함)
+    testImplementation 'org.springframework.boot:spring-boot-starter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'tools.jackson.core:jackson-databind'
+    testRuntimeOnly    'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test')    { useJUnitPlatform(); finalizedBy jacocoTestReport }
+jacocoTestReport       { reports { xml.required = true } }

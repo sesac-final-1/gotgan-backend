@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 서비스 logback-spring.xml 과 같은 모양 — 모듈 테스트(LogbackBaseTest)가 이 파일로 include 를 검증한다 -->
+<configuration>
+    <springProperty scope="context" name="APP" source="spring.application.name"/>
+    <include resource="com/sesac/gojigi/common/logging/logback-base.xml"/>
+</configuration>
