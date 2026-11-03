@@ -4,6 +4,7 @@ import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.DocumentItem;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.ProductItem;
 import com.sesac.gojigi.store.apply.dto.request.SellerApplyRequest.SettlementAccount;
 import com.sesac.gojigi.store.apply.entity.BizType;
+import com.sesac.gojigi.store.apply.entity.ExpectedMonthlySales;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
@@ -78,6 +79,14 @@ public record ApplicationResubmitRequest(
         @Schema(description = "판매 예정 대표 상품 2~10개 — 보내면 목록 전체를 바꿈")
         @Size(min = 2, max = 10, message = "판매 예정 상품은 2~10개를 입력해 주세요.")
         List<@Valid @NotNull ProductItem> representativeProducts,
+
+        @Schema(description = "월 예상 매출 구간", example = "FROM_5M_TO_20M")
+        ExpectedMonthlySales expectedMonthlySales,
+
+        @Schema(description = "운영 중인 채널 URL", example = "https://instagram.com/gotgan.store")
+        @Pattern(regexp = NOT_BLANK, message = "운영 채널을 비울 수 없습니다.")
+        @Size(max = 255, message = "운영 채널은 255자 이하로 입력해 주세요.")
+        String salesChannel,
 
         @Schema(description = "정산 계좌 — 보내면 세 값 모두 바꿈")
         @Valid

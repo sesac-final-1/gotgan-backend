@@ -353,6 +353,8 @@ class SellerApplyControllerTest {
             "카테고리 0          | {\"categoryId\": 0}",
             "대표 상품 1개       | {\"representativeProducts\": [{\"name\": \"셔츠\", \"subCategory\": \"셔츠\", \"price\": 1}]}",
             "계좌 예금주 없음    | {\"settlementAccount\": {\"bank\": \"신한\", \"number\": \"1\", \"holder\": \"\"}}",
+            "운영 채널 공백      | {\"salesChannel\": \"  \"}",
+            "월 매출 구간 모름   | {\"expectedMonthlySales\": \"OVER_1B\"}",
             "서류 종류 없음      | {\"documents\": [{\"key\": \"applications/4/a.pdf\", \"originalName\": \"a.pdf\"}]}"
     })
     @DisplayName("보완 재제출 형식 오류 — 400 INVALID_INPUT, 서비스를 부르지 않는다")

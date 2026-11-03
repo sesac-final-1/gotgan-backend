@@ -313,6 +313,8 @@ public class SellerApplyService {
                 request.categoryId() == null ? current.getCategoryId() : request.categoryId(),
                 intro,
                 products,
+                request.expectedMonthlySales() == null ? current.getExpectedMonthlySales() : request.expectedMonthlySales(),
+                trimOr(request.salesChannel(), current.getSalesChannel()),
                 account == null ? current.getBankName() : account.bank().trim(),
                 account == null ? current.getAccountNo() : account.number().trim(),
                 account == null ? current.getAccountHolder() : account.holder().trim());
@@ -330,6 +332,8 @@ public class SellerApplyService {
         addIfChanged(changed, "카테고리", current.getCategoryId(), correction.categoryId());
         addIfChanged(changed, "스토어 소개", current.getIntro(), correction.intro());
         addIfChanged(changed, "대표 상품", current.getRepresentativeProducts(), correction.representativeProducts());
+        addIfChanged(changed, "월 예상 매출", current.getExpectedMonthlySales(), correction.expectedMonthlySales());
+        addIfChanged(changed, "운영 채널", current.getSalesChannel(), correction.salesChannel());
         addIfChanged(changed, "정산 계좌", List.of(current.getBankName(), current.getAccountNo(), current.getAccountHolder()),
                 List.of(correction.bankName(), correction.accountNo(), correction.accountHolder()));
         return correction;
