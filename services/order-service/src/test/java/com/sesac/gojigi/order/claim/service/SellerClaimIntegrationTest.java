@@ -176,7 +176,8 @@ class SellerClaimIntegrationTest {
                 12_000L, "반품 환불")));
         verify(user).reversePoints(any());
         assertThat(outboxRepository.findAll()).filteredOn(e -> e.getAggregateId().equals(item.getItemNo()))
-                .extracting(e -> e.getEventType()).containsExactly("OrderItemReturned");   // 반품 완료 메일 (같은 트랜잭션)
+                .extracting(e -> e.getEventType())
+                .containsExactly("OrderClaimRequested", "OrderItemReturned");   // 신청 시 판매자 알림 · 반품 완료 메일 (같은 트랜잭션)
         assertThat(sagaRepository.findAll()).filteredOn(s -> s.getOrderClaim() != null
                         && s.getOrderClaim().getId().equals(claim.claimId()))
                 .singleElement().satisfies(s -> {
