@@ -38,6 +38,9 @@ class DemoSeedTest {
         assertThat(count("store")).isEqualTo(9);
         assertThat(count("store_status_history")).isEqualTo(10);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM store WHERE status = 'SUSPENDED'", Integer.class)).isEqualTo(1);
+        assertThat(count("application_document")).isEqualTo(66);  // 신청서 11 × 샘플 서류 6 (서류 3 + 상품 사진 3)
+        assertThat(jdbc.queryForObject("SELECT JSON_CONTAINS(requested_docs, '\"ECOMMERCE_REG\"') FROM store_application WHERE store_application_id = 102",
+                Integer.class)).as("102 보완요청 — 다시 낼 서류").isEqualTo(1);
     }
 
     @Test

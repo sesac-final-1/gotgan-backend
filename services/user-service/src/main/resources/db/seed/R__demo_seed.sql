@@ -59,3 +59,9 @@ INSERT IGNORE INTO point_history (point_history_id, user_id, order_item_id, orde
   (1100, 110, NULL, NULL, 'EARN', 4100, 0, 4100, 'seed-base-110', TIMESTAMP(@today - INTERVAL 30 DAY, '10:00:00')),
   (1120, 112, NULL, NULL, 'EARN', 9900, 0, 9900, 'seed-base-112', TIMESTAMP(@today - INTERVAL 30 DAY, '10:00:00')),
   (1140, 114, NULL, NULL, 'EARN', 5200, 0, 5200, 'seed-base-114', TIMESTAMP(@today - INTERVAL 30 DAY, '10:00:00'));
+
+-- 로그인 구매자 기본 배송지 1개(address_id = user_id) — 주문 시드 배송지와 같은 주소
+INSERT IGNORE INTO address (address_id, user_id, label, receiver_name, receiver_phone, zipcode, address1, address2, is_default, created_at) VALUES
+  (4, 4, '집', '김서연', '010-0000-0010', '04790', '서울 성동구 왕십리로 1', '404호', TRUE, TIMESTAMP(@today - INTERVAL 820 DAY, '10:00:00')),
+  (5, 5, '집', '이도현', '010-0000-0011', '04790', '서울 성동구 왕십리로 1', '505호', TRUE, TIMESTAMP(@today - INTERVAL 1400 DAY, '10:00:00')),
+  (6, 6, '집', '박지민', '010-0000-0012', '04790', '서울 성동구 왕십리로 1', '606호', TRUE, TIMESTAMP(@today - INTERVAL 400 DAY, '10:00:00'));
