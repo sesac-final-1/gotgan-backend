@@ -24,7 +24,7 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>CONNECT — Authorization: Bearer 토큰을 Keycloak JWKS 로 검증 · 탈퇴 차단 확인 → 연결 사용자(ChatPrincipal). 거절이면 서버가 곧 닫음</li>
  *   <li>SUBSCRIBE — /sub/rooms/{id} 는 방 멤버만(관리자 읽기 전용 포함) · /user/queue/errors 만 그 밖에 허용. 구독하면 접속 중 표시</li>
- *   <li>SEND — 토큰이 만료됐으면 거절(다시 연결해 새 토큰으로) · /pub 밖(브로커 주소 /sub · /user)은 거절 — 멤버 검사 · 저장 없이 구독자에게 바로 가지 않게</li>
+ *   <li>SEND — 토큰이 만료됐으면 거절(다시 연결해 새 토큰으로) · 연결 뒤 정지 · 탈퇴된 회원 거절 · /pub 밖(브로커 주소 /sub · /user)은 거절 — 멤버 검사 · 저장 없이 구독자에게 바로 가지 않게</li>
  *   <li>UNSUBSCRIBE — 접속 중 표시 해제 (연결 끊김은 ChatSessionEvents)</li>
  * </ul>
  */
@@ -116,7 +116,11 @@ public class StompAuthInterceptor implements ChannelInterceptor {
     }
 
     private void send(StompHeaderAccessor accessor) {
-        principal(accessor);
+        ChatPrincipal principal = principal(accessor);
+        // CONNECT 때만 보면 연결 중에 정지된 회원이 토큰 만료(최대 30분)까지 계속 보낼 수 있다 (11/3 점검) — Redis 키 조회 1번
+        if (blockedUsers.isBlocked(principal.userId())) {
+            throw new MessagingException("USER_BLOCKED: 탈퇴했거나 이용이 제한된 계정입니다.");
+        }
         String destination = accessor.getDestination();
         if (destination == null || !destination.startsWith(APP_PREFIX)) {
             throw new MessagingException("CHAT_NOT_ALLOWED: 보낼 수 없는 주소입니다.");

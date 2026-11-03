@@ -1,14 +1,15 @@
-// 시연 시드 생성 — node scripts/seed-gen/gen.mjs → 서비스별 db/seed/R__demo_seed.sql (user · store · product · order · payment · settlement · review)
+// 시연 시드 생성 — node scripts/seed-gen/gen.mjs → 서비스별 db/seed/R__demo_seed.sql (user · store · product · order · payment · settlement · review · admin)
 // 직접 고치지 말고 scenario.mjs 를 고친 뒤 다시 생성한다. 담당 구지훈 (각 파일 주인이 리뷰)
 // 금액 · 수수료 · 포인트는 서버 규칙 그대로 계산: 판매수수료(상위 카테고리율) · 결제수수료 2.2% 를 상품주문마다 원 단위 내림,
-// 적립 = (상품주문 금액 − 사용 포인트) × 5% 내림, 배송비는 스토어 정책(무료 기준 이상이면 0)
+// 적립 = (상품주문 금액 − 사용 포인트) × 5% 내림 — 구매확정 때만(ref_key earn-{상품주문}, 시각 = 구매확정), 배송비는 스토어 정책(무료 기준 이상이면 0)
+// 날짜 순서(스토어 개설 < 상품 등록 < 주문 < 구매확정 < 스토어 정지 < 주간 집계 < 오늘) · 등급 = 누적 금액 기준은 아래 check 로 생성 때 검증
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  APPLICATIONS, CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, INQUIRIES, LOGIN_BUYERS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS, REPRESENTATIVE, REVIEWS,
-  STORES, VIEW_BUYERS,
-  combos, salePrice, subCategoryId,
+  APPLICATIONS, CATALOG, CATEGORY, CATEGORY_TREE, COMMISSION, EARN_RATE, GRADE, INQUIRIES, LOGIN_BUYERS, MODERATIONS, ORDERS, PAYMENT_FEE_RATE, PRODUCTS,
+  REPRESENTATIVE, REVIEWS, STORES, VIEW_BUYERS,
+  combos, gradeOf, salePrice, subCategoryId,
 } from './scenario.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -18,6 +19,9 @@ const ago = (days, time = '10:00:00') => `TIMESTAMP(@today - INTERVAL ${days} DA
 const json = (items) => `JSON_ARRAY(${items.map((p) => `JSON_OBJECT('name', ${q(p.name)}, 'subCategory', ${q(p.subCategory)}, 'price', ${p.price})`).join(', ')})`;
 const mask = (name) => (name.length <= 2 ? `${name[0]}*` : `${name[0]}${'*'.repeat(name.length - 2)}${name.at(-1)}`);
 const storeById = Object.fromEntries(STORES.map((s) => [s.storeId, s]));
+const check = (ok, message) => { if (!ok) throw new Error(`시드 검증 실패: ${message}`); };
+// 스토어 정지 시각 — 지난주 월요일(@w1) 기준 요일. 오늘 기준 daysAgo 를 쓰면 요일마다 구매확정 · 집계와 앞뒤가 바뀐다
+const suspendedAt = (st) => `TIMESTAMP(@w1 + INTERVAL ${st.suspendedW1Day} DAY, '10:00:00')`;
 const buyerById = Object.fromEntries(LOGIN_BUYERS.map((b) => [b.userId, b]));
 const header = (owner, extra) => `-- 시연용 시드 (local · k8s 프로필에서만 실행, 내용이 바뀌면 재실행 — R__ 반복 마이그레이션). 담당 ${owner}
 -- ⚠️ 생성 파일 — 직접 고치지 말고 gotgan-backend scripts/seed-gen/scenario.mjs 를 고친 뒤 \`node scripts/seed-gen/gen.mjs\` (구지훈)
@@ -55,43 +59,71 @@ const orders = ORDERS.map((o, i) => {
     if (o.recent === 'DELIVERED') t.delivered = ago(back - 2, '14:00:00');
   }
   const orderNo = `CONCAT(DATE_FORMAT(${t.paid}, '%Y%m%d'), '-${900000 + id}')`;
-  return { ...o, id, p, store, itemAmt, shippingFee, payAmt: itemAmt + shippingFee, topCategory, t, orderNo,
+  const confirmDay = o.week ? -(o.week - 1) * 7 + o.day : null;   // @w1 기준 구매확정 일
+  return { ...o, id, p, store, itemAmt, shippingFee, payAmt: itemAmt + shippingFee, topCategory, t, orderNo, confirmDay,
     earned: Math.floor((itemAmt * EARN_RATE) / 100), buyerInfo: buyerById[o.buyer] };
 });
 
+// ── 검증 — 날짜 순서 · 상태
+const catalogById = Object.fromEntries(CATALOG.map((p) => [p.id, p]));
+for (const o of orders) {
+  check(!o.recent || ['PAYMENT_DONE', 'PREPARING'].includes(o.recent), `상품주문 ${o.id}: 진행 중 시드는 결제완료 · 배송준비까지 (배송중 · 배송완료는 스케줄러가 바로 넘김)`);
+  // 결제일(오늘 기준 최대 며칠 전) — 구매확정 주문은 확정 9일 전, 확정은 최대 (week × 7 + 6)일 전
+  const paidDaysAgo = o.week ? o.week * 7 + 6 + 9 : 2;
+  check(catalogById[o.product].created > paidDaysAgo, `상품 ${o.product}: 등록일(${catalogById[o.product].created}일 전)이 주문(최대 ${paidDaysAgo}일 전)보다 늦음`);
+}
+for (const p of CATALOG) {
+  const st = storeById[Math.floor(p.id / 100)];
+  check(p.created <= st.since, `상품 ${p.id}: 스토어 ${st.storeId} 개설(${st.since}일 전)보다 먼저 등록(${p.created}일 전)`);
+}
+for (const st of STORES.filter((x) => x.status !== 'ACTIVE')) {
+  const last = Math.max(...orders.filter((o) => o.store.storeId === st.storeId && o.confirmDay !== null).map((o) => o.confirmDay));
+  check(st.suspendedW1Day > last && st.suspendedW1Day < 7, `스토어 ${st.storeId}: 정지(@w1+${st.suspendedW1Day})는 마지막 구매확정(@w1+${last}) 뒤 · 주간 집계(@w1+7) 전`);
+}
+
 // ── user
 const buyerTotals = Object.fromEntries(LOGIN_BUYERS.map((b) => [b.userId, { point: 0, confirmed: 0 }]));
-for (const o of orders) {
+for (const o of orders.filter((x) => x.t.status === 'CONFIRMED')) {
   buyerTotals[o.buyer].point += o.earned;
-  if (o.t.status === 'CONFIRMED') buyerTotals[o.buyer].confirmed += o.itemAmt;
+  buyerTotals[o.buyer].confirmed += o.itemAmt;
 }
+for (const b of LOGIN_BUYERS) buyerTotals[b.userId].spent = b.baseSpent + buyerTotals[b.userId].confirmed;
+for (const b of VIEW_BUYERS) check(b.grade === gradeOf(b.spent), `회원 ${b.userId}: 등급 ${b.grade} ↔ 누적 ${b.spent} (기준 ${gradeOf(b.spent)})`);
 const userCols = ['user_id', 'email', 'name', 'nick', 'phone', 'signup_provider', 'point_balance', 'total_confirmed_amt', 'grade', 'status',
   'status_reason', 'suspended_at', 'suspended_until', 'last_login_at', 'created_at'];
 const owners = STORES.filter((s) => s.userId >= 200);
 const userRows = [
-  ...LOGIN_BUYERS.map((b) => [b.userId, q(b.email), q(b.name), q(b.nick), q(b.phone), "'LOCAL'", buyerTotals[b.userId].point, buyerTotals[b.userId].confirmed,
-    q(b.grade), "'ACTIVE'", 'NULL', 'NULL', 'NULL', ago(b.login, '09:00:00'), ago(b.joined)]),
+  ...LOGIN_BUYERS.map((b) => [b.userId, q(b.email), q(b.name), q(b.nick), q(b.phone), "'LOCAL'", buyerTotals[b.userId].point, buyerTotals[b.userId].spent,
+    q(gradeOf(buyerTotals[b.userId].spent)), "'ACTIVE'", 'NULL', 'NULL', 'NULL', ago(b.login, '09:00:00'), ago(b.joined)]),
   ...VIEW_BUYERS.map((b) => [b.userId, q(b.email), q(b.name), q(b.nick), q(b.phone), "'LOCAL'", b.point, b.spent, q(b.grade),
     q(b.suspended ? 'SUSPENDED' : 'ACTIVE'), q(b.suspended?.reason ?? null), b.suspended ? ago(b.suspended.daysAgo) : 'NULL',
     b.suspended ? ago(b.suspended.daysAgo - b.suspended.days) : 'NULL', ago(b.login, '09:00:00'), ago(b.joined)]),
-  ...owners.map((s) => [s.userId, q(`seller${s.storeId}@seed.gotgan.example`), q(s.owner), 'NULL', q(s.phone), "'LOCAL'", 0, 0, "'NORMAL'", "'ACTIVE'",
+  ...owners.map((s) => [s.userId, q(s.email), q(s.owner), 'NULL', q(s.phone), "'LOCAL'", 0, 0, "'NORMAL'", "'ACTIVE'",
     'NULL', 'NULL', 'NULL', ago(1, '09:00:00'), ago(s.since + 3)]),
 ];
+// 구매확정 적립 — 서버(OrderItemConfirmed 소비)와 같은 ref_key earn-{상품주문} · 시각 = 구매확정. 잔액은 확정 시각 순으로 누적
+//   같은 키라 시드 뒤 이벤트가 다시 와도 (type, ref_key) 유니크로 두 번 적립되지 않는다
+const earnedOrders = orders.filter((o) => o.t.status === 'CONFIRMED').sort((a, b) => a.confirmDay - b.confirmDay || a.id - b.id);
+const balance = {};
 const pointRows = [
-  ...orders.map((o) => [o.id, o.buyer, o.id, o.orderNo, "'EARN'", o.earned, 'NULL',
-    `${orders.filter((x) => x.buyer === o.buyer && x.id <= o.id).reduce((a, x) => a + x.earned, 0)}`, q(`seed-earn-${o.id}`), o.t.paid]),
-  ...VIEW_BUYERS.filter((b) => b.point > 0).map((b) => [b.userId * 10, b.userId, 'NULL', 'NULL', "'EARN'", b.point, 'NULL', b.point, q(`seed-base-${b.userId}`),
+  ...earnedOrders.map((o) => {
+    balance[o.buyer] = (balance[o.buyer] ?? 0) + o.earned;
+    return [o.id, o.buyer, o.id, o.orderNo, "'EARN'", o.earned, 0, balance[o.buyer], q(`earn-${o.id}`), o.t.confirmed];
+  }),
+  ...VIEW_BUYERS.filter((b) => b.point > 0).map((b) => [b.userId * 10, b.userId, 'NULL', 'NULL', "'EARN'", b.point, 0, b.point, q(`seed-base-${b.userId}`),
     ago(Math.min(b.joined, 30))]),
 ];
+for (const b of LOGIN_BUYERS) check((balance[b.userId] ?? 0) === buyerTotals[b.userId].point, `회원 ${b.userId}: 포인트 잔액 ↔ 적립 이력 합`);
 const userSql = `${header('perish95', `-- 1 관리자 · 2 · 3 판매자 · 4~6 구매자 = Keycloak 시드 계정(이메일 · user_id 고정 — gotgan-config scripts/keycloak-seed.sh). keycloak_id 는 NULL(이메일로 연결)
--- 4~6 은 목업 u1~u3 프로필, 포인트 · 누적 구매확정 금액은 주문 시드에서 계산(잔액 = 적립 이력 합)
+-- 4~6 은 목업 u1~u3 프로필, 포인트 = 구매확정분 적립(잔액 = 적립 이력 합) · 누적 구매확정 = 시드 이전 누적 + 시드 확정분 · 등급 = 누적 기준(30만 · 80만)
 -- 104~114 목업 구매자 · 201~ 스토어 대표자 = 조회용(Keycloak 계정 없음 — 로그인 불가). 111 은 이용정지(관리자 회원 화면 시연)`)}
 -- 시연 계정 — 프로필은 시드 값으로 되돌리고 포인트 · 상태는 시연 중 바뀐 값 유지
-INSERT INTO users (user_id, email, name, nick, phone, signup_provider, grade, status)
+-- 가입 · 최근 접속 시각 = 스토어 개설 전 · 어제 (값이 없으면 관리자 회원 목록의 날짜 칸이 비고, 가입일이 매일 오늘로 보임)
+INSERT INTO users (user_id, email, name, nick, phone, signup_provider, grade, status, last_login_at, created_at)
 VALUES
-  (1, 'wlsgksvheh+admin@gmail.com',   '곳간 관리자', '관리자', '010-0000-0001', 'LOCAL', 'NORMAL', 'ACTIVE'),
-  (2, 'wlsgksvheh+seller1@gmail.com', ${q(storeById[1].owner)}, NULL, ${q(storeById[1].phone)}, 'LOCAL', 'NORMAL', 'ACTIVE'),
-  (3, 'wlsgksvheh+seller2@gmail.com', ${q(storeById[2].owner)}, NULL, ${q(storeById[2].phone)}, 'LOCAL', 'NORMAL', 'ACTIVE')
+  (1, 'wlsgksvheh+admin@gmail.com',   '곳간 관리자', '관리자', '010-0000-0001', 'LOCAL', 'NORMAL', 'ACTIVE', ${ago(1, '09:00:00')}, ${ago(1400)}),
+  (2, 'wlsgksvheh+seller1@gmail.com', ${q(storeById[1].owner)}, NULL, ${q(storeById[1].phone)}, 'LOCAL', 'NORMAL', 'ACTIVE', ${ago(1, '09:00:00')}, ${ago(storeById[1].since + 3)}),
+  (3, 'wlsgksvheh+seller2@gmail.com', ${q(storeById[2].owner)}, NULL, ${q(storeById[2].phone)}, 'LOCAL', 'NORMAL', 'ACTIVE', ${ago(1, '09:00:00')}, ${ago(storeById[2].since + 3)})
 AS seed
 ON DUPLICATE KEY UPDATE email = seed.email, name = seed.name, nick = seed.nick, phone = seed.phone;
 
@@ -112,7 +144,7 @@ STORES.map((s) => [s.storeId, s.userId, CATEGORY[s.cat], "'INDIVIDUAL'", q(s.nam
   q(s.phone), q(s.email), q(`서울 성동구 성수이로 ${s.storeId}`), q(s.name), q(s.slug), q(`<p>${s.intro}</p>`), json(REPRESENTATIVE[s.cat]), "'FROM_5M_TO_20M'", 'NULL',
   "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), "'APPROVED'", 'NULL', 'FALSE', ago(s.since + 3), ago(s.since), ago(s.since + 3)])
   .concat(APPLICATIONS.map((a) => [a.applicationId, a.userId, CATEGORY[a.cat], "'INDIVIDUAL'", q(a.name), q(a.owner), q(a.bizNo), q(`2026-시연-${a.applicationId}`),
-    q(a.phone), q(a.email), q(`서울 성동구 성수이로 ${a.applicationId}`), q(a.name), q(a.slug), q(`<p>${a.intro}</p>`), json(REPRESENTATIVE[a.cat]), "'UNDER_5M'", 'NULL',
+    q(a.phone), q(a.email), q(`서울 성동구 성수이로 ${a.applicationId}`), q(a.name), q(a.slug), q(`<p>${a.intro}</p>`), json(a.products ?? REPRESENTATIVE[a.cat]), "'UNDER_5M'", 'NULL',
     "'곳간은행'", q(`100-0000-${String(a.applicationId).padStart(6, '0')}`), q(a.owner), q(a.status), q(a.supplement?.reason ?? null), 'FALSE',
     ago(a.submittedDaysAgo), ago(a.supplement?.daysAgo ?? a.submittedDaysAgo), ago(a.submittedDaysAgo)])))}
 ${insert('application_history', ['application_history_id', 'store_application_id', 'from_status', 'to_status', 'actor_type', 'reason', 'created_at'],
@@ -126,7 +158,7 @@ STORES.map((s) => [s.storeId, s.storeId, s.userId, q(s.name), q(s.slug), q(`<p>$
   q(s.courier), q(s.dispatch), q(GRADE[s.grade]), q(s.status), q(s.statusReason ?? null), ago(s.since)]))}
 ${insert('store_status_history', ['store_status_history_id', 'store_id', 'from_status', 'to_status', 'actor_type', 'reason', 'created_at'],
   STORES.flatMap((s) => [[s.storeId * 10 + 1, s.storeId, 'NULL', "'ACTIVE'", "'ADMIN'", 'NULL', ago(s.since)],
-    ...(s.status === 'SUSPENDED' ? [[s.storeId * 10 + 2, s.storeId, "'ACTIVE'", "'SUSPENDED'", "'ADMIN'", q(s.statusReason), ago(s.suspendedDaysAgo)]] : [])]))}`;
+    ...(s.status === 'SUSPENDED' ? [[s.storeId * 10 + 2, s.storeId, "'ACTIVE'", "'SUSPENDED'", "'ADMIN'", q(s.statusReason), suspendedAt(s)]] : [])]))}`;
 
 // ── order
 const flow = ['PAYMENT_DONE', 'PREPARING', 'SHIPPING', 'DELIVERED', 'CONFIRMED'];
@@ -135,7 +167,7 @@ const historyRows = orders.flatMap((o) => {
   const rows = [[o.id * 10 + 1, o.id, o.buyer, 'NULL', "'ORDERED'", "'BUYER'", 'NULL', o.t.paid],
     [o.id * 10 + 2, o.id, 'NULL', "'ORDERED'", "'PAYMENT_DONE'", "'SYSTEM'", 'NULL', o.t.paid]];
   const at = { PREPARING: `${o.t.paid} + INTERVAL 3 HOUR`, SHIPPING: o.t.shipped, DELIVERED: o.t.delivered, CONFIRMED: o.t.confirmed };
-  const actor = { PREPARING: ['SELLER', o.store.userId], SHIPPING: ['SELLER', o.store.userId], DELIVERED: ['SYSTEM', null], CONFIRMED: ['BUYER', o.buyer] };
+  const actor = { PREPARING: ['SELLER', o.store.userId], SHIPPING: ['SELLER', o.store.userId], DELIVERED: ['SYSTEM', null], CONFIRMED: ['SYSTEM', null] };   // 확정 = 배송완료 + 7일 자동
   for (let k = 1; k <= upto; k += 1) {
     const to = flow[k];
     rows.push([o.id * 10 + 2 + k, o.id, q(actor[to][1]), q(flow[k - 1]), q(to), q(actor[to][0]), 'NULL', at[to]]);
@@ -200,8 +232,10 @@ const settlementSql = `${header('jihoon-devstu', `-- 정산 = order 시드의 �
 INSERT IGNORE INTO category_commission (category_id, commission_rate, effective_from) VALUES
 ${Object.entries(COMMISSION).map(([c, r]) => `  (${c}, ${r.toFixed(2)}, '2026-01-01')`).join(',\n')};
 
-${insert('settlement_store', ['settlement_store_id', 'store_id', 'store_name', 'seller_email', 'bank_name', 'account_number', 'account_holder', 'store_status'],
-  STORES.map((s) => [s.storeId, s.storeId, q(s.name), q(s.email), "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), q(s.status)]))}
+${insert('settlement_store', ['settlement_store_id', 'store_id', 'store_name', 'seller_email', 'bank_name', 'account_number', 'account_holder', 'store_status',
+  'store_status_changed_at'],
+  STORES.map((s) => [s.storeId, s.storeId, q(s.name), q(s.email), "'곳간은행'", q(`100-0000-${String(s.storeId).padStart(6, '0')}`), q(s.owner), q(s.status),
+    s.status === 'ACTIVE' ? 'NULL' : suspendedAt(s)]))}
 ${insert('settlement', ['settlement_id', 'store_id', 'week_start', 'week_end', 'item_count', 'carried_over_count', 'sales_amt', 'commission_amt', 'payment_fee_amt',
   'payout_amt', 'status', 'hold_reason', 'scheduled_pay_date', 'held_at', 'paid_at', 'created_at'],
 groups.map((g) => [g.id, g.storeId, g.start, `${g.start} + INTERVAL 6 DAY`, g.items.length, 0, g.sum('itemAmt'), g.sum('commission'), g.sum('fee'), g.sum('payout'),
@@ -236,10 +270,10 @@ CATALOG.map((p) => {
   return [p.id, subCategoryId(p), store.storeId, q(p.name), p.price, p.discount.toFixed(2), salePrice(p),
     q(`<p>${p.name}</p><p>소재 · 원재료: ${p.material} / 원산지: ${p.origin}</p>`), q(p.material), q(p.origin),
     q(p.options[0]?.[0] ?? null), q(p.options[1]?.[0] ?? null), q(p.status ?? 'ON_SALE'), inactive ? 'FALSE' : 'TRUE',
-    inactive ? ago(store.suspendedDaysAgo) : 'NULL', ago(p.created)];
+    inactive ? suspendedAt(store) : 'NULL', ago(p.created)];
 }))}
 ${insert('store_status', ['store_id', 'status', 'status_changed_at'],
-  STORES.filter((s) => s.status !== 'ACTIVE').map((s) => [s.storeId, q(s.status), ago(s.suspendedDaysAgo)]))}
+  STORES.filter((s) => s.status !== 'ACTIVE').map((s) => [s.storeId, q(s.status), suspendedAt(s)]))}
 ${insert('product_option', ['product_option_id', 'product_id', 'option1_value', 'option2_value', 'extra_price', 'stock', 'created_at'],
   CATALOG.flatMap((p) => combos(p).map((c, i, all) => [p.id * 100 + i + 1, p.id, q(c[0] ?? null), q(c[1] ?? null), 0, stockOf(p, i, all.length), ago(p.created)])))}
 ${insert('product_image', ['product_image_id', 'product_id', 's3_key', 'sort_order', 'created_at'],
@@ -253,7 +287,6 @@ const reviews = REVIEWS.map((r) => {
   if (r.content.length < 20 || r.content.length > 2000) throw new Error(`리뷰 ${r.orderItemId}: 본문 20~2,000자`);
   return { ...r, o, at: `${o.t.confirmed} + INTERVAL ${r.afterDays} DAY + INTERVAL 5 HOUR` };
 });
-const catalogById = Object.fromEntries(CATALOG.map((p) => [p.id, p]));
 const nickById = Object.fromEntries([...LOGIN_BUYERS, ...VIEW_BUYERS].map((b) => [b.userId, b.nick ?? mask(b.name)]));
 const reviewSql = `${header('perish95', `-- 작성 자격 = order 시드의 구매확정 상품주문 전부(review_eligibility_id = order_item_id), 값은 OrderItemConfirmed payload 와 같게
 --   buyer_display_name = order 시드 orderer_display_name(마스킹 실명), option_name = order_item.option_name, thumbnail_url = order_item.thumbnail_url(시드는 NULL)
@@ -274,10 +307,43 @@ ${insert('product_inquiry', ['product_inquiry_id', 'user_id', 'product_id', 'sto
 INQUIRIES.map((n, i) => [i + 1, n.userId, n.product, Math.floor(n.product / 100), q(catalogById[n.product].name), 'NULL', q(nickById[n.userId]), q(n.content),
   q(n.answer ?? null), n.secret ? 'TRUE' : 'FALSE', n.answer ? ago(n.daysAgo - n.answerAfterDays, '16:00:00') : 'NULL', ago(n.daysAgo, '13:00:00')]))}`;
 
+// ── admin — 신고 · 조치 이력. 조치 1번이 그 대상의 열린 신고를 모두 닫음(RESOLVED). 시각: 신고 < 조치 = review 블라인드 시각 · user 정지 시각
+const reviewById = Object.fromEntries(reviews.map((r) => [r.o.id, r]));
+const viewById = Object.fromEntries(VIEW_BUYERS.map((b) => [b.userId, b]));
+let reportId = 0;
+const moderations = MODERATIONS.map((m, i) => {
+  let actedAt;
+  let summary;
+  if (m.targetType === 'REVIEW') {
+    const r = reviewById[m.targetId];
+    check(r?.blind, `신고 · 조치 리뷰 ${m.targetId}: review 시드의 블라인드 리뷰가 아님`);
+    actedAt = `${r.o.t.confirmed} + INTERVAL ${r.blind.afterDays} DAY`;
+    summary = r.content.slice(0, 100);
+    check(m.reason === r.blind.reason, `리뷰 ${m.targetId}: 조치 사유 ↔ review blind_reason`);
+  } else {
+    const u = viewById[m.targetId];
+    check(u?.suspended, `신고 · 조치 회원 ${m.targetId}: user 시드의 정지 회원이 아님`);
+    actedAt = ago(u.suspended.daysAgo);
+    summary = u.name;
+    check(m.reason === u.suspended.reason && m.suspendDays === u.suspended.days, `회원 ${m.targetId}: 조치 사유 · 기간 ↔ user 정지`);
+  }
+  // 신고는 조치 하루 전부터 몇 시간 간격으로
+  const reports = m.reports.map((rp, k) => ({ ...rp, id: (reportId += 1), at: `${actedAt} - INTERVAL 1 DAY + INTERVAL ${k * 3} HOUR` }));
+  return { ...m, id: i + 1, actedAt, summary, reports };
+});
+const adminSql = `${header('jihoon-devstu', `-- 신고 · 조치 = 블라인드 리뷰(review 시드 1004) · 정지 회원(user 시드 111)의 근거. 조치 1번이 그 대상의 신고를 모두 닫음(RESOLVED)
+--   조치 시각 = review blinded_at · user suspended_at, 사유 = 대상 서비스에 넣은 사유와 같음. 처리한 관리자 = user 1. 처리 대기 신고는 없음(시연에서 새로 신고)`)}
+${insert('moderation_action', ['moderation_action_id', 'target_type', 'target_id', 'action', 'reason', 'suspend_days', 'admin_id', 'report_count', 'created_at'],
+  moderations.map((m) => [m.id, q(m.targetType), m.targetId, q(m.action), q(m.reason), m.suspendDays ?? 'NULL', 1, m.reports.length, m.actedAt]))}
+${insert('report', ['report_id', 'target_type', 'target_id', 'reporter_id', 'reporter_role', 'reason_code', 'detail', 'target_summary', 'status', 'moderation_action_id',
+  'created_at', 'updated_at'],
+  moderations.flatMap((m) => m.reports.map((rp) => [rp.id, q(m.targetType), m.targetId, rp.reporter, q(rp.role), q(rp.code), 'NULL', q(m.summary), "'RESOLVED'", m.id,
+    rp.at, m.actedAt])))}`;
+
 for (const [service, sql] of [['user', userSql], ['store', storeSql], ['product', productSql], ['order', orderSql], ['payment', paymentSql],
-  ['settlement', settlementSql], ['review', reviewSql]]) {
+  ['settlement', settlementSql], ['review', reviewSql], ['admin', adminSql]]) {
   console.log(write(service, sql));
 }
 console.log(`회원 ${userRows.length + 3} · 스토어 ${STORES.length} · 상품 ${CATALOG.length} · 주문 ${orders.length}(구매확정 ${confirmed.length}) · 정산서 ${groups.length}`
   + ` (${groups.map((g) => `${g.storeId}:W-${g.week}:${g.status}:${g.sum('payout')}`).join(' ')})`
-  + ` · 리뷰 자격 ${confirmed.length} · 리뷰 ${reviews.length} · 문의 ${INQUIRIES.length}`);
+  + ` · 리뷰 자격 ${confirmed.length} · 리뷰 ${reviews.length} · 문의 ${INQUIRIES.length} · 신고 ${reportId} · 조치 ${moderations.length}`);

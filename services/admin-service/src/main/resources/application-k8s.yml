@@ -1,4 +1,8 @@
 # 클러스터용 — ConfigMap 의 SPRING_PROFILES_ACTIVE=k8s 로 활성화 (가이드라인 15장 6절)
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed   # dev 클러스터 = 시연 환경. 운영 환경이면 seed 제거
+
 management:
   tracing:
     sampling:

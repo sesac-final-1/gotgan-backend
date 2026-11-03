@@ -45,7 +45,7 @@ public class ChatRetentionJob {
         this.pause = pause;
     }
 
-    @Scheduled(cron = "${app.chat.retention.cron}", zone = "Asia/Seoul")
+    @Scheduled(cron = "${app.scheduler.chat-retention-cron}", zone = "Asia/Seoul")
     @SchedulerLock(name = "chatRetention", lockAtMostFor = "10m")
     public void run() {
         purge();

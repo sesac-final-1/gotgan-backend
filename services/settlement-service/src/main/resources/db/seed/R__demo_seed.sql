@@ -18,16 +18,16 @@ INSERT IGNORE INTO category_commission (category_id, commission_rate, effective_
   (5, 10.00, '2026-01-01'),
   (6, 6.00, '2026-01-01');
 
-INSERT IGNORE INTO settlement_store (settlement_store_id, store_id, store_name, seller_email, bank_name, account_number, account_holder, store_status) VALUES
-  (1, 1, '산골농부 박씨네', 'wlsgksvheh+seller1@gmail.com', '곳간은행', '100-0000-000001', '박영철', 'ACTIVE'),
-  (2, 2, '토담공방', 'wlsgksvheh+seller2@gmail.com', '곳간은행', '100-0000-000002', '이수아', 'ACTIVE'),
-  (11, 11, '오롯이 리넨', 'hello@orotlinen.example.com', '곳간은행', '100-0000-000011', '한지우', 'ACTIVE'),
-  (12, 12, '무드앤로우', 'cs@moodrow.example.com', '곳간은행', '100-0000-000012', '오세훈', 'ACTIVE'),
-  (13, 13, '걸음상회', 'georum@georum.example.com', '곳간은행', '100-0000-000013', '최민재', 'ACTIVE'),
-  (15, 15, '볕드는집', 'house@byeot.example.com', '곳간은행', '100-0000-000015', '정다은', 'SUSPENDED'),
-  (17, 17, '로스터리 하루', 'roast@haru.example.com', '곳간은행', '100-0000-000017', '윤하루', 'ACTIVE'),
-  (18, 18, '피부정원', 'garden@skingarden.example.com', '곳간은행', '100-0000-000018', '강예린', 'ACTIVE'),
-  (19, 19, '데스크테리어랩', 'lab@deskterior.example.com', '곳간은행', '100-0000-000019', '서준호', 'ACTIVE');
+INSERT IGNORE INTO settlement_store (settlement_store_id, store_id, store_name, seller_email, bank_name, account_number, account_holder, store_status, store_status_changed_at) VALUES
+  (1, 1, '산골농부 박씨네', 'wlsgksvheh+seller1@gmail.com', '곳간은행', '100-0000-000001', '박영철', 'ACTIVE', NULL),
+  (2, 2, '토담공방', 'wlsgksvheh+seller2@gmail.com', '곳간은행', '100-0000-000002', '이수아', 'ACTIVE', NULL),
+  (11, 11, '오롯이 리넨', 'hello@orotlinen.example.com', '곳간은행', '100-0000-000011', '한지우', 'ACTIVE', NULL),
+  (12, 12, '무드앤로우', 'cs@moodrow.example.com', '곳간은행', '100-0000-000012', '오세훈', 'ACTIVE', NULL),
+  (13, 13, '걸음상회', 'georum@georum.example.com', '곳간은행', '100-0000-000013', '최민재', 'ACTIVE', NULL),
+  (15, 15, '볕드는집', 'house@byeot.example.com', '곳간은행', '100-0000-000015', '정다은', 'SUSPENDED', TIMESTAMP(@w1 + INTERVAL 3 DAY, '10:00:00')),
+  (17, 17, '로스터리 하루', 'roast@haru.example.com', '곳간은행', '100-0000-000017', '윤하루', 'ACTIVE', NULL),
+  (18, 18, '피부정원', 'garden@skingarden.example.com', '곳간은행', '100-0000-000018', '강예린', 'ACTIVE', NULL),
+  (19, 19, '데스크테리어랩', 'lab@deskterior.example.com', '곳간은행', '100-0000-000019', '서준호', 'ACTIVE', NULL);
 
 INSERT IGNORE INTO settlement (settlement_id, store_id, week_start, week_end, item_count, carried_over_count, sales_amt, commission_amt, payment_fee_amt, payout_amt, status, hold_reason, scheduled_pay_date, held_at, paid_at, created_at) VALUES
   (1, 1, @w1 - INTERVAL 0 DAY, @w1 - INTERVAL 0 DAY + INTERVAL 6 DAY, 2, 0, 74980, 5248, 1649, 68083, 'SCHEDULED', NULL, @w1 - INTERVAL 0 DAY + INTERVAL 10 DAY, NULL, NULL, TIMESTAMP(@w1 - INTERVAL 0 DAY + INTERVAL 7 DAY, '03:00:00')),

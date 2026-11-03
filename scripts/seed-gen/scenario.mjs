@@ -29,7 +29,7 @@ export const STORES = [
   { storeId: 15, userId: 205, mock: 's5', name: '볕드는집', slug: 'byeot-house', cat: 'living', owner: '정다은', bizNo: '000-00-00005', phone: '031-0000-0005',
     email: 'house@byeot.example.com', intro: '햇볕 잘 드는 방을 위한 조명과 패브릭.', since: 301, grade: '새싹', color: '#c08a2e',
     courier: '한진택배', shipFee: 3000, freeOver: 40000, dispatch: '평일 13시 이전 결제 시 당일 출고',
-    status: 'SUSPENDED', statusReason: '반품 미처리 3건 — 처리 완료 후 해제', suspendedDaysAgo: 31 },
+    status: 'SUSPENDED', statusReason: '고객 문의 · 배송 지연 반복 — 개선 계획 제출 후 해제', suspendedW1Day: 3 },   // 지난주 목 — 1008 확정(화) 뒤 · 집계 전
   { storeId: 17, userId: 207, mock: 's7', name: '로스터리 하루', slug: 'haru-roastery', cat: 'food', owner: '윤하루', bizNo: '000-00-00007', phone: '02-0000-0007',
     email: 'roast@haru.example.com', intro: '월·목 로스팅, 화·금 발송. 볶은 지 3일 이내 원두만 보냅니다.', since: 540, grade: '파워', color: '#3d2b22',
     courier: 'CJ대한통운', shipFee: 3000, freeOver: 30000, dispatch: '화 · 금 발송', status: 'ACTIVE' },
@@ -53,11 +53,14 @@ export const REPRESENTATIVE = {
 
 // 회원 — 1 관리자 · 2 · 3 판매자 · 4~6 구매자는 Keycloak 시드 계정(로그인 가능, 이메일 고정). 4~6 은 목업 u1~u3 프로필로
 //   목업 u4~u14 → user 100 + N (조회용, 로그인 불가 — 답변 K1). 휴면 없음(K2), u11 은 이용정지(관리자 회원 화면 시연)
-//   로그인 계정의 포인트 · 누적 구매확정 금액은 아래 주문에서 계산, 조회용 회원은 목업 값(포인트는 이력 1건으로 잔액과 맞춤)
+//   로그인 계정의 포인트 = 시드 구매확정분 적립(서버 규칙 — 구매확정 때 5%), 누적 구매확정 = baseSpent(시드 주문 이전 누적) + 시드 구매확정분
+//   등급은 손으로 적지 않고 누적 금액으로 계산(GRADE_RULE — 프론트 user/constants.js 와 같은 기준). 조회용 회원도 같은 규칙으로 검증
+export const GRADE_RULE = [['GOLD', 800000], ['SILVER', 300000], ['NORMAL', 0]];
+export const gradeOf = (spent) => GRADE_RULE.find(([, min]) => spent >= min)[0];
 export const LOGIN_BUYERS = [
-  { userId: 4, mock: 'u1', email: 'wlsgksvheh+buyer1@gmail.com', name: '김서연', nick: '서연이네', phone: '010-0000-0010', grade: 'GOLD', joined: 820, login: 0 },
-  { userId: 5, mock: 'u2', email: 'wlsgksvheh+buyer2@gmail.com', name: '이도현', nick: '도현', phone: '010-0000-0011', grade: 'GOLD', joined: 1400, login: 0 },
-  { userId: 6, mock: 'u3', email: 'wlsgksvheh+buyer3@gmail.com', name: '박지민', nick: '지민찡', phone: '010-0000-0012', grade: 'SILVER', joined: 400, login: 2 },
+  { userId: 4, mock: 'u1', email: 'wlsgksvheh+buyer1@gmail.com', name: '김서연', nick: '서연이네', phone: '010-0000-0010', baseSpent: 700000, joined: 820, login: 0 },   // GOLD
+  { userId: 5, mock: 'u2', email: 'wlsgksvheh+buyer2@gmail.com', name: '이도현', nick: '도현', phone: '010-0000-0011', baseSpent: 750000, joined: 1400, login: 0 },    // GOLD
+  { userId: 6, mock: 'u3', email: 'wlsgksvheh+buyer3@gmail.com', name: '박지민', nick: '지민찡', phone: '010-0000-0012', baseSpent: 150000, joined: 400, login: 2 },  // SILVER
 ];
 // 입점 심사 시연용 신청 (10/29) — 관리자가 승인 · 반려 · 보완요청을 눌러 볼 수 있게. 신청자는 Keycloak 에 있는 구매자(승인되면 user 가 SELLER 를 넣음)
 //   buyer1(4)은 메인 시연 구매자라 쓰지 않는다. 서류(application_document)는 S3 객체가 없어 없음 → 화면에 "미제출"
@@ -66,6 +69,7 @@ export const APPLICATIONS = [
     phone: '010-0000-0012', email: 'wlsgksvheh+buyer3@gmail.com', intro: '천연 오일로 저온 숙성한 수제 비누를 만듭니다.', submittedDaysAgo: 1 },
   { applicationId: 102, userId: 5, status: 'SUPPLEMENT', cat: 'living', name: '도현 목공소', slug: 'dohyun-wood', owner: '이도현', bizNo: '000-00-00102',
     phone: '010-0000-0011', email: 'wlsgksvheh+buyer2@gmail.com', intro: '원목 도마와 트레이를 하나씩 깎아 만듭니다.', submittedDaysAgo: 4,
+    products: [{ name: '월넛 원목 도마', subCategory: '식기', price: 48000 }, { name: '오크 서빙 트레이', subCategory: '수납', price: 36000 }],
     supplement: { daysAgo: 2, reason: '통신판매업 신고증 사본이 흐려 확인이 어렵습니다. 다시 올려 주세요.' } },
 ];
 export const VIEW_BUYERS = [
@@ -77,9 +81,9 @@ export const VIEW_BUYERS = [
   { userId: 109, name: '임재현', nick: 'jh_lim', email: 'jaehyun.lim@example.com', phone: '010-0000-0018', grade: 'NORMAL', joined: 720, spent: 140000, point: 0, login: 390 },
   { userId: 110, name: '한소희', nick: '소소', email: 'sohee.han@example.com', phone: '010-0000-0019', grade: 'SILVER', joined: 250, spent: 388000, point: 4100, login: 1 },
   { userId: 111, name: '오준서', nick: '블랙컨슈머아님', email: 'junseo.oh@example.com', phone: '010-0000-0020', grade: 'NORMAL', joined: 90, spent: 210000, point: 0, login: 4,
-    suspended: { reason: '허위 리뷰 반복 작성', daysAgo: 4, days: 14 } },
+    suspended: { reason: '판매자 대상 욕설 · 허위 신고 반복 (신고 2건 확인)', daysAgo: 4, days: 14 } },
   { userId: 112, name: '서다인', nick: '다인', email: 'dain.seo@example.com', phone: '010-0000-0021', grade: 'GOLD', joined: 1100, spent: 1530000, point: 9900, login: 0 },
-  { userId: 113, name: '문태양', nick: '태양', email: 'taeyang.m@example.com', phone: '010-0000-0022', grade: 'NORMAL', joined: 8, spent: 0, point: 3000, login: 0 },
+  { userId: 113, name: '문태양', nick: '태양', email: 'taeyang.m@example.com', phone: '010-0000-0022', grade: 'NORMAL', joined: 8, spent: 0, point: 0, login: 0 },
   { userId: 114, name: '배수빈', nick: '수빈', email: 'subin.bae@example.com', phone: '010-0000-0023', grade: 'SILVER', joined: 510, spent: 610000, point: 5200, login: 6 },
 ];
 
@@ -117,10 +121,10 @@ export const CATALOG = [
   {id: 203, mock: "p403", name: "물레 성형 미니 화병", sub: "화병", price: 36000, discount: 0, stock: 17, created: 40, options: [["형태",["호리병","원통"]]], material: "조합토", origin: "대한민국 (전주)"},
   {id: 204, mock: "p404", name: "다완 찻잔 2인 세트", sub: "식기", price: 64000, discount: 8, stock: 9, created: 6, options: [], material: "분청토", origin: "대한민국 (전주)"},
   {id: 1501, mock: "p501", name: "오크 베이스 패브릭 테이블 램프", sub: "조명", price: 119000, discount: 15, stock: 55, created: 150, options: [["전구",["전구색 2700K","주백색 4000K"]]], material: "오크 원목 / 린넨 갓", origin: "대한민국"},
-  {id: 1502, mock: "p502", name: "스톤워싱 리넨 침구 3종 세트", sub: "침구", price: 239000, discount: 30, stock: 70, created: 330, options: [["사이즈",["SS","Q","K"]],["컬러",["내추럴","테라코타","그레이"]]], material: "리넨 100%", origin: "리투아니아 원단 / 국내 봉제"},
+  {id: 1502, mock: "p502", name: "스톤워싱 리넨 침구 3종 세트", sub: "침구", price: 239000, discount: 30, stock: 70, created: 280, options: [["사이즈",["SS","Q","K"]],["컬러",["내추럴","테라코타","그레이"]]], material: "리넨 100%", origin: "리투아니아 원단 / 국내 봉제"},
   {id: 1503, mock: "p503", name: "핸드위빙 라탄 바스켓", sub: "수납", price: 42000, discount: 0, stock: 130, created: 70, options: [["크기",["S","M","L"]]], material: "라탄", origin: "인도네시아"},
-  {id: 1504, mock: "p504", name: "소이 왁스 우드윅 캔들 200g", sub: "캔들", price: 26000, discount: 0, stock: 300, created: 400, options: [["향",["무화과 잎","흰 차","삼나무"]]], material: "소이왁스 / 우드윅", origin: "대한민국"},
-  {id: 101, mock: "p601", name: "서귀포 노지 햇감귤 5kg", sub: "과일", price: 32900, discount: 18, stock: 900, created: 4, options: [["크기",["로얄과 (S~M)","대과 (L)","못난이 (혼합)"]]], material: "감귤 (노지 재배)", origin: "제주 서귀포시"},
+  {id: 1504, mock: "p504", name: "소이 왁스 우드윅 캔들 200g", sub: "캔들", price: 26000, discount: 0, stock: 300, created: 290, options: [["향",["무화과 잎","흰 차","삼나무"]]], material: "소이왁스 / 우드윅", origin: "대한민국"},
+  {id: 101, mock: "p601", name: "서귀포 노지 햇감귤 5kg", sub: "과일", price: 32900, discount: 18, stock: 900, created: 40, options: [["크기",["로얄과 (S~M)","대과 (L)","못난이 (혼합)"]]], material: "감귤 (노지 재배)", origin: "제주 서귀포시"},
   {id: 102, mock: "p602", name: "지리산 야생화 꿀 1.2kg", sub: "꿀·잼", price: 48000, discount: 0, stock: 120, created: 220, options: [], material: "벌꿀 100% (야생화)", origin: "경남 하동군"},
   {id: 103, mock: "p603", name: "유기농 현미 4kg (2026년 햅쌀)", sub: "쌀·잡곡", price: 29000, discount: 10, stock: 240, created: 12, options: [["도정",["현미","7분도","백미"]]], material: "유기농 현미 100%", origin: "전남 해남군"},
   {id: 104, mock: "p604", name: "설향 딸기잼 무첨가 300g", sub: "꿀·잼", price: 14500, discount: 0, stock: 410, created: 180, options: [["수량",["1병","2병","3병"]]], material: "딸기 70% 비정제원당 30%", origin: "충남 논산시"},
@@ -136,7 +140,7 @@ export const CATALOG = [
   {id: 1901, mock: "p901", name: "저소음 무접점 텐키리스 키보드", sub: "키보드", price: 219000, discount: 8, stock: 38, created: 90, options: [["키압",["35g","45g"]],["배열",["한글","영문"]]], material: "PBT 키캡 / 정전용량 무접점", origin: "중국 (국내 기획)"},
   {id: 1902, mock: "p902", name: "노이즈캔슬링 무선 헤드폰", sub: "음향", price: 249000, discount: 20, stock: 52, created: 130, options: [["컬러",["샌드","블랙"]]], material: "-", origin: "중국"},
   {id: 1903, mock: "p903", name: "월넛 원목 모니터 받침대", sub: "데스크", price: 89000, discount: 0, stock: 26, created: 30, options: [["폭",["600mm","800mm"]]], material: "북미산 월넛 원목", origin: "대한민국"},
-  {id: 1904, mock: "p904", name: "울 펠트 데스크 매트 900×400", sub: "데스크", price: 34000, discount: 10, stock: 210, created: 240, options: [["컬러",["차콜","그레이","오트밀"]]], material: "울 펠트 / 논슬립 백", origin: "중국"},
+  {id: 1904, mock: "p904", name: "울 펠트 데스크 매트 900×400", sub: "데스크", price: 34000, discount: 10, stock: 210, created: 200, options: [["컬러",["차콜","그레이","오트밀"]]], material: "울 펠트 / 논슬립 백", origin: "중국"},
 ];
 
 // 판매가 = price × (100 − 할인율) / 100 을 10원 단위 반올림 (product 서버 규칙 Product.calculateSalePrice 와 같게)
@@ -153,7 +157,8 @@ export const subCategoryId = (p) => SUB_ID[p.sub];
 
 // 주문 시나리오 — 주문 1건 = 스토어 1곳 · 상품 1개(정합성 확인을 단순하게). 포인트 사용 없음
 //   week: 구매확정된 주(1 = 지난주 → 정산 지급예정, 2 = 지지난주 → 지급 완료), day: 그 주 월요일 + day 에 구매확정
-//   recent: 진행 중 상태 — 판매자 주문 화면 시연(발주확인 · 송장 · 배송완료 버튼)
+//   recent: 진행 중 상태 — 판매자 주문 화면 시연(발주확인 · 송장 버튼). 결제완료 · 배송준비까지만 — 배송중 · 배송완료는
+//   자동 배송완료 · 구매확정 스케줄러가 시각으로 넘기므로 시드하지 않고 QA · 시연에서 송장 등록으로 만든다(11/3)
 export const ORDERS = [
   { buyer: 4, product: 101, qty: 2, week: 2, day: 1 },
   { buyer: 5, product: 201, qty: 2, week: 2, day: 2 },
@@ -163,8 +168,8 @@ export const ORDERS = [
   { buyer: 4, product: 202, qty: 1, week: 1, day: 3 },
   { buyer: 4, product: 1701, qty: 2, week: 1, day: 4 },
   { buyer: 6, product: 1501, qty: 1, week: 1, day: 1 },   // 정지 스토어 — 정산서 자동 보류
-  { buyer: 4, product: 101, qty: 1, recent: 'DELIVERED' },
-  { buyer: 5, product: 201, qty: 1, recent: 'SHIPPING' },
+  { buyer: 4, product: 101, qty: 1, recent: 'PREPARING' },
+  { buyer: 5, product: 201, qty: 1, recent: 'PREPARING' },
   { buyer: 6, product: 102, qty: 1, recent: 'PREPARING' },
   { buyer: 4, product: 202, qty: 1, recent: 'PAYMENT_DONE' },
   { buyer: 5, product: 101, qty: 3, recent: 'PAYMENT_DONE' },
@@ -195,6 +200,15 @@ export const REVIEWS = [
     reply: '불편을 드려 죄송합니다. 다음 발송부터 완충재를 보강하고, 무른 귤은 사진 보내 주시면 바로 다시 보내드릴게요.' },
   { orderItemId: 1008, rating: 4, afterDays: 2,
     content: '전구색으로 켜 두면 방 분위기가 확 따뜻해져요. 오크 베이스가 묵직해서 흔들림이 없고 갓 패브릭도 고급스럽습니다. 스위치가 선 중간에 있는 게 조금 아쉬워요.' },
+];
+
+// 신고 · 조치 — 블라인드 리뷰 · 정지 회원의 근거(admindb). 조치 1번이 그 대상의 열린 신고를 한꺼번에 닫는다(RESOLVED)
+//   reviewId = 상품주문 id(review 시드와 같음). reporter = 신고한 회원, role = BUYER / SELLER. 시각은 대상 시각 기준
+export const MODERATIONS = [
+  { targetType: 'REVIEW', targetId: 1004, action: 'BLIND', reason: '상품과 무관한 외부 판매처 홍보 · 광고 (신고 3건 확인)',
+    reports: [{ reporter: 4, role: 'BUYER', code: 'SPAM' }, { reporter: 6, role: 'BUYER', code: 'SPAM' }, { reporter: 2, role: 'SELLER', code: 'SELLER_REQUEST' }] },
+  { targetType: 'USER', targetId: 111, action: 'SUSPEND', reason: '판매자 대상 욕설 · 허위 신고 반복 (신고 2건 확인)', suspendDays: 14,
+    reports: [{ reporter: 2, role: 'SELLER', code: 'ABUSE' }, { reporter: 3, role: 'SELLER', code: 'ABUSE' }] },
 ];
 
 // 상품 문의 — 스토어 1 · 2 상품 위주, 작성자는 로그인 구매자(4~6) 위주. answer 가 있으면 답변완료(answerAfterDays 뒤), secret = 비밀글
