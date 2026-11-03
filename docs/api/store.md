@@ -267,7 +267,7 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 
 | 항목 | 규칙 |
 |---|---|
-| 고칠 수 있는 항목 | `bizType` · `ownerName` · `bizRegNo`(아래 사업자 정보) · `storeName` · `slug`(아래 스토어명 · 주소) · `companyName` · `ecommerceRegNo` · `managerPhone` · `managerEmail` · `businessAddress` · `categoryId` · `intro` · `representativeProducts`(보내면 목록 전체 교체) · `settlementAccount`(보내면 세 값 모두) — 형식은 2절과 같고 빈 문자열로 지울 수 없음(`intro` 만 `""` 로 소개 없음) |
+| 고칠 수 있는 항목 | `bizType` · `ownerName` · `bizRegNo`(아래 사업자 정보) · `storeName` · `slug`(아래 스토어명 · 주소) · `companyName` · `ecommerceRegNo` · `managerPhone` · `managerEmail` · `businessAddress` · `categoryId` · `intro` · `representativeProducts`(보내면 목록 전체 교체) · `expectedMonthlySales` · `salesChannel`(11/3 추가) · `settlementAccount`(보내면 세 값 모두) — 형식은 2절과 같고 빈 문자열로 지울 수 없음(`intro` 만 `""` 로 소개 없음) |
 | 사업자 정보 | `bizType` · `ownerName` · `bizRegNo` 중 하나라도 **실제로 바뀌면 사업자등록증(`BUSINESS_REG`)도 다시** — 보완요청에 없어도 받고, 없으면 400. 지금 값 그대로 보내면 바뀐 것이 아님 |
 | 스토어명 · 주소 | 바꾸면 신청(2절)과 같은 중복 확인 — 스토어(폐점 포함) · **자기를 뺀** 진행 중 신청과 겹치면 409. 승인 때 이름이 겹쳐 보완요청된 신청(5절)이 이 길로 바꿉니다. 지금 값 그대로면 확인 안 함 |
 | `documents` | 보완요청 서류(`requestedDocs`)를 **모두** 다시, 그 밖의 종류는 안 됨. 낸 종류마다 2절 규칙(한 장 서류 1개 · 상품 사진 3~10장 — 사진은 묶음 전체 교체) · 내 `applications/{userId}/` 키 · S3 에서 형식 · 크기 확인(2-1절 presign 으로 올림) |

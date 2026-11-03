@@ -397,7 +397,7 @@ class SellerApplyServiceTest {
         StoreApplication application = supplemented(List.of());
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
         ApplicationResubmitRequest request = new ApplicationResubmitRequest(null, null, null, null, null, null, "2026-서울성동-1234", null, null, null, null,
-                null, null, null, null);
+                null, null, null, null, null, null);
 
         // when
         sellerApplyService.resubmit(USER_ID, 27L, request);
@@ -409,6 +409,44 @@ class SellerApplyServiceTest {
         ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
         verify(applicationHistoryRepository).save(history.capture());
         assertThat(history.getValue().getReason()).isEqualTo("재제출 — 수정: 통신판매업 신고번호");
+    }
+
+    @Test
+    @DisplayName("재제출 — 월 예상 매출 · 운영 채널도 고친 값으로 저장하고(채널은 앞뒤 공백 제거) 이력에 남긴다")
+    void resubmit_salesFields_savesAndRecordsChange() {
+        // given — 신청 때 월 예상 매출 FROM_5M_TO_20M · 운영 채널 스마트스토어
+        StoreApplication application = supplemented(List.of());
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        ApplicationResubmitRequest request = new ApplicationResubmitRequest(null, null, null, null, null, null, null, null, null, null, null,
+                null, null, ExpectedMonthlySales.FROM_20M_TO_100M, "  https://instagram.com/gotgan.store  ", null, null);
+
+        // when
+        sellerApplyService.resubmit(USER_ID, 27L, request);
+
+        // then
+        assertThat(application.getExpectedMonthlySales()).isEqualTo(ExpectedMonthlySales.FROM_20M_TO_100M);
+        assertThat(application.getSalesChannel()).isEqualTo("https://instagram.com/gotgan.store");
+        ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
+        verify(applicationHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getReason()).isEqualTo("재제출 — 수정: 월 예상 매출 · 운영 채널");
+    }
+
+    @Test
+    @DisplayName("재제출 — 월 예상 매출 · 운영 채널을 보내지 않으면 신청 때 값 그대로")
+    void resubmit_salesFieldsOmitted_keepsCurrent() {
+        // given
+        StoreApplication application = supplemented(List.of());
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+
+        // when
+        sellerApplyService.resubmit(USER_ID, 27L, emptyResubmit());
+
+        // then
+        assertThat(application.getExpectedMonthlySales()).isEqualTo(ExpectedMonthlySales.FROM_5M_TO_20M);
+        assertThat(application.getSalesChannel()).isEqualTo("https://smartstore.example/gotgan");
+        ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
+        verify(applicationHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getReason()).isEqualTo("재제출");
     }
 
     @Test
@@ -604,6 +642,7 @@ class SellerApplyServiceTest {
                 .companyName(r.companyName()).ownerName(r.ownerName()).bizRegNo(r.bizRegNo()).ecommerceRegNo(r.ecommerceRegNo())
                 .managerPhone(r.managerPhone()).managerEmail(r.managerEmail()).businessAddress(r.businessAddress())
                 .storeName(r.storeName()).slug(r.slug()).intro(r.intro()).representativeProducts(r.toRepresentativeProducts())
+                .expectedMonthlySales(r.expectedMonthlySales()).salesChannel("https://smartstore.example/gotgan")
                 .bankName("국민").accountNo("000000-00-000000").accountHolder("홍길동")
                 .submittedAt(NOW.minusDays(3)).build();
         ReflectionTestUtils.setField(application, "id", 27L);
@@ -622,17 +661,17 @@ class SellerApplyServiceTest {
     }
 
     private static ApplicationResubmitRequest resubmit(List<DocumentItem> documents, String companyName, SettlementAccount account) {
-        return new ApplicationResubmitRequest(null, null, null, null, null, companyName, null, null, null, null, null, null, null, account, documents);
+        return new ApplicationResubmitRequest(null, null, null, null, null, companyName, null, null, null, null, null, null, null, null, null, account, documents);
     }
 
     private static ApplicationResubmitRequest resubmitStore(String storeName, String slug) {
-        return new ApplicationResubmitRequest(null, null, null, storeName, slug, null, null, null, null, null, null, null, null,
+        return new ApplicationResubmitRequest(null, null, null, storeName, slug, null, null, null, null, null, null, null, null, null, null,
                 null, null);
     }
 
     private static ApplicationResubmitRequest resubmitBusiness(BizType bizType, String ownerName, String bizRegNo,
             List<DocumentItem> documents) {
-        return new ApplicationResubmitRequest(bizType, ownerName, bizRegNo, null, null, null, null, null, null, null, null, null, null, null,
+        return new ApplicationResubmitRequest(bizType, ownerName, bizRegNo, null, null, null, null, null, null, null, null, null, null, null, null, null,
                 documents);
     }
 

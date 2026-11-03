@@ -20,6 +20,8 @@ public record ApplicationCorrection(
         Long categoryId,
         String intro,
         List<RepresentativeProduct> representativeProducts,
+        ExpectedMonthlySales expectedMonthlySales,
+        String salesChannel,
         String bankName,
         String accountNo,
         String accountHolder) {

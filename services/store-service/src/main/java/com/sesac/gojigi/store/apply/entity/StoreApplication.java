@@ -205,6 +205,8 @@ public class StoreApplication extends BaseTimeEntity {
         this.categoryId = correction.categoryId();
         this.intro = correction.intro();
         this.representativeProducts = correction.representativeProducts();
+        this.expectedMonthlySales = correction.expectedMonthlySales();
+        this.salesChannel = correction.salesChannel();
         this.bankName = correction.bankName();
         this.accountNo = correction.accountNo();
         this.accountHolder = correction.accountHolder();
