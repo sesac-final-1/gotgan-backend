@@ -58,7 +58,7 @@ public class OutboxEvent {
     @Column(name = "status", nullable = false, length = 10)
     private Status status;
 
-    /** 발행 시도 횟수 — 한도를 넘으면 ERROR 로그 (V6) */
+    /** 발행 시도 횟수 — 한도에 닿으면 ERROR 로그 + 발행기 대상에서 빠짐 (V6) */
     @Column(name = "attempt_count", nullable = false)
     private int attemptCount;
 

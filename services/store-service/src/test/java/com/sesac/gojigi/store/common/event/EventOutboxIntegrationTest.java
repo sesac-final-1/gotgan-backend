@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
@@ -15,11 +16,14 @@ import com.sesac.gojigi.store.common.config.SchedulingConfig;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -71,6 +75,8 @@ class EventOutboxIntegrationTest {
     private PlatformTransactionManager transactionManager;
     @Autowired
     private JdbcTemplate jdbc;
+    @Value("${app.events.outbox.max-attempts}")
+    private int maxAttempts;
 
     @AfterEach
     void tearDown() {
@@ -170,5 +176,30 @@ class EventOutboxIntegrationTest {
         // then
         verify(sns, times(1)).send(anyString(), anyString(), anyString(), anyString()); // 커밋 직후 1번뿐
         assertThat(repository.findAll().getFirst().getStatus()).isEqualTo(OutboxEvent.Status.NEW);
+    }
+
+    @Test
+    @DisplayName("시도 한도(10)에 닿은 행은 발행기 대상에서 빠진다 — 영구 실패 행 50건이 앞에 있어도 뒤의 새 이벤트가 나간다")
+    void publishPending_whenRowsPastLimit_skipsThemAndSendsNewer() {
+        // given — 한도에 닿은 행 50건(발행기 1회 조회 분량) + 그 뒤에 쌓인 새 행
+        List<OutboxEvent> stuck = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            OutboxEvent row = OutboxEvent.of("evt-stuck-" + i, "StoreApproved", "3", "{\"storeId\":3}", NOW.minusMinutes(2));
+            for (int attempt = 0; attempt < maxAttempts; attempt++) {
+                row.markFailed("timeout");
+            }
+            stuck.add(row);
+        }
+        repository.saveAll(stuck);
+        repository.save(OutboxEvent.of("evt-fresh", "StoreApproved", "4", "{\"storeId\":4}", NOW.minusMinutes(1)));
+
+        // when
+        service.publishPending();
+
+        // then
+        verify(sns).send(eq("StoreApproved"), eq("4"), eq("evt-fresh"), anyString());
+        verify(sns, never()).send(anyString(), anyString(), startsWith("evt-stuck-"), anyString());
+        assertThat(repository.findAll()).filteredOn(r -> r.getEventId().startsWith("evt-stuck-"))
+                .hasSize(50).allSatisfy(r -> assertThat(r.getStatus()).isEqualTo(OutboxEvent.Status.NEW));
     }
 }
