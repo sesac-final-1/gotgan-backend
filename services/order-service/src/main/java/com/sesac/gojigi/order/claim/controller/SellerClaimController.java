@@ -42,7 +42,7 @@ public class SellerClaimController {
     private final CancelOrderItemSaga cancelOrderItemSaga;
 
     @Operation(summary = "판매자 클레임 목록", description = """
-            stage: OPEN(처리대기 — REQUESTED · APPROVED · COLLECTED · RESHIPPED) · DONE(처리완료 — COMPLETED · REJECTED), type: 유형(없으면 전체).
+            stage: OPEN(처리대기 — REQUESTED · APPROVED · COLLECTED · RESHIPPED) · DONE(처리완료 — COMPLETED · REJECTED · WITHDRAWN), type: 유형(없으면 전체).
             최신 요청 먼저, page 0부터 · size 기본 20 · 최대 100. stageCounts 는 고른 유형 기준, typeCounts 는 고른 단계 기준.""")
     @GetMapping
     public ApiResponse<SellerClaimListResponse> list(@Parameter(hidden = true) @CurrentUser AuthUser user,
