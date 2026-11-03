@@ -145,6 +145,9 @@ export function reportKey(p) {
   return `reports/${p.storeId}/${p.week}.csv`;
 }
 
+/** 선점(PROCESSING)을 다른 실행 중으로 보는 시간 — Lambda 타임아웃(30초)보다 넉넉히 */
+const PROCESSING_STALE_MS = 2 * 60 * 1000;
+
 /** 의존성(클라이언트 · 설정)을 받아 핸들러를 만든다 — 테스트는 가짜 클라이언트를 넣는다 */
 export function createHandler({ ddb, s3, ses, env, log = console }) {
   async function processRecord(record) {
@@ -159,15 +162,17 @@ export function createHandler({ ddb, s3, ses, env, log = console }) {
     }
     const keys = { PK: `STORE#${p.storeId}`, SK: `WEEK#${p.week}` };
 
-    // ① 선점 — 없거나 SENT 가 아닐 때만(앞선 시도가 중간에 실패했으면 다시)
+    // ① 선점 — 없거나, SENT 도 진행 중(PROCESSING)도 아닐 때만(앞선 시도가 중간에 죽었으면 2분 뒤 다시)
     try {
       await ddb.send(new PutCommand({
         TableName: env.TABLE,
         Item: { ...keys, status: 'PROCESSING', eventId: envelope.eventId, settlementId: p.settlementId,
           payoutAmt: p.payoutAmt, updatedAt: new Date().toISOString() },
-        ConditionExpression: 'attribute_not_exists(SK) OR #s <> :sent',
-        ExpressionAttributeNames: { '#s': 'status' },
-        ExpressionAttributeValues: { ':sent': 'SENT' },
+        // 다른 실행이 막 선점한 행(PROCESSING, 갱신 2분 안)은 건너뜀 — SQS 가 같은 메시지를 동시에 두 번 줄 때 메일 2통 방지(11/3 점검).
+        // 2분이 지난 PROCESSING 은 앞선 실행이 중간에 죽은 것(Lambda 타임아웃 30초)이라 다시 시도
+        ConditionExpression: 'attribute_not_exists(SK) OR (#s <> :sent AND (#s <> :processing OR #u < :stale))',
+        ExpressionAttributeNames: { '#s': 'status', '#u': 'updatedAt' },
+        ExpressionAttributeValues: { ':sent': 'SENT', ':processing': 'PROCESSING', ':stale': new Date(Date.now() - PROCESSING_STALE_MS).toISOString() },
       }));
     } catch (e) {
       if (e instanceof ConditionalCheckFailedException || e?.name === 'ConditionalCheckFailedException') {

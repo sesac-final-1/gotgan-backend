@@ -325,6 +325,9 @@ TEMPLATES.StoreApplicationSupplementRequested = {
   },
 };
 
+/** 선점(PROCESSING)을 다른 실행 중으로 보는 시간 — Lambda 타임아웃(30초)보다 넉넉히 */
+const PROCESSING_STALE_MS = 2 * 60 * 1000;
+
 /** 의존성(클라이언트 · 설정)을 받아 핸들러를 만든다 — 테스트는 가짜 클라이언트를 넣는다 */
 export function createHandler({ ddb, ses, env, log = console, now = () => new Date() }) {
   async function processRecord(record) {
@@ -343,15 +346,17 @@ export function createHandler({ ddb, ses, env, log = console, now = () => new Da
     const { subject, text, html } = template.mail(p, env.FRONT_URL);
     const at = now();
 
-    // ① 선점 — 없거나 SENT 가 아닐 때만
+    // ① 선점 — 없거나, SENT 도 진행 중(PROCESSING)도 아닐 때만
     try {
       await ddb.send(new PutCommand({
         TableName: env.TABLE,
         Item: { ...keys, status: 'PROCESSING', eventType: envelope.eventType, subject, updatedAt: at.toISOString(),
           ttl: Math.floor(at.getTime() / 1000) + TTL_DAYS * 24 * 3600 },
-        ConditionExpression: 'attribute_not_exists(SK) OR #s <> :sent',
-        ExpressionAttributeNames: { '#s': 'status' },
-        ExpressionAttributeValues: { ':sent': 'SENT' },
+        // 다른 실행이 막 선점한 행(PROCESSING, 갱신 2분 안)은 건너뜀 — SQS 가 같은 메시지를 동시에 두 번 줄 때 메일 2통 방지(11/3 점검).
+        // 2분이 지난 PROCESSING 은 앞선 실행이 중간에 죽은 것(Lambda 타임아웃 30초)이라 다시 시도
+        ConditionExpression: 'attribute_not_exists(SK) OR (#s <> :sent AND (#s <> :processing OR #u < :stale))',
+        ExpressionAttributeNames: { '#s': 'status', '#u': 'updatedAt' },
+        ExpressionAttributeValues: { ':sent': 'SENT', ':processing': 'PROCESSING', ':stale': new Date(at.getTime() - PROCESSING_STALE_MS).toISOString() },
       }));
     } catch (e) {
       if (e instanceof ConditionalCheckFailedException || e?.name === 'ConditionalCheckFailedException') {

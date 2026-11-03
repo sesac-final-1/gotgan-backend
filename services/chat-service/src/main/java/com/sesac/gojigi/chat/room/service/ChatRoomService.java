@@ -92,6 +92,24 @@ public class ChatRoomService {
 
     /** 2절 — 내가 볼 수 있는 방 전체, 최근 메시지순 */
     public List<Room> rooms(AuthUser user, ChatRoomType type, ChatRoomStatus status) {
+        List<Seated> visible = seatedRooms(user).stream()
+                .filter(s -> type == null || s.room().getType() == type)
+                .filter(s -> status == null || s.room().getStatus() == status)
+                .sorted(Comparator.comparing((Seated s) -> recentAt(s.room())).reversed())
+                .toList();
+        return views(visible);
+    }
+
+    /**
+     * 4절 — 헤더 '톡' 배지. 방 목록(상대 이름 조회 · 미리보기)을 만들지 않고 안 읽은 수만 센다 (11/3 점검 — 배지가 방 목록 전체를
+     * 다시 만들고, 이름 캐시가 비면 방 수만큼 user · store 를 부르던 것)
+     */
+    public long unreadCount(AuthUser user) {
+        return unreadByRoom(seatedRooms(user)).values().stream().mapToLong(Long::longValue).sum();
+    }
+
+    /** 역할별로 내가 앉을 수 있는 방 (구매자 · 판매자 · 관리자 자리, 같은 방은 먼저 찾은 자리) */
+    private List<Seated> seatedRooms(AuthUser user) {
         Map<Long, Seated> seated = new LinkedHashMap<>();
         if (user.hasRole(BUYER)) {
             roomRepository.findByBuyerIdAndTypeIn(user.userId(), BUYER_TYPES)
@@ -105,17 +123,7 @@ public class ChatRoomService {
             roomRepository.findByTypeIn(SUPPORT_TYPES)
                     .forEach(r -> seated.putIfAbsent(r.getId(), new Seated(r, ChatSeat.admin(false))));
         }
-        List<Seated> visible = seated.values().stream()
-                .filter(s -> type == null || s.room().getType() == type)
-                .filter(s -> status == null || s.room().getStatus() == status)
-                .sorted(Comparator.comparing((Seated s) -> recentAt(s.room())).reversed())
-                .toList();
-        return views(visible);
-    }
-
-    /** 4절 — 헤더 '톡' 배지 */
-    public long unreadCount(AuthUser user) {
-        return rooms(user, null, null).stream().mapToLong(Room::unreadCount).sum();
+        return new ArrayList<>(seated.values());
     }
 
     /** 3절 — 최신 → 과거, before 보다 이전 */
@@ -307,12 +315,7 @@ public class ChatRoomService {
         List<Long> lastIds = seatedRooms.stream().map(s -> s.room().getLastMessageId()).filter(Objects::nonNull).toList();
         Map<Long, ChatMessage> lasts = messageRepository.findAllById(lastIds).stream()
                 .collect(Collectors.toMap(ChatMessage::getId, Function.identity()));
-        Map<Long, Long> unread = new HashMap<>();
-        seatedRooms.stream()
-                .filter(s -> s.room().getLastMessageId() != null)
-                .collect(Collectors.groupingBy(Seated::seat, Collectors.mapping(s -> s.room().getId(), Collectors.toList())))
-                .forEach((seat, roomIds) -> messageRepository.countUnread(roomIds, seat.readerKey(), seat.role().name())
-                        .forEach(c -> unread.put(c.getRoomId(), c.getCount())));
+        Map<Long, Long> unread = unreadByRoom(seatedRooms);
         List<Room> views = new ArrayList<>();
         for (Seated s : seatedRooms) {
             ChatRoom room = s.room();
@@ -320,6 +323,17 @@ public class ChatRoomService {
                     unread.getOrDefault(room.getId(), 0L)));
         }
         return views;
+    }
+
+    /** 방별 안 읽은 수 — 자리(readerKey)별 한 번의 쿼리. 메시지가 없는 방은 빼고 */
+    private Map<Long, Long> unreadByRoom(List<Seated> seatedRooms) {
+        Map<Long, Long> unread = new HashMap<>();
+        seatedRooms.stream()
+                .filter(s -> s.room().getLastMessageId() != null)
+                .collect(Collectors.groupingBy(Seated::seat, Collectors.mapping(s -> s.room().getId(), Collectors.toList())))
+                .forEach((seat, roomIds) -> messageRepository.countUnread(roomIds, seat.readerKey(), seat.role().name())
+                        .forEach(c -> unread.put(c.getRoomId(), c.getCount())));
+        return unread;
     }
 
     /**

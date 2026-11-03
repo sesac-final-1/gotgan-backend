@@ -40,7 +40,7 @@ test('정상 — 선점 → CSV 업로드 → 메일 → 발송 완료 순서, �
   const [claim, upload, mail, done] = calls;
   assert.equal(claim.input.Item.PK, 'STORE#3');
   assert.equal(claim.input.Item.SK, 'WEEK#2026-W44');
-  assert.match(claim.input.ConditionExpression, /attribute_not_exists\(SK\) OR #s <> :sent/);
+  assert.match(claim.input.ConditionExpression, /attribute_not_exists\(SK\) OR \(#s <> :sent AND \(#s <> :processing OR #u < :stale\)\)/);
   assert.equal(upload.input.Key, 'reports/3/2026-W44.csv');
   assert.deepEqual(mail.input.Destination.ToAddresses, ['seller@example.com']);
   assert.equal(done.input.ExpressionAttributeValues[':sent'], 'SENT');
