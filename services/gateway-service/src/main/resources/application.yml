@@ -163,6 +163,11 @@ app:
     allowed-cidrs: ${METRICS_ALLOWED_CIDRS:127.0.0.1/32,::1/128,10.0.11.0/24,10.0.12.0/24}
 
 management:
+  metrics:
+    distribution:
+      slo:                                  # 응답 시간 구간 8개 → Prometheus _bucket 으로 p95 계산(Grafana 「서비스 (RED)」). 구간을 정해 시리즈 수를 줄임(기본 히스토그램은 약 70칸)
+        "[http.server.requests]": 50ms,100ms,200ms,300ms,500ms,1s,2s,5s
+        "[spring.cloud.gateway.requests]": 50ms,100ms,200ms,300ms,500ms,1s,2s,5s   # 라우트별 p95(외부에서 본 응답 시간)
   endpoints:
     web:
       exposure:
