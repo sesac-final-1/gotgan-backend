@@ -46,7 +46,7 @@ app:
       publish-interval: 30s
       initial-delay: 20s
       retry-after: 10s                       # 커밋 직후 발행과 겹치지 않게 이만큼 지난 NEW 만
-      max-attempts: 10                       # 넘으면 ERROR 로그 (수동 확인)
+      max-attempts: 10                       # 닿으면 ERROR 로그 + 발행기 대상에서 빠짐 (수동 확인)
   scheduler:
     zone: Asia/Seoul
     batch-size: 100                         # 한 주기에 처리할 Saga 최대 건수

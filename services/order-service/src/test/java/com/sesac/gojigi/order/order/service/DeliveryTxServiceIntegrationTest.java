@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.BDDMockito.willDoNothing;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
@@ -32,8 +34,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -190,7 +194,7 @@ class DeliveryTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("SNS 발행 실패 — 한도 전이면 행은 NEW 로 남고 시도 횟수 · 사유를 기록, 발행기가 다시 보내면 SENT")
+    @DisplayName("SNS 발행 실패 — 행은 NEW 로 남고 시도 횟수 · 사유를 기록, 발행기가 다시 보내면 SENT")
     void outbox_retriesFailedPublish() {
         // given — 커밋 직후 발행 실패
         OrderItem item = paidItem();
@@ -203,15 +207,68 @@ class DeliveryTxServiceIntegrationTest {
         assertThat(failed.getAttemptCount()).isEqualTo(1);
         assertThat(failed.getLastError()).contains("sns down");
 
-        // when — 한도(2) 전에 복구 (한도째 실패하면 FAILED — EventOutboxFailedIntegrationTest)
+        // when — 복구 후 발행기 (한도 2 전이라 다시 보낸다)
         willDoNothing().given(sns).send(eq("OrderItemShipped"), anyString(), anyString(), anyString());
         outbox.publishPending();
 
         // then
         OutboxEvent sent = outboxRepository.findById(failed.getId()).orElseThrow();
         assertThat(sent.isSent()).isTrue();
+        assertThat(sent.getAttemptCount()).isEqualTo(2);
         assertThat(sent.getLastError()).isNull();
         assertThat(sent.getSentAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("SNS 발행이 한도(2회)까지 실패 — 행은 NEW 로 남고 시도 2 · 사유 기록, 그 뒤 발행기는 다시 보내지 않음")
+    void outbox_stopsAtMaxAttempts() {
+        // given — 커밋 직후 1회 + 발행기 1회 모두 실패
+        OrderItem item = paidItem();
+        deliveryTx.prepare(STORE, SELLER, item.getId());
+        willThrow(new IllegalStateException("sns down")).given(sns)
+                .send(eq("OrderItemShipped"), anyString(), anyString(), anyString());
+        deliveryTx.ship(STORE, SELLER, item.getId(), "CJ대한통운", null);
+        outbox.publishPending();
+        OutboxEvent failed = outboxRepository.findById(events(item).get(0).getId()).orElseThrow();
+        assertThat(failed.isSent()).isFalse();
+        assertThat(failed.getAttemptCount()).isEqualTo(2);
+        assertThat(failed.getLastError()).contains("sns down");
+
+        // when — SNS 가 살아나도 한도에 닿은 행은 발행기 대상이 아님 (다시 보내려면 attempt_count = 0)
+        willDoNothing().given(sns).send(eq("OrderItemShipped"), anyString(), anyString(), anyString());
+        outbox.publishPending();
+
+        // then
+        assertThat(outboxRepository.findById(failed.getId()).orElseThrow().isSent()).isFalse();
+        verify(sns, org.mockito.Mockito.times(2)).send(eq("OrderItemShipped"), eq(item.getItemNo()), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("시도 한도(2)에 닿은 행은 발행기 대상에서 빠진다 — 영구 실패 행 50건이 앞에 있어도 뒤의 새 이벤트가 나간다")
+    void outbox_skipsRowsPastLimit() {
+        // given — 한도에 닿은 행 50건(발행기 1회 조회 분량) + 그 뒤에 쌓인 새 행
+        List<OutboxEvent> stuck = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            OutboxEvent row = OutboxEvent.of(UUID.randomUUID().toString(), OutboxEvent.AggregateType.ORDER_ITEM,
+                    "stuck-" + i, "OrderItemShipped", "{}");
+            row.markFailed("sns down");
+            row.markFailed("sns down");
+            stuck.add(row);
+        }
+        outboxRepository.saveAll(stuck);
+        OutboxEvent fresh = outboxRepository.save(OutboxEvent.of(UUID.randomUUID().toString(),
+                OutboxEvent.AggregateType.ORDER_ITEM, "fresh-1", "OrderItemShipped", "{}"));
+
+        // when
+        outbox.publishPending();
+
+        // then
+        verify(sns).send(eq("OrderItemShipped"), eq("fresh-1"), eq(fresh.getEventId()), anyString());
+        verify(sns, never()).send(anyString(), startsWith("stuck-"), anyString(), anyString());
+        assertThat(outboxRepository.findById(fresh.getId()).orElseThrow().isSent()).isTrue();
+        assertThat(outboxRepository.findAllById(stuck.stream().map(OutboxEvent::getId).toList()))
+                .hasSize(50).allSatisfy(r -> assertThat(r.isSent()).isFalse());
+        jdbc.update("DELETE FROM outbox_event WHERE aggregate_id LIKE 'stuck-%' OR aggregate_id = 'fresh-1'");
     }
 
     @Test

@@ -155,3 +155,8 @@ aws sqs list-message-move-tasks --source-arn $A:sesac-gojigi-settlement-order-ev
 
 - `settlement_item` 에 해당 `order_item_id` 적재(`settlement_id` 는 다음 집계 때 연결) — 지난주 분이면 "지금 집계"
 - 10/20 클러스터 검증: 수수료 없는 상위 99 구매확정 → DLQ → 율 등록 → move task `COMPLETED 1` → 10,000원 · 8% → 판매수수료 800 · 결제수수료 220 적재
+
+### 아웃박스 발행 포기 행 다시 보내기 (11/3)
+
+- 발행이 `max-attempts`(10회) 실패한 `event_outbox` 행은 `PENDING` 그대로 발행기 조회에서 빠진다(ERROR 로그 "회 실패 — 수동 확인 필요" 한 번). 영구 실패 행이 앞 50건을 막아 새 `SettlementPaid` 가 안 나가는 것 방지
+- 원인을 고친 뒤 `UPDATE event_outbox SET attempt_count = 0 WHERE status = 'PENDING' AND attempt_count >= 10 AND event_id = '<eventId>';` → 다음 주기(30초)에 같은 `eventId` 로 발행

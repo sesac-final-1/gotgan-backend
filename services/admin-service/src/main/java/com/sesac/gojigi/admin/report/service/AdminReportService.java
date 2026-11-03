@@ -15,6 +15,7 @@ import com.sesac.gojigi.admin.report.repository.ReportRepository;
 import com.sesac.gojigi.admin.review.client.ReviewReader;
 import com.sesac.gojigi.admin.user.client.UserClientAdapter;
 import com.sesac.gojigi.common.web.exception.BusinessException;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -50,15 +51,23 @@ public class AdminReportService {
     public List<ReportResponses.TargetSummary> list(ReportTargetType targetType) {
         List<Report> reports = targetType == null ? reportRepository.findAllByOrderByIdDesc()
                 : reportRepository.findByTargetTypeOrderByIdDesc(targetType);
-        Map<Key, ModerationAction> lastActions = moderationActionRepository.findAllByOrderByIdDesc().stream()
-                .collect(Collectors.toMap(a -> new Key(a.getTargetType(), a.getTargetId()), Function.identity(), (first, older) -> first));
         Map<Key, List<Report>> byTarget = reports.stream()
                 .collect(Collectors.groupingBy(r -> new Key(r.getTargetType(), r.getTargetId()), LinkedHashMap::new, Collectors.toList()));
+        Map<Key, ModerationAction> lastActions = lastActions(byTarget.keySet());
         return byTarget.entrySet().stream()
                 .map(e -> summary(e.getKey(), e.getValue(), lastActions.get(e.getKey())))
                 .sorted(Comparator.comparingLong(ReportResponses.TargetSummary::openCount).reversed()
                         .thenComparing(ReportResponses.TargetSummary::lastReportedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
+    }
+
+    /** 대상 종류(리뷰 · 회원)별로 한 번씩 — 목록에 나온 대상의 마지막 조치만 */
+    private Map<Key, ModerationAction> lastActions(Collection<Key> keys) {
+        Map<ReportTargetType, List<Long>> idsByType = keys.stream()
+                .collect(Collectors.groupingBy(Key::type, Collectors.mapping(Key::id, Collectors.toList())));
+        return idsByType.entrySet().stream()
+                .flatMap(e -> moderationActionRepository.findLatestByTargets(e.getKey(), e.getValue()).stream())
+                .collect(Collectors.toMap(a -> new Key(a.getTargetType(), a.getTargetId()), Function.identity()));
     }
 
     private static ReportResponses.TargetSummary summary(Key key, List<Report> reports, ModerationAction lastAction) {

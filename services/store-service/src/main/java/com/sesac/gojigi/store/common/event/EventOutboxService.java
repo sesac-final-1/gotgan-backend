@@ -27,6 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
  * ② 커밋 직후 바로 한 번 발행(AFTER_COMMIT) — 정상일 때 지연 없음, SNS 는 1초에서 끊는다(AwsConfig)
  * ③ 실패 · 미발행은 발행기(publish-interval, ShedLock)가 다시 — SNS 가 죽어도 업무는 진행되고 복구되면 자동으로 나간다
  * 최소 1회 전달: 같은 행을 두 번 보낼 수 있으나 eventId 가 같아 소비자가 거른다. eventId · occurredAt 은 부르는 쪽이 정해 행에 남긴다.
+ * 시도 한도(max-attempts)에 닿으면 ERROR 로그 한 번 후 발행기 대상에서 빠진다(NEW 그대로) — 다시 보내려면 attempt_count = 0 (11/3)
  */
 @Slf4j
 @Service
@@ -88,8 +89,8 @@ public class EventOutboxService {
     @SchedulerLock(name = "store-event-outbox", lockAtMostFor = "5m")
     public void publishPending() {
         LocalDateTime before = LocalDateTime.now(clock).minus(retryAfter);
-        tx.execute(s -> outboxRepository.findByStatusAndOccurredAtBeforeOrderByIdAsc(OutboxEvent.Status.NEW, before,
-                Limit.of(50))).forEach(row -> send(row.getId()));
+        tx.execute(s -> outboxRepository.findByStatusAndAttemptCountLessThanAndOccurredAtBeforeOrderByIdAsc(
+                OutboxEvent.Status.NEW, maxAttempts, before, Limit.of(50))).forEach(row -> send(row.getId()));
     }
 
     /** 1건 발행 — SNS 호출은 트랜잭션 밖, 결과 기록만 짧은 트랜잭션 */

@@ -157,13 +157,13 @@ class EventOutboxServiceTest {
     }
 
     @Test
-    @DisplayName("발행기는 retry-after(10초)보다 오래된 NEW 를 50건까지 오래된 순으로 보낸다")
+    @DisplayName("발행기는 retry-after(10초)보다 오래되고 시도 한도 전인 NEW 를 50건까지 오래된 순으로 보낸다")
     void publishPending_whenRowsLeft_sendsEach() {
         // given
         OutboxEvent first = row(7L, NOW.minusMinutes(2));
         OutboxEvent second = row(8L, NOW.minusMinutes(1));
-        given(repository.findByStatusAndOccurredAtBeforeOrderByIdAsc(OutboxEvent.Status.NEW, NOW.minusSeconds(10),
-                Limit.of(50))).willReturn(List.of(first, second));
+        given(repository.findByStatusAndAttemptCountLessThanAndOccurredAtBeforeOrderByIdAsc(OutboxEvent.Status.NEW,
+                MAX_ATTEMPTS, NOW.minusSeconds(10), Limit.of(50))).willReturn(List.of(first, second));
         given(repository.findById(7L)).willReturn(Optional.of(first));
         given(repository.findById(8L)).willReturn(Optional.of(second));
 

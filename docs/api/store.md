@@ -835,6 +835,7 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | 2 | SNS 타임아웃 | 호출 1초 · 시도 500ms — admin read-timeout 3초 안에 응답(타임아웃 예산). 늦으면 발행기에 맡김 |
 | 3 | `eventId` · `occurredAt` | 부르는 쪽이 정해 아웃박스 행에 저장 — 승인은 신청 ID 이름 기반 UUID · 승인 시각. 다시 보내도 같은 봉투 |
 | 4 | 실패 로그 | 9회까지 warn, 10회째 error + 스택 한 번, 그 뒤 한 줄 warn(컨벤션 2-8 반복 실패는 첫 회만 스택) |
+| 5 | 한도에 닿은 행 (11/3) | 10회 실패한 행은 `NEW` 그대로 두고 발행기 조회에서 뺀다(`attempt_count < max-attempts`) — 영구 실패 행이 50건 창을 막아 새 이벤트가 안 나가던 문제. 원인을 고친 뒤 다시 보내려면 `UPDATE outbox_event SET attempt_count = 0 WHERE status = 'NEW' AND attempt_count >= 10 AND event_id = '<eventId>';` → 다음 주기(30초)에 같은 `eventId` 로 발행 |
 
 ## 10/29 설계 정리 (폐점)
 

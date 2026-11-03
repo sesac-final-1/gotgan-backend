@@ -27,8 +27,7 @@ public class OutboxEvent {
 
     public enum AggregateType { ORDER, ORDER_ITEM }
 
-    /** FAILED — 한도만큼 실패해 발행기가 더 이상 잡지 않는 행 (수동 확인 후 NEW 로 되돌리면 다시 나간다) */
-    public enum Status { NEW, SENT, FAILED }
+    public enum Status { NEW, SENT }
 
     /** last_error VARCHAR(200) */
     private static final int ERROR_MAX = 200;
@@ -59,7 +58,7 @@ public class OutboxEvent {
     @Column(name = "status", nullable = false, length = 10)
     private Status status;
 
-    /** 발행 시도 횟수 — 한도를 넘으면 ERROR 로그 (V6) */
+    /** 발행 시도 횟수 — 한도에 닿으면 ERROR 로그 + 발행기 대상에서 빠짐 (V6) */
     @Column(name = "attempt_count", nullable = false)
     private int attemptCount;
 
@@ -99,12 +98,8 @@ public class OutboxEvent {
         this.lastError = null;
     }
 
-    /** 실패 기록 — 시도 횟수가 maxAttempts 에 닿으면 FAILED 로 바꿔 발행기 조회에서 뺀다 (영구 실패가 큐를 막지 않게) */
-    public void markFailed(String error, int maxAttempts) {
+    public void markFailed(String error) {
         this.attemptCount++;
         this.lastError = error == null || error.length() <= ERROR_MAX ? error : error.substring(0, ERROR_MAX);
-        if (attemptCount >= maxAttempts) {
-            this.status = Status.FAILED;
-        }
     }
 }

@@ -5,6 +5,11 @@
 service: sesac-gojigi-settlement-report
 frameworkVersion: "4"
 
+# 쇼핑몰 주소 — 스테이지마다 바꿀 수 있게(배포 때 --param="frontUrl=..."), 기본은 운영 Vercel 주소 (11/3 점검: 하드코딩 정리)
+params:
+  default:
+    frontUrl: https://gotgan-ashy.vercel.app
+
 provider:
   name: aws
   runtime: nodejs22.x
@@ -17,7 +22,7 @@ provider:
     TABLE: ${ssm:/sesac-gojigi/${sls:stage}/dynamodb/settlement-reports-table}
     BUCKET: ${ssm:/sesac-gojigi/${sls:stage}/s3/reports-bucket}
     FROM_EMAIL: ${ssm:/sesac-gojigi/${sls:stage}/ses/from-email}
-    FRONT_URL: https://gotgan-ashy.vercel.app        # 메일 속 판매자 정산 화면 링크
+    FRONT_URL: ${param:frontUrl} # 메일 속 판매자 정산 화면 링크
   iam:
     role:
       statements:

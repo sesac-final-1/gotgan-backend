@@ -46,7 +46,10 @@ test('정상 — 선점(TTL 90일) → 메일 → 발송 완료, 키는 USER#{bu
   assert.equal(claim.input.Item.PK, 'USER#4');
   assert.equal(claim.input.Item.SK, '2026-10-21T12:00:00+09:00#e-1');
   assert.equal(claim.input.Item.ttl, Math.floor(NOW.getTime() / 1000) + 90 * 24 * 3600);
-  assert.match(claim.input.ConditionExpression, /attribute_not_exists\(SK\) OR #s <> :sent/);
+  assert.match(claim.input.ConditionExpression, /attribute_not_exists\(SK\) OR \(#s <> :sent AND \(#s <> :processing OR #u < :stale\)\)/);
+  // 다른 실행이 2분 안에 선점한 행은 건너뜀 — 동시 전달 때 메일 2통 방지
+  assert.equal(claim.input.ExpressionAttributeValues[':processing'], 'PROCESSING');
+  assert.equal(claim.input.ExpressionAttributeValues[':stale'], new Date(NOW.getTime() - 2 * 60 * 1000).toISOString());
   assert.deepEqual(mail.input.Destination.ToAddresses, ['buyer@example.com']);
   assert.equal(done.input.ExpressionAttributeValues[':sent'], 'SENT');
 });

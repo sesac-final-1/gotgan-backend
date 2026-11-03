@@ -27,8 +27,8 @@ import tools.jackson.databind.json.JsonMapper;
  * ① enqueue: 업무 트랜잭션 안에서만(MANDATORY) — 업무가 롤백되면 이벤트도 남지 않는다
  * ② 커밋 직후 바로 한 번 발행(AFTER_COMMIT) — 정상일 때 지연 없음
  * ③ 실패 · 미발행은 발행기(publish-interval, ShedLock)가 다시 — SNS 가 죽어도 업무는 진행되고 복구되면 자동으로 나간다
- * ④ max-attempts 만큼 실패하면 FAILED — 발행기 조회(NEW)에서 빠져 영구 실패가 쌓여도 새 이벤트를 막지 않는다 (ERROR 로그로 수동 확인)
  * 최소 1회 전달: 같은 행을 두 번 보낼 수 있으나 eventId 가 같아 소비자가 거른다. 봉투의 occurredAt 은 행의 created_at — 다시 보내도 같다.
+ * 시도 한도(max-attempts)에 닿으면 ERROR 로그 한 번 후 발행기 대상에서 빠진다(NEW 그대로) — 다시 보내려면 attempt_count = 0 (11/3)
  */
 @Slf4j
 @Service
@@ -88,14 +88,14 @@ public class EventOutboxService {
     @SchedulerLock(name = "order-event-outbox", lockAtMostFor = "5m")
     public void publishPending() {
         LocalDateTime before = LocalDateTime.now(clock).minus(retryAfter);
-        tx.execute(s -> outboxRepository.findByStatusAndCreatedAtBeforeOrderByIdAsc(OutboxEvent.Status.NEW, before,
-                Limit.of(50))).forEach(row -> send(row.getId()));
+        tx.execute(s -> outboxRepository.findByStatusAndAttemptCountLessThanAndCreatedAtBeforeOrderByIdAsc(
+                OutboxEvent.Status.NEW, maxAttempts, before, Limit.of(50))).forEach(row -> send(row.getId()));
     }
 
     /** 1건 발행 — SNS 호출은 트랜잭션 밖, 결과 기록만 짧은 트랜잭션 */
     void send(Long outboxId) {
         OutboxEvent row = tx.execute(s -> outboxRepository.findById(outboxId).orElse(null));
-        if (row == null || row.getStatus() != OutboxEvent.Status.NEW) {
+        if (row == null || row.isSent()) {
             return;
         }
         try {
@@ -103,8 +103,8 @@ public class EventOutboxService {
         } catch (RuntimeException e) {
             int attempts = record(outboxId, e.toString());
             if (attempts >= maxAttempts) {
-                // 사람이 봐야 하는 실패 — error + 스택트레이스 (컨벤션 2-8)
-                log.error("이벤트 발행이 {}회 실패 — FAILED 로 바꿈, 수동 확인 필요 eventType={} aggregateId={} eventId={}",
+                // 사람이 봐야 하는 실패 — error + 스택트레이스 (컨벤션 2-8). 한도에 닿은 행은 발행기 대상에서 빠지므로 사실상 한 번
+                log.error("이벤트 발행이 {}회 실패 — 수동 확인 필요 eventType={} aggregateId={} eventId={}",
                         attempts, row.getEventType(), row.getAggregateId(), row.getEventId(), e);
             } else {
                 log.warn("이벤트 발행 실패 — 발행기가 다시 보냄 eventType={} aggregateId={} attempt={} cause={}",
@@ -125,7 +125,7 @@ public class EventOutboxService {
 
     private int record(Long outboxId, String error) {
         Integer attempts = tx.execute(s -> outboxRepository.findById(outboxId).map(r -> {
-            r.markFailed(error, maxAttempts);
+            r.markFailed(error);
             return r.getAttemptCount();
         }).orElse(0));
         return attempts == null ? 0 : attempts;
