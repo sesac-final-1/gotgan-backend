@@ -115,10 +115,6 @@ public class Store extends BaseTimeEntity {
     }
 
     /**
-     * 관리자 정지 · 해제 (store.md 9절). 폐점 스토어는 409, 이미 그 상태면 아무것도 바꾸지 않고 false(멱등 — 이력 · 이벤트 없음).
-     * 대상이 ACTIVE · SUSPENDED 인지는 호출하는 쪽이 검사한다(CLOSED 요청은 400)
-     */
-    /**
      * 판매자 스토어 설정 수정 (STR-06, store.md 13절) — 값 검사 · 정화는 호출하는 쪽, 폐점 스토어는 409.
      * 스토어명 · 주소 · 상태 · 등급은 바꾸지 않는다. 비어 있는 택배사 · 출고 안내는 null 로
      */
@@ -154,6 +150,10 @@ public class Store extends BaseTimeEntity {
         return true;
     }
 
+    /**
+     * 관리자 정지 · 해제 (store.md 9절). 폐점 스토어는 409, 이미 그 상태면 아무것도 바꾸지 않고 false(멱등 — 이력 · 이벤트 없음).
+     * 대상이 ACTIVE · SUSPENDED 인지는 호출하는 쪽이 검사한다(CLOSED 요청은 400)
+     */
     public boolean changeStatusByAdmin(StoreStatus target, String reason) {
         if (status == StoreStatus.CLOSED) {
             throw new StoreException(StoreErrorCode.STORE_INVALID_STATUS_TRANSITION);
