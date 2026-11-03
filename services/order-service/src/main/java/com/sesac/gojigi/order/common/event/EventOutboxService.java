@@ -102,13 +102,10 @@ public class EventOutboxService {
             snsEventPublisher.send(row.getEventType(), row.getAggregateId(), row.getEventId(), envelope(row));
         } catch (RuntimeException e) {
             int attempts = record(outboxId, e.toString());
-            if (attempts == maxAttempts) {
-                // 사람이 봐야 하는 실패 — error + 스택트레이스는 한도에 닿은 한 번만 (컨벤션 2-8, store · settlement 와 같은 방식)
+            if (attempts >= maxAttempts) {
+                // 사람이 봐야 하는 실패 — error + 스택트레이스 (컨벤션 2-8). 한도에 닿은 행은 발행기 대상에서 빠지므로 사실상 한 번
                 log.error("이벤트 발행이 {}회 실패 — 수동 확인 필요 eventType={} aggregateId={} eventId={}",
                         attempts, row.getEventType(), row.getAggregateId(), row.getEventId(), e);
-            } else if (attempts > maxAttempts) {
-                log.warn("이벤트 발행 계속 실패 — 수동 확인 필요 eventType={} eventId={} attempt={} cause={}",
-                        row.getEventType(), row.getEventId(), attempts, e.toString());
             } else {
                 log.warn("이벤트 발행 실패 — 발행기가 다시 보냄 eventType={} aggregateId={} attempt={} cause={}",
                         row.getEventType(), row.getAggregateId(), attempts, e.toString());
