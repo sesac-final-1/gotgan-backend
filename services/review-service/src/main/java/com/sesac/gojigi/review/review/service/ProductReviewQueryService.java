@@ -28,11 +28,12 @@ public class ProductReviewQueryService {
     private final ReviewRepository reviewRepository;
     private final ReviewImages reviewImages;
 
+    /** viewerUserId — 내 리뷰 표시(mine)용, 비로그인은 null */
     public PageResponse<ProductReviewResponse> list(Long productId, Integer rating, boolean photoOnly,
-                                                    ProductReviewSort sort, int page, int size) {
+                                                    ProductReviewSort sort, int page, int size, Long viewerUserId) {
         return reviewImages.toPage(reviewRepository.findForProduct(productId, rating, photoOnly,
                         PageRequest.of(page, size, sort.toSort())),
-                (review, images) -> ProductReviewResponse.from(review, ReviewImages.urls(images)));
+                (review, images) -> ProductReviewResponse.of(review, ReviewImages.urls(images), viewerUserId));
     }
 
     public ProductReviewSummaryResponse summarize(Long productId) {

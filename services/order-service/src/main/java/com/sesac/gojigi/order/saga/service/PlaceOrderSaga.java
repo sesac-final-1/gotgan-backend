@@ -69,10 +69,13 @@ public class PlaceOrderSaga {
     private final ProductClientAdapter product;
     private final PaymentClientAdapter payment;
 
-    public OrderCreateResponse place(Long buyerId, OrderCreateRequest request) {
+    public OrderCreateResponse place(Long buyerId, Long buyerStoreId, OrderCreateRequest request) {
         // ① 주문 PENDING + Saga — 가격 · 배송비 · 포인트 배분은 서버가 다시 계산 (여기서 실패하면 주문도 Saga 도 없음)
         // Mapping Product
         List<OrderPricing.Line> lines = lines(request);
+        if (buyerStoreId != null && lines.stream().anyMatch(l -> buyerStoreId.equals(l.option().storeId()))) {
+            throw new OrderException(OrderErrorCode.ORDER_OWN_STORE_PRODUCT);   // 판매자는 자기 스토어 상품을 살 수 없다
+        }
         UserSummaryResponse buyer = user.getUser(buyerId);  // 회원 정보 가져오기
         Map<Long, StoreResponse> stores = stores(lines);   // 스토어 정보 가져오기(중복 제거) — 스토어명 · 배송비 정책
         OrderPricing.Result priced = OrderPricing.calculate(lines, id -> stores.get(id).shippingPolicy(), request.usePoint());

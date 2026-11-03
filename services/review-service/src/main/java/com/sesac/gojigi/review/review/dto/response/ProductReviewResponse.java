@@ -8,13 +8,16 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
-/** 상품 상세 공개 리뷰 한 건 (review.md 9절) — 프론트 ShopProductReviews. 작성자는 표시 이름만(회원 ID 없음) */
+/** 상품 상세 공개 리뷰 한 건 (review.md 9절) — 프론트 ShopProductReviews. 작성자는 표시 이름만(회원 ID 없음) · 내 리뷰 여부만 */
 public record ProductReviewResponse(
         @Schema(description = "리뷰 ID", example = "31")
         Long reviewId,
 
         @Schema(description = "작성자 공개 표시 이름 (닉네임, 없으면 마스킹 실명) — 화면은 그대로 표시", example = "곳간러버")
         String writerDisplayName,
+
+        @Schema(description = "내가 쓴 리뷰 — 신고 버튼을 숨긴다 (비로그인은 false)", example = "false")
+        boolean mine,
 
         @Schema(description = "별점 1~5", example = "5")
         int rating,
@@ -45,8 +48,10 @@ public record ProductReviewResponse(
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    public static ProductReviewResponse from(Review review, List<String> imageUrls) {
-        return new ProductReviewResponse(review.getId(), review.getWriterDisplayName(), review.getRating(),
+    /** viewerUserId — 비로그인은 null */
+    public static ProductReviewResponse of(Review review, List<String> imageUrls, Long viewerUserId) {
+        return new ProductReviewResponse(review.getId(), review.getWriterDisplayName(),
+                viewerUserId != null && review.isOwnedBy(viewerUserId), review.getRating(),
                 review.getTitle(), review.getContent(), review.getEligibility().getOptionName(), review.getFit(),
                 review.getReplyContent(), kst(review.getRepliedAt()), kst(review.getCreatedAt()), imageUrls);
     }

@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,20 +56,26 @@ public class ClaimTxService {
     private final OrderStoreShipmentRepository shipmentRepository;
     private final OrderItemHistoryRepository historyRepository;
     private final OrderClaimRepository claimRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
     private final Duration returnWindow;
 
     public ClaimTxService(OrderRepository orderRepository, OrderItemRepository orderItemRepository,
                           OrderStoreShipmentRepository shipmentRepository, OrderItemHistoryRepository historyRepository,
-                          OrderClaimRepository claimRepository, Clock clock,
+                          OrderClaimRepository claimRepository, ApplicationEventPublisher eventPublisher, Clock clock,
                           @Value("${app.order.return-window:7d}") Duration returnWindow) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.shipmentRepository = shipmentRepository;
         this.historyRepository = historyRepository;
         this.claimRepository = claimRepository;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
         this.returnWindow = returnWindow;
+    }
+
+    /** 반품 · 교환 신청 저장 — 같은 트랜잭션에서 OrderClaimRequested 를 남긴다 (ClaimEventRecorder) */
+    public record ClaimRequested(Long claimId) {
     }
 
     /** 클레임 대상 — storeShippingFeeIfLast 는 그 스토어 마지막 상품주문일 때만 스토어 배송비, 아니면 0 */
@@ -115,6 +122,7 @@ public class ClaimTxService {
         }
         historyRepository.save(OrderItemHistory.of(item, ActorType.BUYER, buyerId, OrderItemStatus.DELIVERED,
                 item.getStatus(), request.type() == ClaimType.RETURN ? "구매자 반품 신청" : "구매자 교환 신청"));
+        eventPublisher.publishEvent(new ClaimRequested(claim.getId()));   // 판매자 알림 (3영업일 내 처리)
         return new ClaimResponse(claim.getId(), item.getId(), request.type(), ClaimStatus.REQUESTED,
                 refund == null ? 0L : refund.refundAmt(), refund == null ? 0L : refund.restorePoint());
     }

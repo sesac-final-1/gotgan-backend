@@ -120,7 +120,7 @@ class PlaceOrderSagaTest {
                     "READY", 62_000L, 0L, null, null));
 
             // when
-            OrderCreateResponse response = saga.place(BUYER_ID, request(2_000L, item(11L, 2)));
+            OrderCreateResponse response = saga.place(BUYER_ID, null, request(2_000L, item(11L, 2)));
 
             // then
             assertThat(response).isEqualTo(new OrderCreateResponse("20261022-000123", OrderStatus.PENDING, 62_000L,
@@ -143,7 +143,7 @@ class PlaceOrderSagaTest {
                     "READY", 64_000L, 0L, null, null));
 
             // when
-            saga.place(BUYER_ID, request(0L, item(11L, 2)));
+            saga.place(BUYER_ID, null, request(0L, item(11L, 2)));
 
             // then
             verify(user, never()).usePoints(any());
@@ -157,7 +157,7 @@ class PlaceOrderSagaTest {
             givenPending(64_000L);
 
             // when
-            OrderCreateResponse response = saga.place(BUYER_ID, request(64_000L, item(11L, 2)));
+            OrderCreateResponse response = saga.place(BUYER_ID, null, request(64_000L, item(11L, 2)));
 
             // then
             assertThat(response.status()).isEqualTo(OrderStatus.PAID);
@@ -179,7 +179,7 @@ class PlaceOrderSagaTest {
                     64_000L, 0L, null, null));
 
             // when
-            saga.place(BUYER_ID, request(0L, item(11L, 2)));
+            saga.place(BUYER_ID, null, request(0L, item(11L, 2)));
 
             // then
             verify(sagaTx, times(2)).startPlaceOrder(any(), any(), any(), any());
@@ -194,7 +194,7 @@ class PlaceOrderSagaTest {
         @DisplayName("같은 옵션이 두 번이면 400 INVALID_INPUT")
         void place_duplicateOption_invalidInput() {
             // when · then
-            assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 1), item(11L, 2))))
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 1), item(11L, 2))))
                     .isInstanceOf(BusinessException.class)
                     .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
             verifyNoInteractions(product, orderTx, sagaTx);
@@ -208,12 +208,25 @@ class PlaceOrderSagaTest {
             given(product.getOptions(List.of(12L))).willReturn(List.of());
 
             // when · then
-            assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 1))))
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 1))))
                     .extracting(e -> ((OrderException) e).getErrorCode())
                     .isEqualTo(OrderErrorCode.ORDER_PRODUCT_NOT_PURCHASABLE);
-            assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(12L, 1))))
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(12L, 1))))
                     .isInstanceOf(OrderException.class);
             verifyNoInteractions(orderTx, sagaTx);
+        }
+
+        @Test
+        @DisplayName("판매자가 자기 스토어(1) 상품을 주문하면 409 ORDER_OWN_STORE_PRODUCT — 다른 스토어 판매자는 통과")
+        void place_ownStoreProduct() {
+            // given — 옵션 11 은 스토어 1 상품
+            given(product.getOptions(List.of(11L))).willReturn(List.of(option(11L, true)));
+
+            // when · then
+            assertThatThrownBy(() -> saga.place(BUYER_ID, 1L, request(0L, item(11L, 1))))
+                    .extracting(e -> ((OrderException) e).getErrorCode())
+                    .isEqualTo(OrderErrorCode.ORDER_OWN_STORE_PRODUCT);
+            verifyNoInteractions(user, orderTx, sagaTx);
         }
     }
 
@@ -234,7 +247,7 @@ class PlaceOrderSagaTest {
             willThrow(new OrderException(OrderErrorCode.ORDER_OUT_OF_STOCK)).given(product).reserve(any());
 
             // when · then
-            assertThatThrownBy(() -> saga.place(BUYER_ID, request(2_000L, item(11L, 2))))
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(2_000L, item(11L, 2))))
                     .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_OUT_OF_STOCK);
             InOrder back = inOrder(sagaTx, orderTx, product, user);
             back.verify(sagaTx).startCompensating(eq(7L), anyString());
@@ -255,7 +268,7 @@ class PlaceOrderSagaTest {
             willThrow(new OrderException(OrderErrorCode.ORDER_POINT_INSUFFICIENT)).given(user).usePoints(any());
 
             // when · then
-            assertThatThrownBy(() -> saga.place(BUYER_ID, request(2_000L, item(11L, 2))))
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(2_000L, item(11L, 2))))
                     .isInstanceOf(OrderException.class);
             verify(user).restorePoints(SAGA_ID);
             verify(product, never()).reserve(any());
@@ -271,7 +284,7 @@ class PlaceOrderSagaTest {
             willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR)).given(payment).prepare(any());
 
             // when · then
-            assertThatThrownBy(() -> saga.place(BUYER_ID, request(2_000L, item(11L, 2))))
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(2_000L, item(11L, 2))))
                     .isInstanceOf(BusinessException.class);
             InOrder back = inOrder(orderTx, payment, product, user);
             back.verify(orderTx).claimForCompensation(1L);                 // ← 맨 앞으로
@@ -290,7 +303,7 @@ class PlaceOrderSagaTest {
                     .given(payment).cancel(anyString(), any());
 
             // when · then
-            assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 2))))
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 2))))
                     .isInstanceOf(BusinessException.class);
             verify(orderTx).claimForCompensation(1L);
             verify(sagaTx).scheduleRetry(eq(7L), anyString());
@@ -306,7 +319,7 @@ class PlaceOrderSagaTest {
             willThrow(new IllegalStateException("boom")).given(product).reserve(any());
 
             // when · then
-            assertThatThrownBy(() -> saga.place(BUYER_ID, request(0L, item(11L, 2))))
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 2))))
                     .isInstanceOf(IllegalStateException.class);
             verify(sagaTx).startCompensating(7L, "IllegalStateException: boom");
             verify(orderTx).claimForCompensation(1L);

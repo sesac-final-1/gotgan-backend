@@ -52,7 +52,7 @@ class CartControllerTest {
     @Test
     @DisplayName("담기 — 200 '장바구니에 담았습니다.' + 내 장바구니, 구매 불가면 409")
     void add() throws Exception {
-        given(cartService.add(eq(4L), any())).willReturn(CART)
+        given(cartService.add(eq(4L), any(), any())).willReturn(CART)
                 .willThrow(new CartException(CartErrorCode.CART_PRODUCT_NOT_PURCHASABLE));
         String body = """
                 {"items":[{"productOptionId":11,"quantity":2},{"productOptionId":12,"quantity":1}]}""";

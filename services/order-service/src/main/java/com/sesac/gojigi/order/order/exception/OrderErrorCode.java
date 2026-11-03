@@ -11,6 +11,8 @@ import org.springframework.http.HttpStatus;
 public enum OrderErrorCode implements ErrorCode {
     /** 판매중지 · 차단 · 삭제된 상품 또는 없는 옵션 — product 조회 · 재고 예약 결과 */
     ORDER_PRODUCT_NOT_PURCHASABLE(HttpStatus.CONFLICT, "현재 구매할 수 없는 상품이 있어요."),
+    /** 판매자가 자기 스토어 상품을 주문 — 자전거래 · 정산 악용 방지 */
+    ORDER_OWN_STORE_PRODUCT(HttpStatus.CONFLICT, "내 스토어 상품은 주문할 수 없어요."),
     /** 재고 예약 실패 (product 409 STOCK_INSUFFICIENT) */
     ORDER_OUT_OF_STOCK(HttpStatus.CONFLICT, "재고가 부족한 상품이 있어요."),
     /** 포인트 사용 실패 (user 409 POINT_INSUFFICIENT) */

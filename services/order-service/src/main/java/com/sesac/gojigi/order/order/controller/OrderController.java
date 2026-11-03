@@ -53,11 +53,11 @@ public class OrderController {
             전액 포인트(payAmt 0)는 결제창 없이 바로 PAID (portonePaymentId null).
             실패하면 앞 단계를 되돌리고 주문 FAILED — 결제창을 띄우지 않는다.
             에러: 400 INVALID_INPUT · ORDER_POINT_EXCEEDS_AMOUNT / 404 ORDER_BUYER_NOT_FOUND /
-            409 ORDER_PRODUCT_NOT_PURCHASABLE · ORDER_OUT_OF_STOCK · ORDER_POINT_INSUFFICIENT / 502 EXTERNAL_API_ERROR""")
+            409 ORDER_PRODUCT_NOT_PURCHASABLE · ORDER_OWN_STORE_PRODUCT(내 스토어 상품) · ORDER_OUT_OF_STOCK · ORDER_POINT_INSUFFICIENT / 502 EXTERNAL_API_ERROR""")
     @PostMapping
     public ResponseEntity<ApiResponse<OrderCreateResponse>> create(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                                                   @Valid @RequestBody OrderCreateRequest request) {
-        OrderCreateResponse created = placeOrderSaga.place(user.userId(), request);
+        OrderCreateResponse created = placeOrderSaga.place(user.userId(), user.storeId(), request);
         String message = created.payAmt() == 0 ? "주문을 완료했습니다." : "주문을 생성했습니다. 결제를 진행해 주세요.";
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(message, created));
     }

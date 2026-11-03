@@ -6,7 +6,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.order.TestcontainersConfiguration;
+import com.sesac.gojigi.order.claim.dto.request.ClaimCreateRequest;
+import com.sesac.gojigi.order.claim.dto.response.ClaimResponse;
 import com.sesac.gojigi.order.claim.entity.ClaimReasonCode;
+import com.sesac.gojigi.order.claim.entity.ClaimType;
 import com.sesac.gojigi.order.claim.service.ClaimTxService;
 import com.sesac.gojigi.order.common.config.SchedulingConfig;
 import com.sesac.gojigi.order.common.event.EventOutboxService;
@@ -26,6 +29,7 @@ import com.sesac.gojigi.order.order.service.OrderTxService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +43,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
@@ -73,6 +78,8 @@ class OrderEventOutboxIntegrationTest {
 
     @Autowired private OrderTxService orderTx;
     @Autowired private CancelItemTxService cancelTx;
+    @Autowired private ClaimTxService claimTx;
+    @Autowired private JdbcTemplate jdbc;
     @Autowired private OrderItemRepository orderItemRepository;
     @Autowired private OutboxEventRepository outboxRepository;
     @Autowired private JsonMapper jsonMapper;
@@ -160,5 +167,50 @@ class OrderEventOutboxIntegrationTest {
         assertThat(payload.get("restoredPoint").asLong()).isEqualTo(item.getUsedPoint());
         assertThat(item.getEarnedPoint()).isPositive();
         assertThat(payload.get("revokedPoint").asLong()).isZero();   // 적립은 구매확정 때 — 확정 전 취소라 회수할 게 없다
+        assertThat(outboxRepository.findAll()).noneMatch(e -> e.getEventType().equals("OrderClaimRequested")
+                && e.getAggregateId().equals(item.getItemNo()));   // 취소는 판매자 확인 없이 끝나 신청 알림이 없다
+    }
+
+    @Test
+    @DisplayName("반품 · 교환 신청 — OrderClaimRequested(상품주문 단위, 스토어 · 유형 · 사유)를 같은 트랜잭션에, 철회는 발행하지 않는다")
+    void orderClaimRequested() {
+        // given — 두 상품주문 모두 이틀 전 배송완료
+        long buyer = BUYERS.getAndIncrement();
+        Order order = paidOrder(buyer);
+        List<OrderItem> items = orderItemRepository.findByOrderIdOrderByIdAsc(order.getId());
+        jdbc.update("update order_item set status = 'DELIVERED', delivered_at = ? where order_id = ?",
+                LocalDateTime.of(2026, 10, 25, 12, 0), order.getId());
+        OrderItem apple = items.get(0);
+        OrderItem pear = items.get(1);
+
+        // when
+        ClaimResponse ret = claimTx.openReturnOrExchange(buyer, order.getOrderNo(),
+                new ClaimCreateRequest(apple.getId(), ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND, "마음이 바뀜"), 6_000L);
+        ClaimResponse exchange = claimTx.openReturnOrExchange(buyer, order.getOrderNo(),
+                new ClaimCreateRequest(pear.getId(), ClaimType.EXCHANGE, ClaimReasonCode.DEFECTIVE, null), 0L);
+        claimTx.withdraw(buyer, ret.claimId());
+
+        // then — 신청마다 하나씩, 철회 뒤에도 늘지 않는다
+        OutboxEvent event = only("OrderClaimRequested", apple.getItemNo());
+        assertThat(event.getAggregateType()).isEqualTo(OutboxEvent.AggregateType.ORDER_ITEM);
+        assertThat(event.isSent()).isTrue();
+        JsonNode payload = sentPayload("OrderClaimRequested", apple.getItemNo());
+        assertThat(payload.get("claimId").asLong()).isEqualTo(ret.claimId());
+        assertThat(payload.get("claimType").asString()).isEqualTo("RETURN");
+        assertThat(payload.get("orderItemId").asLong()).isEqualTo(apple.getId());
+        assertThat(payload.get("orderNo").asString()).isEqualTo(order.getOrderNo());
+        assertThat(payload.get("storeId").asLong()).isEqualTo(1_301L);
+        assertThat(payload.get("storeName").asString()).isEqualTo("곳간상회");
+        assertThat(payload.get("productName").asString()).isEqualTo("사과");
+        assertThat(payload.get("optionName").asString()).isEqualTo("특");
+        assertThat(payload.get("reasonCode").asString()).isEqualTo("CHANGE_OF_MIND");
+        assertThat(payload.get("requestedAt").asString()).isEqualTo("2026-10-27T12:00:00+09:00");
+
+        JsonNode exchangePayload = sentPayload("OrderClaimRequested", pear.getItemNo());
+        assertThat(exchangePayload.get("claimId").asLong()).isEqualTo(exchange.claimId());
+        assertThat(exchangePayload.get("claimType").asString()).isEqualTo("EXCHANGE");
+        assertThat(exchangePayload.get("optionName").isNull()).isTrue();
+        assertThat(outboxRepository.findAll()).filteredOn(e -> e.getEventType().equals("OrderClaimRequested")
+                && List.of(apple.getItemNo(), pear.getItemNo()).contains(e.getAggregateId())).hasSize(2);
     }
 }

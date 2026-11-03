@@ -332,9 +332,9 @@ class ReviewControllerTest {
         @Test
         @DisplayName("목록 — 로그인 없이 200, 기본 sort LATEST · page 0 · size 10")
         void list_defaults_returns200() throws Exception {
-            ProductReviewResponse review = new ProductReviewResponse(31L, "곳간러버", 5, null, "오버핏이에요", "오트밀 / M",
+            ProductReviewResponse review = new ProductReviewResponse(31L, "곳간러버", false, 5, null, "오버핏이에요", "오트밀 / M",
                     ReviewFit.TRUE_TO_SIZE, null, null, OffsetDateTime.parse("2026-10-20T14:00:00+09:00"), List.of());
-            given(productReviewQueryService.list(101L, null, false, ProductReviewSort.LATEST, 0, 10))
+            given(productReviewQueryService.list(101L, null, false, ProductReviewSort.LATEST, 0, 10, null))
                     .willReturn(new PageResponse<>(List.of(review), 0, 10, 1, 1, false));
 
             mockMvc.perform(get("/api/reviews").param("productId", "101"))
@@ -348,7 +348,7 @@ class ReviewControllerTest {
         @Test
         @DisplayName("목록 — rating · sort · page · size 를 그대로 넘긴다")
         void list_withParams_passesThrough() throws Exception {
-            given(productReviewQueryService.list(101L, 5, false, ProductReviewSort.RATING_LOW, 1, 20))
+            given(productReviewQueryService.list(101L, 5, false, ProductReviewSort.RATING_LOW, 1, 20, null))
                     .willReturn(new PageResponse<>(List.of(), 1, 20, 0, 0, false));
 
             mockMvc.perform(get("/api/reviews").param("productId", "101").param("rating", "5")
