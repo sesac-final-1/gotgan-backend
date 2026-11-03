@@ -65,24 +65,24 @@ jobs:
             echo "::warning::마지막 성공 커밋($sha)이 이 커밋의 조상이 아님 — 옛 커밋 run 이라 빌드 · 배포를 건너뜀"
             echo "stale=true" >> "$GITHUB_OUTPUT"
           fi
-      # libs/common-web 은 composite build 로 서비스 jar 에 들어가므로, 바뀌면 의존 서비스 9개를 모두 테스트 · 이미지 재빌드 (결정 5번 B-1)
-      # gateway 는 WebFlux 라 common-web(Servlet 전용)을 쓰지 않아 제외
+      # libs/common-web · common-logging 은 composite build 로 서비스 jar 에 들어가므로, 바뀌면 의존 서비스를 모두 테스트 · 이미지 재빌드 (결정 5번 B-1)
+      # common-web 은 9개(gateway 는 WebFlux 라 Servlet 전용 common-web 을 쓰지 않아 제외), common-logging 은 gateway 포함 10개
       - id: filter
         if: steps.base.outputs.stale != 'true'
         uses: dorny/paths-filter@v3
         with:
           base: ${{ steps.base.outputs.sha }}   # PR 은 비어 있어 기존처럼 PR base 와 비교
           filters: |
-            gateway:    [services/gateway-service/**]
-            user:       [services/user-service/**, libs/common-web/**]
-            store:      [services/store-service/**, libs/common-web/**]
-            product:    [services/product-service/**, libs/common-web/**]
-            order:      [services/order-service/**, libs/common-web/**]
-            payment:    [services/payment-service/**, libs/common-web/**]
-            review:     [services/review-service/**, libs/common-web/**]
-            settlement: [services/settlement-service/**, libs/common-web/**]
-            admin:      [services/admin-service/**, libs/common-web/**]
-            chat:       [services/chat-service/**, libs/common-web/**]
+            gateway:    [services/gateway-service/**, libs/common-logging/**]
+            user:       [services/user-service/**, libs/common-web/**, libs/common-logging/**]
+            store:      [services/store-service/**, libs/common-web/**, libs/common-logging/**]
+            product:    [services/product-service/**, libs/common-web/**, libs/common-logging/**]
+            order:      [services/order-service/**, libs/common-web/**, libs/common-logging/**]
+            payment:    [services/payment-service/**, libs/common-web/**, libs/common-logging/**]
+            review:     [services/review-service/**, libs/common-web/**, libs/common-logging/**]
+            settlement: [services/settlement-service/**, libs/common-web/**, libs/common-logging/**]
+            admin:      [services/admin-service/**, libs/common-web/**, libs/common-logging/**]
+            chat:       [services/chat-service/**, libs/common-web/**, libs/common-logging/**]
       - id: config                           # 서비스 목록(services)에 섞이지 않게 필터를 따로 둔다
         if: steps.base.outputs.stale != 'true'
         uses: dorny/paths-filter@v3

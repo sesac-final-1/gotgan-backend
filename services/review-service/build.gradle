@@ -48,7 +48,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     runtimeOnly    'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-zipkin'
-    implementation "com.github.loki4j:loki-logback-appender:${loki4jVersion}"
+    implementation 'com.sesac.gojigi:common-logging:0.0.1'   // logback 공통 설정 + loki4j (libs/common-logging)
     // Lombok — 생성자 주입(@RequiredArgsConstructor) · @Getter · @Slf4j (컨벤션 2-3)
     compileOnly         'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'

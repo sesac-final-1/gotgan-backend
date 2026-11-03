@@ -1,1 +1,4 @@
 rootProject.name = 'gateway-service'
+
+// 공통 logback 설정 (libs/common-logging) — composite build, 로그 형식 · Loki 전송은 이 모듈 한 벌
+includeBuild('../../libs/common-logging')
