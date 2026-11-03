@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willReturn;
 import static org.mockito.BDDMockito.willThrow;
 
@@ -69,6 +70,7 @@ class ChatWebSocketTest {
     @Autowired ChatSessionRegistry sessions;
     @Autowired ChatRateLimiter rateLimiter;
     @MockitoBean JwtDecoder jwtDecoder;
+    @MockitoBean BlockedUsers blockedUsers;
 
     private WebSocketStompClient client;
     private final List<StompSession> opened = new java.util.ArrayList<>();
@@ -220,6 +222,27 @@ class ChatWebSocketTest {
         assertThat(sendError("stranger", "/user/20/queue/errors")).contains("CHAT_NOT_ALLOWED");
         assertThat(sellerFrames.poll(1_000, TimeUnit.MILLISECONDS)).isNull();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM chat_message", Integer.class)).isZero();
+    }
+
+    @Test
+    @DisplayName("연결한 뒤 정지된 회원의 SEND 는 ERROR — 토큰이 남아 있어도 저장 · 전달되지 않음")
+    void sendFromUserBlockedAfterConnectIsRejected() throws Exception {
+        long roomId = storeInquiry();
+        BlockingQueue<String> errors = new LinkedBlockingQueue<>();
+        StompHeaders headers = new StompHeaders();
+        headers.add("Authorization", "Bearer buyer");
+        StompSession session = client.connectAsync("ws://localhost:" + port + "/ws/chat", new WebSocketHttpHeaders(), headers,
+                errorCollector(errors)).get(5, TimeUnit.SECONDS);
+        opened.add(session);
+        given(blockedUsers.isBlocked(10L)).willReturn(true);   // 연결 뒤 관리자가 정지
+
+        StompHeaders send = new StompHeaders();
+        send.setDestination("/pub/rooms/" + roomId);
+        send.setContentType(org.springframework.util.MimeTypeUtils.APPLICATION_JSON);
+        session.send(send, json.writeValueAsString(Map.of("content", "정지 뒤 메시지")));
+
+        assertThat(errors.poll(5, TimeUnit.SECONDS)).contains("USER_BLOCKED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM chat_message WHERE kind = 'TEXT'", Integer.class)).isZero();
     }
 
     @Test
