@@ -3,6 +3,7 @@ package com.sesac.gojigi.gateway.config;
 import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockJwt;
 import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.springSecurity;
 
+import java.net.InetSocketAddress;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,6 +80,28 @@ class SecurityConfigTest {
                 .expectStatus().isForbidden();
         client.get().uri(LOCAL + "/api/chats/rooms").exchange()
                 .expectStatus().isUnauthorized();
+    }
+
+    /** 접속 IP 를 정해 보내는 클라이언트 — 실제 서버에서는 TCP 접속 IP (NLB 를 거치면 NLB 의 퍼블릭 서브넷 IP) */
+    private WebTestClient clientFrom(String ip) {
+        return WebTestClient.bindToApplicationContext(context)
+                .webFilter((exchange, chain) -> chain.filter(exchange.mutate()
+                        .request(r -> r.remoteAddress(new InetSocketAddress(ip, 40000))).build()))
+                .apply(springSecurity()).configureClient().build();
+    }
+
+    @Test
+    @DisplayName("지표는 클러스터 노드 대역(Prometheus)만 200 — NLB 로 들어온 외부 요청은 401 봉투, health 는 어디서나 200 (K-3)")
+    void prometheus_onlyFromClusterNodes() {
+        clientFrom("10.0.11.206").get().uri("/actuator/prometheus").exchange()
+                .expectStatus().isOk();
+        clientFrom("10.0.1.211").get().uri("/actuator/prometheus").exchange()
+                .expectStatus().isUnauthorized()
+                .expectBody().jsonPath("$.code").isEqualTo("UNAUTHORIZED");
+        clientFrom("203.0.113.7").get().uri("/actuator/prometheus").exchange()
+                .expectStatus().isUnauthorized();
+        clientFrom("10.0.1.211").get().uri("/actuator/health/readiness").exchange()
+                .expectStatus().isOk();
     }
 
     @Test

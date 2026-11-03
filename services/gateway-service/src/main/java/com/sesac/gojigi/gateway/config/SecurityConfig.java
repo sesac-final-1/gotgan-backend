@@ -34,6 +34,7 @@ public class SecurityConfig {
 
     private final GatewayAuthenticationEntryPoint authenticationEntryPoint;
     private final GatewayAccessDeniedHandler accessDeniedHandler;
+    private final MetricsAccessManager metricsAccessManager;
 
     @Bean
     SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
@@ -48,7 +49,8 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.GET, "/ws/chat").permitAll()                       // 채팅 WebSocket 핸드셰이크 — 토큰은 STOMP CONNECT 에서 chat-service 가 검증 (X-User-* 는 UserHeaderFilter 가 지움)
                         .pathMatchers("/api/auth/**").permitAll()                                   // 가입 · 로그인 · refresh (user-service 가 Keycloak 대리 호출)
                         .pathMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()          // 포트원 웹훅 (서명은 payment 가 검증)
-                        .pathMatchers("/actuator/health/**", "/actuator/prometheus").permitAll()
+                        .pathMatchers("/actuator/health/**").permitAll()                          // 프로브 · bootstrap 접속 확인 (상태만, 상세 없음)
+                        .pathMatchers("/actuator/prometheus").access(metricsAccessManager)          // 클러스터 노드 대역(Prometheus)만 — NLB 로 들어온 외부 요청은 거절 (K-3)
                         // Keycloak 사용자 계정 콘솔 · 동적 클라이언트 등록은 막는다 (B-경-9) — 회원 정보 · 비밀번호는 user-service API 로만 바꾼다
                         // (계정 콘솔에서 바꾸면 Keycloak 과 userdb 이메일이 어긋남). 아래 permitAll 보다 먼저 와야 한다
                         .pathMatchers("/realms/gotgan/account", "/realms/gotgan/account/**",
