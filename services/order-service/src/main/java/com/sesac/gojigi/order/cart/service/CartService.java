@@ -58,11 +58,14 @@ public class CartService {
     }
 
     /** 담기 — product 확인은 트랜잭션 밖에서, 이미 담긴 옵션은 수량을 더한다 */
-    public CartItemsResponse add(Long userId, CartItemAddRequest request) {
+    public CartItemsResponse add(Long userId, Long storeId, CartItemAddRequest request) {
         Map<Long, Integer> adding = request.items().stream().collect(Collectors.toMap(
                 CartItemAddRequest.Item::productOptionId, CartItemAddRequest.Item::quantity, Integer::sum,
                 LinkedHashMap::new));
         Map<Long, ProductOptionResponse> options = purchasable(adding.keySet());
+        if (storeId != null && options.values().stream().anyMatch(o -> storeId.equals(o.storeId()))) {
+            throw new CartException(CartErrorCode.CART_OWN_STORE_PRODUCT);   // 판매자는 자기 스토어 상품을 담을 수 없다
+        }
         return tx.execute(s -> {
             Map<Long, CartItem> cart = cartItemRepository.findByUserIdOrderByIdAsc(userId).stream()
                     .collect(Collectors.toMap(CartItem::getProductOptionId, Function.identity()));

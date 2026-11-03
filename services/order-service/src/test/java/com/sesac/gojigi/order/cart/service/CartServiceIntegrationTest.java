@@ -77,10 +77,10 @@ class CartServiceIntegrationTest {
         // given
         long buyer = BUYERS.incrementAndGet();
         givenOptions(option(11L, 101L, true), option(12L, 102L, true));
-        cartService.add(buyer, request(item(11L, 1)));
+        cartService.add(buyer, null, request(item(11L, 1)));
 
         // when
-        CartItemsResponse response = cartService.add(buyer, request(item(11L, 2), item(12L, 1), item(12L, 3)));
+        CartItemsResponse response = cartService.add(buyer, null, request(item(11L, 2), item(12L, 1), item(12L, 3)));
 
         // then
         assertThat(response.cartCount()).isEqualTo(2);
@@ -101,11 +101,11 @@ class CartServiceIntegrationTest {
         givenOptions(option(11L, 101L, true), option(13L, 103L, false));   // 12 는 응답에서 빠짐
 
         // when · then
-        assertThatThrownBy(() -> cartService.add(buyer, request(item(11L, 1), item(12L, 1))))
+        assertThatThrownBy(() -> cartService.add(buyer, null, request(item(11L, 1), item(12L, 1))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(CartErrorCode.CART_PRODUCT_NOT_PURCHASABLE);
-        assertThatThrownBy(() -> cartService.add(buyer, request(item(13L, 1))))
+        assertThatThrownBy(() -> cartService.add(buyer, null, request(item(13L, 1))))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(CartErrorCode.CART_PRODUCT_NOT_PURCHASABLE);
         assertThat(cartItemRepository.findByUserIdOrderByIdAsc(buyer)).isEmpty();
@@ -118,10 +118,10 @@ class CartServiceIntegrationTest {
         // given
         long buyer = BUYERS.incrementAndGet();
         givenOptions(option(11L, 101L, true), option(12L, 102L, true));
-        cartService.add(buyer, request(item(12L, 990)));
+        cartService.add(buyer, null, request(item(12L, 990)));
 
         // when · then
-        assertThatThrownBy(() -> cartService.add(buyer, request(item(11L, 1), item(12L, 10))))
+        assertThatThrownBy(() -> cartService.add(buyer, null, request(item(11L, 1), item(12L, 10))))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(CartErrorCode.CART_QUANTITY_EXCEEDED);
         assertThat(cartItemRepository.findByUserIdOrderByIdAsc(buyer))
@@ -135,7 +135,7 @@ class CartServiceIntegrationTest {
         // given
         long buyer = BUYERS.incrementAndGet();
         givenOptions(option(11L, 101L, true), option(12L, 102L, true), option(13L, 103L, true));
-        cartService.add(buyer, request(item(11L, 1), item(12L, 2), item(13L, 3)));
+        cartService.add(buyer, null, request(item(11L, 1), item(12L, 2), item(13L, 3)));
 
         // when
         CartItemsResponse selected = cartService.remove(buyer, List.of(11L, 13L, 99L));
@@ -155,7 +155,7 @@ class CartServiceIntegrationTest {
         // given
         long buyer = BUYERS.incrementAndGet();
         givenOptions(option(11L, 101L, true), option(12L, 102L, true), option(13L, 103L, true));
-        cartService.add(buyer, request(item(11L, 1), item(12L, 2), item(13L, 1)));
+        cartService.add(buyer, null, request(item(11L, 1), item(12L, 2), item(13L, 1)));
         Order order = createOrder(buyer, 11L, 12L);
 
         // when
@@ -182,6 +182,22 @@ class CartServiceIntegrationTest {
                 Map.of(1L, "곳간상회")).order();
     }
 
+    @Test
+    @DisplayName("담기 — 판매자가 자기 스토어(1) 상품을 담으면 409 CART_OWN_STORE_PRODUCT, 아무것도 저장하지 않는다")
+    void add_ownStoreProduct_rejected() {
+        // given
+        long buyer = BUYERS.incrementAndGet();
+        givenOptions(option(11L, 101L, true));
+
+        // when · then
+        assertThatThrownBy(() -> cartService.add(buyer, 1L, request(item(11L, 1))))
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(CartErrorCode.CART_OWN_STORE_PRODUCT);
+        assertThat(cartItemRepository.findByUserIdOrderByIdAsc(buyer)).isEmpty();
+        cartService.add(buyer, 2L, request(item(11L, 1)));   // 다른 스토어 판매자는 담을 수 있다
+        assertThat(cartItemRepository.findByUserIdOrderByIdAsc(buyer)).hasSize(1);
+    }
+
     private static ProductOptionResponse option(long optionId, long productId, boolean purchasable) {
         return new ProductOptionResponse(optionId, productId, "상품 " + productId, "옵션 " + optionId, 1L, 301L, 3L,
                 10_000L, 0L, 10_000L, 100, purchasable, null);
@@ -205,7 +221,7 @@ class CartServiceIntegrationTest {
         // given
         long buyer = BUYERS.incrementAndGet();
         givenOptions(option(11L, 101L, true), option(12L, 102L, true));
-        cartService.add(buyer, request(item(11L, 1), item(12L, 2)));
+        cartService.add(buyer, null, request(item(11L, 1), item(12L, 2)));
 
         // when
         cartService.update(buyer, 11L, new CartItemUpdateRequest(5, null));

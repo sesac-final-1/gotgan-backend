@@ -41,11 +41,12 @@ public class CartController {
             product 에서 옵션이 있고 구매 가능한지 확인한다(가격 · 품절 표시는 조회에서 다시).
             응답은 담은 뒤 내 장바구니 전체(옵션 · 수량)와 줄 수(cartCount, 헤더 배지).
             에러: 400 INVALID_INPUT / 409 CART_PRODUCT_NOT_PURCHASABLE(없는 옵션 · 판매중지 등, 하나라도 있으면 전부 거절) ·
+            CART_OWN_STORE_PRODUCT(판매자의 내 스토어 상품) ·
             CART_QUANTITY_EXCEEDED(옵션당 999개 초과) / 502 EXTERNAL_API_ERROR(product 장애)""")
     @PostMapping("/api/carts/items")
     public ApiResponse<CartItemsResponse> add(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                               @Valid @RequestBody CartItemAddRequest request) {
-        return ApiResponse.success("장바구니에 담았습니다.", cartService.add(user.userId(), request));
+        return ApiResponse.success("장바구니에 담았습니다.", cartService.add(user.userId(), user.storeId(), request));
     }
 
     @Operation(summary = "장바구니 조회", description = """

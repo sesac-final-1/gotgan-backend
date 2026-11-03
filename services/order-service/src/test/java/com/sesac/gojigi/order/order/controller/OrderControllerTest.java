@@ -66,7 +66,7 @@ class OrderControllerTest {
     @Test
     @DisplayName("주문 생성 — 201, 결제창에 넣을 portonePaymentId · payAmt · orderName")
     void create() throws Exception {
-        given(placeOrderSaga.place(eq(4L), any())).willReturn(new OrderCreateResponse("20261022-000123",
+        given(placeOrderSaga.place(eq(4L), any(), any())).willReturn(new OrderCreateResponse("20261022-000123",
                 OrderStatus.PENDING, 62_000L, "pay-20261022-000123", "제철 사과 3kg"));
 
         mockMvc.perform(post("/api/orders").header("X-User-Id", "4")
@@ -81,7 +81,7 @@ class OrderControllerTest {
     @Test
     @DisplayName("전액 포인트 — 201 PAID, 결제 진행 안내 없음")
     void create_zeroPayAmount() throws Exception {
-        given(placeOrderSaga.place(eq(4L), any())).willReturn(new OrderCreateResponse("20261022-000123",
+        given(placeOrderSaga.place(eq(4L), any(), any())).willReturn(new OrderCreateResponse("20261022-000123",
                 OrderStatus.PAID, 0L, null, "제철 사과 3kg"));
 
         mockMvc.perform(post("/api/orders").header("X-User-Id", "4")
@@ -110,7 +110,7 @@ class OrderControllerTest {
     @Test
     @DisplayName("재고 부족 — 409 ORDER_OUT_OF_STOCK")
     void create_outOfStock() throws Exception {
-        given(placeOrderSaga.place(eq(4L), any())).willThrow(new OrderException(OrderErrorCode.ORDER_OUT_OF_STOCK));
+        given(placeOrderSaga.place(eq(4L), any(), any())).willThrow(new OrderException(OrderErrorCode.ORDER_OUT_OF_STOCK));
 
         mockMvc.perform(post("/api/orders").header("X-User-Id", "4")
                         .contentType(MediaType.APPLICATION_JSON).content(BODY))

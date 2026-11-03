@@ -81,7 +81,7 @@ class ProductReviewQueryServiceIntegrationTest {
         @Test
         @DisplayName("최신순 — 이 상품만 · 블라인드 · 삭제 제외, 작성자 표시 이름 · 옵션명 · 답글")
         void list_latest_excludesBlindedAndDeleted() {
-            PageResponse<ProductReviewResponse> page = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 10);
+            PageResponse<ProductReviewResponse> page = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 10, null);
 
             assertThat(page.content()).extracting(ProductReviewResponse::reviewId)
                     .containsExactly(r5Replied.getId(), r3Small.getId(), r5Fit.getId());
@@ -95,10 +95,10 @@ class ProductReviewQueryServiceIntegrationTest {
         @Test
         @DisplayName("평점 높은순 · 낮은순 — 같은 별점이면 최신 먼저")
         void list_ratingSorts() {
-            assertThat(productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.RATING_HIGH, 0, 10).content())
+            assertThat(productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.RATING_HIGH, 0, 10, null).content())
                     .extracting(ProductReviewResponse::reviewId)
                     .containsExactly(r5Replied.getId(), r5Fit.getId(), r3Small.getId());
-            assertThat(productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.RATING_LOW, 0, 10).content())
+            assertThat(productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.RATING_LOW, 0, 10, null).content())
                     .extracting(ProductReviewResponse::reviewId)
                     .containsExactly(r3Small.getId(), r5Replied.getId(), r5Fit.getId());
         }
@@ -106,16 +106,16 @@ class ProductReviewQueryServiceIntegrationTest {
         @Test
         @DisplayName("별점 하나만 · 페이지 나눔 · 없는 상품은 빈 목록")
         void list_ratingFilterPagingAndUnknownProduct() {
-            assertThat(productReviewQueryService.list(PRODUCT, 5, false, ProductReviewSort.LATEST, 0, 10).content())
+            assertThat(productReviewQueryService.list(PRODUCT, 5, false, ProductReviewSort.LATEST, 0, 10, null).content())
                     .extracting(ProductReviewResponse::reviewId).containsExactly(r5Replied.getId(), r5Fit.getId());
-            assertThat(productReviewQueryService.list(PRODUCT, 1, false, ProductReviewSort.LATEST, 0, 10).content()).isEmpty();
+            assertThat(productReviewQueryService.list(PRODUCT, 1, false, ProductReviewSort.LATEST, 0, 10, null).content()).isEmpty();
 
-            PageResponse<ProductReviewResponse> first = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 2);
+            PageResponse<ProductReviewResponse> first = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 2, null);
             assertThat(first.content()).hasSize(2);
             assertThat(first.totalElements()).isEqualTo(3);
             assertThat(first.hasNext()).isTrue();
 
-            assertThat(productReviewQueryService.list(9999L, null, false, ProductReviewSort.LATEST, 0, 10).content()).isEmpty();
+            assertThat(productReviewQueryService.list(9999L, null, false, ProductReviewSort.LATEST, 0, 10, null).content()).isEmpty();
         }
     }
 
@@ -151,8 +151,8 @@ class ProductReviewQueryServiceIntegrationTest {
         reviewImageRepository.flush();
 
         // when
-        var photos = productReviewQueryService.list(PRODUCT, null, true, ProductReviewSort.LATEST, 0, 10).content();
-        var all = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 10).content();
+        var photos = productReviewQueryService.list(PRODUCT, null, true, ProductReviewSort.LATEST, 0, 10, null).content();
+        var all = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 10, null).content();
 
         // then
         assertThat(photos).extracting(ProductReviewResponse::reviewId).containsExactly(r3Small.getId());

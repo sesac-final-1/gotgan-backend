@@ -2,6 +2,7 @@ package com.sesac.gojigi.review.review.controller;
 
 import com.sesac.gojigi.common.web.auth.AuthUser;
 import com.sesac.gojigi.common.web.auth.CurrentUser;
+import com.sesac.gojigi.common.web.auth.CurrentUserArgumentResolver;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
 import com.sesac.gojigi.common.web.dto.PageResponse;
 import com.sesac.gojigi.review.review.dto.request.ProductReviewSort;
@@ -40,6 +41,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -141,18 +143,19 @@ public class ReviewController {
     }
 
     @Operation(summary = "상품 리뷰 목록 (공개)", description = """
-            인가: 없음(공개). 블라인드 · 삭제 제외. rating 으로 별점 하나만 · photoOnly=true 면 사진 있는 리뷰만(선택),
+            인가: 없음(공개 — 로그인이면 mine = 내 리뷰, 신고 버튼 숨김). 블라인드 · 삭제 제외. rating 으로 별점 하나만 · photoOnly=true 면 사진 있는 리뷰만(선택),
             sort: LATEST(기본) · RATING_HIGH · RATING_LOW. page(0부터) · size(1~50, 기본 10). 없는 상품은 빈 목록.
             에러: 400 INVALID_INPUT(productId 없음 · rating 1~5 밖 · sort 모르는 값 · page · size)""")
     @GetMapping
     public ApiResponse<PageResponse<ProductReviewResponse>> listForProduct(@RequestParam Long productId,
+            @Parameter(hidden = true) @RequestHeader(value = CurrentUserArgumentResolver.USER_ID_HEADER, required = false) Long viewerUserId,
             @RequestParam(required = false) @Min(1) @Max(5) Integer rating,
             @RequestParam(defaultValue = "false") boolean photoOnly,
             @RequestParam(defaultValue = "LATEST") ProductReviewSort sort,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(50) int size) {
         return ApiResponse.success("리뷰 목록을 조회했습니다.",
-                productReviewQueryService.list(productId, rating, photoOnly, sort, page, size));
+                productReviewQueryService.list(productId, rating, photoOnly, sort, page, size, viewerUserId));
     }
 
     @Operation(summary = "상품 리뷰 요약 (공개)", description = """

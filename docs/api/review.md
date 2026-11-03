@@ -235,10 +235,11 @@
 - `sort`: `LATEST`(기본, 최신순) · `RATING_HIGH` · `RATING_LOW` — 같은 별점이면 최신 먼저. **도움순은 범위 제외**(10/28)라 없습니다.
 - `page` 0부터 · `size` 1~50(기본 10).
 - 작성자는 `writerDisplayName`(닉네임, 없으면 마스킹 실명)만 — **회원 ID · 아바타 · 등급은 주지 않습니다.** 화면은 기본 아바타, 등급 배지 생략.
+- `mine` — 로그인한 회원이 쓴 리뷰면 true(비로그인은 false). 화면은 내 리뷰에 신고 버튼을 숨깁니다(본인 신고는 서버도 `REPORT_SELF`로 막음).
 - `photoOnly=true` 면 사진 있는 리뷰만("포토 리뷰만"). 응답 `imageUrls` 는 사진 URL 순서대로.
 
 ```json
-{ "content": [ { "reviewId": 31, "writerDisplayName": "곳간러버", "rating": 5, "title": null,
+{ "content": [ { "reviewId": 31, "writerDisplayName": "곳간러버", "mine": false, "rating": 5, "title": null,
     "content": "…", "optionName": "오트밀 / M", "fit": "TRUE_TO_SIZE",
     "replyContent": "소중한 후기 감사합니다.", "repliedAt": "2026-10-21T09:30:00+09:00",
     "createdAt": "2026-10-20T14:00:00+09:00" } ],
