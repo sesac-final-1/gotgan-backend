@@ -80,7 +80,7 @@ public class ChatRoomService {
         }
         String title = request.context() == null ? null : contextTitle(request.type(), opening.storeId(), user, request.context());
         ChatRoom room = transactions.execute(tx -> {
-            ChatRoom saved = found != null ? load(found.getId())
+            ChatRoom saved = found != null ? loadForUpdate(found.getId())
                     : roomRepository.save(ChatRoom.open(request.type(), opening.buyerId(), opening.storeId()));
             if (title != null) {
                 appendContext(saved, user, opening.seat(), request.context(), title);
@@ -163,7 +163,7 @@ public class ChatRoomService {
             throw new ChatException(ChatErrorCode.CHAT_STORE_INACTIVE);   // D-1 — 기존 방은 읽기만
         }
         transactions.executeWithoutResult(tx -> {
-            ChatRoom room = load(roomId);
+            ChatRoom room = loadForUpdate(roomId);
             if (room.getStatus() == ChatRoomStatus.RESOLVED && seated.seat().role() != SenderRole.ADMIN) {
                 room.changeStatus(ChatRoomStatus.OPEN);
                 events.publishEvent(new ChatEvents.StatusChanged(roomId, ChatRoomStatus.OPEN));
@@ -185,7 +185,7 @@ public class ChatRoomService {
             throw new ChatException(ChatErrorCode.CHAT_NOT_ALLOWED);
         }
         ChatRoom room = transactions.execute(tx -> {
-            ChatRoom changed = load(roomId);
+            ChatRoom changed = loadForUpdate(roomId);
             if (!changed.getType().isSupport()) {
                 throw new ChatException(ChatErrorCode.CHAT_INVALID_TYPE);
             }
@@ -274,6 +274,11 @@ public class ChatRoomService {
 
     private ChatRoom load(Long roomId) {
         return roomRepository.findById(roomId).orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
+    }
+
+    /** 트랜잭션 안에서 메시지를 저장하고 방을 갱신할 때 — 같은 방 쓰기를 줄 세운다(ChatRoomRepository#findForUpdate) */
+    private ChatRoom loadForUpdate(Long roomId) {
+        return roomRepository.findForUpdate(roomId).orElseThrow(() -> new ChatException(ChatErrorCode.CHAT_ROOM_NOT_FOUND));
     }
 
     /** 방 + 내 자리 — 자리가 없으면 404 */

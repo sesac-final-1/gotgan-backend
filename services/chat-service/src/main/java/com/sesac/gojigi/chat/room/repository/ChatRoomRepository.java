@@ -6,13 +6,23 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
+
+    /**
+     * 메시지 저장 트랜잭션용 — 방 행을 먼저 쓰기 잠금. chat_message INSERT 의 외래키 검사가 방 행에 공유 잠금을 걸고
+     * 이어지는 방 UPDATE(마지막 메시지)가 배타 잠금으로 올리려다 같은 방 동시 전송끼리 데드락(1213)이 난다(11/4 k6 S5)
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM ChatRoom r WHERE r.id = :id")
+    Optional<ChatRoom> findForUpdate(@Param("id") Long id);
 
     Optional<ChatRoom> findByTypeAndBuyerIdAndStoreId(ChatRoomType type, Long buyerId, Long storeId);
 
