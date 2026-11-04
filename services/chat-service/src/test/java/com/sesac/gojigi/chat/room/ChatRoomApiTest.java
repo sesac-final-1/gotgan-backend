@@ -316,6 +316,37 @@ class ChatRoomApiTest {
                 .andExpect(jsonPath("$.data.lastMessage.preview").value("주문 #123"));   // 주문번호 모양이 아니면 번호
     }
 
+    @Test
+    @DisplayName("같은 방 동시 전송 — 데드락 없이 모두 저장되고 방의 마지막 메시지는 가장 큰 번호 (11/4 k6 S5 데드락 21건)")
+    void concurrentSendsToSameRoom(@Autowired ChatRoomService chatRoomService) throws Exception {
+        long roomId = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5}"));
+        AuthUser buyer = new AuthUser(BUYER_ID, List.of("BUYER"), null);
+        int senders = 8;
+        int each = 5;
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(senders);
+        List<java.util.concurrent.Future<?>> results = new java.util.ArrayList<>();
+        for (int s = 0; s < senders; s++) {
+            results.add(pool.submit(() -> {
+                start.await();
+                for (int i = 0; i < each; i++) {
+                    chatRoomService.send(buyer, roomId, "동시 전송");
+                }
+                return null;
+            }));
+        }
+        start.countDown();
+        for (java.util.concurrent.Future<?> result : results) {
+            result.get(30, java.util.concurrent.TimeUnit.SECONDS);   // 데드락(1213)이면 여기서 예외
+        }
+        pool.shutdown();
+
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "SELECT COUNT(*) FROM chat_message WHERE chat_room_id = ? AND kind = 'TEXT'", Integer.class, roomId)).isEqualTo(senders * each);
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT last_message_id FROM chat_room WHERE chat_room_id = ?", Long.class, roomId))
+                .isEqualTo(jdbc.queryForObject("SELECT MAX(chat_message_id) FROM chat_message WHERE chat_room_id = ?", Long.class, roomId));
+    }
+
     private ResultActions open(MockHttpServletRequestBuilder request, String body) throws Exception {
         return mockMvc.perform(request.contentType(MediaType.APPLICATION_JSON).content(body));
     }
