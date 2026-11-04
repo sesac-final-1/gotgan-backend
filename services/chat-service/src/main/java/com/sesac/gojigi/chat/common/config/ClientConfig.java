@@ -1,5 +1,6 @@
 package com.sesac.gojigi.chat.common.config;
 
+import io.micrometer.observation.ObservationRegistry;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.concurrent.Executor;
@@ -15,10 +16,17 @@ import org.springframework.web.client.RestClient;
 
 /**
  * 밖으로 나가는 호출 — Keycloak 공개키(STOMP CONNECT 토큰 검증) · admin 알림 센터 · user · store(상대 이름 · 스토어 상태) · product(상품 카드) · settlement(정산 카드).
- * 타임아웃은 컨벤션 2-7(연결 2초 · 읽기 3초)보다 짧게 — 알림 · 이름은 빠져도 되는 부가 정보라 오래 기다리지 않는다
+ * 타임아웃은 컨벤션 2-7(연결 2초 · 읽기 3초)보다 짧게 — 알림 · 이름은 빠져도 되는 부가 정보라 오래 기다리지 않는다.
+ * ObservationRegistry 를 붙여 나가는 요청에 traceparent 를 싣는다 — 받는 서비스가 같은 traceId 로 이어 Zipkin 에서 한 줄로 보인다.
  */
 @Configuration
 public class ClientConfig {
+
+    private final ObservationRegistry observationRegistry;
+
+    public ClientConfig(ObservationRegistry observationRegistry) {
+        this.observationRegistry = observationRegistry;
+    }
 
     /** 게이트웨이와 같은 검증 — 서명(JWKS, 내부 주소) + 만료 + iss(공개 주소). 공개키는 Nimbus 가 캐시 */
     @Bean
@@ -53,11 +61,11 @@ public class ClientConfig {
         return shortTimeout(settlementUri);
     }
 
-    private static RestClient shortTimeout(String baseUrl) {
+    private RestClient shortTimeout(String baseUrl) {
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(Duration.ofSeconds(2));
-        return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+        return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).observationRegistry(observationRegistry).build();
     }
 
     /** 알림 전송 전용 — 스레드 2개 · 대기 500건. 넘치면 버린다(ChatNotifier 가 기록) */
