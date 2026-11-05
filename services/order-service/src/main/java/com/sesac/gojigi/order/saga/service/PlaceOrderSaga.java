@@ -316,7 +316,7 @@ public class PlaceOrderSaga {
                 return sagaTx.startPlaceOrder(orderNoIssuer.next(), buyer, request, priced, storeNames);   // 번호는 주문 트랜잭션 밖에서
             } catch (DataIntegrityViolationException e) {
                 if (attempt >= ORDER_NO_ATTEMPTS) {
-                    throw e;
+                    throw new OrderException(OrderErrorCode.ORDER_NO_CONFLICT, e);   // 주문 · Saga 는 롤백됨, 되돌릴 앞 단계 없음
                 }
                 log.warn("주문번호 충돌 - 다시 발급, attempt={}", attempt);
             }

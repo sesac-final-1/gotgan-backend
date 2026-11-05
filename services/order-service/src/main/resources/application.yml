@@ -52,7 +52,7 @@ app:
     batch-size: 100                         # 한 주기에 처리할 Saga 최대 건수
     max-run: 4m                             # 결제 대기 만료 · Saga 복구 한 번 실행 상한 — ShedLock lockAtMostFor(5m) 보다 짧게, 남은 건은 다음 주기
     payment-expiry:                         # PaymentExpiryScheduler — 결제 대기 만료 (ORD-07)
-      interval: ${PAYMENT_EXPIRY_INTERVAL:60s}
+      interval: ${PAYMENT_EXPIRY_INTERVAL:20s}  # 실행이 끝난 뒤부터 센다 — 배치 100건에 약 20초라 60s 면 분당 약 73건(k6 경-4), 20s 면 약 150건
       initial-delay: 30s
     auto-deliver:                           # AutoDeliverScheduler — 배송중 → 자동 배송완료 (DLV-04)
       interval: ${AUTO_DELIVER_INTERVAL:60s}

@@ -43,7 +43,7 @@ public class PaymentExpiryScheduler {
         this.maxRun = maxRun;
     }
 
-    @Scheduled(fixedDelayString = "${app.scheduler.payment-expiry.interval:60s}",
+    @Scheduled(fixedDelayString = "${app.scheduler.payment-expiry.interval:20s}",
             initialDelayString = "${app.scheduler.payment-expiry.initial-delay:30s}")
     @SchedulerLock(name = "payment-expiry", lockAtMostFor = "5m")   // 레플리카가 2개여도 한 파드만 — max-run 이 이보다 짧아야 한다
     public void expireWaitingPayments() {

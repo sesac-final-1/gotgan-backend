@@ -29,6 +29,8 @@ public enum OrderErrorCode implements ErrorCode {
     ORDER_PAYMENT_NOT_COMPLETED(HttpStatus.CONFLICT, "결제가 아직 완료되지 않았어요."),
     /** 결제 확인 — 금액 불일치 · 끝난 결제 · 결제 없음. 재고 · 포인트를 되돌리고 주문 FAILED */
     ORDER_PAYMENT_FAILED(HttpStatus.CONFLICT, "결제를 확인하지 못해 주문이 취소되었어요."),
+    /** 주문번호 발급 재시도를 다 써도 겹침 (롤링 배포 중 옛 파드와) — 앞 단계가 없어 그대로 다시 주문하면 된다 */
+    ORDER_NO_CONFLICT(HttpStatus.CONFLICT, "주문을 처리하지 못했어요. 잠시 후 다시 시도해 주세요."),
     /** 지금 주문 상태에서 할 수 없는 변경 — 서버 버그 또는 동시 처리 */
     ORDER_INVALID_STATUS(HttpStatus.CONFLICT, "지금 주문 상태에서는 처리할 수 없습니다.");
 
