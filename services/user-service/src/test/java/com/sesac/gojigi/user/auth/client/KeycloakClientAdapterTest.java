@@ -11,6 +11,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
+import com.sesac.gojigi.user.auth.client.dto.KeycloakAccount;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import com.sesac.gojigi.user.auth.client.dto.SellerGrantResult;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
@@ -31,6 +32,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
@@ -202,6 +204,41 @@ class KeycloakClientAdapterTest {
         assertThatThrownBy(() -> adapter.createUser("ghost@gotgan.com", "Ghost!pass1", 8L))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_EMAIL_DUPLICATE);
+    }
+
+    @Test
+    @DisplayName("계정 찾기 — username 정확 일치 계정의 user_id 속성, 속성이 없으면 null · 계정이 없으면 empty")
+    void findAccount_readsUserIdAttribute() {
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=ghost%40gotgan.com&exact=true"))
+                .andRespond(withSuccess("[{\"id\":\"kc-3\"}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-3"))
+                .andRespond(withSuccess("{\"id\":\"kc-3\",\"attributes\":{\"user_id\":[\"3\"]}}", MediaType.APPLICATION_JSON));
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=social%40gotgan.com&exact=true"))
+                .andRespond(withSuccess("[{\"id\":\"kc-4\"}]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(USERS_URL + "/kc-4"))
+                .andRespond(withSuccess("{\"id\":\"kc-4\"}", MediaType.APPLICATION_JSON));
+        expectServiceAccountToken();
+        server.expect(requestTo(USERS_URL + "?username=none%40gotgan.com&exact=true"))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+
+        assertThat(adapter.findAccount("ghost@gotgan.com")).contains(new KeycloakAccount("kc-3", 3L));
+        assertThat(adapter.findAccount("social@gotgan.com")).contains(new KeycloakAccount("kc-4", null));
+        assertThat(adapter.findAccount("none@gotgan.com")).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("결과를 모르는 실패는 타임아웃 · 5xx 뿐 — 원인이 없거나 4xx 면 계정이 없다")
+    void outcomeUnknown_onlyTimeoutAnd5xx() {
+        assertThat(KeycloakClientAdapter.outcomeUnknown(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "x",
+                new ResourceAccessException("timeout")))).isTrue();
+        assertThat(KeycloakClientAdapter.outcomeUnknown(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "x",
+                HttpServerErrorException.create(HttpStatus.BAD_GATEWAY, "x", HttpHeaders.EMPTY, new byte[0], null)))).isTrue();
+        assertThat(KeycloakClientAdapter.outcomeUnknown(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "x",
+                HttpClientErrorException.create(HttpStatus.FORBIDDEN, "x", HttpHeaders.EMPTY, new byte[0], null)))).isFalse();
+        assertThat(KeycloakClientAdapter.outcomeUnknown(new AuthException(AuthErrorCode.AUTH_SIGNUP_BUSY))).isFalse();
     }
 
     @Test

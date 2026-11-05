@@ -18,6 +18,8 @@ public enum AuthErrorCode implements ErrorCode {
     AUTH_EMAIL_DUPLICATE(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
     /** 가입 — Keycloak 비밀번호 정책 위반 (8자 이상 · 영문 · 특수문자 · 이메일과 다름) */
     AUTH_PASSWORD_POLICY_VIOLATION(HttpStatus.BAD_REQUEST, "비밀번호는 8자 이상이며 영문과 특수문자를 포함하고, 이메일과 달라야 합니다."),
+    /** 가입 — Keycloak 계정 생성 동시 호출 상한 초과 (Bulkhead). 계정을 만들지 않았고 회원 행도 지웠으므로 다시 시도하면 된다 */
+    AUTH_SIGNUP_BUSY(HttpStatus.SERVICE_UNAVAILABLE, "가입 요청이 많아요. 잠시 후 다시 시도해 주세요."),
     /** 토큰 재발급 — Refresh 쿠키 없음 · 만료 · 로그아웃된 세션 (invalid_grant) */
     AUTH_SESSION_EXPIRED(HttpStatus.UNAUTHORIZED, "로그인이 만료되었습니다. 다시 로그인해 주세요."),
     /** 소셜 로그인 — 지원하지 않는 제공자 (google · kakao · naver 만) */

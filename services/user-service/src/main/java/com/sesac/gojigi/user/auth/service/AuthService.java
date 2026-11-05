@@ -37,6 +37,7 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 public class AuthService {
     private final KeycloakClientAdapter keycloakClientAdapter;
+    private final SignupOrphanCleaner signupOrphanCleaner;
     private final UserRepository userRepository;
     private final TransactionTemplate transactionTemplate;
     private final SocialLoginUrls socialLoginUrls;
@@ -52,6 +53,7 @@ public class AuthService {
      * 회원가입 (users.keycloak_id 주석 · keycloak README):
      * 1. userdb 행 생성 (커밋해야 user_id 가 나온다) → 2. Keycloak 계정 생성(user_id 속성) → 3. keycloak_id 연결 → 4. 자동 로그인.
      * 2 가 실패하면 1 의 행을 지운다 (가입 실패 보상 — 회원 물리 삭제 금지의 유일한 예외).
+     * 2 의 결과를 모르면(타임아웃 · 5xx) 계정이 남았을 수 있어 응답 뒤에 정리한다 (SignupOrphanCleaner). 그래도 남은 계정은 재가입 때 지운다 (createKeycloakAccount).
      * 3 · 4 의 실패는 가입을 되돌리지 않는다 — keycloak_id 는 첫 로그인 때도 연결되고, 로그인은 다시 하면 된다.
      */
     public SignupResult signup(SignupRequest request) {
@@ -66,9 +68,12 @@ public class AuthService {
         Long userId = createUserRow(email, request.trimmedName(), request.normalizedPhone());
         String keycloakId;
         try {
-            keycloakId = keycloakClientAdapter.createUser(email, request.password(), userId);
+            keycloakId = createKeycloakAccount(email, request.password(), userId);
         } catch (RuntimeException e) {
             deleteUserRow(userId);
+            if (KeycloakClientAdapter.outcomeUnknown(e)) {
+                signupOrphanCleaner.schedule(email, userId);
+            }
             throw e;
         }
         linkKeycloak(userId, keycloakId);
@@ -284,6 +289,34 @@ public class AuthService {
             throw new AuthException(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
         }
         keycloakClientAdapter.resetPassword(keycloakId, email, newPassword);
+    }
+
+    /** 계정 생성 — 이미 있어도 지난 가입 실패로 남은 계정이면 지우고 한 번 다시 만든다 */
+    private String createKeycloakAccount(String email, String password, Long userId) {
+        try {
+            return keycloakClientAdapter.createUser(email, password, userId);
+        } catch (AuthException e) {
+            if (e.getErrorCode() != AuthErrorCode.AUTH_EMAIL_DUPLICATE || !deleteOrphanAccount(email)) {
+                throw e;
+            }
+            return keycloakClientAdapter.createUser(email, password, userId);
+        }
+    }
+
+    /**
+     * 지난 가입 실패의 고아 계정 삭제 — user_id 속성이 가리키는 회원 행이 없을 때만. 기존 계정에 연결하면 실패한 가입의 비밀번호가 남으므로 지운다.
+     * user_id 가 없는 계정은 지우지 않는다 — 소셜 첫 로그인 진행 중일 수 있다.
+     */
+    private boolean deleteOrphanAccount(String email) {
+        return keycloakClientAdapter.findAccount(email)
+                .filter(account -> account.userId() != null && !userRepository.existsById(account.userId()))
+                .map(account -> {
+                    keycloakClientAdapter.deleteUser(account.keycloakId(), null);
+                    log.warn("재가입 — 지난 가입 실패로 남은 Keycloak 계정 삭제 orphanUserId={}, keycloakId={}",
+                            account.userId(), account.keycloakId());
+                    return true;
+                })
+                .orElse(false);
     }
 
     private Long createUserRow(String email, String name, String phone) {

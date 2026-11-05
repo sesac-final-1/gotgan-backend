@@ -2,17 +2,21 @@ package com.sesac.gojigi.user.auth.client;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
+import com.sesac.gojigi.user.auth.client.dto.KeycloakAccount;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserCreateRequest;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakUserSummary;
 import com.sesac.gojigi.user.auth.client.dto.SellerGrantResult;
 import com.sesac.gojigi.user.auth.exception.AuthErrorCode;
 import com.sesac.gojigi.user.auth.exception.AuthException;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +24,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -30,6 +36,7 @@ import tools.jackson.databind.json.JsonMapper;
  * - invalid_grant(비밀번호 불일치 · 임시 잠금 · 정지)는 도메인 예외로 바꾸고 서킷 실패로 세지 않는다
  * - 계정 생성 · 삭제(Admin API)는 서비스 계정 토큰(client_credentials)으로 — 409 는 이메일 중복, 비밀번호 정책 위반 400 은 도메인 예외
  * - client 인증(client-id · secret)은 KeycloakClientConfig 가 Basic 헤더로 붙인다 — 여기서는 grant 별 폼만 만든다
+ * - 계정 생성은 Bulkhead "keycloak-signup" 으로 동시 호출을 제한한다 — 거절은 AUTH_SIGNUP_BUSY(503), 서킷에 집계하지 않는다 (로그인까지 막히지 않게)
  * - 비밀번호 · client secret · 토큰은 로그에 남기지 않는다
  * - 여기서는 로그를 찍지 않는다 — 원인을 예외에 실어 던지면 GlobalExceptionHandler 가 warn 한 번 (컨벤션 5-6)
  */
@@ -38,9 +45,11 @@ import tools.jackson.databind.json.JsonMapper;
 public class KeycloakClientAdapter {
 
     private static final String CIRCUIT = "keycloak";
+    private static final String SIGNUP_BULKHEAD = "keycloak-signup";
     private static final String INVALID_GRANT = "invalid_grant";
     private static final String ACCOUNT_DISABLED = "Account disabled";   // Keycloak 이 enabled=false 계정에 주는 설명
     private static final String SELLER = "SELLER";
+    private static final String USER_ID = "user_id";
     private static final String STORE_ID = "store_id";                   // User Profile 선언 속성 → store_id 클레임
 
     private final KeycloakClient keycloakClient;
@@ -113,7 +122,7 @@ public class KeycloakClientAdapter {
             Map<String, Object> user = new HashMap<>(keycloakAdminClient.getUser(bearer, keycloakId));
             Map<String, Object> attributes = new HashMap<>(
                     (Map<String, Object>) user.getOrDefault("attributes", Map.of()));
-            attributes.put("user_id", List.of(String.valueOf(userId)));
+            attributes.put(USER_ID, List.of(String.valueOf(userId)));
             user.put("attributes", attributes);
             keycloakAdminClient.updateUser(bearer, keycloakId, user);
         } catch (HttpClientErrorException e) {
@@ -138,6 +147,7 @@ public class KeycloakClientAdapter {
      * 역할 BUYER 는 realm 기본 역할이라 따로 부여하지 않는다.
      */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "createUserFallback")
+    @Bulkhead(name = SIGNUP_BULKHEAD)
     public String createUser(String email, String password, long userId) {
         String bearer = "Bearer " + serviceAccountToken();
         try {
@@ -189,6 +199,36 @@ public class KeycloakClientAdapter {
         } catch (HttpClientErrorException e) {
             throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
         }
+    }
+
+    /** 가입 정리용 — username 이 정확히 같은 계정과 그 user_id 속성. 계정이 없으면 empty */
+    @CircuitBreaker(name = CIRCUIT, fallbackMethod = "findAccountFallback")
+    @SuppressWarnings("unchecked")
+    public Optional<KeycloakAccount> findAccount(String email) {
+        String bearer = "Bearer " + serviceAccountToken();
+        try {
+            String id = findIdByUsername(bearer, email);
+            if (id == null) {
+                return Optional.empty();
+            }
+            Map<String, Object> attributes = (Map<String, Object>) keycloakAdminClient.getUser(bearer, id)
+                    .getOrDefault("attributes", Map.of());
+            List<String> userIds = (List<String>) attributes.getOrDefault(USER_ID, List.of());
+            return Optional.of(new KeycloakAccount(id, userIds.isEmpty() ? null : Long.valueOf(userIds.get(0))));
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (HttpClientErrorException e) {
+            throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
+        }
+    }
+
+    private Optional<KeycloakAccount> findAccountFallback(String email, Throwable t) {
+        throw unavailable(t);
+    }
+
+    /** 호출이 Keycloak 에 닿았는데 결과를 모르는 실패(타임아웃 · 끊김 · 5xx) — 계정이 만들어졌을 수 있다. 서킷 OPEN · 4xx · 상한 초과는 아니다 */
+    public static boolean outcomeUnknown(RuntimeException e) {
+        return e.getCause() instanceof ResourceAccessException || e.getCause() instanceof HttpServerErrorException;
     }
 
     private String findIdByUsername(String bearer, String email) {
@@ -374,6 +414,9 @@ public class KeycloakClientAdapter {
     }
 
     private String createUserFallback(String email, String password, long userId, Throwable t) {
+        if (t instanceof BulkheadFullException) {
+            throw new AuthException(AuthErrorCode.AUTH_SIGNUP_BUSY);
+        }
         throw unavailable(t);
     }
 
