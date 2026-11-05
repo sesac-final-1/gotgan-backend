@@ -69,7 +69,7 @@ public class ClientConfig {
     }
 
     /** 알림 전송 전용 — 스레드 2개 · 대기 500건. 넘치면 버린다(ChatNotifier 가 기록) */
-    @Bean
+    @Bean(defaultCandidate = false)   // 타입으로 찾히면 Boot 가 유일한 AsyncTaskExecutor 로 보고 WebSocket 채널에 씌운다(11/5 k6 S5) — @Qualifier 로만 주입
     public Executor chatNotifyExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
