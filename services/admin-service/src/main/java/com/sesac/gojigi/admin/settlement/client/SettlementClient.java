@@ -28,9 +28,6 @@ public interface SettlementClient {
     @GetExchange("/settlements/{id}")
     ApiResponse<JsonNode> detail(@PathVariable Long id);
 
-    @PostExchange("/settlements/aggregate")
-    ApiResponse<JsonNode> aggregate(@RequestBody(required = false) JsonNode body);
-
     @PostExchange("/settlements/pay")
     ApiResponse<JsonNode> pay(@RequestBody JsonNode body);
 
