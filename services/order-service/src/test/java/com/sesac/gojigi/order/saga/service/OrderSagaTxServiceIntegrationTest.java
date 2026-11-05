@@ -11,6 +11,7 @@ import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
 import com.sesac.gojigi.order.order.exception.OrderException;
 import com.sesac.gojigi.order.order.service.OrderPricing;
@@ -83,7 +84,7 @@ class OrderSagaTxServiceIntegrationTest {
     }
 
     private Order order() {
-        return orderTx.createPending(BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES).order();
+        return orderTx.createPending(OrderFixtures.nextOrderNo(), BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES).order();
     }
 
     private long orderCount() {
@@ -123,7 +124,7 @@ class OrderSagaTxServiceIntegrationTest {
     @DisplayName("주문 PENDING + Saga 는 한 트랜잭션 (A-경-4) — 함께 저장되고, Saga 저장이 실패하면 주문도 남지 않는다")
     void startPlaceOrder_savesOrderAndSagaTogether() {
         // when
-        PlacedOrder placed = sagaTx.startPlaceOrder(BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES);
+        PlacedOrder placed = sagaTx.startPlaceOrder(OrderFixtures.nextOrderNo(), BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES);
 
         // then
         assertThat(sagaTx.getPlaceOrder(placed.pending().order().getId()).getSagaId())
@@ -134,7 +135,7 @@ class OrderSagaTxServiceIntegrationTest {
         willThrow(new IllegalStateException("Saga 저장 실패")).given(sagaInstanceRepository).save(any());
 
         // when · then
-        assertThatThrownBy(() -> sagaTx.startPlaceOrder(BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES))
+        assertThatThrownBy(() -> sagaTx.startPlaceOrder(OrderFixtures.nextOrderNo(), BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(orderCount()).isEqualTo(before);
     }

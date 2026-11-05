@@ -19,6 +19,7 @@ import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderItemHistory;
 import com.sesac.gojigi.order.order.entity.OrderItemStatus;
@@ -82,7 +83,7 @@ class ClaimTxServiceIntegrationTest {
         OrderPricing.Result priced = OrderPricing.calculate(List.of(new OrderPricing.Line(new ProductOptionResponse(95L,
                         95L, "상품 95", null, 951L, 301L, 3L, 20_000L, 0L, 20_000L, 100, true, null), 1)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), 2_000L);
-        Order order = orderTx.createPending(new UserSummaryResponse(buyerId, "buyer@example.com", "홍길동", null),
+        Order order = orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(buyerId, "buyer@example.com", "홍길동", null),
                 request, priced, Map.of(951L, "곳간상회")).order();
         orderTx.markPaid(order.getId());
         return orderItemRepository.findByOrderIdOrderByIdAsc(order.getId()).get(0);

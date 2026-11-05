@@ -1,9 +1,18 @@
 package com.sesac.gojigi.order.order.entity;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /** 테스트용 주문 · 상품주문 — 이벤트 payload 값 확인에 쓰는 스냅샷 값 */
 public final class OrderFixtures {
 
+    private static final AtomicLong ORDER_NO = new AtomicLong();
+
     private OrderFixtures() {
+    }
+
+    /** 테스트마다 겹치지 않는 주문번호 — 채번은 OrderNoIssuerIntegrationTest 에서 따로 확인 */
+    public static String nextOrderNo() {
+        return String.format("20261022-%06d", ORDER_NO.incrementAndGet());
     }
 
     public static Order order() {
