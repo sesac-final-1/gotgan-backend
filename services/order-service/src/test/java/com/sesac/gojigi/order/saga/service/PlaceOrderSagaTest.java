@@ -9,6 +9,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -186,6 +187,25 @@ class PlaceOrderSagaTest {
             // then
             verify(sagaTx).startPlaceOrder(eq("20261022-000001"), any(), any(), any(), any());
             verify(sagaTx).startPlaceOrder(eq("20261022-000002"), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("3번 다 겹치면 409 ORDER_NO_CONFLICT — 앞 단계가 없어 호출도 보상도 없다")
+        void place_orderNoCollisionExhausted_conflict() {
+            // given
+            givenPending(0L);
+            given(orderNoIssuer.next()).willReturn("20261022-000001", "20261022-000002", "20261022-000003");
+            DataIntegrityViolationException collision = new DataIntegrityViolationException("uk_orders_order_no");
+            given(sagaTx.startPlaceOrder(any(), any(), any(), any(), any())).willThrow(collision);
+
+            // when · then
+            assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 2))))
+                    .isInstanceOf(OrderException.class)
+                    .hasCause(collision)
+                    .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_NO_CONFLICT);
+            verify(sagaTx, times(3)).startPlaceOrder(any(), any(), any(), any(), any());
+            verifyNoInteractions(payment);
+            verify(product, never()).reserve(any());
         }
     }
 
