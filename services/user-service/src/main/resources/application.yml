@@ -81,7 +81,7 @@ resilience4j:
   bulkhead:
     instances:
       keycloak-signup:                      # KeycloakClientAdapter#createUser — 11/5 실측: 동시 10 이면 가입 200건 모두 성공 · 초당 9.5건 · p95 1.6초
-        max-concurrent-calls: 10            # 파드당 (user-service 레플리카 1)
+        max-concurrent-calls: 5             # 파드당 — user-service 레플리카 2 라 합 10 (실측 기준 유지, 11/5)
         max-wait-duration: 500ms            # 토큰 · 생성 · 자동 로그인 최대 9초 + 대기 — gateway · 프론트 axios 제한 10초 안에
   retry:
     retry-aspect-order: 2

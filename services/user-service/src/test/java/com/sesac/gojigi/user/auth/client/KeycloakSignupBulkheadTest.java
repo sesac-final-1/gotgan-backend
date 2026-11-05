@@ -31,13 +31,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Bulkhead · 서킷 AOP 를 실제로 거쳐 application.yml 설정대로 — 동시 10개까지, 넘으면 AUTH_SIGNUP_BUSY, 거절은 서킷에 집계되지 않는다 */
+/** Bulkhead · 서킷 AOP 를 실제로 거쳐 application.yml 설정대로 — 파드당 동시 5개까지, 넘으면 AUTH_SIGNUP_BUSY, 거절은 서킷에 집계되지 않는다 */
 @SpringBootTest(classes = KeycloakClientAdapter.class)
 @ImportAutoConfiguration({ AopAutoConfiguration.class, CircuitBreakerAutoConfiguration.class,
         BulkheadAutoConfiguration.class })
 class KeycloakSignupBulkheadTest {
 
-    private static final int LIMIT = 10;
+    private static final int LIMIT = 5;   // application.yml 파드당 상한
 
     @MockitoBean KeycloakClient keycloakClient;
     @MockitoBean KeycloakAdminClient keycloakAdminClient;
@@ -46,9 +46,9 @@ class KeycloakSignupBulkheadTest {
     @Autowired CircuitBreakerRegistry circuitBreakers;
 
     @Test
-    @DisplayName("동시 10개가 진행 중이면 대기 500ms 뒤 AUTH_SIGNUP_BUSY — Keycloak 을 부르지 않고 서킷도 열리지 않는다")
+    @DisplayName("동시 5개가 진행 중이면 대기 500ms 뒤 AUTH_SIGNUP_BUSY — Keycloak 을 부르지 않고 서킷도 열리지 않는다")
     void createUser_overLimit_rejectedWithoutOpeningCircuit() throws Exception {
-        // given — 10개가 Keycloak 호출에 묶여 있다
+        // given — 5개가 Keycloak 호출에 묶여 있다
         CountDownLatch entered = new CountDownLatch(LIMIT);
         CountDownLatch release = new CountDownLatch(1);
         given(keycloakClient.serviceAccountToken(any())).willReturn(new KeycloakServiceAccountToken("sa"));
@@ -76,7 +76,7 @@ class KeycloakSignupBulkheadTest {
 
         CircuitBreaker circuit = circuitBreakers.circuitBreaker("keycloak");
         assertThat(circuit.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
-        assertThat(circuit.getMetrics().getNumberOfBufferedCalls()).isZero();   // 진행 중 10개는 아직 안 끝났고, 거절은 집계하지 않음
+        assertThat(circuit.getMetrics().getNumberOfBufferedCalls()).isZero();   // 진행 중 5개는 아직 안 끝났고, 거절은 집계하지 않음
         verify(keycloakAdminClient, times(LIMIT)).createUser(any(), any());
 
         // 자리가 나면 다시 된다
