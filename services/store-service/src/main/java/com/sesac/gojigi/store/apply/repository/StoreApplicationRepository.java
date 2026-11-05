@@ -13,6 +13,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface StoreApplicationRepository extends JpaRepository<StoreApplication, Long> {
 
+    /** 내부 상세 — 다른 서비스가 자주 부르므로 필요한 세 칸만 읽는다 (k6 지-2) */
+    @Query("""
+            select new com.sesac.gojigi.store.apply.repository.ApplicantInfo(a.ownerName, a.companyName, a.bizRegNo)
+            from StoreApplication a where a.id = :id
+            """)
+    Optional<ApplicantInfo> findApplicantById(@Param("id") Long id);
+
     /** 관리자 심사 목록 — 제출 최신순, 같은 시각이면 나중에 들어온 신청 먼저 (store.md 3절) */
     List<StoreApplication> findAllByOrderByTermsAgreedAtDescIdDesc();
 

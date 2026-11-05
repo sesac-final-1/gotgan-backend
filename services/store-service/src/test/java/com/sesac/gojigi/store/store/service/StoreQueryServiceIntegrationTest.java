@@ -3,6 +3,11 @@ package com.sesac.gojigi.store.store.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.store.TestcontainersConfiguration;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
@@ -30,6 +35,9 @@ class StoreQueryServiceIntegrationTest {
 
     @Autowired
     private StoreQueryService storeQueryService;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Test
     @DisplayName("시드 정지 스토어 15 — 신청서의 대표자 · 사업자번호, 등급 · 사유, 이력 개설 → 정지 (오래된 순)")
@@ -73,6 +81,23 @@ class StoreQueryServiceIntegrationTest {
             assertThat(h.fromStatus()).isNull();
             assertThat(h.toStatus()).isEqualTo(StoreStatus.ACTIVE);
         });
+    }
+
+    @Test
+    @DisplayName("내부 상세는 신청서 엔티티를 불러오지 않고 대표자 · 상호 · 사업자번호만 읽는다 (k6 지-2)")
+    void getInternal_doesNotLoadApplicationEntity() {
+        // given
+        Statistics statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+
+        // when
+        InternalStoreResponse detail = storeQueryService.getInternal(15L);
+
+        // then
+        assertThat(detail.ownerName()).isEqualTo("정다은");
+        assertThat(detail.bizRegNo()).isEqualTo("000-00-00005");
+        assertThat(statistics.getEntityStatistics(StoreApplication.class.getName()).getLoadCount()).isZero();
     }
 
     @Test

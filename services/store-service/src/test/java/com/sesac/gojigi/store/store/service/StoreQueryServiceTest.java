@@ -12,6 +12,7 @@ import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.store.apply.entity.BizType;
 import com.sesac.gojigi.store.apply.entity.RepresentativeProduct;
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import com.sesac.gojigi.store.apply.repository.ApplicantInfo;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
@@ -71,16 +72,7 @@ class StoreQueryServiceTest {
         ReflectionTestUtils.setField(store, "grade", StoreGrade.POWER);
         ReflectionTestUtils.setField(store, "createdAt", LocalDateTime.of(2026, 10, 15, 9, 0));
         given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store));
-        StoreApplication application = StoreApplication.builder()
-                .userId(2L).categoryId(1L).bizType(BizType.INDIVIDUAL)
-                .companyName("곳간상사").ownerName("홍길동").bizRegNo("000-00-00001").ecommerceRegNo("2026-서울성동-0000")
-                .managerPhone("010-0000-1234").managerEmail("seller@example.com").businessAddress("서울시 성동구")
-                .storeName("곳간상회").slug("gotgan").intro("<p>소개</p>")
-                .representativeProducts(List.of(new RepresentativeProduct("리넨 셔츠", "셔츠", 39000)))
-                .bankName("국민").accountNo("000000-00-000000").accountHolder("홍길동")
-                .marketingAgreed(false).submittedAt(LocalDateTime.of(2026, 10, 10, 9, 0))
-                .build();
-        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+        given(storeApplicationRepository.findApplicantById(27L)).willReturn(Optional.of(new ApplicantInfo("홍길동", "곳간상사", "000-00-00001")));
         StoreStatusHistory opened = StoreStatusHistory.of(1L, null, StoreStatus.ACTIVE, StoreActorType.ADMIN, null);
         ReflectionTestUtils.setField(opened, "createdAt", LocalDateTime.of(2026, 10, 15, 9, 0));
         StoreStatusHistory closed = StoreStatusHistory.of(1L, StoreStatus.ACTIVE, StoreStatus.CLOSED, StoreActorType.SELLER, "판매자 폐점");
