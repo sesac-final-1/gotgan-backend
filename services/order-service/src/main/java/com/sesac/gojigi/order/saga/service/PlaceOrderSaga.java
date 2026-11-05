@@ -26,6 +26,7 @@ import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
 import com.sesac.gojigi.order.order.exception.OrderException;
+import com.sesac.gojigi.order.order.service.OrderNoIssuer;
 import com.sesac.gojigi.order.order.service.OrderPricing;
 import com.sesac.gojigi.order.order.service.OrderTxService;
 import com.sesac.gojigi.order.order.service.OrderTxService.PendingOrder;
@@ -58,12 +59,13 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class PlaceOrderSaga {
 
-    /** 주문번호(그날 순번)가 동시 주문과 겹치면 다시 발급하는 횟수 */
+    /** 주문번호가 겹치면 새 번호로 다시 시도하는 횟수 — 채번 테이블은 겹치지 않고, 롤링 배포 중 옛 파드(orders 최대값 + 1)와 겹칠 때만 */
     private static final int ORDER_NO_ATTEMPTS = 3;
     private static final String CANCEL_REASON = "주문 처리 실패";
 
     private final OrderTxService orderTx;
     private final OrderSagaTxService sagaTx;
+    private final OrderNoIssuer orderNoIssuer;
     private final UserClientAdapter user;
     private final StoreClientAdapter store;
     private final ProductClientAdapter product;
@@ -311,7 +313,7 @@ public class PlaceOrderSaga {
                                       Map<Long, String> storeNames) {
         for (int attempt = 1; ; attempt++) {
             try {
-                return sagaTx.startPlaceOrder(buyer, request, priced, storeNames);
+                return sagaTx.startPlaceOrder(orderNoIssuer.next(), buyer, request, priced, storeNames);   // 번호는 주문 트랜잭션 밖에서
             } catch (DataIntegrityViolationException e) {
                 if (attempt >= ORDER_NO_ATTEMPTS) {
                     throw e;
