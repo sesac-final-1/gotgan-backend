@@ -72,6 +72,18 @@ class NotificationMapperTest {
     }
 
     @Test
+    @DisplayName("반품 · 교환 요청 → 그 스토어 판매자에게 CLAIM_REQUESTED, 옵션이 없으면 상품명만 (Q-구-15)")
+    void claimRequested() {
+        assertThat(map("OrderClaimRequested", """
+                {"claimId":7,"claimType":"RETURN","storeId":3,"productName":"머그","optionName":"화이트"}""").getFirst())
+                .extracting(NewNotification::recipient, NewNotification::type, NewNotification::title, NewNotification::body, NewNotification::link)
+                .containsExactly("STORE#3", "CLAIM_REQUESTED", "반품 요청이 들어왔어요", "머그 · 화이트", "/seller/claims");
+        assertThat(map("OrderClaimRequested", """
+                {"claimId":8,"claimType":"EXCHANGE","storeId":3,"productName":"머그","optionName":null}""").getFirst())
+                .extracting(NewNotification::title, NewNotification::body).containsExactly("교환 요청이 들어왔어요", "머그");
+    }
+
+    @Test
     @DisplayName("알림을 만들지 않는 이벤트(구매확정 · 스토어 상태)는 빈 목록")
     void ignored() {
         assertThat(map("OrderItemConfirmed", "{\"orderItemId\":1}")).isEmpty();
