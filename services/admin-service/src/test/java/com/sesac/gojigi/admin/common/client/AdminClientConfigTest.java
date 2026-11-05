@@ -3,7 +3,7 @@ package com.sesac.gojigi.admin.common.client;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.sesac.gojigi.admin.settlement.client.SettlementAggregateClient;
+import com.sesac.gojigi.admin.settlement.client.SettlementBatchClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -56,7 +56,7 @@ class AdminClientConfigTest {
     @Test
     @DisplayName("공통 읽기 시간을 넘기는 집계도 집계 전용 클라이언트는 응답을 받는다")
     void aggregateClientOutlivesCommonReadTimeout() {
-        SettlementAggregateClient client = config.settlementAggregateClient(commonBuilder(), baseUrl, CONNECT, Duration.ofSeconds(5));
+        SettlementBatchClient client = config.settlementBatchClient(commonBuilder(), baseUrl, CONNECT, Duration.ofSeconds(5));
 
         assertThat(client.aggregate(null).data().get("created").asInt()).isEqualTo(8);
     }
@@ -64,7 +64,7 @@ class AdminClientConfigTest {
     @Test
     @DisplayName("집계 전용 읽기 시간도 넘기면 끊는다 — 무한 대기하지 않음")
     void aggregateClientStillHasLimit() {
-        SettlementAggregateClient client = config.settlementAggregateClient(commonBuilder(), baseUrl, CONNECT, Duration.ofMillis(100));
+        SettlementBatchClient client = config.settlementBatchClient(commonBuilder(), baseUrl, CONNECT, Duration.ofMillis(100));
 
         assertThatThrownBy(() -> client.aggregate(null)).isInstanceOf(ResourceAccessException.class);
     }
@@ -73,7 +73,7 @@ class AdminClientConfigTest {
     @DisplayName("다른 호출은 공통 읽기 시간을 그대로 쓴다 — 집계 전용 설정이 공통 빌더에 번지지 않음")
     void commonClientKeepsCommonReadTimeout() {
         RestClient.Builder common = commonBuilder();
-        config.settlementAggregateClient(common, baseUrl, CONNECT, Duration.ofSeconds(5));
+        config.settlementBatchClient(common, baseUrl, CONNECT, Duration.ofSeconds(5));
         SettlementClient client = config.settlementClient(common, baseUrl);
 
         assertThatThrownBy(() -> client.list(null, null, null)).isInstanceOf(ResourceAccessException.class);

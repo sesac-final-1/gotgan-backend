@@ -14,6 +14,7 @@ import static org.mockito.BDDMockito.given;
 
 import com.sesac.gojigi.chat.TestcontainersConfiguration;
 import com.sesac.gojigi.chat.directory.ChatDirectory;
+import com.sesac.gojigi.chat.room.dto.ChatRequests;
 import com.sesac.gojigi.chat.room.service.ChatRoomService;
 import com.sesac.gojigi.common.web.auth.AuthUser;
 import java.util.List;
@@ -314,6 +315,30 @@ class ChatRoomApiTest {
                 .andExpect(status().isBadRequest());
         open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"ORDER\",\"id\":123}}")
                 .andExpect(jsonPath("$.data.lastMessage.preview").value("주문 #123"));   // 주문번호 모양이 아니면 번호
+    }
+
+    @Test
+    @DisplayName("같은 방을 동시에 열어도 500 없이 한 방으로 — uk_chat_room 충돌은 기존 방을 돌려준다 (B-구-11)")
+    void concurrentOpenSameRoom(@Autowired ChatRoomService chatRoomService) throws Exception {
+        AuthUser buyer = new AuthUser(BUYER_ID, List.of("BUYER"), null);
+        ChatRequests.OpenRoom request = json.readValue("{\"type\":\"STORE_INQUIRY\",\"storeId\":5}", ChatRequests.OpenRoom.class);
+        int openers = 8;
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(openers);
+        List<java.util.concurrent.Future<?>> results = new java.util.ArrayList<>();
+        for (int i = 0; i < openers; i++) {
+            results.add(pool.submit(() -> {
+                start.await();
+                return chatRoomService.open(buyer, request);
+            }));
+        }
+        start.countDown();
+        for (java.util.concurrent.Future<?> result : results) {
+            result.get(30, java.util.concurrent.TimeUnit.SECONDS);   // 충돌을 그대로 던지면 여기서 예외
+        }
+        pool.shutdown();
+
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM chat_room", Integer.class)).isEqualTo(1);
     }
 
     @Test
