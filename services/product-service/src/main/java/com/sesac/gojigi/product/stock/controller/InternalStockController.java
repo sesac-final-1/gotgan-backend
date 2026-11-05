@@ -5,6 +5,7 @@ import com.sesac.gojigi.product.stock.dto.request.StockReleaseRequest;
 import com.sesac.gojigi.product.stock.dto.request.StockReserveRequest;
 import com.sesac.gojigi.product.stock.dto.request.StockRestoreRequest;
 import com.sesac.gojigi.product.stock.dto.response.StockReservationResponse;
+import com.sesac.gojigi.product.stock.service.StockFastRejectService;
 import com.sesac.gojigi.product.stock.service.StockReservationService;
 import com.sesac.gojigi.product.stock.service.StockRestorationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class InternalStockController {
 
+    private final StockFastRejectService stockFastRejectService;
     private final StockReservationService stockReservationService;
     private final StockRestorationService stockRestorationService;
 
@@ -43,6 +45,7 @@ public class InternalStockController {
     })
     @PostMapping("/reservations")
     public ApiResponse<StockReservationResponse> reserve(@Valid @RequestBody StockReserveRequest request) {
+        stockFastRejectService.rejectIfOutOfStock(request);   // 품절이면 잠금을 기다리지 않고 409
         return ApiResponse.success("재고를 예약했습니다.", stockReservationService.reserve(request));
     }
 

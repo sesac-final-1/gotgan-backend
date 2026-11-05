@@ -54,7 +54,7 @@
 | 없는 옵션 ID | 전체 롤백 | **404** `PRODUCT_OPTION_NOT_FOUND` | 보상 |
 | `items` 비었음 · `quantity < 1` · 같은 옵션 ID 중복 | 없음 | **400** `INVALID_INPUT` | 보상 (order 버그) |
 
-- 처리 순서(product 내부): ① 요청 옵션 행을 **ID 오름차순으로 잠금**(`SELECT … FOR UPDATE`, 데드락 방지) ② 같은 `sagaId` RESERVE 기록이 있으면 처음 응답 ③ 해제 표식이 있으면 409 ④ 없는 옵션 404 · 구매 불가 409 ⑤ 조건부 UPDATE ⑥ RESERVE 기록. 같은 옵션을 건드리는 예약 · 해제 · 같은 `sagaId` 재요청은 ①에서 줄을 섭니다.
+- 처리 순서(product 내부): ① 요청 옵션 행을 **ID 오름차순으로 잠금**(`SELECT … FOR UPDATE`, 데드락 방지) ② 같은 `sagaId` RESERVE 기록이 있으면 처음 응답 ③ 해제 표식이 있으면 409 ④ 없는 옵션 404 · 구매 불가 409 ⑤ 조건부 UPDATE ⑥ RESERVE 기록. 같은 옵션을 건드리는 예약 · 해제 · 같은 `sagaId` 재요청은 ①에서 줄을 섭니다. 단 ① 전에 재고만 먼저 봐서, 품절이면 줄을 서지 않고 바로 409 `STOCK_INSUFFICIENT` 입니다(재요청 · 해제 표식 · 구매 불가는 위 순서 그대로).
 - 응답 `items` 는 옵션 ID 오름차순입니다.
 - 가격은 확인하지 않습니다. 주문 금액은 order 가 Saga 1단계에서 4번 조회로 스냅샷합니다.
 
