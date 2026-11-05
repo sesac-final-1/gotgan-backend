@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sesac.gojigi.admin.product.client.AdminProductClient;
 import com.sesac.gojigi.admin.review.client.ReviewClient;
+import com.sesac.gojigi.admin.settlement.client.SettlementAggregateClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.admin.user.client.UserClient;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
@@ -55,6 +56,7 @@ class AdminRelayApiTest {
     @Autowired JsonMapper json;
     @MockitoBean UserClient userClient;
     @MockitoBean SettlementClient settlementClient;
+    @MockitoBean SettlementAggregateClient settlementAggregateClient;
     @MockitoBean AdminProductClient adminProductClient;
     @MockitoBean ReviewClient reviewClient;
     @Autowired CircuitBreakerRegistry circuitBreakers;
@@ -223,7 +225,7 @@ class AdminRelayApiTest {
         mockMvc.perform(get("/api/admin/settlements").param("week", "2026-W43").param("status", "HELD"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.week").value("2026-W43"));
 
-        when(settlementClient.aggregate(isNull())).thenReturn(ok("{\"week\":\"2026-W43\",\"created\":2}"));
+        when(settlementAggregateClient.aggregate(isNull())).thenReturn(ok("{\"week\":\"2026-W43\",\"created\":2}"));
         mockMvc.perform(post("/api/admin/settlements/aggregate"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.created").value(2));
 

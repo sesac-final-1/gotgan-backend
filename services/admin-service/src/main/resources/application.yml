@@ -31,6 +31,7 @@ app:
   client:
     connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
     read-timeout: 3s
+    settlement-aggregate-read-timeout: 9s   # 주간 집계만 — 5,000건 5.6초(11/5 k6) · gateway · 프론트 제한 10초보다 짧게
     store-url: ${STORE_SERVICE_URI:http://localhost:8082}
     product-url: ${PRODUCT_SERVICE_URI:http://localhost:8083}
     settlement-url: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}
