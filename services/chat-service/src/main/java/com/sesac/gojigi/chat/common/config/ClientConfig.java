@@ -68,12 +68,12 @@ public class ClientConfig {
         return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).observationRegistry(observationRegistry).build();
     }
 
-    /** 알림 전송 전용 — 스레드 2개 · 대기 500건. 넘치면 버린다(ChatNotifier 가 기록) */
+    /** 알림 전송 전용 — 스레드 4개 · 대기 500건. 넘치면 버린다(ChatNotifier 가 기록). 2개는 초당 약 30건이라 500 연결(초당 약 100건)에 유실(11/5 k6) */
     @Bean(defaultCandidate = false)   // 타입으로 찾히면 Boot 가 유일한 AsyncTaskExecutor 로 보고 WebSocket 채널에 씌운다(11/5 k6 S5) — @Qualifier 로만 주입
     public Executor chatNotifyExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(2);
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(4);
         executor.setQueueCapacity(500);
         executor.setThreadNamePrefix("chat-notify-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
