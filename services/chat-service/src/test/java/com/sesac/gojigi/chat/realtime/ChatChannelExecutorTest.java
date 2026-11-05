@@ -32,6 +32,6 @@ class ChatChannelExecutorTest {
         assertThat(outbound).isNotSameAs(notify);
         assertThat(inbound.getCorePoolSize()).isEqualTo(4);
         assertThat(outbound.getCorePoolSize()).isEqualTo(4);
-        assertThat(notify.getCorePoolSize()).isEqualTo(2);
+        assertThat(notify.getCorePoolSize()).isEqualTo(4);
     }
 }
