@@ -21,6 +21,7 @@ import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.service.OrderEventRecorder;
@@ -95,7 +96,7 @@ class OrderEventOutboxIntegrationTest {
                 new OrderPricing.Line(new ProductOptionResponse(132L, 132L, "배", null, 1_301L, 301L, 3L, 10_000L, 0L,
                         10_000L, 100, true, null), 1)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), 3_000L);
-        Order order = orderTx.createPending(new UserSummaryResponse(buyer, "buyer@example.com", "홍길동", "곳간지기"),
+        Order order = orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(buyer, "buyer@example.com", "홍길동", "곳간지기"),
                 request, priced, Map.of(1_301L, "곳간상회")).order();
         orderTx.markPaid(order.getId());
         return order;

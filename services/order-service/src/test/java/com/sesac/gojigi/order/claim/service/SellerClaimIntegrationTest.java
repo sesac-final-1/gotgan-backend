@@ -34,6 +34,7 @@ import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.repository.OrderItemRepository;
@@ -131,7 +132,7 @@ class SellerClaimIntegrationTest {
         OrderPricing.Result priced = OrderPricing.calculate(List.of(new OrderPricing.Line(new ProductOptionResponse(111L,
                         111L, "상품 111", "특", store, 301L, 3L, 20_000L, 0L, 20_000L, 100, true, null), 1)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), 2_000L);
-        Order order = orderTx.createPending(new UserSummaryResponse(buyer, "buyer@example.com", "홍길동", "곳간지기"),
+        Order order = orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(buyer, "buyer@example.com", "홍길동", "곳간지기"),
                 request, priced, Map.of(store, "곳간상회")).order();
         orderTx.markPaid(order.getId());
         OrderItem item = orderItemRepository.findByOrderIdOrderByIdAsc(order.getId()).get(0);

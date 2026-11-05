@@ -9,7 +9,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -36,6 +35,7 @@ import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
 import com.sesac.gojigi.order.order.exception.OrderException;
+import com.sesac.gojigi.order.order.service.OrderNoIssuer;
 import com.sesac.gojigi.order.order.service.OrderTxService;
 import com.sesac.gojigi.order.order.service.OrderTxService.PendingOrder;
 import com.sesac.gojigi.order.saga.entity.SagaInstance;
@@ -65,6 +65,7 @@ class PlaceOrderSagaTest {
 
     @Mock private OrderTxService orderTx;
     @Mock private OrderSagaTxService sagaTx;
+    @Mock private OrderNoIssuer orderNoIssuer;
     @Mock private UserClientAdapter user;
     @Mock private StoreClientAdapter store;
     @Mock private ProductClientAdapter product;
@@ -104,7 +105,7 @@ class PlaceOrderSagaTest {
         given(user.getUser(BUYER_ID)).willReturn(new UserSummaryResponse(BUYER_ID, "buyer@example.com", "김구매", null));
         given(store.getStore(1L)).willReturn(new StoreResponse(1L, 2L, "곳간상회", "ACTIVE", 3_000L, 50_000L));
         placed = new PlacedOrder(new PendingOrder(order, List.of(item)), instance);
-        given(sagaTx.startPlaceOrder(any(), any(), any(), any())).willReturn(placed);
+        given(sagaTx.startPlaceOrder(any(), any(), any(), any(), any())).willReturn(placed);
     }
 
     @Nested
@@ -168,11 +169,12 @@ class PlaceOrderSagaTest {
         }
 
         @Test
-        @DisplayName("주문번호가 동시 주문과 겹치면 다시 발급한다")
+        @DisplayName("주문번호가 겹치면(롤링 배포 중 옛 파드) 새 번호로 다시 시도한다")
         void place_orderNoCollision_retries() {
             // given
             givenPending(0L);
-            given(sagaTx.startPlaceOrder(any(), any(), any(), any()))
+            given(orderNoIssuer.next()).willReturn("20261022-000001", "20261022-000002");
+            given(sagaTx.startPlaceOrder(any(), any(), any(), any(), any()))
                     .willThrow(new DataIntegrityViolationException("uk_orders_order_no"))
                     .willReturn(placed);
             given(payment.prepare(any())).willReturn(new PaymentResponse("20261022-000123", "pay-1", "READY",
@@ -182,7 +184,8 @@ class PlaceOrderSagaTest {
             saga.place(BUYER_ID, null, request(0L, item(11L, 2)));
 
             // then
-            verify(sagaTx, times(2)).startPlaceOrder(any(), any(), any(), any());
+            verify(sagaTx).startPlaceOrder(eq("20261022-000001"), any(), any(), any(), any());
+            verify(sagaTx).startPlaceOrder(eq("20261022-000002"), any(), any(), any(), any());
         }
     }
 

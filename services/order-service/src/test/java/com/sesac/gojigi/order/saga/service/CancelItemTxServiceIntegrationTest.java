@@ -16,6 +16,7 @@ import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderItemHistory;
 import com.sesac.gojigi.order.order.entity.OrderItemStatus;
@@ -98,7 +99,7 @@ class CancelItemTxServiceIntegrationTest {
         OrderPricing.Result priced = OrderPricing.calculate(
                 List.of(line(91L, 901L, 10_000L), line(92L, 901L, 5_000L), line(93L, 902L, 20_000L)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), usePoint);
-        Order order = orderTx.createPending(new UserSummaryResponse(buyerId, "buyer@example.com", "홍길동", null),
+        Order order = orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(buyerId, "buyer@example.com", "홍길동", null),
                 request, priced, Map.of(901L, "곳간상회", 902L, "들녘마켓")).order();
         orderTx.markPaid(order.getId());
         return order;
@@ -253,7 +254,7 @@ class CancelItemTxServiceIntegrationTest {
         Order order = paidOrder(buyer, 0L);
         Order other = paidOrder(buyer, 0L);
         OrderItem item = items(order).get(0);
-        Order pending = orderTx.createPending(new UserSummaryResponse(buyer, "b@e.com", "홍길동", null),
+        Order pending = orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(buyer, "b@e.com", "홍길동", null),
                 new OrderCreateRequest(List.of(new OrderCreateRequest.Item(91L, 1)), "김구매", "010-1234-5678", "06236",
                         "주소", null, null, 0L),
                 OrderPricing.calculate(List.of(line(91L, 901L, 10_000L)), id -> new ShippingPolicy(3_000L, 50_000L), 0L),

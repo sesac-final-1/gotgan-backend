@@ -8,6 +8,7 @@ import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
@@ -44,7 +45,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 주문 PENDING 저장(주문번호 · 스냅샷 · 배송비) · 상태 변경 · Saga 기록 — MySQL 8.4 + Flyway */
+/** 주문 PENDING 저장(스냅샷 · 배송비) · 상태 변경 · Saga 기록 — MySQL 8.4 + Flyway */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderSagaTxService.class, SimpleMeterRegistry.class,
@@ -76,22 +77,19 @@ class OrderTxServiceIntegrationTest {
         OrderPricing.Result priced = OrderPricing.calculate(
                 List.of(OrderPricingTest.line(11L, 1L, 15_000L, 2), OrderPricingTest.line(12L, 2L, 5_000L, 1)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), 1_000L);
-        return orderTx.createPending(new UserSummaryResponse(4L, "buyer@example.com", "홍길동", nick), request, priced,
+        return orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(4L, "buyer@example.com", "홍길동", nick), request, priced,
                 Map.of(1L, "곳간상회", 2L, "들녘마켓"));
     }
 
     @Test
-    @DisplayName("주문 PENDING · 상품주문 스냅샷 · 스토어별 배송비를 저장하고, 주문번호는 그날 순번")
-    void createPending_savesSnapshotAndSequence() {
+    @DisplayName("주문 PENDING · 상품주문 스냅샷 · 스토어별 배송비를 받은 주문번호로 저장한다")
+    void createPending_savesSnapshot() {
         // when
         PendingOrder first = create(null);
         PendingOrder second = create("곳간지기");
 
         // then
         Order order = orderRepository.findById(first.order().getId()).orElseThrow();
-        long firstSeq = Long.parseLong(first.order().getOrderNo().substring("20261022-".length()));
-        assertThat(first.order().getOrderNo()).matches("20261022-\\d{6}");
-        assertThat(second.order().getOrderNo()).isEqualTo(String.format("20261022-%06d", firstSeq + 1));
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(order.getOrdererName()).isEqualTo("홍길동");
         assertThat(order.getOrdererDisplayName()).isEqualTo("홍*동");

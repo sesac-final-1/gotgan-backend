@@ -13,9 +13,7 @@ import com.sesac.gojigi.order.order.repository.OrderItemRepository;
 import com.sesac.gojigi.order.order.repository.OrderRepository;
 import com.sesac.gojigi.order.order.repository.OrderStoreShipmentRepository;
 import java.time.Clock;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,8 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderTxService {
 
-    private static final DateTimeFormatter ORDER_DATE = DateTimeFormatter.BASIC_ISO_DATE;   // 20261022
-
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderStoreShipmentRepository orderStoreShipmentRepository;
@@ -47,13 +43,10 @@ public class OrderTxService {
     public record Paid(Long buyerId, List<Long> productOptionIds, Long orderId) {
     }
 
-    /**
-     * 주문번호는 그날 순번이라 동시에 만들면 uk_orders_order_no 충돌이 날 수 있다 — 호출 쪽이 DataIntegrityViolationException 이면 다시 부른다.
-     */
+    /** orderNo 는 트랜잭션 밖에서 OrderNoIssuer 로 받아 온다 */
     @Transactional
-    public PendingOrder createPending(UserSummaryResponse buyer, OrderCreateRequest request, OrderPricing.Result priced,
+    public PendingOrder createPending(String orderNo, UserSummaryResponse buyer, OrderCreateRequest request, OrderPricing.Result priced,
                                      Map<Long, String> storeNames) {
-        String orderNo = nextOrderNo(LocalDate.now(clock));
         Order order = orderRepository.saveAndFlush(Order.builder()
                 .buyerId(buyer.userId()).orderNo(orderNo)
                 .ordererName(buyer.name()).ordererDisplayName(displayName(buyer)).ordererEmail(buyer.email())
@@ -114,14 +107,6 @@ public class OrderTxService {
 
     private Order getOrder(Long orderId) {
         return orderRepository.findById(orderId).orElseThrow(() -> new OrderException(OrderErrorCode.ORDER_INVALID_STATUS));
-    }
-
-    private String nextOrderNo(LocalDate today) {
-        String prefix = today.format(ORDER_DATE) + "-";
-        long last = orderRepository.findTopByOrderNoStartingWithOrderByOrderNoDesc(prefix)
-                .map(o -> Long.parseLong(o.getOrderNo().substring(prefix.length())))
-                .orElse(0L);
-        return prefix + String.format("%06d", last + 1);
     }
 
     private static OrderItem snapshot(Order order, String itemNo, OrderPricing.PricedLine priced, String storeName) {

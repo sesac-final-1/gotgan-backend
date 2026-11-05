@@ -24,6 +24,7 @@ import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.dto.response.OrderItemResponse;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.entity.OrderItem;
 import com.sesac.gojigi.order.order.entity.OrderItemHistory;
 import com.sesac.gojigi.order.order.entity.OrderItemStatus;
@@ -102,7 +103,7 @@ class DeliveryTxServiceIntegrationTest {
         OrderPricing.Result priced = OrderPricing.calculate(List.of(new OrderPricing.Line(new ProductOptionResponse(96L,
                         96L, "상품 96", "특", STORE, 301L, 3L, 20_000L, 0L, 20_000L, 100, true, null), 1)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), 0L);
-        Order order = orderTx.createPending(new UserSummaryResponse(4L, "buyer@example.com", "홍길동", null), request,
+        Order order = orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(4L, "buyer@example.com", "홍길동", null), request,
                 priced, Map.of(STORE, "곳간상회")).order();
         orderTx.markPaid(order.getId());
         return orderItemRepository.findByOrderIdOrderByIdAsc(order.getId()).get(0);

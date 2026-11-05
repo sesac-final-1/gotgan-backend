@@ -51,12 +51,12 @@ public class OrderSagaTxService {
     /**
      * 주문 PENDING + 주문 Saga 를 한 트랜잭션으로 (A-경-4) — 따로 커밋하면 사이에 파드가 죽었을 때
      * Saga 없는 PENDING 주문이 남고, 결제 대기 만료 · 복구 스케줄러는 saga_instance 만 보므로 영원히 PENDING 이다.
-     * 주문번호 충돌(DataIntegrityViolationException)이면 둘 다 롤백 — 호출 쪽이 다시 부른다.
+     * 주문번호가 겹치면(DataIntegrityViolationException) 둘 다 롤백 — 호출 쪽이 새 번호로 다시 부른다.
      */
     @Transactional
-    public PlacedOrder startPlaceOrder(UserSummaryResponse buyer, OrderCreateRequest request, OrderPricing.Result priced,
-                                       Map<Long, String> storeNames) {
-        PendingOrder pending = orderTx.createPending(buyer, request, priced, storeNames);
+    public PlacedOrder startPlaceOrder(String orderNo, UserSummaryResponse buyer, OrderCreateRequest request,
+                                       OrderPricing.Result priced, Map<Long, String> storeNames) {
+        PendingOrder pending = orderTx.createPending(orderNo, buyer, request, priced, storeNames);
         return new PlacedOrder(pending, startPlaceOrder(pending.order()));
     }
 

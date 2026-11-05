@@ -13,9 +13,6 @@ import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
-    /** 그날 마지막 주문번호 — 주문번호 = yyyyMMdd-{그날 순번 6자리} (uk_orders_order_no 가 동시 생성 충돌을 막는다) */
-    Optional<Order> findTopByOrderNoStartingWithOrderByOrderNoDesc(String datePrefix);
-
     /** 내 주문 최신순 — idx_orders_buyer_created (buyer_id, created_at) */
     List<Order> findByBuyerIdOrderByCreatedAtDescIdDesc(Long buyerId);
 

@@ -16,6 +16,7 @@ import com.sesac.gojigi.order.order.dto.response.OrderItemResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderListResponse;
 import com.sesac.gojigi.order.order.dto.response.OrderSummaryResponse;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import com.sesac.gojigi.order.order.entity.OrderStatus;
 import com.sesac.gojigi.order.order.exception.OrderErrorCode;
@@ -72,7 +73,7 @@ class OrderQueryServiceIntegrationTest {
         OrderPricing.Result priced = OrderPricing.calculate(
                 List.of(OrderPricingTest.line(11L, 1L, 15_000L, 2), OrderPricingTest.line(12L, 2L, 5_000L, 1)),
                 storeId -> new ShippingPolicy(3_000L, 50_000L), usePoint);
-        return orderTx.createPending(new UserSummaryResponse(buyerId, "buyer@example.com", "홍길동", null), request,
+        return orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(buyerId, "buyer@example.com", "홍길동", null), request,
                 priced, Map.of(1L, "곳간상회", 2L, "들녘마켓")).order();
     }
 

@@ -21,6 +21,7 @@ import com.sesac.gojigi.order.order.client.dto.ShippingPolicy;
 import com.sesac.gojigi.order.order.client.dto.UserSummaryResponse;
 import com.sesac.gojigi.order.order.dto.request.OrderCreateRequest;
 import com.sesac.gojigi.order.order.entity.Order;
+import com.sesac.gojigi.order.order.entity.OrderFixtures;
 import com.sesac.gojigi.order.order.service.OrderPricing;
 import com.sesac.gojigi.order.order.service.OrderTxService;
 import java.time.Clock;
@@ -178,7 +179,7 @@ class CartServiceIntegrationTest {
         OrderCreateRequest request = new OrderCreateRequest(
                 Arrays.stream(optionIds).map(id -> new OrderCreateRequest.Item(id, 1)).toList(), "김구매",
                 "010-1234-5678", "06236", "서울 강남구 테헤란로 1", null, null, 0L);
-        return orderTx.createPending(new UserSummaryResponse(buyer, "buyer@example.com", "홍길동", null), request, priced,
+        return orderTx.createPending(OrderFixtures.nextOrderNo(), new UserSummaryResponse(buyer, "buyer@example.com", "홍길동", null), request, priced,
                 Map.of(1L, "곳간상회")).order();
     }
 
