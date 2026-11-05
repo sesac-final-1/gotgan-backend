@@ -1,7 +1,8 @@
 // 핸들러 단위 테스트 — node --test (담당 jihoon-devstu). AWS 클라이언트는 가짜로 넣는다
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCsv, buildEmail, createHandler, csvCell, displayDateTime, reportKey } from '../src/report.js';
+import { gzipSync } from 'node:zlib';
+import { buildCsv, buildEmail, createHandler, csvCell, displayDateTime, reportKey, withItems } from '../src/report.js';
 
 const ENV = { TABLE: 'sesac-gojigi-settlement-reports', BUCKET: 'sesac-gojigi-reports-test', FROM_EMAIL: 'from@example.com',
   FRONT_URL: 'https://gotgan-ashy.vercel.app' };
@@ -160,4 +161,12 @@ test('SES 본문은 HTML + 텍스트 둘 다', async () => {
   assert.ok(body.Html.Data.startsWith('<!doctype html>'));
   assert.equal(body.Html.Charset, 'UTF-8');
   assert.ok(body.Text.Data.includes('정산금이 지급되었습니다'));
+});
+
+test('withItems — 압축된 항목을 풀고, 평문 항목은 그대로 둔다', () => {
+  const items = [{ orderNo: 'N1', productName: '머그', itemAmt: 1000 }];
+  const itemsGzip = gzipSync(Buffer.from(JSON.stringify(items))).toString('base64');
+  assert.deepEqual(withItems({ storeId: 1, itemsGzip }).items, items);
+  assert.deepEqual(withItems({ storeId: 1, items }).items, items);
+  assert.equal(withItems({ storeId: 1 }).items, undefined);
 });

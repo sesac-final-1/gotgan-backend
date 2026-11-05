@@ -9,6 +9,7 @@
 // 어느 단계든 실패하면 그 메시지만 batchItemFailures → SQS 재전달 → 3회 실패 시 DLQ(CloudWatch 알람). ③ 성공 · ④ 실패면 메일이 한 번 더 갈 수 있다(최소 1회)
 import { DynamoDBClient, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { gunzipSync } from 'node:zlib';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 
@@ -102,6 +103,12 @@ export function displayDateTime(iso) {
   return m ? `${m[1]} ${m[2]}` : (iso ?? '');
 }
 
+/** 항목이 많으면 itemsGzip(gzip + Base64)으로 온다 — SNS 한도 256KB (settlement SettlementPaidPayload, 11/5) */
+export function withItems(payload) {
+  if (payload.items || !payload.itemsGzip) return payload;
+  return { ...payload, items: JSON.parse(gunzipSync(Buffer.from(payload.itemsGzip, 'base64')).toString('utf8')) };
+}
+
 /** 엑셀에서 한글이 깨지지 않게 UTF-8 BOM 을 붙인다 */
 export function buildCsv(p) {
   const header = ['주문번호', '상품명', '구매확정일시', '판매금액', '수수료율(%)', '판매수수료', '결제수수료', '지급액'];
@@ -156,7 +163,7 @@ export function createHandler({ ddb, s3, ses, env, log = console }) {
       log.warn(JSON.stringify({ msg: '처리하지 않는 이벤트 — 무시', eventType: envelope.eventType, eventId: envelope.eventId }));
       return;
     }
-    const p = envelope.payload;
+    const p = withItems(envelope.payload);
     if (!p.sellerEmail) {
       throw new Error('받는 주소 없음 — SettlementPaid payload 확인');   // 계약 누락은 재전달 → DLQ 알람으로 (order-notification 과 같게)
     }

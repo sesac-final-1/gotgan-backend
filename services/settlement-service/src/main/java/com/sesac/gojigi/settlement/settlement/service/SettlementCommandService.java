@@ -30,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 정산서 상태를 바꾸는 작업 — 주간 집계(STL-03) · 보류/해제(STL-09) · 지급(STL-06). 상태가 바뀔 때마다 settlement_history 1행.
@@ -51,6 +52,7 @@ public class SettlementCommandService {
     private final PayoutRepository payoutRepository;
     private final EventOutboxService eventOutboxService;
     private final Clock clock;
+    private final JsonMapper jsonMapper;
 
     /** carriedOver = 지난 주차(지급 완료 · 정산서 없음)에서 이번 주차 정산서로 이월한 상품주문 수 */
     public record AggregateResult(String week, int created, int updated, int autoHeld, int carriedOver) {
@@ -184,7 +186,7 @@ public class SettlementCommandService {
         // 지급과 같은 트랜잭션에 이벤트를 남긴다 — 커밋 후 발행, 실패하면 아웃박스 발행기가 다시 (V7)
         // 명세서 Lambda 가 다른 곳을 조회하지 않도록 항목까지 담는다 (10/21 방식 B)
         eventOutboxService.enqueue("SettlementPaid", String.valueOf(settlement.getId()), SettlementPaidPayload.of(settlement, store,
-                settlementItemRepository.findBySettlementIdOrderByConfirmedAtAsc(settlement.getId())));
+                settlementItemRepository.findBySettlementIdOrderByConfirmedAtAsc(settlement.getId()), jsonMapper));
         return settlement;
     }
 

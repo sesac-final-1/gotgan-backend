@@ -40,7 +40,7 @@ public class EventOutbox {
     @Column(name = "aggregate_id", nullable = false, length = 64)
     private String aggregateId;
 
-    @Column(name = "payload", nullable = false, columnDefinition = "TEXT")
+    @Column(name = "payload", nullable = false, columnDefinition = "MEDIUMTEXT")
     private String payload;
 
     @Enumerated(EnumType.STRING)
