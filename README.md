@@ -11,7 +11,7 @@
 | 🎨 화면 목업 (42개 화면) | https://mockup-page-sable.vercel.app/ |
 | 📦 저장소 3개 | **[gotgan-backend](https://github.com/sesac-final-1/gotgan-backend)** (이 저장소) · [gotgan-frontend](https://github.com/sesac-final-1/gotgan-frontend) · [gotgan-config](https://github.com/sesac-final-1/gotgan-config) |
 
-이 저장소는 **Spring Boot 서비스 9개 + 서버리스 함수 3개**입니다. 배포 매니페스트 · Terraform · 운영 문서는 `gotgan-config`, React 앱은 `gotgan-frontend`에 있습니다.
+이 저장소는 **Spring Boot 서비스 10개 + 서버리스 함수 4개**입니다. 배포 매니페스트 · Terraform · 운영 문서는 `gotgan-config`, React 앱은 `gotgan-frontend`에 있습니다.
 
 ---
 
@@ -42,11 +42,11 @@
 |---|---|
 | 백엔드 | Java 21 · Spring Boot 4.1 · Spring Cloud Gateway · Spring Data JPA · QueryDSL · Flyway · Resilience4j · springdoc |
 | 인증 | Keycloak 26 (realm `gotgan`, 클러스터 내부 전용) — 우리 로그인 페이지 → user-service가 대리 호출 |
-| 데이터 | MySQL 8.4 (1대 · 서비스별 스키마 8개 · 계정 분리) · Redis 7 (장바구니 캐시, 원본은 MySQL) · DynamoDB (Lambda 멱등 · 이력) · S3 |
+| 데이터 | MySQL 8.4 (1대 · 스키마 10개(Keycloak 포함) · 계정 분리) · Redis 7 (장바구니 캐시, 원본은 MySQL) · DynamoDB (Lambda 멱등 · 이력) · S3 |
 | 메시징 | SNS → SQS (+DLQ) 도메인 이벤트 · 주문 Saga는 동기 REST 오케스트레이션 + 보상 |
-| 서버리스 | Serverless Framework v4 · Lambda (배치 · 로깅만: 알림 메일 · 정산 명세서 · 로그 아카이브) |
+| 서버리스 | Serverless Framework v4 · Lambda (배치 · 로깅 · 검사만: 알림 메일 · 정산 명세서 · 로그 아카이브 · 업로드 검사) |
 | 결제 | 포트원(PortOne) V2 테스트 채널 |
-| 인프라 · CI (gotgan-config) | AWS EKS 3티어 (백 티어 `app` t3.xlarge × 2 + DB 티어 `db` t3.medium × 1 — MySQL · Redis 전용, NetworkPolicy로 백 티어만 접근; 매일 07:00 생성 · 21:00 삭제) · Terraform · GitHub Actions (OIDC) · ArgoCD · SonarQube Cloud · Prometheus · Loki · Zipkin · Grafana |
+| 인프라 · CI (gotgan-config) | AWS EKS 3티어 (백 티어 `app` t3.xlarge × 2 + DB 티어 `db` t3.medium × 1 — MySQL · Redis 전용, NetworkPolicy로 백 티어만 접근; 매일 08:00 생성 · 22:00 삭제) · Terraform · GitHub Actions (OIDC) · ArgoCD · SonarQube Cloud · Prometheus · Loki · Zipkin · Grafana |
 
 ---
 
@@ -62,7 +62,8 @@
 | `settlement-service` | 8085 | `settlementdb` | 정산 적재 · 주간 집계 · 지급 · 카테고리별 수수료 | 구지훈 |
 | `payment-service` | 8086 | `paymentdb` | 결제 · 포트원 V2 검증/취소 · 웹훅 | 구지훈 |
 | `review-service` | 8087 | `reviewdb` | 리뷰 · 판매자 답글 · 상품문의 · 리뷰 작성 자격 · 관리자 블라인드 | 이경석 |
-| `admin-service` | 8088 | — | 관리자 API 진입점 · `/internal/**` 조합 · 관리자 대시보드 | 구지훈 |
+| `admin-service` | 8088 | `admindb` + DynamoDB | 관리자 API 진입점 · `/internal/**` 조합 · 관리자 대시보드 · 신고 · 조치 이력 · 알림 센터(SSE) | 구지훈 |
+| `chat-service` | 8089 | `chatdb` + Redis | 1:1 채팅(STOMP over WebSocket) · 방 3종 | 구지훈 |
 
 규칙 요약: 모든 응답은 `ApiResponse<T>` 봉투 `{ code, message, data }` · 에러 코드는 의미형(`ORDER_OUT_OF_STOCK`) · 시간대는 DB · JDBC · JVM 모두 Asia/Seoul(`created_at` · `updated_at`은 DB가 기록) · 다른 서비스 DB에 FK · JOIN 금지 · 관리자 기능은 전부 `/api/admin/**` → admin-service → 각 서비스 `/internal/**` · 모든 동기 호출은 Resilience4j. 전체 규칙은 [docs/CONVENTION.md](docs/CONVENTION.md).
 
@@ -80,7 +81,7 @@ gotgan-backend/
 ├── serverless/                  order-notification · settlement-report · log-archive
 ├── docs/api/                    OpenAPI 명세 · 에러 코드 목록
 ├── docs/CONVENTION.md           백엔드 · DB · 로깅 컨벤션 (문서 사이트 발췌본)
-├── docker-compose.yml           로컬 MySQL(스키마 8) + Redis + Keycloak — gotgan-config의 스크립트 · realm을 마운트
+├── docker-compose.yml           로컬 MySQL(스키마 10) + Redis + Keycloak — gotgan-config의 스크립트 · realm을 마운트
 └── .github/workflows/           backend(테스트 · Sonar → ECR → config 태그 커밋) · serverless · security
 ```
 
@@ -92,7 +93,7 @@ gotgan-backend/
 # 0. 저장소 세 개를 같은 폴더에 나란히 clone (docker-compose가 ../gotgan-config 를 참조)
 #    gotgan/gotgan-backend · gotgan/gotgan-config · gotgan/gotgan-frontend
 
-# 1. 로컬 인프라 — MySQL(스키마 8개 · 계정 자동 생성) · Redis · Keycloak(realm 자동 import)
+# 1. 로컬 인프라 — MySQL(스키마 10개 · 계정 자동 생성) · Redis · Keycloak(realm 자동 import)
 docker compose up -d
 #    Keycloak 콘솔 http://localhost:8180 (admin / admin)
 
@@ -106,7 +107,7 @@ cd services/order-service
 
 - 스키마 · 계정은 `gotgan-config/deploy/k8s/db/init-schemas.sh`가 만들고(빈 볼륨으로 처음 뜰 때 1회), 테이블은 각 서비스의 Flyway(`db/migration`)가 만듭니다. 스크립트를 바꿨다면 `docker compose down -v`.
 - 다른 서비스가 필요하면 dev 클러스터로 `kubectl port-forward svc/product-service 8083:8083 -n sesac-gojigi`, 또는 클라이언트 호출이 실패해도 폴백으로 동작하는지 확인하는 기회로 씁니다.
-- dev 클러스터는 **매일 07:00 생성 · 21:00 삭제**됩니다(gotgan-config `infra-schedule`). 아침마다 DB는 Flyway 시드로 새로 시작합니다.
+- dev 클러스터는 **매일 08:00 생성 · 22:00 삭제**됩니다(gotgan-config `infra-schedule`). 아침마다 DB는 Flyway 시드로 새로 시작합니다.
 - Windows는 WSL 안에서 작업하세요. `.gitattributes`가 `gradlew` · `*.sh`를 LF로 고정합니다.
 
 ---
