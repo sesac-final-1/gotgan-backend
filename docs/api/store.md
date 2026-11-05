@@ -121,7 +121,7 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 | `managerEmail` | 이메일 형식, 100자 이하. **심사 결과 메일 수신 주소 = `StoreApproved.sellerEmail`** |
 | `businessAddress` | 필수, 255자 이하 |
 | `storeName` | 필수, 50자 이하 |
-| `slug` | 3~30자, 영소문자 · 숫자 · `-`, `-` 로 시작 · 끝 금지, 예약어(`admin` · `seller` · `new` · `api` · `me`) 금지. 승인 후 변경 불가 |
+| `slug` | 3~30자, 영소문자 · 숫자 · `-`, `-` 로 시작 · 끝 금지, 예약어(`admin` · `seller` · `new` · `api` · `me`) · 숫자만 금지(`/store/{id}` 와 구분, 14-3). 승인 후 변경 불가 |
 | `categoryId` | 필수, 양수. 상위 카테고리 존재 · 사용 여부는 **store 가 확인하지 않음**(심사 참고용 — 설계 정리 4) |
 | `intro` | 선택, 5000자 이하. HTML 은 sanitizer 로 정화해 저장(서식 · 문단 · 링크만) |
 | `representativeProducts` | **2~10개**. `name`(100자 이하) · `subCategory`(세부 분류 이름, 50자 이하) 필수 · `price` 1 이상. 심사 화면 표시용이라 받은 모양 그대로 JSON 컬럼에 저장 |
@@ -684,7 +684,7 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 - 올라온 파일은 Lambda `upload-guard` 가 앞부분 바이트로 실제 JPG · PNG · WEBP 인지 확인해 아니면 지웁니다(product 17절과 같음). 13-2절은 S3 존재를 확인하지 않으므로 지워진 키는 깨진 이미지로 보입니다.
 - 올리고 저장하지 않은 파일 · 교체 전 옛 이미지는 S3 에 남습니다(삭제 권한 없음 — product 와 같이 보류).
 
-## 14. 공개 스토어 — `GET /api/stores` · `GET /api/stores/{storeId}` (STR-12)
+## 14. 공개 스토어 — `GET /api/stores` · `GET /api/stores/{storeId}` · `GET /api/stores/slug/{slug}` (STR-12)
 
 구매자 스토어 목록(`/stores`) · 스토어 홈(`/store/:id`) 화면이 부릅니다. 로그인 없이 호출(게이트웨이 `GET /api/stores/**` 공개).
 
@@ -745,6 +745,18 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | `shippingFee` · `freeShippingThreshold` · `courier` · `dispatchNote` | 배송 안내 — 1절 · 13-1 과 같은 값(`freeShippingThreshold: null` = 무료배송 없음) |
 
 - 정지가 풀리면 다시 홈 전체가 나옵니다. 상품은 정지 · 폐점 동안 product 가 숨깁니다(product 9절).
+
+### 14-3. 스토어 홈(주소로) — `GET /api/stores/slug/{slug}`
+
+판매자가 입점 신청 때 정한 스토어 주소(`/store/{slug}`)로 들어온 화면이 부릅니다. 응답 · 정지 · 폐점 처리는 14-2 와 같습니다.
+
+| 경우 | 응답 | 화면 권장 처리 |
+|---|---|---|
+| 운영 중 | **200** 14-2 응답 | 스토어 홈 |
+| 정지 · 폐점 | **200** `{storeId, storeName, status}` 만 | "운영하지 않는 스토어" 안내 |
+| 없거나 소프트 삭제 | **404** `STORE_NOT_FOUND` | "존재하지 않는 스토어" |
+
+- 화면 주소 `/store/{값}` 은 값이 숫자면 14-2, 아니면 이 API 를 부릅니다. 그래서 숫자만으로 된 `slug` 는 만들 수 없습니다(2절)
 
 ## 15. 판매자 대시보드 — `GET /api/seller/dashboard` (STR-07)
 

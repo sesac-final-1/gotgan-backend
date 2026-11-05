@@ -46,8 +46,17 @@ public class StoreQueryService {
      * 없거나 소프트 삭제면 STORE_NOT_FOUND. 대표자 · 사업자번호 · 카테고리는 원래 신청서
      */
     public PublicStoreResponse getPublic(Long storeId) {
-        Store store = storeRepository.findByIdAndDeletedAtIsNull(storeId)
-                .orElseThrow(() -> new StoreException(StoreErrorCode.STORE_NOT_FOUND));
+        return toPublic(storeRepository.findByIdAndDeletedAtIsNull(storeId)
+                .orElseThrow(() -> new StoreException(StoreErrorCode.STORE_NOT_FOUND)));
+    }
+
+    /** 공개 스토어 홈을 주소 slug 로 (14-3) — 응답 · 정지 · 폐점 처리는 getPublic 과 같다 */
+    public PublicStoreResponse getPublicBySlug(String slug) {
+        return toPublic(storeRepository.findBySlugAndDeletedAtIsNull(slug)
+                .orElseThrow(() -> new StoreException(StoreErrorCode.STORE_NOT_FOUND)));
+    }
+
+    private PublicStoreResponse toPublic(Store store) {
         if (store.getStatus() != StoreStatus.ACTIVE) {
             return PublicStoreResponse.closed(store);
         }

@@ -100,6 +100,25 @@ class PublicStoreControllerTest {
     }
 
     @Test
+    @DisplayName("스토어 홈 주소 조회 — slug 로 200, 없으면 404 STORE_NOT_FOUND")
+    void getBySlug_returnsHomeOr404() throws Exception {
+        // given
+        given(storeQueryService.getPublicBySlug("park-farm")).willReturn(new PublicStoreResponse(1L, "산골농부 박씨네", StoreStatus.ACTIVE, "park-farm",
+                1L, "<p>소개</p>", null, "#d0701f", StoreGrade.BIG_POWER, OffsetDateTime.parse("2024-03-23T10:00:00+09:00"),
+                "박영철", "000-00-00006", "064-0000-0006", 3000L, null, "우체국택배", "수확일 기준 당일 발송"));
+        given(storeQueryService.getPublicBySlug("no-store")).willThrow(new StoreException(StoreErrorCode.STORE_NOT_FOUND));
+
+        // when · then
+        mockMvc.perform(get("/api/stores/slug/park-farm"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.storeId").value(1))
+                .andExpect(jsonPath("$.data.slug").value("park-farm"));
+        mockMvc.perform(get("/api/stores/slug/no-store"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"));
+    }
+
+    @Test
     @DisplayName("스토어 홈 — 없으면 404 STORE_NOT_FOUND, 숫자가 아니면 400 INVALID_INPUT")
     void get_whenMissingOrInvalidId_returnsError() throws Exception {
         // given

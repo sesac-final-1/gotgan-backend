@@ -38,7 +38,7 @@ public record ApplicationResubmitRequest(
         @Size(max = 50, message = "스토어명은 50자 이하로 입력해 주세요.")
         String storeName,
 
-        @Schema(description = "스토어 주소 gotgan.kr/store/{slug} — 바꾸면 중복 다시 확인, 승인 후 변경 불가", example = "gotgan-store")
+        @Schema(description = "스토어 주소 /store/{slug} — 바꾸면 중복 다시 확인, 승인 후 변경 불가", example = "gotgan-store")
         @Pattern(regexp = "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$",
                 message = "스토어 주소는 영문 소문자 · 숫자 · 하이픈 3~30자로, 하이픈으로 시작하거나 끝날 수 없습니다.")
         String slug,
@@ -102,6 +102,13 @@ public record ApplicationResubmitRequest(
     @AssertTrue(message = "사용할 수 없는 스토어 주소입니다.")
     public boolean isSlugNotReserved() {
         return slug == null || !SellerApplyRequest.RESERVED_SLUGS.contains(slug);
+    }
+
+    /** 숫자만이면 /store/{id} 와 구분할 수 없다 (store.md 14-3) */
+    @Schema(hidden = true)
+    @AssertTrue(message = "스토어 주소는 숫자만으로 만들 수 없습니다.")
+    public boolean isSlugNotAllDigits() {
+        return slug == null || !slug.matches("\\d+");
     }
 
     public List<DocumentItem> documentsOrEmpty() {
