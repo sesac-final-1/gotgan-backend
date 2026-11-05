@@ -99,6 +99,7 @@
 |---|---|---|
 | `SETTLE_NOT_FOUND` | 404 | 정산서 없음 |
 | `SETTLE_STORE_NOT_FOUND` | 404 | 스토어 스냅샷 없음 (이벤트 재전달 대기 · 지급 불가) |
+| `SETTLE_AGGREGATE_CONFLICT` | 409 | 다른 집계와 겹침 — 멱등이라 다시 시도 |
 | `SETTLE_INVALID_STATUS` | 409 | 지금 상태에서 불가 (보류 중 지급 · 지급완료 보류 등) |
 | `SETTLE_STORE_PAYOUT_HELD` | 409 | 정지 · 폐점 스토어 지급 |
 | `SETTLE_PAYOUT_ACCOUNT_MISSING` | 409 | 정산 계좌 없음 |

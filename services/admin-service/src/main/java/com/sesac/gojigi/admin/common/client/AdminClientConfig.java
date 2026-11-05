@@ -4,7 +4,7 @@ import com.sesac.gojigi.admin.category.client.ProductClient;
 import com.sesac.gojigi.admin.dashboard.client.OrderClient;
 import com.sesac.gojigi.admin.product.client.AdminProductClient;
 import com.sesac.gojigi.admin.review.client.ReviewClient;
-import com.sesac.gojigi.admin.settlement.client.SettlementAggregateClient;
+import com.sesac.gojigi.admin.settlement.client.SettlementBatchClient;
 import com.sesac.gojigi.admin.settlement.client.SettlementClient;
 import com.sesac.gojigi.admin.store.client.StoreClient;
 import com.sesac.gojigi.admin.user.client.UserClient;
@@ -32,15 +32,15 @@ public class AdminClientConfig {
         return create(restClientBuilder, baseUrl, SettlementClient.class);
     }
 
-    /** 주간 집계 전용 — 읽기 시간을 gateway · 프론트 제한(10초)보다 조금 짧게. 넘어도 서버 집계는 끝나고, 멱등이라 다시 눌러도 된다 */
+    /** 집계 · 일괄 지급 전용 — 읽기 시간을 gateway · 프론트 제한(10초)보다 조금 짧게. 넘어도 서버 처리는 끝난다(집계는 멱등 · 지급은 정산서별 상태로 판단) */
     @Bean
-    public SettlementAggregateClient settlementAggregateClient(RestClient.Builder restClientBuilder,
+    public SettlementBatchClient settlementBatchClient(RestClient.Builder restClientBuilder,
             @Value("${app.client.settlement-url}") String baseUrl,
             @Value("${app.client.connect-timeout:2s}") Duration connectTimeout,
-            @Value("${app.client.settlement-aggregate-read-timeout:9s}") Duration readTimeout) {
+            @Value("${app.client.settlement-batch-read-timeout:9s}") Duration readTimeout) {
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(connectTimeout).build());
         factory.setReadTimeout(readTimeout);
-        return create(restClientBuilder.clone().requestFactory(factory), baseUrl, SettlementAggregateClient.class);
+        return create(restClientBuilder.clone().requestFactory(factory), baseUrl, SettlementBatchClient.class);
     }
 
     @Bean

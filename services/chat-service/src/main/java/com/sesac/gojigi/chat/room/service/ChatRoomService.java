@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -72,6 +73,14 @@ public class ChatRoomService {
 
     /** 1절 — 같은 방이 있으면 그 방(문맥 카드만 추가), 없으면 새로. 스토어 상태 · 카드 제목 조회는 먼저, 방 · 카드 저장만 트랜잭션 */
     public Opened open(AuthUser user, ChatRequests.OpenRoom request) {
+        try {
+            return openOnce(user, request);
+        } catch (DataIntegrityViolationException e) {
+            return openOnce(user, request);   // 같은 방을 동시에 처음 열면 uk_chat_room 충돌 — 이제 있는 방을 찾아 돌려준다(B-구-11)
+        }
+    }
+
+    private Opened openOnce(AuthUser user, ChatRequests.OpenRoom request) {
         Opening opening = opening(user, request);
         ChatRoom found = roomRepository.findByTypeAndBuyerIdAndStoreId(request.type(), opening.buyerId(), opening.storeId())
                 .orElse(null);

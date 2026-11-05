@@ -21,7 +21,7 @@ public class SettlementClientAdapter {
     private static final String TARGET = "settlement";
 
     private final SettlementClient settlementClient;
-    private final SettlementAggregateClient settlementAggregateClient;
+    private final SettlementBatchClient settlementBatchClient;
 
     @Retry(name = TARGET)
     @CircuitBreaker(name = TARGET, fallbackMethod = "listFallback")
@@ -43,12 +43,12 @@ public class SettlementClientAdapter {
 
     @CircuitBreaker(name = TARGET, fallbackMethod = "bodyFallback")
     public JsonNode aggregate(JsonNode body) {
-        return call(() -> settlementAggregateClient.aggregate(body));
+        return call(() -> settlementBatchClient.aggregate(body));
     }
 
     @CircuitBreaker(name = TARGET, fallbackMethod = "bodyFallback")
     public JsonNode pay(JsonNode body) {
-        return call(() -> settlementClient.pay(body));
+        return call(() -> settlementBatchClient.pay(body));
     }
 
     @CircuitBreaker(name = TARGET, fallbackMethod = "holdFallback")

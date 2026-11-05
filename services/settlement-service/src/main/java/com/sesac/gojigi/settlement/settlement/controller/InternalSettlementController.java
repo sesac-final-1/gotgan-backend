@@ -25,6 +25,10 @@ import jakarta.validation.constraints.Pattern;
 import java.time.Clock;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
+import com.sesac.gojigi.settlement.settlement.exception.SettlementErrorCode;
+import com.sesac.gojigi.settlement.settlement.exception.SettlementException;
+import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -72,8 +76,13 @@ public class InternalSettlementController {
     @Operation(summary = "지금 집계", description = "주간 집계를 즉시 실행 — 멱등(스토어 × 주차 1건). week 생략 = 지난주")
     @PostMapping("/internal/settlements/aggregate")
     public ApiResponse<SettlementCommandService.AggregateResult> aggregate(@Valid @RequestBody(required = false) AggregateRequest request) {
-        return ApiResponse.success("정산을 집계했습니다.",
-                settlementCommandService.aggregate(week(request == null ? null : request.week()), Actor.ADMIN));
+        try {
+            return ApiResponse.success("정산을 집계했습니다.",
+                    settlementCommandService.aggregate(week(request == null ? null : request.week()), Actor.ADMIN));
+        } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
+            // 동시 집계 — 스토어 × 주차 UK · 잠금 충돌. 집계는 멱등이라 다시 누르면 된다(B-구-11)
+            throw new SettlementException(SettlementErrorCode.SETTLE_AGGREGATE_CONFLICT);
+        }
     }
 
     @Operation(summary = "지급 실행 (단건 · 일괄)", description = "지급예정 · 스토어 운영중 · 계좌 있음만 지급, 건마다 결과. 지급 후 SettlementPaid 발행")
