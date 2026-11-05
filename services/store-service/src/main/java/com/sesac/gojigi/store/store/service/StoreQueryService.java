@@ -1,6 +1,7 @@
 package com.sesac.gojigi.store.store.service;
 
 import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import com.sesac.gojigi.store.apply.repository.ApplicantInfo;
 import com.sesac.gojigi.store.apply.repository.StoreApplicationRepository;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreSummaryResponse;
@@ -79,7 +80,7 @@ public class StoreQueryService {
     public InternalStoreResponse getInternal(Long storeId) {
         Store store = storeRepository.findByIdAndDeletedAtIsNull(storeId)
                 .orElseThrow(() -> new StoreException(StoreErrorCode.STORE_NOT_FOUND));
-        StoreApplication application = storeApplicationRepository.findById(store.getStoreApplicationId()).orElseThrow(); // FK — 신청서는 지우지 않는다
-        return InternalStoreResponse.of(store, application, storeStatusHistoryRepository.findAllByStoreIdOrderByIdAsc(storeId));
+        ApplicantInfo applicant = storeApplicationRepository.findApplicantById(store.getStoreApplicationId()).orElseThrow(); // FK — 신청서는 항상 있음
+        return InternalStoreResponse.of(store, applicant, storeStatusHistoryRepository.findAllByStoreIdOrderByIdAsc(storeId));
     }
 }

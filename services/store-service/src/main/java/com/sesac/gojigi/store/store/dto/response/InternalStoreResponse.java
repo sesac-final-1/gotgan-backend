@@ -1,6 +1,6 @@
 package com.sesac.gojigi.store.store.dto.response;
 
-import com.sesac.gojigi.store.apply.entity.StoreApplication;
+import com.sesac.gojigi.store.apply.repository.ApplicantInfo;
 import com.sesac.gojigi.store.store.entity.Store;
 import com.sesac.gojigi.store.store.entity.StoreActorType;
 import com.sesac.gojigi.store.store.entity.StoreGrade;
@@ -95,10 +95,10 @@ public record InternalStoreResponse(
             OffsetDateTime changedAt) {
     }
 
-    public static InternalStoreResponse of(Store store, StoreApplication application, List<StoreStatusHistory> histories) {
+    public static InternalStoreResponse of(Store store, ApplicantInfo applicant, List<StoreStatusHistory> histories) {
         return new InternalStoreResponse(store.getId(), store.getUserId(), store.getStoreName(), store.getStatus(),
                 store.getShippingFee(), store.getFreeShippingThreshold(), store.getCourier(),
-                store.getSlug(), application.getOwnerName(), application.getCompanyName(), application.getBizRegNo(),
+                store.getSlug(), applicant.ownerName(), applicant.companyName(), applicant.bizRegNo(),
                 store.getCsPhone(), store.getGrade(), store.getDispatchNote(), store.getStatusReason(),
                 store.getStoreApplicationId(), kst(store.getCreatedAt()),
                 histories.stream()
