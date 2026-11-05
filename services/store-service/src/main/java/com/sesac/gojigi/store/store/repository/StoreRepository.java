@@ -51,6 +51,9 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     /** 승인된 신청으로 만든 스토어 — uk_store_store_application_id */
     Optional<Store> findByStoreApplicationId(Long storeApplicationId);
 
+    /** 공개 스토어 홈 주소 /store/{slug} (store.md 14-3) — uk_store_slug */
+    Optional<Store> findBySlugAndDeletedAtIsNull(String slug);
+
     /** 같은 사업자번호의 다른 신청으로 만든 스토어 — 폐점 포함, 소프트 삭제 제외 (store.md 4절 sameBizRegNo) */
     List<Store> findAllByStoreApplicationIdInAndDeletedAtIsNullOrderByIdAsc(Collection<Long> storeApplicationIds);
 

@@ -1,7 +1,9 @@
 package com.sesac.gojigi.store.store.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.store.TestcontainersConfiguration;
 import com.sesac.gojigi.store.store.dto.response.InternalStoreResponse;
 import com.sesac.gojigi.store.store.dto.response.PublicStoreResponse;
@@ -71,6 +73,18 @@ class StoreQueryServiceIntegrationTest {
             assertThat(h.fromStatus()).isNull();
             assertThat(h.toStatus()).isEqualTo(StoreStatus.ACTIVE);
         });
+    }
+
+    @Test
+    @DisplayName("공개 스토어 홈 주소 조회 — 시드 park-farm 은 스토어 1, 없는 주소는 예외")
+    void getPublicBySlug_seedStore_findsStore() {
+        // when
+        PublicStoreResponse park = storeQueryService.getPublicBySlug("park-farm");
+
+        // then
+        assertThat(park.storeId()).isEqualTo(1L);
+        assertThat(park.ownerName()).isEqualTo("박영철");
+        assertThatThrownBy(() -> storeQueryService.getPublicBySlug("no-such-store")).isInstanceOf(BusinessException.class);
     }
 
     @Test

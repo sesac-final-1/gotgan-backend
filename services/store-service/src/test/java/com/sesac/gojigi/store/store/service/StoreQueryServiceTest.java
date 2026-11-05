@@ -203,6 +203,36 @@ class StoreQueryServiceTest {
     }
 
     @Test
+    @DisplayName("공개 스토어 주소 조회 — 운영 중은 홈 전체, 정지는 이름 · 상태만, 없으면 STORE_NOT_FOUND")
+    void getPublicBySlug_followsSameRulesAsId() {
+        // given
+        Store active = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
+        ReflectionTestUtils.setField(active, "id", 1L);
+        ReflectionTestUtils.setField(active, "createdAt", LocalDateTime.of(2026, 10, 15, 9, 0));
+        Store suspended = Store.open(28L, 3L, "토담공방", "todam", null, "063-0000-0004");
+        ReflectionTestUtils.setField(suspended, "id", 2L);
+        ReflectionTestUtils.setField(suspended, "status", StoreStatus.SUSPENDED);
+        StoreApplication application = mock(StoreApplication.class);
+        given(storeRepository.findBySlugAndDeletedAtIsNull("gotgan")).willReturn(Optional.of(active));
+        given(storeRepository.findBySlugAndDeletedAtIsNull("todam")).willReturn(Optional.of(suspended));
+        given(storeRepository.findBySlugAndDeletedAtIsNull("no-store")).willReturn(Optional.empty());
+        given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
+
+        // when
+        PublicStoreResponse home = storeQueryService.getPublicBySlug("gotgan");
+        PublicStoreResponse closed = storeQueryService.getPublicBySlug("todam");
+
+        // then
+        assertThat(home.storeId()).isEqualTo(1L);
+        assertThat(home.slug()).isEqualTo("gotgan");
+        assertThat(closed.storeName()).isEqualTo("토담공방");
+        assertThat(closed.status()).isEqualTo(StoreStatus.SUSPENDED);
+        assertThat(closed.ownerName()).isNull();
+        assertThatThrownBy(() -> storeQueryService.getPublicBySlug("no-store"))
+                .extracting("errorCode").isEqualTo(StoreErrorCode.STORE_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("공개 스토어 홈 — 정지 · 폐점이면 이름 · 상태만, 신청서는 읽지 않는다 / 없으면 404")
     void getPublic_whenNotActive_returnsNameAndStatusOnly() {
         // given

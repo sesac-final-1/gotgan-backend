@@ -53,4 +53,18 @@ public class PublicStoreController {
             @Parameter(description = "스토어 ID", example = "1") @PathVariable Long storeId) {
         return ResponseEntity.ok(ApiResponse.success("스토어를 조회했습니다.", storeQueryService.getPublic(storeId)));
     }
+
+    @Operation(summary = "스토어 홈 (주소로)",
+            description = """
+            인가: 공개. 입점 신청 때 정한 스토어 주소(slug)로 조회 — 응답은 스토어 홈과 같다(정지 · 폐점이면 이름 · 상태만).
+            에러: 404 STORE_NOT_FOUND(없거나 삭제)""")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 정지 · 폐점도 200(status 로 구분)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "STORE_NOT_FOUND")
+    })
+    @GetMapping("/slug/{slug}")
+    public ResponseEntity<ApiResponse<PublicStoreResponse>> getBySlug(
+            @Parameter(description = "스토어 주소", example = "park-farm") @PathVariable String slug) {
+        return ResponseEntity.ok(ApiResponse.success("스토어를 조회했습니다.", storeQueryService.getPublicBySlug(slug)));
+    }
 }
