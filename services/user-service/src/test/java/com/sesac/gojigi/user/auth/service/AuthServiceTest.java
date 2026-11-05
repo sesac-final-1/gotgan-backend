@@ -9,11 +9,13 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.sesac.gojigi.common.web.exception.BusinessException;
 import com.sesac.gojigi.common.web.exception.CommonErrorCode;
 import com.sesac.gojigi.user.auth.client.KeycloakClientAdapter;
+import com.sesac.gojigi.user.auth.client.dto.KeycloakAccount;
 import com.sesac.gojigi.user.auth.client.dto.KeycloakTokenResponse;
 import com.sesac.gojigi.user.auth.component.AccessTokenClaimsTest;
 import com.sesac.gojigi.user.auth.component.SocialLoginState;
@@ -47,6 +49,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.client.ResourceAccessException;
 import tools.jackson.databind.json.JsonMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,6 +60,9 @@ class AuthServiceTest {
 
     @Mock
     private KeycloakClientAdapter keycloakClientAdapter;
+
+    @Mock
+    private SignupOrphanCleaner signupOrphanCleaner;
 
     @Mock
     private UserRepository userRepository;
@@ -71,7 +77,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(keycloakClientAdapter, userRepository, transactionTemplate, URLS,
+        authService = new AuthService(keycloakClientAdapter, signupOrphanCleaner, userRepository, transactionTemplate, URLS,
                 JsonMapper.builder().build(), CLOCK);
         // 트랜잭션 템플릿은 콜백을 그대로 실행 (중복 이메일처럼 트랜잭션 전에 끝나는 경우가 있어 lenient)
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation ->
@@ -275,6 +281,88 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.signup(SIGNUP)).isSameAs(failure);
         verify(userRepository).deleteById(8L);
         verify(keycloakClientAdapter, never()).passwordGrant(anyString(), anyString());
+        verify(signupOrphanCleaner, never()).schedule(anyString(), anyLong());   // 서킷 OPEN 등 — Keycloak 에 닿지 않았다
+    }
+
+    @Test
+    @DisplayName("계정 생성 결과를 모르면(타임아웃) 회원 행을 지우고 남았을 수 있는 계정 정리를 맡긴다 — 응답은 기다리지 않는다")
+    void signup_outcomeUnknown_schedulesOrphanCleanup() {
+        // given
+        given(userRepository.existsByEmail("new1@gotgan.com")).willReturn(false);
+        givenSavedAs(8L);
+        BusinessException failure = new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버에 연결할 수 없습니다.",
+                new ResourceAccessException("timeout"));
+        given(keycloakClientAdapter.createUser("new1@gotgan.com", "Newbie!pass1", 8L)).willThrow(failure);
+
+        // when · then
+        assertThatThrownBy(() -> authService.signup(SIGNUP)).isSameAs(failure);
+        verify(userRepository).deleteById(8L);
+        verify(signupOrphanCleaner).schedule("new1@gotgan.com", 8L);
+        verify(keycloakClientAdapter, never()).findAccount(anyString());
+    }
+
+    @Test
+    @DisplayName("동시 가입 상한 초과(AUTH_SIGNUP_BUSY)는 회원 행만 지운다 — 계정을 만들지 않았으니 Keycloak 을 조회하지 않는다")
+    void signup_busy_deletesRowOnly() {
+        // given
+        given(userRepository.existsByEmail("new1@gotgan.com")).willReturn(false);
+        givenSavedAs(8L);
+        given(keycloakClientAdapter.createUser("new1@gotgan.com", "Newbie!pass1", 8L))
+                .willThrow(new AuthException(AuthErrorCode.AUTH_SIGNUP_BUSY));
+
+        // when · then
+        assertThatThrownBy(() -> authService.signup(SIGNUP))
+                .extracting(e -> ((AuthException) e).getErrorCode()).isEqualTo(AuthErrorCode.AUTH_SIGNUP_BUSY);
+        verify(userRepository).deleteById(8L);
+        verify(signupOrphanCleaner, never()).schedule(anyString(), anyLong());
+        verify(keycloakClientAdapter, never()).findAccount(anyString());
+    }
+
+    @Test
+    @DisplayName("재가입 — Keycloak 409 인데 user_id 의 회원 행이 없으면 지난 실패의 고아 계정: 지우고 한 번 다시 만들어 가입 완료")
+    void signup_orphanAccount_deletesAndRecreates() {
+        // given
+        given(userRepository.existsByEmail("new1@gotgan.com")).willReturn(false);
+        User[] saved = givenSavedAs(7L);
+        given(keycloakClientAdapter.createUser("new1@gotgan.com", "Newbie!pass1", 7L))
+                .willThrow(new AuthException(AuthErrorCode.AUTH_EMAIL_DUPLICATE)).willReturn("kc-7");
+        given(keycloakClientAdapter.findAccount("new1@gotgan.com")).willReturn(Optional.of(new KeycloakAccount("kc-old", 3L)));
+        given(userRepository.existsById(3L)).willReturn(false);
+        given(userRepository.findById(7L)).willAnswer(invocation -> Optional.of(saved[0]));
+        givenNewMemberToken(7L);
+        given(userRepository.findByIdAndDeletedAtIsNull(7L)).willAnswer(invocation -> Optional.of(saved[0]));
+
+        // when
+        SignupResult result = authService.signup(SIGNUP);
+
+        // then
+        verify(keycloakClientAdapter).deleteUser("kc-old", null);
+        assertThat(saved[0].getKeycloakId()).isEqualTo("kc-7");
+        assertThat(result.userId()).isEqualTo(7L);
+        verify(userRepository, never()).deleteById(anyLong());
+    }
+
+    @Test
+    @DisplayName("Keycloak 409 — user_id 의 회원 행이 있거나 user_id 가 없으면(소셜 첫 로그인 중) 지우지 않고 AUTH_EMAIL_DUPLICATE")
+    void signup_accountNotOrphan_keepsAccountAndRejects() {
+        // given
+        given(userRepository.existsByEmail("new1@gotgan.com")).willReturn(false);
+        givenSavedAs(7L);
+        given(keycloakClientAdapter.createUser("new1@gotgan.com", "Newbie!pass1", 7L))
+                .willThrow(new AuthException(AuthErrorCode.AUTH_EMAIL_DUPLICATE));
+        given(keycloakClientAdapter.findAccount("new1@gotgan.com"))
+                .willReturn(Optional.of(new KeycloakAccount("kc-live", 3L)))
+                .willReturn(Optional.of(new KeycloakAccount("kc-social", null)))
+                .willReturn(Optional.empty());
+        given(userRepository.existsById(3L)).willReturn(true);
+
+        // when · then — 살아 있는 계정 · 소셜 진행 중 · 그 사이 사라짐
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> authService.signup(SIGNUP))
+                    .extracting(e -> ((AuthException) e).getErrorCode()).isEqualTo(AuthErrorCode.AUTH_EMAIL_DUPLICATE);
+        }
+        verify(keycloakClientAdapter, never()).deleteUser(any(), any());
+        verify(userRepository, times(3)).deleteById(7L);
     }
 
     @Test
