@@ -145,7 +145,7 @@ public class StockReservationService {
         }
     }
 
-    private static boolean categoryActive(Product product, Map<Long, Category> categories) {
+    static boolean categoryActive(Product product, Map<Long, Category> categories) {
         Category category = categories.get(product.getCategoryId());
         Category top = category == null ? null : categories.get(category.getParentId());
         return category != null && category.isActive() && top != null && top.isActive();

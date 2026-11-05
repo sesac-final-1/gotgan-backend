@@ -27,6 +27,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +42,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 재고 예약 (POST /internal/stock/reservations, product.md 1절) · 해제 (POST …/{sagaId}/release, 2절)
@@ -60,6 +63,7 @@ class InternalStockReservationApiIntegrationTest {
     @Autowired StockReservationService stockReservationService;
     @Autowired StockRestorationService stockRestorationService;
     @Autowired JdbcTemplate jdbc;
+    @Autowired PlatformTransactionManager transactionManager;
 
     private Category shirt;
 
@@ -271,6 +275,119 @@ class InternalStockReservationApiIntegrationTest {
                 reserve(json).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
             }
             assertThat(stock(id)).isEqualTo(10);
+        }
+    }
+
+    @Nested
+    @DisplayName("빠른 거절 — 품절이면 옵션 행 잠금을 기다리지 않음 (k6 지-4)")
+    class FastReject {
+
+        @Test
+        @DisplayName("다른 트랜잭션이 옵션 행을 잠그고 있어도 품절 주문은 바로 409 STOCK_INSUFFICIENT")
+        void reserve_soldOutWhileRowLocked_rejectsWithoutWaiting() throws Exception {
+            // given — 옵션 행을 잠근 채 유지 (잠금을 기다리면 3초 안에 끝나지 않는다)
+            long id = options(ProductStatus.ON_SALE, 0).getFirst();
+            CountDownLatch locked = new CountDownLatch(1);
+            CountDownLatch finish = new CountDownLatch(1);
+            ExecutorService pool = Executors.newFixedThreadPool(2);
+            try {
+                Future<?> holder = pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+                    jdbc.queryForObject("SELECT stock FROM product_option WHERE product_option_id = ? FOR UPDATE", Integer.class, id);
+                    locked.countDown();
+                    try {
+                        finish.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+                assertThat(locked.await(5, TimeUnit.SECONDS)).isTrue();
+
+                // when
+                Future<Integer> response = pool.submit(() -> reserve(body("saga-1", id, 1)).andReturn().getResponse().getStatus());
+
+                // then
+                assertThat(response.get(3, TimeUnit.SECONDS)).isEqualTo(409);
+                finish.countDown();
+                holder.get(5, TimeUnit.SECONDS);
+            } finally {
+                finish.countDown();
+                pool.shutdownNow();
+            }
+            assertThat(historyCount("RESERVE", "saga-1")).isZero();
+        }
+
+        @Test
+        @DisplayName("이미 예약한 sagaId 재요청은 재고가 0 이어도 처음 응답 200 — 재고 그대로")
+        void reserve_retryAfterSoldOut_returnsFirstResponse() throws Exception {
+            // given — 이 예약으로 재고가 0 이 됨
+            long id = options(ProductStatus.ON_SALE, 2).getFirst();
+            reserve(body("saga-1", id, 2)).andExpect(status().isOk());
+
+            // when · then
+            reserve(body("saga-1", id, 2))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.items[0].quantity").value(2));
+            assertThat(stock(id)).isZero();
+            assertThat(historyCount("RESERVE", "saga-1")).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("해제 표식이 있으면 품절이어도 409 STOCK_RESERVATION_RELEASED")
+        void reserve_releaseMarkerAndSoldOut_returnsReleased() throws Exception {
+            // given
+            long id = options(ProductStatus.ON_SALE, 0).getFirst();
+            jdbc.update("INSERT INTO stock_history (product_option_id, type, ref_key, quantity) VALUES (?, 'RELEASE', 'saga-1', 0)", id);
+
+            // when · then
+            reserve(body("saga-1", id, 1))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("STOCK_RESERVATION_RELEASED"));
+        }
+
+        @Test
+        @DisplayName("판매중지 상품은 품절이어도 409 PRODUCT_NOT_PURCHASABLE")
+        void reserve_stoppedAndSoldOut_returnsNotPurchasable() throws Exception {
+            // given
+            long id = options(ProductStatus.STOPPED, 0).getFirst();
+
+            // when · then
+            reserve(body("saga-1", id, 1))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("PRODUCT_NOT_PURCHASABLE"));
+        }
+
+        @Test
+        @DisplayName("재고 10 에 100건 동시 — 10건만 성공, 90건 409, 재고 0, 초과 판매 없음")
+        void reserve_100ConcurrentOnStock10_noOversell() throws Exception {
+            // given
+            long id = options(ProductStatus.ON_SALE, 10).getFirst();
+            ExecutorService pool = Executors.newFixedThreadPool(100);
+            CountDownLatch start = new CountDownLatch(1);
+            try {
+                List<Future<Integer>> futures = new ArrayList<>();
+                for (int i = 0; i < 100; i++) {
+                    String sagaId = "saga-" + i;
+                    futures.add(pool.submit(() -> {
+                        start.await();
+                        return reserve(body(sagaId, id, 1)).andReturn().getResponse().getStatus();
+                    }));
+                }
+
+                // when
+                start.countDown();
+                List<Integer> statuses = new ArrayList<>();
+                for (Future<Integer> f : futures) {
+                    statuses.add(f.get(60, TimeUnit.SECONDS));
+                }
+
+                // then
+                assertThat(statuses).filteredOn(s -> s == 200).hasSize(10);
+                assertThat(statuses).filteredOn(s -> s == 409).hasSize(90);
+                assertThat(stock(id)).isZero();
+                assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM stock_history WHERE type = 'RESERVE'", Integer.class)).isEqualTo(10);
+            } finally {
+                pool.shutdownNow();
+            }
         }
     }
 
