@@ -42,6 +42,7 @@ class StoreStatusServiceTest {
     @Autowired StoreStatusService service;
     @Autowired SettlementStoreRepository repository;
     @MockitoBean EventOutboxService eventOutboxService;   // SettlementCommandService 의존 — 이 테스트는 지급 · 발행을 다루지 않음
+    @MockitoBean tools.jackson.databind.json.JsonMapper jsonMapper;   // SettlementCommandService 의존 — JPA 슬라이스에는 없음
 
     static final long STORE_ID = 1L;
     static final OffsetDateTime T1000 = OffsetDateTime.parse("2026-10-21T10:00:00+09:00");

@@ -299,6 +299,27 @@ class SettlementApiIntegrationTest {
         }
 
         @Test
+        @DisplayName("큰 정산서(항목 2,000건)도 지급된다 — 이벤트가 SNS 한도(256KB) 안이고 항목을 압축해 전부 싣는다")
+        void pay_manyItems_fitsEventLimit() throws Exception {
+            for (int i = 0; i < 2_000; i++) {
+                item(storeId, 10_000L + i, LocalDateTime.of(2026, 10, 20, 12, 0));
+            }
+            aggregate();
+
+            pay(settlementId).andExpect(status().isOk()).andExpect(jsonPath("$.data.success[0]").value(settlementId));
+
+            ArgumentCaptor<String> envelope = ArgumentCaptor.forClass(String.class);
+            verify(snsEventPublisher).send(eq("SettlementPaid"), eq(String.valueOf(settlementId)), anyString(), envelope.capture());
+            assertThat(envelope.getValue().getBytes(java.nio.charset.StandardCharsets.UTF_8).length).isLessThan(256 * 1024);
+            JsonNode payload = jsonMapper.readTree(envelope.getValue()).path("payload");
+            assertThat(payload.has("items")).isFalse();
+            try (var in = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(
+                    java.util.Base64.getDecoder().decode(payload.path("itemsGzip").asString())))) {
+                assertThat(jsonMapper.readTree(in.readAllBytes())).hasSize(2_001);
+            }
+        }
+
+        @Test
         @DisplayName("보류는 사유 필수(400) · 보류 중 지급은 실패 목록 · 해제 후 지급 가능")
         void hold_release_pay() throws Exception {
             hold(settlementId, true, null).andExpect(status().isBadRequest())
