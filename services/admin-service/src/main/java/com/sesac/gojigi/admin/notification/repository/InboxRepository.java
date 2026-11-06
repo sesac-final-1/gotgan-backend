@@ -27,6 +27,8 @@ import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledExcepti
 @Repository
 public class InboxRepository {
 
+    static final long UNREAD_COUNT_CAP = 100;
+
     private static final Duration KEEP = Duration.ofDays(90);
     private static final String SOURCE_PREFIX = "SRC#";
     /** 알림 SK(숫자 13자리로 시작)의 위쪽 경계 — 표식 행(SRC#…)은 이보다 크다 */
@@ -83,7 +85,7 @@ public class InboxRepository {
         return dynamoDb.query(q.build()).items().stream().map(InboxRepository::toItem).toList();
     }
 
-    /** 안 읽은 알림 수 (90일 TTL 이라 받는 쪽마다 많아야 수백 건) */
+    /** 안 읽은 알림 수 — 화면은 99+ 까지만 쓰므로 UNREAD_COUNT_CAP 에서 멈춘다. 끝까지 세면 주문이 몰린 스토어(11/6 9.7만 건)에서 호출마다 전체를 읽는다 */
     public long countUnread(String recipient) {
         long count = 0;
         Map<String, AttributeValue> start = null;
@@ -91,8 +93,8 @@ public class InboxRepository {
             QueryResponse res = dynamoDb.query(unread(recipient, start).select(Select.COUNT).build());
             count += res.count();
             start = res.hasLastEvaluatedKey() && !res.lastEvaluatedKey().isEmpty() ? res.lastEvaluatedKey() : null;
-        } while (start != null);
-        return count;
+        } while (start != null && count < UNREAD_COUNT_CAP);
+        return Math.min(count, UNREAD_COUNT_CAP);
     }
 
     /** 안 읽은 알림의 SK (모두 읽음 처리용) */

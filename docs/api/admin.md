@@ -140,7 +140,7 @@
 | 메서드 · 경로 | 응답 |
 |---|---|
 | `GET /api/notifications?cursor=&size=20` | `{items[{id, type, title, body, link, read, createdAt}], nextCursor, unreadCount}` — 최신순, `size` 최대 50 |
-| `GET /api/notifications/unread-count` | `{count}` |
+| `GET /api/notifications/unread-count` | `{count}` — 받는 쪽(USER# · STORE#)마다 100까지만 셈(화면은 99+) |
 | `PATCH /api/notifications/{id}/read` | 내 알림이 아니거나 없으면 **404** `NOTIFICATION_NOT_FOUND` |
 | `PATCH /api/notifications/read-all` | `{count}` = 읽음으로 바꾼 수 |
 | `GET /api/notifications/stream` | `text/event-stream` — `event: ready` → 새 알림마다 `event: notification`(data = 목록 항목 JSON), 25초마다 주석. 브라우저 `EventSource` 는 Authorization 헤더를 못 보내 화면은 fetch 기반 SSE 사용 |

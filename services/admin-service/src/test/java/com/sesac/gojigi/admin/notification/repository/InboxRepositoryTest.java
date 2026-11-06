@@ -110,6 +110,18 @@ class InboxRepositoryTest {
     }
 
     @Test
+    @DisplayName("안 읽은 수 — 100건을 넘으면 더 읽지 않고 100")
+    void countUnreadStopsAtCap() {
+        given(dynamo.query(any(QueryRequest.class))).willReturn(
+                QueryResponse.builder().count(6800)
+                        .lastEvaluatedKey(Map.of("PK", AttributeValue.fromS("STORE#1"), "SK", AttributeValue.fromS("b"))).build());
+
+        assertThat(repository.countUnread("STORE#1")).isEqualTo(100);
+
+        verify(dynamo, times(1)).query(any(QueryRequest.class));
+    }
+
+    @Test
     @DisplayName("읽음 — 있는 알림만(조건부), 없으면 false")
     void markRead() {
         ArgumentCaptor<Consumer<UpdateItemRequest.Builder>> captor = ArgumentCaptor.forClass(Consumer.class);
