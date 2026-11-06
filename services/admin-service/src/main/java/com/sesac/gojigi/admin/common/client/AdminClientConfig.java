@@ -37,7 +37,7 @@ public class AdminClientConfig {
     public SettlementBatchClient settlementBatchClient(RestClient.Builder restClientBuilder,
             @Value("${app.client.settlement-url}") String baseUrl,
             @Value("${app.client.connect-timeout:2s}") Duration connectTimeout,
-            @Value("${app.client.settlement-batch-read-timeout:9s}") Duration readTimeout) {
+            @Value("${app.client.settlement-batch-read-timeout:28s}") Duration readTimeout) {
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(connectTimeout).build());
         factory.setReadTimeout(readTimeout);
         return create(restClientBuilder.clone().requestFactory(factory), baseUrl, SettlementBatchClient.class);

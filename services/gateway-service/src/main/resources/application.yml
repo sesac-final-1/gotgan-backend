@@ -109,6 +109,14 @@ spring:
                 response-timeout: -1
               filters:
                 - *rate-limit-default       # 연결 1번이 요청 1건이라 함께 세도 됨
+            - id: admin-settlement-batch    # 정산 집계 · 일괄 지급 — 11/6 5,000건 집계 약 11.6초로 기본 10초를 넘음. admin 호출 28초보다 길게
+              uri: ${ADMIN_SERVICE_URI:http://localhost:8088}
+              predicates:
+                - Path=/api/admin/settlements/aggregate,/api/admin/settlements/pay
+              metadata:
+                response-timeout: 30000
+              filters:
+                - *rate-limit-default
             - id: admin-service
               uri: ${ADMIN_SERVICE_URI:http://localhost:8088}
               predicates:
