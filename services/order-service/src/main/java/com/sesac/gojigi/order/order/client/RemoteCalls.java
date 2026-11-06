@@ -30,7 +30,7 @@ final class RemoteCalls {
     /** 어댑터가 따로 처리하지 않는 4xx — 호출 쪽(order) 버그일 가능성이 높아 warn 으로 본문까지 남긴다 */
     static BusinessException rejected(String target, String action, HttpClientErrorException e) {
         log.warn("{} {} 거절 - status={}, body={}", target, action, e.getStatusCode(), e.getResponseBodyAsString());
-        return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, target + " " + action + " 요청이 거절되었습니다.");
+        return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, action + " 요청이 거절되었습니다.");
     }
 
     /** 서킷 폴백 — 이미 변환된 4xx(BusinessException)는 그대로, 그 밖에는 502 */
@@ -43,6 +43,6 @@ final class RemoteCalls {
         } else {
             log.error("{} {} 실패", target, action, t);           // 연결 실패 · 타임아웃 · 5xx — 스택트레이스 포함 (컨벤션 2-8)
         }
-        return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, target + " " + action + "에 실패했습니다.");
+        return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, action + "에 실패했습니다.");   // 응답 문구는 화면에 그대로 나간다 — 서비스 이름은 로그에만
     }
 }
