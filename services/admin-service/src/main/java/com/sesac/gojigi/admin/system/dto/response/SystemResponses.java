@@ -34,6 +34,14 @@ public final class SystemResponses {
     public record FeatureStatus(String key, String label, ServiceState state, List<String> causes) {
     }
 
+    /** GET /metrics — 서비스 순서는 status 와 같음 */
+    public record Metrics(List<ServiceMetric> services) {
+    }
+
+    /** gateway 라우트 지표 기준(1분 rate). errorRate = 5xx ÷ 전체(0 ~ 1), 요청 0 · 조회 실패면 null */
+    public record ServiceMetric(String name, Double requestsPerSecond, Double errorRate) {
+    }
+
     /** POST .../kill → 202 */
     public record Killed(Long eventId, List<String> deletedPods) {
     }

@@ -43,6 +43,15 @@ public class AdminSystemController {
         return ApiResponse.success("시스템 상태를 조회했습니다.", adminSystemService.status());
     }
 
+    @Operation(summary = "서비스별 요청량 · 오류율 (15초 폴링)", description = """
+            services[] — requestsPerSecond · errorRate(5xx ÷ 전체, 0 ~ 1). gateway 라우트 지표(1분 rate)를 서비스로 묶음.
+            요청 0 이면 errorRate null, Prometheus 실패면 200 에 값 null""")
+    @GetMapping("/metrics")
+    public ApiResponse<SystemResponses.Metrics> metrics(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
+        requireAdmin(admin);
+        return ApiResponse.success("시스템 지표를 조회했습니다.", adminSystemService.metrics());
+    }
+
     @Operation(summary = "서비스 내리기", description = """
             {scope: ONE/ALL, reason?} → 202 {eventId, deletedPods}. 파드를 지우면 Deployment 가 새 파드를 띄운다.
             403 SYSTEM_CHAOS_DISABLED · 400 SYSTEM_SERVICE_NOT_KILLABLE · 409 SYSTEM_KILL_COOLDOWN(서비스당 1분 · 복구 중) ·

@@ -2,6 +2,8 @@ package com.sesac.gojigi.admin.system.service;
 
 import com.sesac.gojigi.admin.system.dto.response.ServiceState;
 import com.sesac.gojigi.admin.system.dto.response.SystemResponses.FeatureStatus;
+import com.sesac.gojigi.admin.system.dto.response.SystemResponses.ServiceMetric;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,7 +50,65 @@ public final class SystemCatalog {
             new Feature("MYPAGE", "회원 · 마이페이지", List.of("user-service")));
 
     /**
-     * 서비스 상태 — Ready 0개면 DOWN(새 파드가 뜨는 중이어도 응답은 못 함), 원하는 수만큼이면 UP,
+     * gateway 라우트 id → 서비스 (gateway-service application.yml 의 라우트 전부, 11/7 기준). keycloak 라우트는 내릴 수 없는 서비스라 뺀다.
+     * 라우트를 추가 · 이름 변경하면 여기도 고친다 — 없는 id 는 지표에서 빠진다
+     */
+    public static final Map<String, String> ROUTE_SERVICES = Map.ofEntries(
+            Map.entry("user-auth-strict", "user-service"),
+            Map.entry("user-auth", "user-service"),
+            Map.entry("user-service", "user-service"),
+            Map.entry("store-service", "store-service"),
+            Map.entry("product-service", "product-service"),
+            Map.entry("order-service", "order-service"),
+            Map.entry("settlement-service", "settlement-service"),
+            Map.entry("payment-service", "payment-service"),
+            Map.entry("review-service", "review-service"),
+            Map.entry("admin-notification-stream", "admin-service"),
+            Map.entry("admin-settlement-batch", "admin-service"),
+            Map.entry("admin-service", "admin-service"),
+            Map.entry("chat-service", "chat-service"),
+            Map.entry("chat-websocket", "chat-service"));
+
+    /**
+     * 서비스별 지표 — 라우트 rate 를 서비스로 더한 뒤 비율. 요청 0 이면 errorRate null.
+     * 라우트가 없는 서비스(gateway · keycloak · mysql · redis)는 둘 다 null
+     */
+    public static List<ServiceMetric> serviceMetrics(Map<String, Double> totalByRoute, Map<String, Double> errorByRoute) {
+        Map<String, Double> totals = byService(totalByRoute);
+        Map<String, Double> errors = byService(errorByRoute);
+        return SERVICES.stream().map(t -> {
+            if (!ROUTE_SERVICES.containsValue(t.name())) {
+                return new ServiceMetric(t.name(), null, null);
+            }
+            double total = totals.getOrDefault(t.name(), 0.0);
+            Double errorRate = total > 0 ? round(errors.getOrDefault(t.name(), 0.0) / total, 4) : null;
+            return new ServiceMetric(t.name(), round(total, 2), errorRate);
+        }).toList();
+    }
+
+    /** Prometheus 조회 실패 — 모든 서비스 값 null (부분 응답) */
+    public static List<ServiceMetric> unknownMetrics() {
+        return SERVICES.stream().map(t -> new ServiceMetric(t.name(), null, null)).toList();
+    }
+
+    private static Map<String, Double> byService(Map<String, Double> byRoute) {
+        Map<String, Double> sums = new HashMap<>();
+        byRoute.forEach((route, value) -> {
+            String service = ROUTE_SERVICES.get(route);
+            if (service != null) {
+                sums.merge(service, value, Double::sum);
+            }
+        });
+        return sums;
+    }
+
+    private static double round(double value, int digits) {
+        double scale = Math.pow(10, digits);
+        return Math.round(value * scale) / scale;
+    }
+
+    /**
+     * 서비스 상태 —Ready 0개면 DOWN(새 파드가 뜨는 중이어도 응답은 못 함), 원하는 수만큼이면 UP,
      * 그 사이는 내린 뒤 복구 전이면 RECOVERING · 아니면 DEGRADED
      */
     public static ServiceState serviceState(int desired, int ready, boolean recovering) {

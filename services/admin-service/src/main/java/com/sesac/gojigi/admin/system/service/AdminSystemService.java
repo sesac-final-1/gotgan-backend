@@ -2,6 +2,7 @@ package com.sesac.gojigi.admin.system.service;
 
 import com.sesac.gojigi.admin.system.client.KubernetesClient;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.Pod;
+import com.sesac.gojigi.admin.system.client.PrometheusClient;
 import com.sesac.gojigi.admin.system.dto.request.KillRequest;
 import com.sesac.gojigi.admin.system.dto.response.ServiceState;
 import com.sesac.gojigi.admin.system.dto.response.SystemResponses;
@@ -20,6 +21,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -36,17 +38,32 @@ public class AdminSystemService {
 
     static final Duration KILL_COOLDOWN = Duration.ofMinutes(1);
 
+    /** gateway 라우트 지표 — 1분 rate. 서비스를 내리면 gateway 가 502 로 센다(11/6 장애 영향표) */
+    static final String REQUESTS_QUERY = "sum by (routeId)(rate(spring_cloud_gateway_requests_seconds_count[1m]))";
+    static final String ERRORS_QUERY = "sum by (routeId)(rate(spring_cloud_gateway_requests_seconds_count{httpStatusCode=~\"5..\"}[1m]))";
+
     private final KubernetesClient kubernetes;
+    private final PrometheusClient prometheus;
     private final ChaosEventRepository chaosEventRepository;
     private final Clock clock;
     private final boolean chaosEnabled;
 
-    public AdminSystemService(KubernetesClient kubernetes, ChaosEventRepository chaosEventRepository, Clock clock,
-            @Value("${app.chaos.enabled:false}") boolean chaosEnabled) {
+    public AdminSystemService(KubernetesClient kubernetes, PrometheusClient prometheus, ChaosEventRepository chaosEventRepository,
+            Clock clock, @Value("${app.chaos.enabled:false}") boolean chaosEnabled) {
         this.kubernetes = kubernetes;
+        this.prometheus = prometheus;
         this.chaosEventRepository = chaosEventRepository;
         this.clock = clock;
         this.chaosEnabled = chaosEnabled;
+    }
+
+    /** 서비스별 요청량 · 오류율 — Prometheus 가 안 되면 200 에 값 null (status 와 달리 503 아님) */
+    public SystemResponses.Metrics metrics() {
+        Optional<Map<String, Double>> requests = prometheus.byRoute(REQUESTS_QUERY);
+        Optional<Map<String, Double>> errors = requests.isPresent() ? prometheus.byRoute(ERRORS_QUERY) : Optional.empty();
+        return new SystemResponses.Metrics(requests.isPresent() && errors.isPresent()
+                ? SystemCatalog.serviceMetrics(requests.get(), errors.get())
+                : SystemCatalog.unknownMetrics());
     }
 
     /** 서비스 상태 + 사용자 기능 — 쿠버네티스 조회 실패면 503 (화면은 마지막 값 유지 · "연결 끊김") */
