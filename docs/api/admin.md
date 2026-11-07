@@ -249,6 +249,26 @@
 
 최신순 20건: `[{ "eventId", "service", "scope", "reason", "deletedPods": [], "actorId", "killedAt", "recoveredAt", "recoverySeconds" }]` — 복구 전이면 `recoveredAt` · `recoverySeconds` 가 `null`.
 
-### 7-4. 지표 — `GET /api/admin/system/metrics` (2순위, 미구현)
+### 7-4. 지표 — `GET /api/admin/system/metrics` (15초 폴링)
 
-협업 요청 4장 계약 그대로 예정 — gateway `spring_cloud_gateway_requests_seconds_count` 의 `routeId` 를 서비스 이름으로 묶어 `requestsPerSecond` · `errorRate`(5xx ÷ 전체), Prometheus 실패면 `null`.
+```json
+{ "services": [{ "name": "order-service", "requestsPerSecond": 2.0, "errorRate": 0.25 },
+               { "name": "gateway-service", "requestsPerSecond": null, "errorRate": null }] }
+```
+
+- 출처: Prometheus `/api/v1/query`(`app.prometheus.url`, env `PROMETHEUS_URL`, 기본 `http://prometheus.monitoring:9090`) — 연결 · 읽기 제한 2초
+- 지표: gateway `spring_cloud_gateway_requests_seconds_count` 1분 rate — 서비스를 전부 내리면 그 서비스는 자기 5xx 를 못 세므로 gateway 에서 센다(11/6 실측: 내린 서비스는 502)
+  - 요청량 `sum by (routeId)(rate(…[1m]))`, 오류 `sum by (routeId)(rate(…{httpStatusCode=~"5.."}[1m]))`
+  - 라우트를 서비스로 묶어 rate 를 더한 뒤 `errorRate = 5xx ÷ 전체`(0 ~ 1, 소수 4자리) · `requestsPerSecond` 소수 2자리
+- `services` 는 7-1 과 같은 13개 · 같은 순서. 스위치가 꺼져 있어도 조회 가능
+- `null` 규칙: 요청이 0 이면 `errorRate` 만 `null`(0% 가 아님) · 라우트가 없는 서비스(gateway · keycloak · mysql · redis)는 둘 다 `null` · **Prometheus 실패면 503 이 아니라 200 에 전부 `null`**(부분 응답, 화면은 `-`)
+
+| gateway 라우트 id | 서비스 |
+|---|---|
+| `user-auth-strict` · `user-auth` · `user-service` | user-service |
+| `admin-notification-stream` · `admin-settlement-batch` · `admin-service` | admin-service |
+| `chat-service` · `chat-websocket` | chat-service |
+| `store-service` · `product-service` · `order-service` · `settlement-service` · `payment-service` · `review-service` | 같은 이름 |
+| `keycloak` | 제외 |
+
+> 라우트를 추가 · 이름 변경하면 `SystemCatalog.ROUTE_SERVICES` 도 고친다 — 표에 없는 id 는 지표에서 빠진다.
