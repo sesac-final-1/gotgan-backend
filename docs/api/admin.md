@@ -105,7 +105,7 @@
 
 ## 5. 알림 센터 (NTF-08, 10/27 회의 추가 기능)
 
-업무 이벤트와 다른 서비스 요청을 **받는 쪽별 알림**으로 바꿔 알림함(DynamoDB `sesac-gojigi-inbox`, 90일)에 쌓고, 연결된 화면에 SSE 로 바로 보냅니다. 파드가 여러 개여도 Redis Pub/Sub(`notify:{받는 쪽}`)로 모든 파드가 자기 연결에 전달합니다.
+업무 이벤트와 다른 서비스 요청을 **받는 쪽별 알림**으로 바꿔 알림함(DynamoDB `sesac-gojigi-inbox`, TTL 90일 — 단 표를 매일 08:00 새로 만들어 실제로는 하루, 11/6)에 쌓고, 연결된 화면에 SSE 로 바로 보냅니다. 파드가 여러 개여도 Redis Pub/Sub(`notify:{받는 쪽}`)로 모든 파드가 자기 연결에 전달합니다.
 
 | 받는 쪽 (알림함 PK) | 누가 보나 |
 |---|---|
@@ -167,6 +167,6 @@
 | 스토어 상품 · 차단 | `GET /api/admin/stores/{storeId}/products` · `PATCH /api/admin/products/{productId}/block` | product (product.md 6절) |
 | 카테고리 | `GET · POST /api/admin/categories` · `PUT /{categoryId}` | product 7절 + settlement 수수료(상위 생성 · 활성화) |
 | 수수료 | `GET · PUT /api/admin/commissions` | settlement (settlement.md 2절) |
-| 정산 | `GET /api/admin/settlements` · `/{id}` · `POST /aggregate` · `/pay` · `PATCH /{id}/hold` · `GET /api/admin/stores/{storeId}/settlements` | settlement (settlement.md 3절) |
+| 정산 | `GET /api/admin/settlements` · `/{id}` · `POST /aggregate` · `/pay` · `PATCH /{id}/hold` · `GET /api/admin/stores/{storeId}/settlements` — `aggregate` · `pay` 만 settlement 호출 읽기 28초 · gateway 라우트 `admin-settlement-batch` 30초(11/6, 5,000건 집계 5.6 ~ 11.6초), 나머지는 3초 · gateway 10초 | settlement (settlement.md 3절) |
 | 회원 | `GET /api/admin/users` · `/{userId}` · `/{userId}/points` · `/{userId}/reviews` · `PATCH /{userId}/status` | user 내부 API · review 작성 리뷰 |
 | 신고 · 알림 | 1 ~ 5절 | admin 자체 (admindb · DynamoDB) |
