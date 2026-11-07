@@ -122,7 +122,7 @@ public final class SystemCatalog {
     }
 
     /** 기능 상태 — 원인 서비스 중 하나라도 DOWN 이면 DOWN, DEGRADED · RECOVERING 이면 DEGRADED. 목록에 없는 서비스는 DOWN 으로 본다 */
-    public static List<FeatureStatus> features(Map<String, ServiceState> states) {
+    public static List<FeatureStatus> featureStatuses(Map<String, ServiceState> states) {
         return FEATURES.stream().map(f -> {
             List<String> causes = f.dependsOn().stream().filter(s -> states.getOrDefault(s, ServiceState.DOWN) != ServiceState.UP).toList();
             boolean down = causes.stream().anyMatch(s -> states.getOrDefault(s, ServiceState.DOWN) == ServiceState.DOWN);

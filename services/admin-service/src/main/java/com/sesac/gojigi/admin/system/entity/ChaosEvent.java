@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import lombok.AccessLevel;
@@ -24,6 +25,8 @@ import org.hibernate.generator.EventType;
 @Table(name = "chaos_event")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChaosEvent {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -82,7 +85,7 @@ public class ChaosEvent {
 
     /** 복구까지 걸린 초 — 복구 전이면 null */
     public Long recoverySeconds() {
-        return recoveredAt == null ? null : Duration.between(killedAt, recoveredAt).toSeconds();
+        return recoveredAt == null ? null : Duration.between(killedAt.atZone(KST), recoveredAt.atZone(KST)).toSeconds();   // 두 시각 모두 KST(ClockConfig)
     }
 
     public List<String> deletedPodList() {

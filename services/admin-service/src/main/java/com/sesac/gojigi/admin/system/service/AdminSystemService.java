@@ -81,7 +81,7 @@ public class AdminSystemService {
         Map<String, ServiceState> states = services.stream()
                 .collect(Collectors.toMap(SystemResponses.ServiceStatus::name, SystemResponses.ServiceStatus::state, (a, b) -> a, LinkedHashMap::new));
         return new SystemResponses.Status(chaosEnabled, OffsetDateTime.ofInstant(now, clock.getZone()), services,
-                SystemCatalog.features(states));
+                SystemCatalog.featureStatuses(states));
     }
 
     /**

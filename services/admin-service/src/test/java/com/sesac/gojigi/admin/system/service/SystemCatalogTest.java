@@ -38,7 +38,7 @@ class SystemCatalogTest {
     @Test
     @DisplayName("기능 상태 — 전부 UP 이면 8개 기능 모두 UP · causes 비어 있음")
     void features_allUp() {
-        List<FeatureStatus> features = SystemCatalog.features(allUp());
+        List<FeatureStatus> features = SystemCatalog.featureStatuses(allUp());
         assertThat(features).hasSize(8).allSatisfy(f -> {
             assertThat(f.state()).isEqualTo(ServiceState.UP);
             assertThat(f.causes()).isEmpty();
@@ -50,7 +50,7 @@ class SystemCatalogTest {
     void features_orderDown() {
         Map<String, ServiceState> states = allUp();
         states.put("order-service", ServiceState.DOWN);
-        Map<String, FeatureStatus> f = byKey(SystemCatalog.features(states));
+        Map<String, FeatureStatus> f = byKey(SystemCatalog.featureStatuses(states));
         assertThat(f.get("CART_ORDER").state()).isEqualTo(ServiceState.DOWN);
         assertThat(f.get("CART_ORDER").causes()).containsExactly("order-service");
         assertThat(f.get("PAYMENT").state()).isEqualTo(ServiceState.DOWN);
@@ -66,7 +66,7 @@ class SystemCatalogTest {
         states.put("product-service", ServiceState.RECOVERING);
         states.put("store-service", ServiceState.DOWN);
         states.put("payment-service", ServiceState.DEGRADED);
-        Map<String, FeatureStatus> f = byKey(SystemCatalog.features(states));
+        Map<String, FeatureStatus> f = byKey(SystemCatalog.featureStatuses(states));
         assertThat(f.get("CART_ORDER").state()).isEqualTo(ServiceState.DOWN);
         assertThat(f.get("CART_ORDER").causes()).containsExactly("product-service", "store-service");
         assertThat(f.get("BROWSE").state()).isEqualTo(ServiceState.DEGRADED);
@@ -77,7 +77,7 @@ class SystemCatalogTest {
     @Test
     @DisplayName("기능 상태 — 상태를 모르는 서비스는 DOWN 으로 본다")
     void features_unknownIsDown() {
-        Map<String, FeatureStatus> f = byKey(SystemCatalog.features(Map.of()));
+        Map<String, FeatureStatus> f = byKey(SystemCatalog.featureStatuses(Map.of()));
         assertThat(f.get("MYPAGE").state()).isEqualTo(ServiceState.DOWN);
         assertThat(f.get("MYPAGE").causes()).containsExactly("user-service");
     }
