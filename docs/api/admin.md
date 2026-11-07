@@ -1,6 +1,6 @@
-# admin-service API — 신고 · 조치 (10/26 B안) · 알림 센터 (10/27)
+# admin-service API — 신고 · 조치 (10/26 B안) · 알림 센터 (10/27) · 장애 시연 (11/7)
 
-- 담당: 구지훈. 다른 관리자 API(회원 · 정산 · 수수료 · 카테고리 · 대시보드 · 입점 · 스토어)는 하위 서비스 계약(user · settlement · product · store.md)을 그대로 전달하므로 여기에는 **admin 이 직접 갖는 신고 · 알림 센터만** 적는다
+- 담당: 구지훈. 다른 관리자 API(회원 · 정산 · 수수료 · 카테고리 · 대시보드 · 입점 · 스토어)는 하위 서비스 계약(user · settlement · product · store.md)을 그대로 전달하므로 여기에는 **admin 이 직접 갖는 신고 · 알림 센터 · 장애 시연만** 적는다
 - 근거: ADR-0001 "변경 (10/26)" — 회원 신고 범위 복귀 · admin DB 예외(신고 · 조치 이력만), 노션 확인 요청 「신고 · 리뷰 블라인드 (B안)」
 - 저장: admindb `report`(신고자 · 대상당 1건) · `moderation_action`(처리 1번 = 1행). 리뷰 블라인드 상태는 review, 회원 정지 상태는 user 가 주인
 
@@ -170,3 +170,85 @@
 | 정산 | `GET /api/admin/settlements` · `/{id}` · `POST /aggregate` · `/pay` · `PATCH /{id}/hold` · `GET /api/admin/stores/{storeId}/settlements` | settlement (settlement.md 3절) |
 | 회원 | `GET /api/admin/users` · `/{userId}` · `/{userId}/points` · `/{userId}/reviews` · `PATCH /{userId}/status` | user 내부 API · review 작성 리뷰 |
 | 신고 · 알림 | 1 ~ 5절 | admin 자체 (admindb · DynamoDB) |
+| 장애 시연 | 7절 | admin 자체 (쿠버네티스 API · admindb) |
+
+## 7. 장애 시연 대시보드 — F-1 (11/7)
+
+> 관리자가 서비스 파드를 내리고 상태 · 복구를 한 화면에서 본다(슬로건 "하나가 멈춰도 곳간은 열려 있다"). 근거: 노션 협업 요청 「F-1 장애 시연 대시보드」 4장 계약 · 11/6 QA 장애 영향표.
+> 전부 `ADMIN` — 게이트웨이 `/api/admin/**` 확인에 더해 admin 도 `X-User-Roles` 에 ADMIN 이 없으면 403 `FORBIDDEN`.
+
+| 항목 | 규칙 |
+|---|---|
+| 데이터 | 쿠버네티스 API(in-cluster ServiceAccount 토큰 · ca.crt) — `sesac-gojigi` 네임스페이스 Deployment · StatefulSet `spec.replicas` + 파드(`app` 라벨). 권한 = gotgan-config `chaos-rbac.yaml`(pods get · list · delete, deployments · statefulsets get · list) |
+| 스위치 | `app.chaos.enabled`(env `APP_CHAOS_ENABLED`, 기본 `false`) — 꺼져 있으면 **내리기만** 403, 상태 · 타임라인은 조회 가능 |
+| 내리기 방식 | 파드 삭제만(Deployment 가 새 파드를 띄움 · ArgoCD selfHeal 과 충돌 없음). 레플리카를 0 으로 줄이지 않는다 |
+| 기록 | admindb `chaos_event` — 내리기 1번 = 1행(서비스 · 범위 · 사유 · 지운 파드 · 관리자 · 시각 · 복구 시각) |
+
+### 서비스 · 상태
+
+| 서비스 | 내리기 |
+|---|---|
+| `order-service` · `product-service` · `payment-service` · `store-service` · `user-service` · `review-service` · `settlement-service` · `chat-service` | ✅ (`killable: true`) |
+| `gateway-service` · `admin-service` · `keycloak` · `mysql` · `redis` | ❌ 입구 · 이 화면 · 로그인 · 데이터 (`killable: false`, 상태만) |
+
+`ready` = 지워지는 중이 아닌 Ready 파드 수, `desired` = `spec.replicas`.
+
+| `state` | 조건 |
+|---|---|
+| `UP` | `ready ≥ desired` |
+| `DOWN` | `ready = 0` — 새 파드가 뜨는 중이어도 응답을 못 하므로 DOWN |
+| `RECOVERING` | `0 < ready < desired` 이고 마지막 내리기가 아직 복구 전 |
+| `DEGRADED` | `0 < ready < desired` 이고 내리기와 무관(자연 장애 · 재시작) |
+
+### 사용자 기능 `features` (서버 계산, 11/6 QA 실측)
+
+| `key` | `label` | 원인 서비스 |
+|---|---|---|
+| `BROWSE` | 둘러보기 · 상품 상세 | product |
+| `STORE` | 스토어 | store |
+| `REVIEW` | 리뷰 · 문의 | review |
+| `CART_ORDER` | 장바구니 · 주문 | order · product · store (장바구니가 상품 · 스토어 배송 정책을 읽음) |
+| `PAYMENT` | 결제 | order · payment |
+| `CHAT` | 채팅 | chat |
+| `SETTLEMENT` | 판매자 정산 | settlement |
+| `MYPAGE` | 회원 · 마이페이지 | user |
+
+원인 중 하나라도 `DOWN` → `DOWN`, `DEGRADED` · `RECOVERING` 만 → `DEGRADED`, 아니면 `UP`. `causes` = `UP` 이 아닌 원인 서비스.
+
+### 7-1. 상태 — `GET /api/admin/system/status` (2초 폴링)
+
+```json
+{ "chaosEnabled": true, "serverTime": "2026-11-09T14:03:12+09:00",
+  "services": [{ "name": "order-service", "killable": true, "desired": 2, "ready": 0, "state": "DOWN",
+                 "pods": [{ "name": "order-service-…", "node": "ip-10-0-11-…", "phase": "Pending", "ready": false,
+                            "restarts": 0, "ageSeconds": 3, "terminating": false }] }],
+  "features": [{ "key": "CART_ORDER", "label": "장바구니 · 주문", "state": "DOWN", "causes": ["order-service"] }] }
+```
+
+- `services` 는 위 표 순서(13개), `pods` 는 이름순 · 지워지는 중(`terminating: true`)인 파드 포함
+- 복구 시각은 이 조회가 "내린 뒤 `ready ≥ desired`" 를 처음 본 때 기록(별도 감시 없음 — 정확도 = 폴링 주기)
+- **503** `SYSTEM_CLUSTER_UNAVAILABLE` — 쿠버네티스 조회 실패(클러스터 밖 · 권한 · 타임아웃). 화면은 마지막 값 유지 · "연결 끊김"
+
+### 7-2. 내리기 — `POST /api/admin/system/services/{name}/kill`
+
+`{ "scope": "ONE" | "ALL", "reason"?: "≤255자" }` → **202** `{ "eventId": 12, "deletedPods": ["order-service-…"] }`
+
+- `ONE` = Ready 파드 1개(이름순 첫 번째), `ALL` = 지워지는 중이 아닌 파드 전부. 파드 1개 서비스는 둘이 같음
+- 일부만 지우고 실패하면 지운 파드만 기록하고 503
+- 검사 순서: 꺼짐 → 허용 목록 → 1분 제한 → 복구 중 → Ready 파드
+
+| 응답 | 코드 |
+|---|---|
+| 403 | `SYSTEM_CHAOS_DISABLED` — 스위치 꺼짐 |
+| 400 | `SYSTEM_SERVICE_NOT_KILLABLE` — 허용 목록 밖(없는 이름 포함) · `INVALID_INPUT` — scope 없음 |
+| 409 | `SYSTEM_KILL_COOLDOWN` — 그 서비스를 1분 안에 내렸거나 복구 중(`RECOVERING`) |
+| 409 | `SYSTEM_NO_READY_POD` — 지울 파드가 없음(ONE 인데 Ready 0개 등) |
+| 503 | `SYSTEM_CLUSTER_UNAVAILABLE` |
+
+### 7-3. 타임라인 — `GET /api/admin/system/events`
+
+최신순 20건: `[{ "eventId", "service", "scope", "reason", "deletedPods": [], "actorId", "killedAt", "recoveredAt", "recoverySeconds" }]` — 복구 전이면 `recoveredAt` · `recoverySeconds` 가 `null`.
+
+### 7-4. 지표 — `GET /api/admin/system/metrics` (2순위, 미구현)
+
+협업 요청 4장 계약 그대로 예정 — gateway `spring_cloud_gateway_requests_seconds_count` 의 `routeId` 를 서비스 이름으로 묶어 `requestsPerSecond` · `errorRate`(5xx ÷ 전체), Prometheus 실패면 `null`.
