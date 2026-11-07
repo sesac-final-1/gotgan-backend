@@ -46,6 +46,11 @@ app:
       store: ${ADMIN_STORE_EVENTS_QUEUE_URL:}
       order: ${ADMIN_ORDER_EVENTS_QUEUE_URL:}
       settlement: ${ADMIN_SETTLEMENT_EVENTS_QUEUE_URL:}
+  chaos:                                    # F-1 장애 시연 (11/7) — 파드 상태 · 내리기. 권한은 gotgan-config chaos-rbac.yaml
+    enabled: ${APP_CHAOS_ENABLED:false}     # 내리기만 막는다(상태 · 타임라인 조회는 항상). 시연 때만 Helm values 에서 true
+    kubernetes-url: https://kubernetes.default.svc
+    namespace: sesac-gojigi
+    service-account-dir: /var/run/secrets/kubernetes.io/serviceaccount   # token · ca.crt — 클러스터 밖에는 없어 조회가 503
 
 resilience4j:
   circuitbreaker:
