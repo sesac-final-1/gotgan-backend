@@ -12,7 +12,9 @@ import static org.mockito.Mockito.when;
 
 import com.sesac.gojigi.admin.system.client.KubernetesClient;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.Pod;
+import com.sesac.gojigi.admin.system.client.PrometheusClient;
 import com.sesac.gojigi.admin.system.dto.request.KillRequest;
+import com.sesac.gojigi.admin.system.dto.response.SystemResponses;
 import com.sesac.gojigi.admin.system.entity.ChaosEvent;
 import com.sesac.gojigi.admin.system.entity.KillScope;
 import com.sesac.gojigi.admin.system.exception.SystemErrorCode;
@@ -37,15 +39,55 @@ class AdminSystemServiceTest {
 
     private final KubernetesClient kubernetes = mock(KubernetesClient.class);
     private final ChaosEventRepository repository = mock(ChaosEventRepository.class);
+    private final PrometheusClient prometheus = mock(PrometheusClient.class);
     private final Clock clock = Clock.fixed(NOW, KST);
 
     private AdminSystemService service(boolean enabled) {
         when(repository.save(any(ChaosEvent.class))).thenAnswer(inv -> inv.getArgument(0));
-        return new AdminSystemService(kubernetes, repository, clock, enabled);
+        return new AdminSystemService(kubernetes, prometheus, repository, clock, enabled);
     }
 
     private static Pod pod(String name, boolean ready) {
         return new Pod(name, "order-service", "node-1", "Running", ready, 0, NOW.minusSeconds(60), false);
+    }
+
+    private static SystemResponses.ServiceMetric metric(SystemResponses.Metrics metrics, String name) {
+        return metrics.services().stream().filter(m -> m.name().equals(name)).findFirst().orElseThrow();
+    }
+
+    @Test
+    @DisplayName("지표 — 라우트를 서비스로 더해 비율, 요청 0 이면 errorRate null, 라우트 없는 서비스는 둘 다 null · 꺼져 있어도 조회")
+    void metrics_aggregates() {
+        AdminSystemService service = service(false);
+        when(prometheus.byRoute(AdminSystemService.REQUESTS_QUERY)).thenReturn(Optional.of(Map.of(
+                "order-service", 4.0, "user-auth", 1.0, "user-auth-strict", 0.5, "user-service", 2.5, "review-service", 0.0)));
+        when(prometheus.byRoute(AdminSystemService.ERRORS_QUERY)).thenReturn(Optional.of(Map.of("order-service", 1.0, "user-auth", 0.4)));
+
+        SystemResponses.Metrics metrics = service.metrics();
+
+        assertThat(metrics.services()).hasSize(13);
+        assertThat(metric(metrics, "order-service")).isEqualTo(new SystemResponses.ServiceMetric("order-service", 4.0, 0.25));
+        assertThat(metric(metrics, "user-service")).isEqualTo(new SystemResponses.ServiceMetric("user-service", 4.0, 0.1));
+        assertThat(metric(metrics, "review-service")).isEqualTo(new SystemResponses.ServiceMetric("review-service", 0.0, null));
+        assertThat(metric(metrics, "chat-service")).isEqualTo(new SystemResponses.ServiceMetric("chat-service", 0.0, null));
+        assertThat(metric(metrics, "gateway-service")).isEqualTo(new SystemResponses.ServiceMetric("gateway-service", null, null));
+        verifyNoInteractions(kubernetes);
+    }
+
+    @Test
+    @DisplayName("지표 — 요청량 조회 실패면 오류 쿼리는 부르지 않고 전부 null, 오류 쿼리만 실패해도 전부 null")
+    void metrics_prometheusDown_allNull() {
+        AdminSystemService service = service(true);
+        when(prometheus.byRoute(AdminSystemService.REQUESTS_QUERY)).thenReturn(Optional.empty());
+        assertThat(service.metrics().services()).allSatisfy(m -> {
+            assertThat(m.requestsPerSecond()).isNull();
+            assertThat(m.errorRate()).isNull();
+        });
+        verify(prometheus, never()).byRoute(AdminSystemService.ERRORS_QUERY);
+
+        when(prometheus.byRoute(AdminSystemService.REQUESTS_QUERY)).thenReturn(Optional.of(Map.of("order-service", 1.0)));
+        when(prometheus.byRoute(AdminSystemService.ERRORS_QUERY)).thenReturn(Optional.empty());
+        assertThat(metric(service.metrics(), "order-service").requestsPerSecond()).isNull();
     }
 
     @Test

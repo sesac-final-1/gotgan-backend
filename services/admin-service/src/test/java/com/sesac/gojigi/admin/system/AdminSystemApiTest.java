@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.sesac.gojigi.admin.TestcontainersConfiguration;
 import com.sesac.gojigi.admin.system.client.KubernetesClient;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.Pod;
+import com.sesac.gojigi.admin.system.client.PrometheusClient;
 import com.sesac.gojigi.admin.system.exception.SystemErrorCode;
 import com.sesac.gojigi.admin.system.exception.SystemException;
 import com.sesac.gojigi.admin.system.service.SystemCatalog;
@@ -19,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +49,7 @@ class AdminSystemApiTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean KubernetesClient kubernetes;
+    @MockitoBean PrometheusClient prometheus;
 
     private final List<Pod> pods = new ArrayList<>();
 
@@ -122,8 +125,33 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("ADMIN 이 아니면 — 상태 · 내리기 · 타임라인 모두 403 FORBIDDEN")
+    @DisplayName("지표 — 서비스 순서 그대로 요청량 · 오류율, Prometheus 실패면 200 에 null")
+    void metrics() throws Exception {
+        when(prometheus.byRoute(org.mockito.ArgumentMatchers.contains("5.."))).thenReturn(Optional.of(Map.of("order-service", 0.5)));
+        when(prometheus.byRoute(org.mockito.ArgumentMatchers.argThat(q -> q != null && !q.contains("5.."))))
+                .thenReturn(Optional.of(Map.of("order-service", 2.0)));
+        mockMvc.perform(get("/api/admin/system/metrics").header("X-User-Id", ADMIN_ID).header("X-User-Roles", "ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.services.length()").value(13))
+                .andExpect(jsonPath("$.data.services[0].name").value("order-service"))
+                .andExpect(jsonPath("$.data.services[0].requestsPerSecond").value(2.0))
+                .andExpect(jsonPath("$.data.services[0].errorRate").value(0.25))
+                .andExpect(jsonPath("$.data.services[1].requestsPerSecond").value(0.0))
+                .andExpect(jsonPath("$.data.services[1].errorRate").doesNotExist());
+
+        org.mockito.Mockito.reset(prometheus);
+        when(prometheus.byRoute(any())).thenReturn(Optional.empty());
+        mockMvc.perform(get("/api/admin/system/metrics").header("X-User-Id", ADMIN_ID).header("X-User-Roles", "ADMIN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.services[0].name").value("order-service"))
+                .andExpect(jsonPath("$.data.services[0].requestsPerSecond").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("ADMIN 이 아니면 — 상태 · 지표 · 내리기 · 타임라인 모두 403 FORBIDDEN")
     void nonAdmin_forbidden() throws Exception {
+        mockMvc.perform(get("/api/admin/system/metrics").header("X-User-Id", 4L).header("X-User-Roles", "SELLER"))
+                .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/admin/system/status").header("X-User-Id", 4L).header("X-User-Roles", "BUYER,SELLER"))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
         mockMvc.perform(get("/api/admin/system/events").header("X-User-Id", 4L).header("X-User-Roles", "BUYER"))

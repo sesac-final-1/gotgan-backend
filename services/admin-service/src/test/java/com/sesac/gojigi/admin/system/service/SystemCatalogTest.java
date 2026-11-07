@@ -83,6 +83,35 @@ class SystemCatalogTest {
     }
 
     @Test
+    @DisplayName("라우트 묶기 — user 3개 · admin 3개 · chat 2개를 서비스 하나로, keycloak · 모르는 라우트는 뺀다")
+    void routeServices_grouping() {
+        assertThat(SystemCatalog.ROUTE_SERVICES).hasSize(14).doesNotContainKey("keycloak");
+        assertThat(SystemCatalog.ROUTE_SERVICES.entrySet().stream().filter(e -> e.getValue().equals("user-service")).map(Map.Entry::getKey))
+                .containsExactlyInAnyOrder("user-auth-strict", "user-auth", "user-service");
+        assertThat(SystemCatalog.ROUTE_SERVICES.entrySet().stream().filter(e -> e.getValue().equals("admin-service")).map(Map.Entry::getKey))
+                .containsExactlyInAnyOrder("admin-notification-stream", "admin-settlement-batch", "admin-service");
+        assertThat(SystemCatalog.ROUTE_SERVICES.entrySet().stream().filter(e -> e.getValue().equals("chat-service")).map(Map.Entry::getKey))
+                .containsExactlyInAnyOrder("chat-service", "chat-websocket");
+
+        var metrics = SystemCatalog.serviceMetrics(
+                Map.of("admin-notification-stream", 0.2, "admin-settlement-batch", 0.1, "admin-service", 0.7, "keycloak", 9.0, "unknown", 3.0),
+                Map.of("admin-settlement-batch", 0.1, "keycloak", 9.0));
+        var admin = metrics.stream().filter(m -> m.name().equals("admin-service")).findFirst().orElseThrow();
+        assertThat(admin.requestsPerSecond()).isEqualTo(1.0);
+        assertThat(admin.errorRate()).isEqualTo(0.1);
+        assertThat(metrics.stream().filter(m -> m.name().equals("keycloak")).findFirst().orElseThrow().requestsPerSecond()).isNull();
+    }
+
+    @Test
+    @DisplayName("지표 반올림 — 요청량 소수 2자리 · 오류율 4자리, 실패 목록은 13개 전부 null")
+    void serviceMetrics_roundAndUnknown() {
+        var order = SystemCatalog.serviceMetrics(Map.of("order-service", 0.0666666), Map.of("order-service", 0.0222222)).getFirst();
+        assertThat(order.requestsPerSecond()).isEqualTo(0.07);
+        assertThat(order.errorRate()).isEqualTo(0.3333);
+        assertThat(SystemCatalog.unknownMetrics()).hasSize(13).allSatisfy(m -> assertThat(m.errorRate()).isNull());
+    }
+
+    @Test
     @DisplayName("내릴 수 없는 서비스 — gateway · admin · keycloak · mysql · redis")
     void services_notKillable() {
         assertThat(SystemCatalog.SERVICES.stream().filter(t -> !t.killable()).map(SystemCatalog.Target::name))
