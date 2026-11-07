@@ -37,7 +37,7 @@ services:
     ports: ["6379:6379"]
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.8      # 클러스터(deploy/k8s/keycloak) 와 같은 버전
+    image: quay.io/keycloak/keycloak:26.8.2    # 클러스터(deploy/k8s/keycloak) 와 같은 버전 — 패치 번호까지 고정(움직이는 태그 26.8 로 11/6 가입 장애)
     command: ["start-dev", "--import-realm"]   # 개발 모드: HTTP · 캐시 끔 · 빠른 기동
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin       # 로컬 전용 값

@@ -451,6 +451,7 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
 - **서비스 간 호출 실패**: `client`에서 `RestClientResponseException`을 잡아 호출한 쪽 도메인 예외로 변환
   - 상대가 보낸 비즈니스 오류(재고 부족 409) → 의미가 같은 내 도메인 코드
   - 연결 실패 · 타임아웃 · 5xx · 서킷 열림 → `EXTERNAL_API_ERROR`(502/504) + Saga 보상 (대시보드 조합은 부분 응답, 2-7)
+  - 응답 문구에는 서비스 이름을 넣지 않고 업무 이름만 — `결제 준비에 실패했습니다.`(11/6). 서비스 이름은 로그에만
   - 예외: admin-service는 변환하지 않고 하위 서비스의 `code` · HTTP 상태를 그대로 전달
 - 게이트웨이 필터 체인(WebFlux) 안에서는 `BusinessException`을 던지지 않음 — 전용 핸들러가 JSON으로 응답
 
@@ -483,7 +484,7 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
 | 항목 | 규칙 |
 |---|---|
 | 타임아웃 | 연결 2초 · 읽기 3초 (`common/config/RestClientConfig`) — 필수 |
-| 오래 걸리는 호출 | 배치성 호출만 클라이언트를 따로 — `SettlementBatchClient` 읽기 9초(집계 · 일괄 지급, gateway · 프론트 10초보다 짧게) |
+| 오래 걸리는 호출 | 배치성 호출만 클라이언트를 따로 — `SettlementBatchClient` 읽기 28초(집계 · 일괄 지급 — 5,000건 집계 5.6 ~ 11.6초, 11/6). gateway 는 이 두 경로만 라우트 `admin-settlement-batch` 30초 · 프론트 30초, 나머지 관리자 API 는 10초 그대로 |
 | 추적 | `RestClient` 를 직접 만들면 `ObservationRegistry` 를 함께 넘긴다 — 빠지면 서비스 간 traceId 가 끊김(QA Q-박-5) |
 | 비동기 풀 | `AsyncTaskExecutor` 빈이 하나뿐이면 Boot 가 WebSocket 채널에 씌운다 — 알림용 풀은 `@Bean(defaultCandidate = false)` + `@Qualifier`(k6 S5) |
 | 서킷 브레이커 | **client(대상 서비스)마다 인스턴스 하나**, 이름 = 대상 서비스 (`resilience4j.circuitbreaker.instances.product`) |
