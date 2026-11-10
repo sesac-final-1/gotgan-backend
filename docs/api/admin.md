@@ -245,6 +245,32 @@
 | 409 | `SYSTEM_NO_READY_POD` — 지울 파드가 없음(ONE 인데 Ready 0개 등) |
 | 503 | `SYSTEM_CLUSTER_UNAVAILABLE` |
 
+### 7-2-1. 시나리오 — `POST /api/admin/system/scenarios/kill-one-each` (11/10)
+
+"구매 경로 서비스를 **전부 1개씩** 죽여도 시스템은 그대로" 를 버튼 하나로 보여 준다.
+
+`{ "reason"?: "≤255자" }` (본문 생략 가능) → **202**
+
+```json
+{ "services": [{ "service": "order-service", "eventId": 31, "deletedPods": ["order-service-…"] },
+               { "service": "product-service", "eventId": 32, "deletedPods": ["product-service-…"] }] }
+```
+
+- 대상 = 내릴 수 있고(`killable`) **레플리카 2 이상**(`desired ≥ 2`)인 서비스 — 지금 order · product · payment · store · user. 화면 순서대로
+- 서비스마다 Ready 파드 1개(이름순 첫 번째)를 즉시 삭제 = 서비스별 `ONE` 내리기와 같음. **서비스마다 1행씩** 기록 → 타임라인 · 복구 시간은 서비스별로 그대로 보임
+- `reason` 을 비우면 `시나리오 — 레플리카 2 서비스 1개씩 내리기` 로 기록(타임라인에서 시나리오로 내린 것을 구분)
+- **전부 아니면 없음**: 대상 중 하나라도 1분 제한 · 정상(`UP`) 아님이면 아무것도 지우지 않음 — 이미 1개가 빠진 서비스에서 또 지우면 「1개씩 지워도 괜찮다」가 성립하지 않으므로
+- 중간에 삭제가 실패하면 그때까지 지운 서비스만 기록하고 503
+- 1분 제한은 서비스별 그대로 — 시나리오 직후 대상 서비스를 따로 내리면 409, 반대도 같음
+
+| 응답 | 코드 |
+|---|---|
+| 403 | `SYSTEM_CHAOS_DISABLED` — 스위치 꺼짐 |
+| 409 | `SYSTEM_KILL_COOLDOWN` — 대상 중 하나라도 1분 안에 내림 |
+| 409 | `SYSTEM_SCENARIO_NOT_READY` — 대상 중 하나라도 `ready < desired`(복구 중 · 자연 장애) |
+| 409 | `SYSTEM_NO_READY_POD` — 대상 서비스가 없음(레플리카 2 이상인 서비스가 없을 때) |
+| 503 | `SYSTEM_CLUSTER_UNAVAILABLE` |
+
 ### 7-3. 타임라인 — `GET /api/admin/system/events`
 
 최신순 20건: `[{ "eventId", "service", "scope", "reason", "deletedPods": [], "actorId", "killedAt", "recoveredAt", "recoverySeconds" }]` — 복구 전이면 `recoveredAt` · `recoverySeconds` 가 `null`.

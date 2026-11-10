@@ -14,6 +14,7 @@ import com.sesac.gojigi.admin.system.client.KubernetesClient;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.Pod;
 import com.sesac.gojigi.admin.system.client.PrometheusClient;
 import com.sesac.gojigi.admin.system.dto.request.KillRequest;
+import com.sesac.gojigi.admin.system.dto.request.ScenarioRequest;
 import com.sesac.gojigi.admin.system.dto.response.SystemResponses;
 import com.sesac.gojigi.admin.system.entity.ChaosEvent;
 import com.sesac.gojigi.admin.system.entity.KillScope;
@@ -164,5 +165,38 @@ class AdminSystemServiceTest {
         assertThatThrownBy(() -> service.kill("order-service", new KillRequest(KillScope.ONE, null), 1L))
                 .isInstanceOf(SystemException.class);
         verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("시나리오 꺼짐 — 403 SYSTEM_CHAOS_DISABLED, 쿠버네티스는 부르지 않음")
+    void scenario_disabled_forbidden() {
+        AdminSystemService service = service(false);
+        assertThatThrownBy(() -> service.killOneEach(null, 1L))
+                .extracting(e -> ((SystemException) e).getErrorCode()).isEqualTo(SystemErrorCode.SYSTEM_CHAOS_DISABLED);
+        verifyNoInteractions(kubernetes);
+    }
+
+    @Test
+    @DisplayName("시나리오 중간 삭제 실패 — 앞 서비스 · 지운 만큼은 기록하고 503 을 그대로 던짐, 뒤 서비스는 안 지움 · 사유는 공백 제거")
+    void scenario_partialFailure_recordsDeleted() {
+        AdminSystemService service = service(true);
+        when(kubernetes.desiredReplicas()).thenReturn(Map.of("order-service", 2, "product-service", 2, "payment-service", 2));
+        when(kubernetes.pods()).thenReturn(List.of(
+                pod("order-service-a", true), pod("order-service-b", true),
+                new Pod("product-service-a", "product-service", "node-1", "Running", true, 0, NOW.minusSeconds(60), false),
+                new Pod("product-service-b", "product-service", "node-2", "Running", true, 0, NOW.minusSeconds(60), false),
+                new Pod("payment-service-a", "payment-service", "node-1", "Running", true, 0, NOW.minusSeconds(60), false),
+                new Pod("payment-service-b", "payment-service", "node-2", "Running", true, 0, NOW.minusSeconds(60), false)));
+        when(repository.findFirstByServiceNameOrderByIdDesc(any())).thenReturn(Optional.empty());
+        doThrow(new SystemException(SystemErrorCode.SYSTEM_CLUSTER_UNAVAILABLE)).when(kubernetes).deletePod("product-service-a");
+
+        assertThatThrownBy(() -> service.killOneEach(new ScenarioRequest("  리허설  "), 1L))
+                .extracting(e -> ((SystemException) e).getErrorCode()).isEqualTo(SystemErrorCode.SYSTEM_CLUSTER_UNAVAILABLE);
+
+        ArgumentCaptor<ChaosEvent> saved = ArgumentCaptor.forClass(ChaosEvent.class);
+        verify(repository).save(saved.capture());
+        assertThat(saved.getValue().getServiceName()).isEqualTo("order-service");
+        assertThat(saved.getValue().getReason()).isEqualTo("리허설");
+        verify(kubernetes, never()).deletePod("payment-service-a");
     }
 }

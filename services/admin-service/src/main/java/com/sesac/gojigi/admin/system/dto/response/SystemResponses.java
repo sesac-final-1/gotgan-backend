@@ -46,6 +46,13 @@ public final class SystemResponses {
     public record Killed(Long eventId, List<String> deletedPods) {
     }
 
+    /** POST /scenarios/kill-one-each → 202 — 서비스마다 1행씩 기록한 결과 */
+    public record ScenarioKilled(List<ServiceKilled> services) {
+    }
+
+    public record ServiceKilled(String service, Long eventId, List<String> deletedPods) {
+    }
+
     /** GET /events — 최신순 20건 */
     public record EventItem(Long eventId, String service, KillScope scope, String reason, List<String> deletedPods, Long actorId,
             OffsetDateTime killedAt, OffsetDateTime recoveredAt, Long recoverySeconds) {
