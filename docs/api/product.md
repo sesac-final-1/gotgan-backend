@@ -175,6 +175,7 @@ admin 이 스토어 상세 화면에서 상품을 찾아 차단합니다. 차단
 | `blocked: false` · 지금 BLOCKED | `status = STOPPED` · 사유 지움 → 판매자가 점검 후 직접 재개 | **200** |
 | `blocked: false` · BLOCKED 아님 | 없음 | **200** (현재 상태) |
 | `blocked: true` 인데 `reason` 비었음 | 없음 | **400** `PRODUCT_BLOCK_REASON_REQUIRED` |
+| `blocked` 없음 · `reason` 255자 초과 | 없음 | **400** `INVALID_INPUT` |
 | 없거나 삭제된 상품 | 없음 | **404** `PRODUCT_NOT_FOUND` |
 
 - BLOCKED 상품은 판매자가 **재개할 수 없습니다**(15절, `PRODUCT_BLOCKED`). 사유를 고치도록 **수정 · 삭제는 가능**하고, 고친 뒤 관리자가 해제합니다.
@@ -187,7 +188,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 | API | 요청 | 응답 |
 |---|---|---|
 | `GET /internal/categories` | | **200** 트리 — 비활성 포함 `[{ id, name, nameEn, sortOrder, active, children[{ id, name, nameEn, sortOrder, active, productCount }], productCount }]` |
-| `POST /internal/categories` | `{ parentId?, name, nameEn?, sortOrder? }` | **201** 만든 카테고리 |
+| `POST /internal/categories` | `{ parentId?, name, nameEn?, sortOrder? }` | **201** 만든 카테고리 `{ id, parentId, name, nameEn, sortOrder, active }` (PUT · PATCH 응답도 같은 모양) |
 | `PUT /internal/categories/{id}` | `{ name, nameEn?, sortOrder }` | **200** — 상위 · 하위 이동(`parentId` 변경)은 안 됨 |
 | `PATCH /internal/categories/{id}` | `{ active }` | **200** — 사용 / 사용 중지 |
 
@@ -201,6 +202,7 @@ admin `category` 패키지가 부릅니다. 카테고리는 **삭제하지 않�
 | 없는 `parentId` | 없음 | **404** `CATEGORY_NOT_FOUND` |
 | 같은 부모 아래 같은 이름 (생성 · 수정) | 없음 | **409** `CATEGORY_NAME_DUPLICATED` |
 | `sortOrder` 생략 | 같은 부모 안 맨 뒤 | — |
+| `name` 비었음 · 50자 초과 · `nameEn` 50자 초과 · `sortOrder` 음수 (생성 · 수정, 수정은 `sortOrder` 필수) | 없음 | **400** `INVALID_INPUT` |
 
 **사용 / 사용 중지 (PATCH)**
 
@@ -410,7 +412,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 { "productIds": [3, 4, 7], "status": "STOPPED" }
 ```
 
-**200** `{ "success": [3, 4], "failed": [ { "productId": 7, "code": "PRODUCT_BLOCKED", "message": "관리자가 판매중지한 상품은 재개할 수 없습니다." } ] }`
+**200** `{ "success": [3, 4], "failed": [ { "productId": 7, "code": "PRODUCT_BLOCKED", "message": "관리자가 판매중지한 상품은 판매 상태를 바꿀 수 없습니다." } ] }`
 
 | 경우 | 결과 |
 |---|---|
@@ -448,7 +450,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 | 경우 | 응답 |
 |---|---|
 | 1 ~ 5개 · `image/jpeg` · `image/png` · `image/webp` · 각 10MB 이하 | **200** — 요청과 같은 순서, 키는 `products/{storeId}/{UUID}.{jpg\|png\|webp}`(확장자는 형식으로 정함), 주소 유효 10분 |
-| 개수 · 형식 · 크기 위반 | **400** `PRODUCT_IMAGE_INVALID` — 하나라도 틀리면 전체 거절, 메시지에 "n번째 파일: …" |
+| 개수 · 형식 · 크기(0바이트 이하 · 10MB 초과) 위반 | **400** `PRODUCT_IMAGE_INVALID` — 하나라도 틀리면 전체 거절, 메시지에 "n번째 파일: …" |
 | `files` · `contentType` · `size` 없음 | **400** `INVALID_INPUT` |
 | 스토어 헤더 없음 | **403** `FORBIDDEN` |
 | 서명용 자격 증명(IRSA)을 못 얻음 | **502** `EXTERNAL_API_ERROR` |

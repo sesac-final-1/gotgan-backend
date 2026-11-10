@@ -19,7 +19,7 @@
 |---|---|---|
 | `ACTIVE` | 운영 중 — 승인 직후 상태 | — |
 | `SUSPENDED` | 정지 | 관리자 → 관리자 (사유 필수) |
-| `CLOSED` | 폐점 — **되돌릴 수 없는 마지막 상태**. 판매자 탈퇴 조건 | 판매자 (폐점 API 는 다음 PR) |
+| `CLOSED` | 폐점 — **되돌릴 수 없는 마지막 상태**. 판매자 탈퇴 조건 | 판매자 (폐점 API 12절) |
 
 - 폐점은 `deleted_at` 이 아니라 `status` 로 표현합니다. 폐점한 스토어도 주문 · 정산 내역과 내부 API 에서 계속 조회되어야 하기 때문입니다. `deleted_at` 은 컨벤션 3-5 소프트 삭제 자리로만 두고, 채워진 스토어는 모든 조회에서 없는 것으로 봅니다.
 - 상태 값은 늘어날 수 있습니다. 호출하는 쪽은 `ACTIVE` 인지 아닌지(또는 필요한 값인지)로 판단하고, 모르는 값이 와도 실패하지 않게 해 주세요.
@@ -307,7 +307,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | `PENDING` | 심사대기 | 신청(2절) · 재제출(2-3절) |
 | `SUPPLEMENT` | 보완요청 — 신청자 재제출 대기 | 보완요청(7절) |
 | `APPROVED` | 승인 — 스토어 생성됨 | 승인(5절) |
-| `REJECTED` | 반려 | 반려(6절) · 7일 미보완 자동 반려(4주차) |
+| `REJECTED` | 반려 | 반려(6절) · 7일 미보완 자동 반려(7-1절) |
 
 ## 3. 입점 신청 목록 (내부) — `GET /internal/applications?status=` (STR-03)
 
@@ -403,7 +403,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 |---|---|
 | `storeId` | 승인된 신청이면 만들어진 스토어 ID, 아니면 `null` |
 | `documents` | 지금 서류(`current: true`)와 재제출로 바뀐 이전 서류(`false`)를 모두 담음 — 이전 제출본과 비교용(STR-09). 종류별 · 올린 순서 |
-| `documents[].url` | seller-docs 버킷 presigned GET, **10분** 만료. 서명은 store 안에서 계산하므로 S3 장애여도 상세는 200 (링크만 열리지 않음) |
+| `documents[].url` | seller-docs 버킷 presigned GET, **10분** 만료. 서명은 store 안에서 계산하므로 S3 장애여도 상세는 200. 서명용 자격 증명을 얻지 못하면 상세는 그대로 200 이고 `url` · `urlExpiresAt` 이 `null` |
 | `history` | 오래된 순. 신청자 재제출(`SUPPLEMENT → PENDING`, `APPLICANT`)과 자동 반려(`SYSTEM`)도 여기에 |
 | `sameBizRegNo` | 같은 사업자등록번호의 **이 신청을 뺀** 다른 신청 · 스토어(폐점 포함, 소프트 삭제 제외). `stores[]` 는 `{storeId, storeName, status}` |
 | 체크리스트 | **서버는 받지도 검사하지도 않음**(STR-10 "체크 결과는 저장하지 않음") — 화면이 네 항목을 모두 체크해야 승인 버튼을 켬. 중복 입점 판단 근거가 `sameBizRegNo` |
@@ -509,7 +509,7 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 - 스토어 상세(관리자 상세 화면)는 1절을 씁니다 — 1절 응답에 관리자용 필드와 상태 이력을 **추가**했습니다(아래 "1절 확장").
 
 **1절 확장 (10/29 구현)** — 기존 7개 필드(배송 정책 포함) 뒤에 붙습니다. user · order · chat 은 기존 필드만 읽으면 됩니다. 정지 · 해제(9절) 응답도 같은 모양입니다.
-`slug` · `ownerName` · `companyName` · `bizRegNo` · `csPhone` · `grade` · `shippingFee` · `freeShippingThreshold` · `courier` · `dispatchNote` · `statusReason` · `applicationId` · `createdAt` · `statusHistory[{fromStatus, toStatus, actor, reason, changedAt}]`(오래된 순)
+`slug` · `ownerName` · `companyName` · `bizRegNo` · `csPhone` · `grade` · `dispatchNote` · `statusReason` · `applicationId` · `createdAt` · `statusHistory[{fromStatus, toStatus, actor, reason, changedAt}]`(오래된 순)
 
 ## 9. 스토어 정지 · 해제 (내부) — `PATCH /internal/stores/{storeId}/status` (STR-13)
 
@@ -520,7 +520,7 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | `ACTIVE → SUSPENDED` · `SUSPENDED → ACTIVE` | 상태 · `statusReason` 변경 + 스토어 이력(`ADMIN`) | **200** 1절 응답 | 상세 갱신 |
 | 이미 그 상태 | 바꾸지 않음 · 이벤트 없음 | **200** 1절 응답 (멱등 — 두 번 눌러도 안전) | 그대로 |
 | 폐점(`CLOSED`) 스토어 | — | **409** `STORE_INVALID_STATUS_TRANSITION` | "폐점한 스토어는 바꿀 수 없음" 안내 |
-| `status` 가 `CLOSED` · 그 밖의 값, 사유 없음 · 255자 초과 | — | **400** `INVALID_INPUT` | 폐점은 판매자만(`PATCH /api/seller/store/close`, 다음 PR) |
+| `status` 가 `CLOSED` · 그 밖의 값, 사유 없음 · 255자 초과 | — | **400** `INVALID_INPUT` | 폐점은 판매자만(`PATCH /api/seller/store/close`, 12절) |
 | 없는 스토어 · 소프트 삭제 | — | **404** `STORE_NOT_FOUND` | 목록으로 |
 
 **발행 이벤트 `StoreStatusChanged`** `{storeId, status}` (구독 product — 상품 노출 숨김 · settlement — 지급 보류). 구독자는 `occurredAt` 으로 옛 이벤트를 거릅니다(events.md A안). 같은 이벤트를 폐점 API 도 `CLOSED` 로 발행합니다.
