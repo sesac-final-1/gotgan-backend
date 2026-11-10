@@ -8,7 +8,7 @@
 | 항목 | 값 |
 |---|---|
 | 주소 | `SETTLEMENT_SERVICE_URI=http://settlement-service:8085` |
-| 인가 | `/internal/**` = 게이트웨이 라우트 없음(admin-service · store 만 호출). `/api/seller/settlements/**` = 게이트웨이 SELLER → 여기서 `X-Store-Id` 소유권 |
+| 인가 | `/internal/**` = 게이트웨이 라우트 없음(admin-service · store · chat 이 호출 — chat 은 정산 카드용 `GET /internal/settlements/{id}`). `/api/seller/settlements/**` = 게이트웨이 SELLER → 여기서 `X-Store-Id` 소유권 |
 | 주차 | ISO 주차 `2026-W43` = 월~일(KST). 생략하면 지난주 |
 | 금액 | `long` 원. 지급액 = 매출 − 판매수수료 − 결제수수료(2.2%), 상품주문마다 원 단위 내림 후 합계 |
 | 율 | % 값 (`11.50` = 11.5%) |
@@ -56,10 +56,10 @@
 | `GET /internal/settlements/recent?storeId=&weeks=8` | | `{storeId, weeks, fromWeek, totals, settlements[Summary]}` — 관리자 스토어 상세(admin `GET /api/admin/stores/{storeId}/settlements`)의 정산 이력 · 8주 KPI. 이번 주를 포함해 최근 `weeks`(1~12, 기본 8)주 동안 시작한 주차, 최신 주차 먼저 · 없는 스토어는 빈 목록 (10/29) |
 | `GET /internal/settlements/{id}` | | `{settlement: Summary, items[{orderItemId, orderNo, productName, confirmedAt, itemAmt, categoryId, rate, commission, paymentFee, payout, carriedOver}], history[{at, actor(SYSTEM/ADMIN), from, to, reason}]}` |
 | `POST /internal/settlements/aggregate` | `{week?}` | `{week, created, updated, autoHeld, carriedOver}` — 멱등(스토어 × 주차 1건) |
-| `POST /internal/settlements/pay` | `{ids[]}` | `{success[ids], failed[{id, code, message}]}` — 건마다 따로 커밋 |
-| `PATCH /internal/settlements/{id}/hold` | `{hold, reason}` | 상세 — `hold=true` 면 reason 필수 |
+| `POST /internal/settlements/pay` | `{ids[]}` (1~500개) | `{success[ids], failed[{id, code, message}]}` — 건마다 따로 커밋 |
+| `PATCH /internal/settlements/{id}/hold` | `{hold, reason}` | 상세 — `hold=true` 면 reason 필수(255자) |
 | `GET /internal/settlements/outstanding?storeId=` | | `{storeId, unsettledItemCount, unsettledPayoutAmt, scheduledCount, scheduledPayoutAmt, heldCount, heldPayoutAmt, clear}` — 스토어 폐점 · 판매자 탈퇴 전 확인, 셋 다 0 이면 `clear=true` |
-| `GET /internal/stats/settlements?storeId=` | | storeId 있으면 `store{pendingItemCount, pendingPayoutAmt, nextPayout, recentPaid[8주]}`, 없으면 `platform{scheduledCount, scheduledAmt, heldCount, heldAmt, paidThisMonthAmt, commissionRevenueThisMonth, salesFrom, categorySales[{categoryId, itemCount, salesAmt, commissionAmt}], topStores[{storeId, storeName, itemCount, salesAmt, commissionAmt}](10개)}` — salesFrom(이번 주 포함 8주 전 월요일)부터 오늘까지 구매확정분, 매출 큰 순 (10/26 관리자 대시보드 카테고리별 거래액 · 스토어 순위) |
+| `GET /internal/stats/settlements?storeId=` | | storeId 있으면 `store{storeId, pendingItemCount, pendingPayoutAmt, nextPayout, recentPaid[8주]}`, 없으면 `platform{scheduledCount, scheduledAmt, heldCount, heldAmt, paidThisMonthAmt, commissionRevenueThisMonth, salesFrom, categorySales[{categoryId, itemCount, salesAmt, commissionAmt}], topStores[{storeId, storeName, itemCount, salesAmt, commissionAmt}](10개)}` — salesFrom(이번 주 포함 8주 전 월요일)부터 오늘까지 구매확정분, 매출 큰 순 (10/26 관리자 대시보드 카테고리별 거래액 · 스토어 순위) |
 
 `Summary` = `{id, storeId, storeName, week, weekStart, weekEnd, itemCount, carriedOverCount, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt, status, holdReason, scheduledPayDate, paidAt, bank{bankName, accountNumber, accountHolder}}`
 

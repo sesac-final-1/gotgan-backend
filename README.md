@@ -8,7 +8,7 @@
 | | 링크 |
 |---|---|
 | 📘 설계 문서 (가이드라인 · 스펙 · 컨벤션) | https://gotganguide.vercel.app/ |
-| 🎨 화면 목업 (42개 화면) | https://mockup-page-sable.vercel.app/ |
+| 🎨 화면 목업 (라우트 54개 · MOCK 바로가기 70개 — 실제 프론트와 1:1) | https://mockup-page-sable.vercel.app/ |
 | 📦 저장소 3개 | **[gotgan-backend](https://github.com/sesac-final-1/gotgan-backend)** (이 저장소) · [gotgan-frontend](https://github.com/sesac-final-1/gotgan-frontend) · [gotgan-config](https://github.com/sesac-final-1/gotgan-config) |
 
 이 저장소는 **Spring Boot 서비스 10개 + 서버리스 함수 4개**입니다. 배포 매니페스트 · Terraform · 운영 문서는 `gotgan-config`, React 앱은 `gotgan-frontend`에 있습니다.
@@ -19,7 +19,7 @@
 
 ![곳간 아키텍처 구조도](docs/aws-architecture.svg)
 
-빨간 번호가 흐름입니다 — ① 사용자 → Vercel ② `/api/*` → `https://api.gotgan.click`(Route 53 → EIP) → NLB 443 TLS ③ gateway(JWT 검증 · X-User-* 헤더) ④ 서비스 라우팅 · admin → `/internal/**` ⑤ 주문 Saga(order → user · product · payment) ⑥ MySQL · Redis 캐시 ⑦ SNS → SQS 이벤트 ⑧ 포트원 검증 · 웹훅 ⑨ S3 presigned ⑩ Lambda(메일 · 명세서 · 로그 아카이브) ⑪ CI → ECR → config 태그 커밋 ⑫ ArgoCD GitOps ⑬ Terraform 일일 스케줄 · bootstrap · secrets-sync ⑭ 관측(Prometheus · Loki · Zipkin → Grafana) ⑮ Vercel 배포. 네트워크 상세는 [가이드라인 04장](https://gotganguide.vercel.app/guideline#s4).
+빨간 번호가 흐름입니다 — ① 사용자 → Vercel ② `/api/*` → `https://api.gotgan.click`(Route 53 → EIP) → NLB 443 TLS ③ gateway(JWT 검증 · X-User-* 헤더) ④ 서비스 라우팅 · admin → `/internal/**` ⑤ 주문 Saga(order → user · product · payment) ⑥ MySQL · Redis 캐시 ⑦ SNS → SQS 이벤트 ⑧ 포트원 검증 · 웹훅 ⑨ S3 presigned ⑩ Lambda(메일 · 명세서 · 로그 아카이브 · 업로드 검사 — 업로드 검사는 그림에 없음) ⑪ CI → ECR → config 태그 커밋 ⑫ ArgoCD GitOps ⑬ Terraform 일일 스케줄 · bootstrap · secrets-sync ⑭ 관측(Prometheus · Loki · Zipkin → Grafana) ⑮ Vercel 배포. 네트워크 상세는 [가이드라인 04장](https://gotganguide.vercel.app/guideline#s4).
 
 ---
 
@@ -27,7 +27,7 @@
 
 | 이름 | GitHub | 인프라 | 서비스 · 도메인 |
 |---|---|---|---|
-| 구지훈 | [@jihoon-devstu](https://github.com/jihoon-devstu) | AWS IaC (Terraform) · 일일 스케줄 · 시크릿 동기화 | `settlement` · `admin` · `payment` — 정산 · 관리자 · 결제(포트원) · 알림 · 명세서 Lambda |
+| 구지훈 | [@jihoon-devstu](https://github.com/jihoon-devstu) | AWS IaC (Terraform) · 일일 스케줄 · 시크릿 동기화 | `settlement` · `admin` · `payment` · `chat` — 정산 · 관리자 · 결제(포트원) · 1:1 채팅 · 알림 · 명세서 · 업로드 검사 Lambda |
 | 이경석 | [@perish95](https://github.com/perish95) | CI/CD (GitHub Actions · ArgoCD) · Keycloak · SonarQube Cloud | `gateway` · `user` · `order` · `review` — 회원 · 인증 · 인가 · 주문(Saga) · 리뷰 |
 | 박지연 | [@VoC-100](https://github.com/VoC-100) | 로깅 · 관측성 (Prometheus · Loki · Grafana · Zipkin) · 헬스 체크 대시보드 | `product` · `store` — 판매자 스토어 도메인 · 로그 아카이브 Lambda |
 
@@ -42,7 +42,7 @@
 |---|---|
 | 백엔드 | Java 21 · Spring Boot 4.1 · Spring Cloud Gateway · Spring Data JPA · QueryDSL · Flyway · Resilience4j · springdoc |
 | 인증 | Keycloak 26 (realm `gotgan`, 클러스터 내부 전용) — 우리 로그인 페이지 → user-service가 대리 호출 |
-| 데이터 | MySQL 8.4 (1대 · 스키마 10개(Keycloak 포함) · 계정 분리) · Redis 7 (장바구니 캐시, 원본은 MySQL) · DynamoDB (Lambda 멱등 · 이력) · S3 |
+| 데이터 | MySQL 8.4 (1대 · 스키마 10개(Keycloak 포함) · 계정 분리) · Redis 7 (장바구니 캐시, 원본은 MySQL) · DynamoDB (Lambda 멱등 · 이력 · admin 알림 센터) · S3 |
 | 메시징 | SNS → SQS (+DLQ) 도메인 이벤트 · 주문 Saga는 동기 REST 오케스트레이션 + 보상 |
 | 서버리스 | Serverless Framework v4 · Lambda (배치 · 로깅 · 검사만: 알림 메일 · 정산 명세서 · 로그 아카이브 · 업로드 검사) |
 | 결제 | 포트원(PortOne) V2 테스트 채널 |
@@ -76,10 +76,11 @@ gotgan-backend/
 ├── services/{name}-service/     독립 Gradle 프로젝트 1개 = 이미지 1개 = Deployment 1개
 │   ├── build.gradle · Dockerfile · gradle.properties(공통 버전)
 │   └── src/main/java/com/sesac/gojigi/{name}/
-│       ├── common/              ApiResponse · 예외 · @CurrentUser · BaseTimeEntity · RestClient 설정 (서비스 템플릿, 9개 동일)
+│       ├── common/              config(RestClient · AWS 등) · entity(BaseTimeEntity) · event 등 — 서비스별 (gateway 는 없음)
 │       └── {domain}/            controller · service · repository · entity · dto · exception · client
-├── serverless/                  order-notification · settlement-report · log-archive
-├── docs/api/                    OpenAPI 명세 · 에러 코드 목록
+├── libs/                        common-web(ApiResponse · 예외 · @CurrentUser — gateway 제외 9개 서비스) · common-logging(logback 공통 형식 — 10개 서비스)
+├── serverless/                  order-notification · settlement-report · upload-guard · log-archive
+├── docs/api/                    서비스별 API 계약 문서(`*.md`) · 에러 코드 목록
 ├── docs/CONVENTION.md           백엔드 · DB · 로깅 컨벤션 (문서 사이트 발췌본)
 ├── docker-compose.yml           로컬 MySQL(스키마 10) + Redis + Keycloak — gotgan-config의 스크립트 · realm을 마운트
 └── .github/workflows/           backend(테스트 · Sonar → ECR → config 태그 커밋) · serverless · security
@@ -97,7 +98,7 @@ gotgan-backend/
 docker compose up -d
 #    Keycloak 콘솔 http://localhost:8180 (admin / admin)
 
-# 2. 자기 서비스만 local 프로필로 실행 (9개를 다 띄우면 노트북이 버티지 못함)
+# 2. 자기 서비스만 local 프로필로 실행 (10개를 다 띄우면 노트북이 버티지 못함)
 cd services/order-service
 ./gradlew bootRun --args='--spring.profiles.active=local'
 #    Swagger  http://localhost:8084/swagger-ui.html   ·   health http://localhost:8084/actuator/health
@@ -127,4 +128,4 @@ cd services/order-service
 
 ## 지금 상태
 
-**뼈대 단계**입니다. 빌드 파일 · 공통 코드 · 설정 · Flyway 폴더까지 있고 도메인 코드는 각 담당자가 채웁니다. `TODO {이름}` 주석과 각 도메인의 `package-info.java`가 시작점입니다. 주차별 계획은 [가이드라인 16장](https://gotganguide.vercel.app/guideline#s13).
+**서비스 10개 · 서버리스 함수 4개의 도메인 기능이 구현되어** dev 클러스터(EKS)에 배포돼 있습니다. API 계약은 [docs/api](docs/api/README.md), 에러 코드는 [docs/api/error-codes.md](docs/api/error-codes.md). 주차별 계획은 [가이드라인 16장](https://gotganguide.vercel.app/guideline#s13).

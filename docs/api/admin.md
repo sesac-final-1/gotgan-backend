@@ -119,7 +119,7 @@
 |---|---|---|---|
 | `OrderPaid` | 구매자 | `ORDER_PAID` 결제가 완료됐어요 — "상품 외 n건 · 금액" | `/mypage/orders/{orderNo}` |
 | `OrderPaid` (11/3, O-13) | 주문에 든 스토어마다 판매자(`STORE#`) | `ORDER_NEW` 새 주문이 들어왔어요 — "그 스토어 상품 외 n건 · 그 스토어 상품 금액 합" (`items[].storeId` 없는 옛 이벤트면 생략) | `/seller/orders` |
-| `OrderClaimRequested` (11/5, Q-구-15) | 그 스토어 판매자(`STORE#`) | `CLAIM_REQUESTED` 반품 / 교환 요청이 들어왔어요 · 상품명 · 옵션 · `/seller/claims` |
+| `OrderClaimRequested` (11/5, Q-구-15) | 그 스토어 판매자(`STORE#`) | `CLAIM_REQUESTED` 반품 요청이 들어왔어요 · 교환 요청이 들어왔어요(유형별) — "상품명 · 옵션" | `/seller/claims` |
 | `OrderItemShipped` | 구매자 | `ORDER_SHIPPED` 배송이 시작됐어요 — "상품 · 택배사 송장" | 〃 |
 | `OrderItemCancelled` · `OrderItemReturned` | 구매자 | `ORDER_CANCELLED` 취소가 완료됐어요 · `ORDER_RETURNED` 반품이 완료됐어요 — "상품 · 환불 금액" | 〃 |
 | `SettlementPaid` | 스토어 | `SETTLEMENT_PAID` 정산금이 지급됐어요 — "주차 · 지급액" | `/seller/settlements` |
@@ -140,7 +140,7 @@
 | 메서드 · 경로 | 응답 |
 |---|---|
 | `GET /api/notifications?cursor=&size=20` | `{items[{id, type, title, body, link, read, createdAt}], nextCursor, unreadCount}` — 최신순, `size` 최대 50 |
-| `GET /api/notifications/unread-count` | `{count}` — 받는 쪽(USER# · STORE#)마다 100까지만 셈(화면은 99+) |
+| `GET /api/notifications/unread-count` | `{count}` — 받는 쪽(USER# · STORE# · ADMIN)마다 100까지만 셈(화면은 99+) |
 | `PATCH /api/notifications/{id}/read` | 내 알림이 아니거나 없으면 **404** `NOTIFICATION_NOT_FOUND` |
 | `PATCH /api/notifications/read-all` | `{count}` = 읽음으로 바꾼 수 |
 | `GET /api/notifications/stream` | `text/event-stream` — `event: ready` → 새 알림마다 `event: notification`(data = 목록 항목 JSON), 25초마다 주석. 브라우저 `EventSource` 는 Authorization 헤더를 못 보내 화면은 fetch 기반 SSE 사용 |

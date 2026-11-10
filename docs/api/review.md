@@ -1,6 +1,6 @@
-# review-service API 계약 (설계 — 10/28)
+# review-service API 계약 (설계 10/28 · 1 ~ 20절 구현 완료)
 
-담당 이경석. 리뷰(`/api/reviews/**` · `/api/seller/reviews/**`) · 상품문의(`/api/inquiries/**` · `/api/seller/inquiries/**`) · admin 이 부르는 `/internal/reviews/**` 의 **계약**입니다. 엔드포인트마다 PR 하나로 구현하면서 해당 절을 추가합니다. 코드가 정본(springdoc)이고, 이 문서는 호출하는 쪽이 지킬 규칙 설명으로 남깁니다.
+담당 이경석. 리뷰(`/api/reviews/**` · `/api/seller/reviews/**`) · 상품문의(`/api/inquiries/**` · `/api/seller/inquiries/**`) · admin 이 부르는 `/internal/reviews/**` 의 **계약**입니다. 1 ~ 20절 엔드포인트는 모두 구현되어 있습니다. 코드가 정본(springdoc)이고, 이 문서는 호출하는 쪽이 지킬 규칙 설명으로 남깁니다.
 근거: 스펙 REV-01~09 · REV-12, reviewdb V2, 노션 확인 요청 「신고 · 리뷰 블라인드 (B안)」 10/26, 프론트 `features/review`.
 
 ## 공통
@@ -11,7 +11,7 @@
 | 응답 | `ApiResponse<T>` 봉투 (컨벤션 2-4). 오류는 `code` · `message`, `data: null` |
 | 시각 | ISO-8601 오프셋 포함 (Asia/Seoul) |
 | 작성 자격 | `OrderItemConfirmed` 를 받아 저장한 `review_eligibility` 만 본다 — order 를 호출하지 않는다 (REV-01) |
-| 상품 표시값 | 상품명 · 옵션명 · 대표 사진은 구매확정 시점 스냅샷(자격에 저장) — review 는 product 를 호출하지 않는다. `OrderItemConfirmed` 에 `optionName` · `thumbnailUrl` · `buyerDisplayName` 추가 필요(order) |
+| 상품 표시값 | 상품명 · 옵션명 · 대표 사진은 구매확정 시점 스냅샷(자격에 저장) — review 는 product 를 호출하지 않는다. `OrderItemConfirmed` 의 `optionName` · `thumbnailUrl` · `buyerDisplayName` 은 10/28 order payload 에 추가됨(11절) |
 | 문의 표시값 | 상품문의는 구매와 무관해 자격이 없으므로 **등록 때만** product(`GET /api/products/{id}` — 스토어 · 상품명 · 대표 사진) · user(`GET /internal/users/{id}` — 표시 이름)를 동기 호출해 저장한다(V6). 목록 · 답변은 호출하지 않는다 |
 | 본문 | 일반 텍스트. 저장 전 OWASP sanitizer 로 태그를 모두 지운다(엔티티로 쓴 태그 포함). 화면은 React 기본 이스케이프로 출력 |
 
@@ -40,14 +40,16 @@
 
 | 경우 (검사 순서) | 응답 |
 |---|---|
-| 형식 위반 · 태그를 지우니 본문이 빔 | 400 `INVALID_INPUT` |
-| 남의 · 형식이 다른 사진 키 · 4장 이상 · 중복 | 400 `REVIEW_IMAGE_INVALID` |
 | `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
+| 형식 위반 | 400 `INVALID_INPUT` |
 | 작성 자격 없음 · 다른 회원의 상품주문 (구분하지 않음) | 403 `REVIEW_NOT_ELIGIBLE` |
-| 이미 리뷰를 쓴 상품주문 — **삭제한 리뷰 포함**, 동시 제출도 1건만 | 409 `REVIEW_ALREADY_WRITTEN` |
+| 이미 리뷰를 쓴 상품주문 — **삭제한 리뷰 포함** | 409 `REVIEW_ALREADY_WRITTEN` |
 | 구매확정 후 30일이 지남 (`expires_at` 시각까지 작성 가능) | 409 `REVIEW_WRITE_EXPIRED` |
+| 남의 · 형식이 다른 사진 키 · 4장 이상 · 중복 | 400 `REVIEW_IMAGE_INVALID` |
+| 태그를 지우니 본문이 빔 | 400 `INVALID_INPUT` |
+| 같은 상품주문 동시 제출 — 1건만 저장 | 409 `REVIEW_ALREADY_WRITTEN` |
 
-- 작성자 표시 이름(`writerDisplayName`)은 자격의 `buyer_display_name`(닉네임, 없으면 마스킹 실명)을 복사합니다. 이 값은 `OrderItemConfirmed.buyerDisplayName` 으로 받을 예정이라 order payload 추가가 필요합니다.
+- 작성자 표시 이름(`writerDisplayName`)은 자격의 `buyer_display_name`(닉네임, 없으면 마스킹 실명)을 복사합니다. 이 값은 `OrderItemConfirmed.buyerDisplayName` 으로 받습니다(10/28 order payload 추가, 11절).
 
 ## 2. 내 리뷰 수정 — `PUT /api/reviews/{reviewId}` (REV-05)
 
@@ -70,6 +72,7 @@
 | `X-User-Id` 없음 | 401 `UNAUTHORIZED` |
 | 없는 · 삭제된 · 다른 회원의 리뷰 (구분하지 않음) | 404 `REVIEW_NOT_FOUND` |
 | 관리자가 블라인드한 리뷰 — 사유가 된 내용을 고쳐 노출을 되살리지 못하게, 해제는 관리자만 | 409 `REVIEW_BLINDED` |
+| 남의 · 형식이 다른 사진 키(기존 키 제외) · 4장 이상 · 중복 | 400 `REVIEW_IMAGE_INVALID` |
 
 ## 3. 내 리뷰 삭제 — `DELETE /api/reviews/{reviewId}` (REV-05)
 
@@ -117,7 +120,7 @@
 ```
 
 - 화면 "작성기한 D-n" 은 `expiresAt` 으로 계산합니다 (연동 때 목업의 계산식을 이 값으로 바꿈).
-- `optionName` · `thumbnailUrl` 은 order payload 추가 전 자격이면 `null` — 화면은 기본 이미지 · 옵션 생략.
+- `optionName` · `thumbnailUrl` 은 10/28 order payload 추가 전에 저장된 자격(옵션명은 옵션 없는 상품도)이면 `null` — 화면은 기본 이미지 · 옵션 생략.
 
 | 경우 | 응답 |
 |---|---|
@@ -137,7 +140,7 @@
 ```json
 { "content": [ { "reviewId": 31, "productId": 101, "productName": "린넨 셔츠", "optionName": "오트밀 / M",
     "writerDisplayName": "곳간러버", "rating": 2, "title": null, "content": "…", "fit": "LARGE", "blinded": false,
-    "replyContent": null, "repliedAt": null, "createdAt": "2026-10-20T14:00:00+09:00" } ],
+    "replyContent": null, "repliedAt": null, "createdAt": "2026-10-20T14:00:00+09:00", "imageUrls": [] } ],
   "page": 0, "size": 10, "totalElements": 39, "totalPages": 4, "hasNext": true }
 ```
 
@@ -150,7 +153,7 @@
   "distribution": [ { "rating": 5, "count": 23 }, { "rating": 4, "count": 10 }, { "rating": 3, "count": 2 },
                     { "rating": 2, "count": 1 }, { "rating": 1, "count": 1 } ],
   "products": [ { "productId": 101, "productName": "린넨 셔츠", "averageRating": 4.8, "count": 12 } ],
-  "tabCounts": { "all": 39, "noReply": 8, "lowRating": 3 } }
+  "tabCounts": { "all": 39, "noReply": 8, "lowRating": 3, "photo": 12 } }
 ```
 
 - 평균은 소수 둘째 자리 반올림, 리뷰가 없으면 0. 분포는 항상 5 → 1점 5개. 상품별은 평균 높은순.
@@ -242,7 +245,7 @@
 { "content": [ { "reviewId": 31, "writerDisplayName": "곳간러버", "mine": false, "rating": 5, "title": null,
     "content": "…", "optionName": "오트밀 / M", "fit": "TRUE_TO_SIZE",
     "replyContent": "소중한 후기 감사합니다.", "repliedAt": "2026-10-21T09:30:00+09:00",
-    "createdAt": "2026-10-20T14:00:00+09:00" } ],
+    "createdAt": "2026-10-20T14:00:00+09:00", "imageUrls": [] } ],
   "page": 0, "size": 10, "totalElements": 37, "totalPages": 4, "hasNext": true }
 ```
 
@@ -257,7 +260,7 @@
 
 - 평균은 소수 둘째 자리 반올림(리뷰 없으면 0) — 판매자 평점 요약(6-2)과 같은 계산.
 - `fits` 는 항상 3칸, 사이즈 체감을 남긴 리뷰만 셉니다. 패션 · 신발가방이 아니면 화면이 감춥니다.
-- 리뷰 탭 숫자 · 상품 상단 별점은 이 값을 씁니다. 상품 카드 · 목록의 별점 · 리뷰 수(여러 상품 한 번에)는 별도 PR 입니다.
+- 리뷰 탭 숫자 · 상품 상단 별점은 이 값을 씁니다. 상품 카드 · 목록의 별점 · 리뷰 수(여러 상품 한 번에)는 10절입니다.
 
 | 경우 (9-1 · 9-2) | 응답 |
 |---|---|
@@ -285,7 +288,7 @@ product · store 는 다른 서비스를 부르지 않으므로(`product.md` 9 �
 - `ids=101,102` · `ids=101&ids=102` 둘 다 받습니다. 1~100개 (product `product-options` 내부 API 와 같은 상한).
 - **요청한 순서대로**, 같은 ID 는 한 번만. **리뷰가 없으면 `0 · 0`** 으로 채워 항상 요청한 ID 수만큼 돌려줍니다.
 - 블라인드 · 삭제 제외, 평균은 소수 둘째 자리 반올림 — 6-2 · 9-2 와 같은 기준.
-- **평점순 · 리뷰 많은순 정렬은 이 API 로 할 수 없습니다** — 상품 목록 페이징 · 정렬은 product 가 하고 평점은 review 에 있어서입니다. `product.md` 결정(정렬은 신상품 · 가격 2종, 리뷰 · 평점 정렬은 범위 밖) 그대로이고, 화면의 "리뷰 많은순 · 평점 높은순" 메뉴는 빼야 합니다.
+- **평점순 · 리뷰 많은순 정렬은 이 API 로 할 수 없습니다** — 상품 목록 페이징 · 정렬은 product 가 하고 평점은 review 에 있어서입니다. `product.md` 결정(정렬은 신상품 · 가격 2종, 리뷰 · 평점 정렬은 범위 밖) 그대로이고, 상품 목록 화면의 "리뷰 많은순 · 평점 높은순" 메뉴는 뺐습니다.
 
 | 경우 | 응답 |
 |---|---|
@@ -355,7 +358,7 @@ API 가 아니라 이벤트 소비입니다. 구매확정(구매자 버튼 · �
 - 스토어는 요청으로 받지 않고 **상품에서** 가져옵니다(판매자 문의 목록 키).
 - 상품명 · 대표 사진 · 작성자 표시 이름(닉네임, 없으면 가운데 가린 실명 — 리뷰와 같은 규칙)은 **등록 시점 값**으로 저장합니다. 상품명이 바뀌어도 문의 목록은 그대로입니다.
 - product · user 호출은 서킷 브레이커(`product` · `user`) + GET 재시도 1회(200ms 뒤) — 장애가 이어지면 서킷이 열려 호출 없이 바로 502 (store · order 와 같은 설정). 없는 상품 404 는 재시도하지 않습니다.
-- 문의 유형(상품 · 배송 · 교환/반품 · 기타)은 받지 않습니다 — 화면 목업에만 있고 표시하는 곳이 없음 (프론트 연동 때 결정).
+- 문의 유형(상품 · 배송 · 교환/반품 · 기타)은 받지 않습니다 — 화면 목업에만 있고 표시하는 곳이 없음 (프론트 문의 모달도 받지 않음).
 
 응답 **201** `{ "inquiryId": 12 }`
 

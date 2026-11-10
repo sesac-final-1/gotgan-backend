@@ -1,6 +1,6 @@
-# payment-service 내부 API 계약 (설계 — 10/16)
+# payment-service 내부 API 계약 (설계 10/16 · 1 ~ 5절 구현 완료)
 
-담당 구지훈. order-service(Saga, 담당 이경석)가 호출하는 `/internal/payments/**`와 포트원 웹훅의 **계약**입니다. 코드가 나오면 `payment.yaml`(springdoc 내보내기)을 함께 올리고, 이 문서는 동작 규칙 설명으로 남깁니다.
+담당 구지훈. order-service(Saga, 담당 이경석)가 호출하는 `/internal/payments/**`와 포트원 웹훅의 **계약**입니다. 코드가 정본(springdoc `/swagger-ui.html`)이고, 이 문서는 동작 규칙 설명으로 남깁니다.
 근거: 스펙 PAY-01~04 · 결제 상태, 가이드라인 06장(Saga) · 07장(결제 · paymentdb). 설계 문서끼리 어긋났던 부분은 10/16에 아래 내용으로 맞췄습니다(맨 아래 표).
 
 ## 공통
@@ -74,7 +74,7 @@ order는 응답의 `portonePaymentId`를 브라우저에 넘겨 결제창 `payme
 { "sagaId": "9b2e...", "orderItemId": 456, "amount": 32200, "reason": "구매자 취소" }
 ```
 
-`amount` · `orderItemId`를 **생략하면 전액 취소**(주문 Saga 보상), 넣으면 **부분 취소**(취소 · 반품 Saga 2단계).
+`amount` 를 **생략하면 전액 취소**(주문 Saga 보상), 넣으면 **부분 취소**(취소 · 반품 Saga 2단계 — `orderItemId` 함께). `sagaId` 36자 · `reason` 200자 필수, `amount` 1 이상.
 
 **전액 취소 (주문 Saga 보상 — "되돌릴 게 없으면 아무 일도 안 함")**
 
@@ -108,8 +108,8 @@ order는 응답의 `portonePaymentId`를 브라우저에 넘겨 결제창 `payme
 ## 5. 포트원 웹훅 — `POST /api/payments/webhook` (PAY-04)
 
 - 게이트웨이 permitAll(POST만, 이미 설정됨). 포트원 콘솔 등록 주소: `https://gotgan-ashy.vercel.app/api/payments/webhook`
-- 서명 검증: Standard Webhooks 형식(`webhook-id` · `webhook-timestamp` · `webhook-signature`, HMAC-SHA256, 시크릿 `PORTONE_WEBHOOK_SECRET`, 시각 허용 5분) — **구현 시 포트원 V2 문서로 재확인**. 실패하면 **400**, 처리 안 함
-- 본문은 "확인 요청"으로만 사용: `data.paymentId`로 `payment`를 찾아 **포트원을 다시 조회**하고 2번과 같은 비교(기대 금액 = `payment.amount`). 모르는 type · paymentId는 **200** 무시
+- 서명 검증: Standard Webhooks 형식(`webhook-id` · `webhook-timestamp` · `webhook-signature`, HMAC-SHA256, 시크릿 `PORTONE_WEBHOOK_SECRET`, 시각 허용 5분 `app.portone.webhook-tolerance`). 실패하면 **400** `PAYMENT_WEBHOOK_INVALID_SIGNATURE`, 처리 안 함
+- 본문은 "확인 요청"으로만 사용: `data.paymentId`로 `payment`를 찾아 **포트원을 다시 조회**하고 2번과 같은 비교(기대 금액 = `payment.amount`). `Transaction.` 으로 시작하지 않는 type · 모르는 paymentId는 **200** 무시
 - **FAILED 인데 포트원이 PAID**(결제 대기 만료 · 보상 후 사용자가 늦게 결제 완료) → 환불 선기록(사유 "결제 실패 처리 후 승인된 결제 자동 취소") → 포트원 전액 환불, 상태는 FAILED 유지 — 주문 없는 결제가 남지 않게. 웹훅이 여러 번 와도 진행 중인 환불이 있으면 새로 보내지 않음
 - 이 결제에 확정 안 된 취소(PENDING)가 있으면 먼저 포트원 조회로 **대조만** 한다(다시 보내지 않음 — 첫 요청이 아직 처리 중일 수 있음). 취소 완료 · 실패 웹훅으로 REQUESTED 가 확정되는 경로
 - 처리 중 오류는 **5xx** → 포트원이 재전송. `version`(@Version)으로 확인 요청과 웹훅이 동시에 와도 한 번만 반영
@@ -132,7 +132,7 @@ order는 409 · 404를 자기 도메인 코드로 바꾸고 **서킷 실패로 �
 
 ## 7. order 쪽 준비 사항 (이경석)
 
-- 서킷 브레이커 인스턴스 이름은 가이드라인 06장 규칙대로 **`payment`**(대상 서비스 이름). 지금 order `application.yml`의 `paymentClient`는 템플릿 값이라 맞춰 주세요. payment 쪽도 `portoneClient` → `portone`으로 바꿉니다
+- 서킷 브레이커 인스턴스 이름은 가이드라인 06장 규칙대로 대상 서비스 이름 — order `payment`(`base-config: remote`), payment 쪽 `portone` (둘 다 반영됨)
 - 0원 주문: 결제 준비 · 검증 단계 생략 → 바로 주문 PAID (위 1번)
 - `PAYMENT_NOT_COMPLETED` · `EXTERNAL_API_ERROR` 때는 결제 대기를 유지하고 만료 스케줄러에서 4번 조회로 확정하는 것을 권장 (2번 표)
 - **취소 `PAYMENT_CANCEL_PENDING`(409)은 실패가 아니라 "아직 모름"** — 보상 · 클레임을 실패 처리하지 말고 같은 `sagaId` 로 재시도. payment 복구 스케줄러가 먼저 확정할 수 있으므로 재시도하면 결국 200 (10/20 추가)
