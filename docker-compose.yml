@@ -1,4 +1,4 @@
-# 로컬 개발용 — MySQL(스키마 8개) + Redis + Keycloak. 자기 서비스는 IDE 에서 local 프로필로 띄운다 (가이드라인 15장 10절)
+# 로컬 개발용 — MySQL(스키마 10개) + Redis + Keycloak. 자기 서비스는 IDE 에서 local 프로필로 띄운다 (가이드라인 15장 10절)
 # 스크립트(init-schemas.sh) 를 바꿨다면 docker compose down -v 후 다시 올린다
 #
 # 폴더 배치 (저장소 3분할 — 가이드라인 15장): 세 저장소를 D:\gotgan\ 아래 나란히 clone 한다

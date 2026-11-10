@@ -8,7 +8,7 @@
 | | 링크 |
 |---|---|
 | 📘 설계 문서 (가이드라인 · 스펙 · 컨벤션) | https://gotganguide.vercel.app/ |
-| 🎨 화면 목업 (42개 화면) | https://mockup-page-sable.vercel.app/ |
+| 🎨 화면 목업 (라우트 54개 · MOCK 바로가기 70개 — 실제 프론트와 1:1) | https://mockup-page-sable.vercel.app/ |
 | 📦 저장소 3개 | **[gotgan-backend](https://github.com/sesac-final-1/gotgan-backend)** (이 저장소) · [gotgan-frontend](https://github.com/sesac-final-1/gotgan-frontend) · [gotgan-config](https://github.com/sesac-final-1/gotgan-config) |
 
 이 저장소는 **Spring Boot 서비스 10개 + 서버리스 함수 4개**입니다. 배포 매니페스트 · Terraform · 운영 문서는 `gotgan-config`, React 앱은 `gotgan-frontend`에 있습니다.
@@ -19,7 +19,7 @@
 
 ![곳간 아키텍처 구조도](docs/aws-architecture.svg)
 
-빨간 번호가 흐름입니다 — ① 사용자 → Vercel ② `/api/*` → `https://api.gotgan.click`(Route 53 → EIP) → NLB 443 TLS ③ gateway(JWT 검증 · X-User-* 헤더) ④ 서비스 라우팅 · admin → `/internal/**` ⑤ 주문 Saga(order → user · product · payment) ⑥ MySQL · Redis 캐시 ⑦ SNS → SQS 이벤트 ⑧ 포트원 검증 · 웹훅 ⑨ S3 presigned ⑩ Lambda(메일 · 명세서 · 로그 아카이브) ⑪ CI → ECR → config 태그 커밋 ⑫ ArgoCD GitOps ⑬ Terraform 일일 스케줄 · bootstrap · secrets-sync ⑭ 관측(Prometheus · Loki · Zipkin → Grafana) ⑮ Vercel 배포. 네트워크 상세는 [가이드라인 04장](https://gotganguide.vercel.app/guideline#s4).
+빨간 번호가 흐름입니다 — ① 사용자 → Vercel ② `/api/*` → `https://api.gotgan.click`(Route 53 → EIP) → NLB 443 TLS ③ gateway(JWT 검증 · X-User-* 헤더) ④ 서비스 라우팅 · admin → `/internal/**` ⑤ 주문 Saga(order → user · product · payment) ⑥ MySQL · Redis 캐시 ⑦ SNS → SQS 이벤트 ⑧ 포트원 검증 · 웹훅 ⑨ S3 presigned ⑩ Lambda(메일 · 명세서 · 로그 아카이브 · 업로드 검사 — 업로드 검사는 그림에 없음) ⑪ CI → ECR → config 태그 커밋 ⑫ ArgoCD GitOps ⑬ Terraform 일일 스케줄 · bootstrap · secrets-sync ⑭ 관측(Prometheus · Loki · Zipkin → Grafana) ⑮ Vercel 배포. 네트워크 상세는 [가이드라인 04장](https://gotganguide.vercel.app/guideline#s4).
 
 ---
 
