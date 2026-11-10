@@ -306,7 +306,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 ```json
 [
   { "productId": 3, "name": "프렌치 리넨 오버핏 셔츠",
-    "categoryId": 301, "categoryName": "셔츠", "topCategoryName": "패션의류",
+    "categoryId": 301, "categoryName": "셔츠", "topCategoryId": 3, "topCategoryName": "패션의류",
     "price": 89000, "discountRate": 15.00, "salePrice": 75650,
     "imageUrl": "https://.../products/1/a1b2.jpg", "totalStock": 142, "soldOut": false,
     "status": "ON_SALE", "statusReason": null,
@@ -316,6 +316,7 @@ SELLER. `X-Store-Id` 스토어의 상품을 **전체 조회**합니다(페이징
 ```
 
 - `hiddenReason`: 쇼핑몰에 안 보이는 이유 — `STOPPED` · `BLOCKED` · `CATEGORY_INACTIVE` · `STORE_INACTIVE` 중 하나, 보이면 `null`. 화면은 "쇼핑몰 미노출" 표시와 이유를 보여 줍니다.
+- `topCategoryId`: 상위 카테고리 id(11/10 추가, 9절 목록과 같은 값). 화면이 카테고리별 대체 이미지를 고를 때 씁니다. 카테고리가 지워졌으면 `null`.
 - 화면 상태 탭(판매중 · 품절 · 판매중지)은 `status` 와 `soldOut` 으로 셉니다. `BLOCKED` 는 판매중지 탭에 사유와 함께.
 
 ## 12. 판매자 상품 상세 — `GET /api/seller/products/{productId}`

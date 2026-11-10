@@ -117,6 +117,7 @@ class InternalProductApiIntegrationTest {
                     .andExpect(jsonPath("$.data[1].salePrice").value(75_650))
                     .andExpect(jsonPath("$.data[1].imageUrl").value("https://img.test/products/1/셔츠A-main.jpg"))
                     .andExpect(jsonPath("$.data[1].categoryName").value("셔츠"))
+                    .andExpect(jsonPath("$.data[1].topCategoryId").value(top.getId()))
                     .andExpect(jsonPath("$.data[1].topCategoryName").value("패션의류"))
                     .andExpect(jsonPath("$.data[1].displayable").value(true))
                     .andExpect(jsonPath("$.data[1].hiddenReason").doesNotExist());

@@ -514,6 +514,7 @@ class SellerProductApiIntegrationTest {
                             .value("https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com/products/1/second.webp"))
                     .andExpect(jsonPath("$.data[1].productId").value(first))
                     .andExpect(jsonPath("$.data[1].categoryName").value("셔츠"))
+                    .andExpect(jsonPath("$.data[1].topCategoryId").value(top.getId()))
                     .andExpect(jsonPath("$.data[1].topCategoryName").value("패션의류"))
                     .andExpect(jsonPath("$.data[1].salePrice").value(75650))
                     .andExpect(jsonPath("$.data[1].totalStock").value(30))

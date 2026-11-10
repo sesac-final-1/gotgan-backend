@@ -377,7 +377,7 @@ public class SellerProductService {
         Category top = category == null || category.isTop() ? category : categories.get(category.getParentId());
         HiddenReason hiddenReason = HiddenReason.of(p, category != null && category.isActive() && top != null && top.isActive());
         return new SellerProductResponse(p.getId(), p.getName(), p.getCategoryId(),
-                category == null ? null : category.getName(), top == null ? null : top.getName(),
+                category == null ? null : category.getName(), top == null ? null : top.getId(), top == null ? null : top.getName(),
                 p.getPrice(), p.getDiscountRate(), p.getSalePrice(), imageUrls.of(imageKey), totalStock, totalStock == 0,
                 p.getStatus(), p.getStatusReason(), hiddenReason == null, hiddenReason,
                 p.getCreatedAt() == null ? null : p.getCreatedAt().atZone(KST).toOffsetDateTime());
