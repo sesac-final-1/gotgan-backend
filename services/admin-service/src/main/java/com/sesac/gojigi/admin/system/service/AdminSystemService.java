@@ -4,6 +4,7 @@ import com.sesac.gojigi.admin.system.client.KubernetesClient;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.Pod;
 import com.sesac.gojigi.admin.system.client.PrometheusClient;
 import com.sesac.gojigi.admin.system.dto.request.KillRequest;
+import com.sesac.gojigi.admin.system.dto.request.ScenarioRequest;
 import com.sesac.gojigi.admin.system.dto.response.ServiceState;
 import com.sesac.gojigi.admin.system.dto.response.SystemResponses;
 import com.sesac.gojigi.admin.system.entity.ChaosEvent;
@@ -37,6 +38,10 @@ import org.springframework.stereotype.Service;
 public class AdminSystemService {
 
     static final Duration KILL_COOLDOWN = Duration.ofMinutes(1);
+
+    /** 시나리오 대상 — 레플리카 2 이상(구매 경로 이중화). 1개씩 지워도 남은 파드가 받으므로 끊김이 없어야 한다 */
+    static final int SCENARIO_MIN_REPLICAS = 2;
+    static final String SCENARIO_DEFAULT_REASON = "시나리오 — 레플리카 2 서비스 1개씩 내리기";
 
     /** gateway 라우트 지표 — 1분 rate. 서비스를 내리면 gateway 가 502 로 센다(11/6 장애 영향표) */
     static final String REQUESTS_QUERY = "sum by (routeId)(rate(spring_cloud_gateway_requests_seconds_count[1m]))";
@@ -89,16 +94,12 @@ public class AdminSystemService {
      * 관리자 파드가 1개라 동시 요청은 synchronized 로 막는다
      */
     public synchronized SystemResponses.Killed kill(String name, KillRequest request, Long actorId) {
-        if (!chaosEnabled) {
-            throw new SystemException(SystemErrorCode.SYSTEM_CHAOS_DISABLED);
-        }
+        requireEnabled();
         SystemCatalog.Target target = SystemCatalog.SERVICES.stream().filter(t -> t.killable() && t.name().equals(name)).findFirst()
                 .orElseThrow(() -> new SystemException(SystemErrorCode.SYSTEM_SERVICE_NOT_KILLABLE));
         Instant now = clock.instant();
         ChaosEvent last = chaosEventRepository.findFirstByServiceNameOrderByIdDesc(name).orElse(null);
-        if (last != null && last.getKilledAt().isAfter(local(now).minus(KILL_COOLDOWN))) {
-            throw new SystemException(SystemErrorCode.SYSTEM_KILL_COOLDOWN);
-        }
+        requireOffCooldown(last, now);
 
         List<Pod> pods = kubernetes.pods().stream().filter(p -> name.equals(p.app())).toList();
         SystemResponses.ServiceStatus current = serviceStatus(target, kubernetes.desiredReplicas().getOrDefault(name, 0), pods, last, now);
@@ -110,6 +111,66 @@ public class AdminSystemService {
             throw new SystemException(SystemErrorCode.SYSTEM_NO_READY_POD);
         }
 
+        ChaosEvent saved = deleteAndRecord(name, request.scope(), request.reason(), victims, actorId, now);
+        log.info("장애 시연 내리기 - service={}, scope={}, pods={}, actorId={}", name, request.scope(), saved.deletedPodList(), actorId);
+        return new SystemResponses.Killed(saved.getId(), saved.deletedPodList());
+    }
+
+    /**
+     * 시나리오 — 레플리카 2 이상인 내릴 수 있는 서비스마다 Ready 파드 1개씩(ONE) 한 번에 지운다. 서비스마다 1행씩 기록(타임라인 · 복구 시간 그대로).
+     * 대상이 하나라도 1분 제한 · 정상(UP) 아님이면 아무것도 지우지 않는다 — 남은 파드가 없으면 「1개씩 지워도 괜찮다」가 성립하지 않으므로
+     */
+    public synchronized SystemResponses.ScenarioKilled killOneEach(ScenarioRequest request, Long actorId) {
+        requireEnabled();
+        Instant now = clock.instant();
+        Map<String, Integer> desired = kubernetes.desiredReplicas();
+        Map<String, List<Pod>> podsByApp = kubernetes.pods().stream().collect(Collectors.groupingBy(Pod::app));
+        List<SystemCatalog.Target> targets = SystemCatalog.SERVICES.stream()
+                .filter(t -> t.killable() && desired.getOrDefault(t.name(), 0) >= SCENARIO_MIN_REPLICAS).toList();
+        if (targets.isEmpty()) {
+            throw new SystemException(SystemErrorCode.SYSTEM_NO_READY_POD);
+        }
+
+        Map<String, List<String>> plan = new LinkedHashMap<>();
+        for (SystemCatalog.Target target : targets) {
+            List<Pod> pods = podsByApp.getOrDefault(target.name(), List.of());
+            ChaosEvent last = chaosEventRepository.findFirstByServiceNameOrderByIdDesc(target.name()).orElse(null);
+            requireOffCooldown(last, now);
+            if (serviceStatus(target, desired.get(target.name()), pods, last, now).state() != ServiceState.UP) {
+                throw new SystemException(SystemErrorCode.SYSTEM_SCENARIO_NOT_READY);
+            }
+            plan.put(target.name(), victims(pods, KillScope.ONE));   // UP 이고 desired ≥ 2 라 Ready 파드가 있음
+        }
+
+        String reason = request == null || request.reason() == null || request.reason().isBlank() ? SCENARIO_DEFAULT_REASON : request.reason();
+        List<SystemResponses.ServiceKilled> killed = new ArrayList<>();
+        plan.forEach((name, victims) -> {
+            ChaosEvent saved = deleteAndRecord(name, KillScope.ONE, reason, victims, actorId, now);
+            killed.add(new SystemResponses.ServiceKilled(name, saved.getId(), saved.deletedPodList()));
+        });
+        log.info("장애 시연 시나리오 1개씩 내리기 - services={}, actorId={}", plan.keySet(), actorId);
+        return new SystemResponses.ScenarioKilled(killed);
+    }
+
+    /** 타임라인 — 최신순 20건 */
+    public List<SystemResponses.EventItem> events() {
+        return chaosEventRepository.findTop20ByOrderByIdDesc().stream().map(SystemResponses.EventItem::of).toList();
+    }
+
+    private void requireEnabled() {
+        if (!chaosEnabled) {
+            throw new SystemException(SystemErrorCode.SYSTEM_CHAOS_DISABLED);
+        }
+    }
+
+    private void requireOffCooldown(ChaosEvent last, Instant now) {
+        if (last != null && last.getKilledAt().isAfter(local(now).minus(KILL_COOLDOWN))) {
+            throw new SystemException(SystemErrorCode.SYSTEM_KILL_COOLDOWN);
+        }
+    }
+
+    /** 파드를 지우고 1행 기록 — 일부만 지우고 실패해도 지운 만큼은 기록하고 예외를 그대로 던진다 */
+    private ChaosEvent deleteAndRecord(String name, KillScope scope, String reason, List<String> victims, Long actorId, Instant now) {
         List<String> deleted = new ArrayList<>();
         ChaosEvent saved = null;
         try {
@@ -118,22 +179,12 @@ public class AdminSystemService {
                 deleted.add(pod);
             }
         } finally {
-            if (!deleted.isEmpty()) {   // 일부만 지우고 실패해도 지운 만큼은 기록
-                saved = record(name, request, actorId, deleted, now);
+            if (!deleted.isEmpty()) {
+                String stripped = reason == null || reason.isBlank() ? null : reason.strip();
+                saved = chaosEventRepository.save(ChaosEvent.of(name, scope, stripped, deleted, actorId, local(now)));
             }
         }
-        log.info("장애 시연 내리기 - service={}, scope={}, pods={}, actorId={}", name, request.scope(), deleted, actorId);
-        return new SystemResponses.Killed(saved.getId(), deleted);
-    }
-
-    /** 타임라인 — 최신순 20건 */
-    public List<SystemResponses.EventItem> events() {
-        return chaosEventRepository.findTop20ByOrderByIdDesc().stream().map(SystemResponses.EventItem::of).toList();
-    }
-
-    private ChaosEvent record(String name, KillRequest request, Long actorId, List<String> deleted, Instant killedAt) {
-        String reason = request.reason() == null || request.reason().isBlank() ? null : request.reason().strip();
-        return chaosEventRepository.save(ChaosEvent.of(name, request.scope(), reason, deleted, actorId, local(killedAt)));
+        return saved;
     }
 
     private static List<String> victims(List<Pod> pods, KillScope scope) {

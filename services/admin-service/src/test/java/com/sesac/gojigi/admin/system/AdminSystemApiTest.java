@@ -85,6 +85,18 @@ class AdminSystemApiTest {
                 .header("X-User-Roles", "ADMIN").contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
+    private ResultActions scenario(String body) throws Exception {
+        var request = post("/api/admin/system/scenarios/kill-one-each").header("X-User-Id", ADMIN_ID).header("X-User-Roles", "ADMIN");
+        return mockMvc.perform(body == null ? request : request.contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
+    /** 시나리오 대상 지정 — 이 서비스들만 레플리카 2, 나머지는 1(파드는 2개 그대로라 UP) */
+    private void replicatedOnly(String... names) {
+        List<String> two = List.of(names);
+        when(kubernetes.desiredReplicas()).thenReturn(SystemCatalog.SERVICES.stream()
+                .collect(Collectors.toMap(SystemCatalog.Target::name, t -> two.contains(t.name()) ? 2 : 1)));
+    }
+
     private ResultActions events() throws Exception {
         return mockMvc.perform(get("/api/admin/system/events").header("X-User-Id", ADMIN_ID).header("X-User-Roles", "ADMIN"));
     }
@@ -159,6 +171,8 @@ class AdminSystemApiTest {
         mockMvc.perform(post("/api/admin/system/services/order-service/kill").header("X-User-Id", 4L).header("X-User-Roles", "BUYER")
                 .contentType(MediaType.APPLICATION_JSON).content("{\"scope\":\"ALL\"}"))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/admin/system/scenarios/kill-one-each").header("X-User-Id", 9L).header("X-User-Roles", "BUYER"))
+                .andExpect(status().isForbidden());
         verify(kubernetes, never()).deletePod(any());
     }
 
@@ -215,6 +229,46 @@ class AdminSystemApiTest {
         statusApi().andExpect(jsonPath("$.data.services[4].name").value("user-service"))
                 .andExpect(jsonPath("$.data.services[4].state").value("DOWN"))
                 .andExpect(jsonPath("$.data.features[?(@.key=='MYPAGE')].state").value("DOWN"));
+    }
+
+    @Test
+    @DisplayName("시나리오 — 레플리카 2 이상 · 내릴 수 있는 서비스만 1개씩 202, 서비스마다 1행 기록, 바로 다시 409 · 지운 파드 없음")
+    void scenario_killOneEach() throws Exception {
+        replicatedOnly("payment-service", "review-service", "gateway-service");   // gateway 는 내릴 수 없어 제외
+
+        scenario(null)
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.data.services.length()").value(2))
+                .andExpect(jsonPath("$.data.services[0].service").value("payment-service"))
+                .andExpect(jsonPath("$.data.services[0].eventId").isNumber())
+                .andExpect(jsonPath("$.data.services[0].deletedPods[0]").value("payment-service-a"))
+                .andExpect(jsonPath("$.data.services[1].service").value("review-service"))
+                .andExpect(jsonPath("$.data.services[1].deletedPods.length()").value(1));
+        verify(kubernetes).deletePod("payment-service-a");
+        verify(kubernetes).deletePod("review-service-a");
+        verify(kubernetes, never()).deletePod("payment-service-b");
+        verify(kubernetes, never()).deletePod("gateway-service-a");
+
+        events().andExpect(jsonPath("$.data[0].service").value("review-service"))
+                .andExpect(jsonPath("$.data[0].scope").value("ONE"))
+                .andExpect(jsonPath("$.data[0].reason").value("시나리오 — 레플리카 2 서비스 1개씩 내리기"))
+                .andExpect(jsonPath("$.data[1].service").value("payment-service"));
+
+        scenario("{\"reason\":\"다시\"}")
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SYSTEM_KILL_COOLDOWN"));
+        verify(kubernetes, never()).deletePod("payment-service-b");
+    }
+
+    @Test
+    @DisplayName("시나리오 — 대상 중 하나라도 정상 아님(Ready < 원하는 수)이면 409 SYSTEM_SCENARIO_NOT_READY, 아무것도 안 지움 · 대상 없으면 409 SYSTEM_NO_READY_POD")
+    void scenario_notReady_and_noTarget() throws Exception {
+        replicatedOnly("order-service");
+        replace("order-service-b", false, false);
+        scenario("{}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SYSTEM_SCENARIO_NOT_READY"));
+
+        replicatedOnly();
+        scenario(null).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SYSTEM_NO_READY_POD"));
+        verify(kubernetes, never()).deletePod(any());
     }
 
     @Test

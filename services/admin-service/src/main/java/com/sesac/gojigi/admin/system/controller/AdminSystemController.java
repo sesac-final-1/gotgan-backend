@@ -1,6 +1,7 @@
 package com.sesac.gojigi.admin.system.controller;
 
 import com.sesac.gojigi.admin.system.dto.request.KillRequest;
+import com.sesac.gojigi.admin.system.dto.request.ScenarioRequest;
 import com.sesac.gojigi.admin.system.dto.response.SystemResponses;
 import com.sesac.gojigi.admin.system.service.AdminSystemService;
 import com.sesac.gojigi.common.web.auth.AuthUser;
@@ -62,6 +63,18 @@ public class AdminSystemController {
                                                     @Valid @RequestBody KillRequest request) {
         requireAdmin(admin);
         return ApiResponse.success("서비스를 내렸습니다.", adminSystemService.kill(name, request, admin.userId()));
+    }
+
+    @Operation(summary = "시나리오 — 레플리카 2 서비스 1개씩 한 번에 내리기", description = """
+            {reason?} (본문 생략 가능) → 202 {services[{service, eventId, deletedPods}]}. 대상 = 내릴 수 있고 레플리카 2 이상(지금 order · product · payment · store · user).
+            서비스마다 ONE 1행씩 기록. 대상이 하나라도 1분 제한 · 정상 아님이면 아무것도 지우지 않음.
+            403 SYSTEM_CHAOS_DISABLED · 409 SYSTEM_KILL_COOLDOWN · 409 SYSTEM_SCENARIO_NOT_READY · 409 SYSTEM_NO_READY_POD(대상 없음) · 503 SYSTEM_CLUSTER_UNAVAILABLE""")
+    @PostMapping("/scenarios/kill-one-each")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApiResponse<SystemResponses.ScenarioKilled> killOneEach(@Parameter(hidden = true) @CurrentUser AuthUser admin,
+                                                                   @Valid @RequestBody(required = false) ScenarioRequest request) {
+        requireAdmin(admin);
+        return ApiResponse.success("레플리카 2 서비스를 1개씩 내렸습니다.", adminSystemService.killOneEach(request, admin.userId()));
     }
 
     @Operation(summary = "내리기 타임라인", description = "최신순 20건 — 복구 전이면 recoveredAt · recoverySeconds null")
