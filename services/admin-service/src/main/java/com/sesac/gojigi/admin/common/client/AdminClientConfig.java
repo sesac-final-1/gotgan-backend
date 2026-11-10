@@ -32,7 +32,7 @@ public class AdminClientConfig {
         return create(restClientBuilder, baseUrl, SettlementClient.class);
     }
 
-    /** 집계 · 일괄 지급 전용 — 읽기 시간을 gateway · 프론트 제한(10초)보다 조금 짧게. 넘어도 서버 처리는 끝난다(집계는 멱등 · 지급은 정산서별 상태로 판단) */
+    /** 집계 · 일괄 지급 전용 — 읽기 28초, gateway 이 경로(admin-settlement-batch) · 프론트 제한(30초)보다 조금 짧게(#248). 넘어도 서버 처리는 끝난다(집계는 멱등 · 지급은 정산서별 상태로 판단) */
     @Bean
     public SettlementBatchClient settlementBatchClient(RestClient.Builder restClientBuilder,
             @Value("${app.client.settlement-url}") String baseUrl,
