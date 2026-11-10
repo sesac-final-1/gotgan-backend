@@ -181,7 +181,7 @@
 |---|---|
 | 데이터 | 쿠버네티스 API(in-cluster ServiceAccount 토큰 · ca.crt) — `sesac-gojigi` 네임스페이스 Deployment · StatefulSet `spec.replicas` + 파드(`app` 라벨). 권한 = gotgan-config `chaos-rbac.yaml`(pods get · list · delete, deployments · statefulsets get · list) |
 | 스위치 | `app.chaos.enabled`(env `APP_CHAOS_ENABLED`, 기본 `false`) — 꺼져 있으면 **내리기만** 403, 상태 · 타임라인은 조회 가능 |
-| 내리기 방식 | 파드 삭제만(Deployment 가 새 파드를 띄움 · ArgoCD selfHeal 과 충돌 없음). 레플리카를 0 으로 줄이지 않는다 |
+| 내리기 방식 | 파드 **즉시 삭제**(`gracePeriodSeconds=0`)만 — Deployment 가 새 파드를 띄움 · ArgoCD selfHeal 과 충돌 없음. 레플리카를 0 으로 줄이지 않는다. 기본 유예로 지우면 옛 파드가 preStop 10초 동안 응답해 실패 구간이 8초 안팎뿐(11/10) |
 | 기록 | admindb `chaos_event` — 내리기 1번 = 1행(서비스 · 범위 · 사유 · 지운 파드 · 관리자 · 시각 · 복구 시각) |
 
 ### 서비스 · 상태
