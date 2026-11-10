@@ -76,7 +76,7 @@
 ## 3. 메시지 — `GET /api/chats/rooms/{roomId}/messages?before=&size=30`
 
 `[{ messageId, roomId, senderRole(BUYER · SELLER · ADMIN · SYSTEM), mine, kind(TEXT · CONTEXT · SYSTEM), content, context: { type, id, title } | null, createdAt }]`
-- 최신 → 과거 순, `before`(messageId) 보다 이전 것. 재연결 뒤 놓친 메시지도 이 API 로 채운다
+- 최신 → 과거 순, `before`(messageId) 보다 이전 것. `size` 1~100(범위 밖은 가까운 값으로). 재연결 뒤 놓친 메시지도 이 API 로 채운다
 - 남의 방 **404** `CHAT_ROOM_NOT_FOUND`
 
 ## 4. 읽음 · 안 읽은 수
@@ -106,6 +106,7 @@
 | `SEND` 그 밖의 주소 | `/pub/` 로 시작하지 않으면(브로커 주소 `/sub/**` · `/user/**` 로 직접 보내기 등) `ERROR` (`CHAT_NOT_ALLOWED`) — 멤버 검사 · 요청 제한 · 저장을 건너뛰고 구독자에게 바로 전달되지 않게 |
 | 서버 → 구독 | 새 메시지 `{ type: MESSAGE, messageId, roomId, senderRole, kind, content, context, createdAt }`(3절 모양에서 `mine` 없음 — 화면이 senderRole 과 자기 자리로 판단) · 읽음 `{ type: READ, userRole, lastMessageId }` · 상태 `{ type: STATUS, status }` |
 
+- `SEND` · `SUBSCRIBE` 마다 연결의 토큰 만료를 다시 보고(만료면 `ERROR` `UNAUTHORIZED` — 새 토큰으로 다시 연결), `SEND` 는 탈퇴 차단 목록도 다시 확인해 연결 뒤 정지 · 탈퇴된 회원을 `ERROR` `USER_BLOCKED` 로 막는다(11/3 점검)
 - 파드 간: 저장한 파드가 Redis `chat:room:{roomId}` 에 발행 → 모든 파드가 자기 구독자에게
 - 연결이 끊기면 화면이 다시 연결하고 3절 `before` 없이 최신을 다시 받아 빈 곳을 채운다
 - 전송 속도 제한은 게이트웨이 요청 제한(이경석)과 별개로 서비스에서 **연결마다** 1초 5건 — 넘으면 오류 큐 `CHAT_TOO_FAST`(연결은 유지)
@@ -130,7 +131,7 @@ WebSocket 은 항상 열려 있어서, 끊긴 연결이 남지 않게 서버 · 
 | 연결별 보내기 버퍼 · 시간 | 256KB · 10초 — 느린 연결 하나가 메모리 · 스레드를 붙잡으면 그 연결만 닫음 |
 | STOMP 채널 스레드 | 들어오는 쪽 4 · 나가는 쪽 4 고정 (연결은 Tomcat NIO 라 연결당 스레드 없음) |
 | Redis | 파드당 구독 연결 1개 · 패턴 `chat:room:*` 하나 — 방이 늘어도 그대로 |
-| 알림 호출 | 전용 스레드 2 · 대기 500건, 넘치면 버림 · 연결 1초 · 읽기 2초 |
+| 알림 호출 | 전용 스레드 4 · 대기 500건, 넘치면 버림 · 연결 1초 · 읽기 2초 (2개는 500 연결에서 유실 — 11/5 k6) |
 | 지표 | `chat_ws_sessions` (파드별 연결 수 — Grafana) |
 
 화면(구지훈, 프론트 채팅 PR)은 채팅 화면에서만 연결하고, 화면을 떠나면 3초 뒤(채팅 화면끼리 이동할 때 다시 연결하지 않게) · `pagehide` 면 바로 끊는다. 탭이 가려지면 **연결은 두고 방 구독만 해제**(보고 있지 않음 → 알림이 감) · 다시 보이면 재구독 + 빈 곳 채우기 — 잦은 탭 전환에 재연결(핸드셰이크 · 토큰 검증 · 권한 조회) 비용을 들이지 않으려고(10/27). 모바일 백그라운드는 브라우저가 탭을 얼려 하트비트가 멈추므로 서버가 약 30초 안에 닫는다. 재연결은 첫 지연 1초 근처(무작위) 뒤 두 배씩 최대 30초(stompjs EXPONENTIAL)으로 파드 재시작 때 동시에 몰리지 않게 한다.
@@ -147,7 +148,7 @@ WebSocket 은 항상 열려 있어서, 끊긴 연결이 남지 않게 서버 · 
 - 받는 쪽이 그 방을 **구독 중이면 알림을 보내지 않는다** — Redis ZSET `chat:presence:{roomId}`(6-1절). 확인이 실패하면 보냄(빠지는 것보다 한 번 더)
 - 대화 메시지(`TEXT`)만 — 문맥 카드 · 상담 종료 안내는 알리지 않음
 - 전송 경로를 막지 않게 전용 스레드에서 보내고, admin 장애 · 대기열 초과면 알림만 빠지고 메시지는 저장 · 전달된다(짧은 타임아웃 — 서킷은 두지 않음)
-- 이름: user `GET /internal/users/{id}` · store `GET /internal/stores/{id}` (캐시 — 이름 10분 · 스토어 1분 · 실패 10초). 못 받으면 번호("스토어 #5" · "회원 #10")
+- 이름: user `GET /internal/users/{id}` · store `GET /internal/stores/{id}` (캐시 — 이름 10분 · 스토어 1분 · 실패 10초). 못 받으면 번호("스토어 #5" · "회원 #10"), 스토어 톡 본문의 구매자 이름은 "구매자"
 
 ## 8. DB (chatdb, Flyway V1)
 
@@ -221,7 +222,7 @@ CREATE TABLE chat_read (
 
 - config: Terraform `ecr/` 저장소 `sesac-gojigi-chat`, `init-schemas.sh` chatdb · chat 계정, secrets-sync `CHAT_DB_PASSWORD`(값 등록은 사용자 — GitHub Secrets), Helm values `chat-service`(:8089), NetworkPolicy DB 접근 라벨, ConfigMap `CHAT_SERVICE_URI`
 - backend: `services/chat-service`(gradle: websocket · data-jpa · flyway · data-redis · spring-security-oauth2-jose(JWT 검증만)), CI 매트릭스에 chat(이경석 리뷰)
-- 게이트웨이: 라우트 하나 `chat-service` = `/api/chats/**` · `/ws/chat`(`Upgrade: websocket` 이면 ws:// 로 그대로 이음 — 응답 타임아웃 설정 없음) + `GET /ws/chat` permitAll(토큰은 CONNECT 에서 chat-service 가 검증) + globalcors 로 이 경로만 Origin 확인
+- 게이트웨이: 라우트 둘 — `chat-service` = `/api/chats/**`(요청 제한 기본), `chat-websocket` = `/ws/chat`(`Upgrade: websocket` 이면 ws:// 로 그대로 이음 — 응답 타임아웃 설정 없음 · 요청 제한 없음) + `GET /ws/chat` permitAll(토큰은 CONNECT 에서 chat-service 가 검증) + globalcors 로 이 경로만 Origin 확인
 
 ## 11. 범위 밖
 
