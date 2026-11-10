@@ -119,14 +119,14 @@ class InClusterKubernetesClientTest {
     }
 
     @Test
-    @DisplayName("파드 삭제 — DELETE, 이미 없으면(404) 무시, 권한 없음(403)은 503")
+    @DisplayName("파드 삭제 — 즉시 삭제(유예 0) DELETE, 이미 없으면(404) 무시, 권한 없음(403)은 503")
     void deletePod() throws IOException {
         writeToken();
         KubernetesClient client = client();
         client.deletePod("order-service-a");
         assertThatCode(() -> client.deletePod("gone")).doesNotThrowAnyException();
         assertUnavailable(() -> client.deletePod("forbidden"));
-        assertThat(requests).contains("DELETE /api/v1" + NS + "/pods/order-service-a");
+        assertThat(requests).contains("DELETE /api/v1" + NS + "/pods/order-service-a?gracePeriodSeconds=0");
     }
 
     @Test

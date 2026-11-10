@@ -53,7 +53,9 @@ public class InClusterKubernetesClient implements KubernetesClient {
     @Override
     public void deletePod(String podName) {
         try {
-            call(() -> restClient.delete().uri("/api/v1/namespaces/{ns}/pods/{name}", namespace, podName).retrieve().toBodilessEntity());
+            // 즉시 삭제(유예 0) — 기본 유예면 옛 파드가 preStop 10초 동안 계속 응답해(준비된 파드가 없으면 종료 중 파드로 보냄)
+            // 화면이 실패하는 구간이 8초 안팎뿐이라 시연에서 멈춘 장면이 안 보임(11/10 chat 확인). 처리 중 요청은 끊겨도 되는 시연용 기능
+            call(() -> restClient.delete().uri("/api/v1/namespaces/{ns}/pods/{name}?gracePeriodSeconds=0", namespace, podName).retrieve().toBodilessEntity());
         } catch (SystemException e) {
             if (!(e.getCause() instanceof HttpClientErrorException.NotFound)) {
                 throw e;
