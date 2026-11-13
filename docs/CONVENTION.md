@@ -94,7 +94,7 @@
 ### 1-3. 이슈 · PR
 
 - 이슈 제목: `[요구사항 ID] 작업` — 예: `[ORD-06] 결제 검증`
-- PR 제목: 커밋 메시지 형식과 동일
+- PR 제목: gitmoji + 커밋 메시지 형식 — 예: `✨ feat(product): 판매자 상품 목록에 상위 카테고리 id 추가` · `🐛 fix(order): 호출 실패 응답에서 서비스 이름 제거`
 - PR 본문 템플릿(`.github/pull_request_template.md`, 세 저장소 같음):
   - 🚀 개요 — 관련 요구사항 ID · 이슈 링크 · 무엇을 · 왜 바꿨나
   - 🛠️ 작업 내용 — 변경마다 이전 → 이후 · 이유 · 파일 표
@@ -143,7 +143,8 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
     ├── entity                       # JPA 엔티티 · Enum
     ├── dto
     │   ├── request                  # XxxRequest
-    │   └── response                 # XxxResponse
+    │   ├── response                 # XxxResponse
+    │   └── event                    # {이벤트}Payload (이벤트를 발행 · 구독하는 도메인만)
     ├── exception                    # {Domain}Exception · {Domain}ErrorCode
     ├── client                       # 다른 서비스 · 포트원 호출 (@HttpExchange)
     └── util                         # 이 도메인 전용 유틸
@@ -248,6 +249,7 @@ com.sesac.gojigi.{service}            # service = gateway · user · store · pr
 | `chat:room:{roomId}` | chat | 1:1 채팅 파드 간 중계 Pub/Sub 채널 — 파드당 패턴 구독 `chat:room:*` 1개 (10/27) |
 | `chat:presence:{roomId}` | chat | 접속 중 표시 ZSET — 점수 = 만료 시각(20초마다 연장 · 60초 TTL), 보고 있는 쪽엔 알림을 보내지 않음 (10/27) |
 | `notify:{받는 쪽}` | admin | 알림 센터 실시간 Pub/Sub 채널(`USER#{id}` · `STORE#{id}` · `ADMIN`) — 모든 파드가 자기 SSE 연결에 전달 (10/27) |
+| `request_rate_limiter.*` | gateway | 요청 제한 토큰 버킷 — Spring Cloud Gateway `RedisRateLimiter` 기본 키, 식별자는 `RateLimitKeyResolver`의 `user:{userId}` · `ip:{ip}` · `direct`, 라우트마다 따로 셈. Redis 장애면 통과(fail-open) |
 
 - 한 Redis를 여러 서비스가 공유하므로 **다른 서비스의 키 접두어 사용 금지**
 - 리프레시 토큰은 Keycloak이 관리 — Redis에 `refresh:` 키를 만들지 않음. 상품 캐시 키도 없음
@@ -329,12 +331,12 @@ if (isAmountMismatch) {
 
 - 성공 판별은 `code === "SUCCESS"` 하나
 - HTTP 상태 코드는 전송 레벨, `code`는 비즈니스 레벨 — 둘 다 정확히
-- 컨트롤러 반환 타입은 `ResponseEntity<ApiResponse<T>>`로 통일
+- 컨트롤러 반환 타입은 200이면 `ApiResponse<T>`, 201 등 상태 코드를 바꿀 때는 `ResponseEntity<ApiResponse<T>>` (store · chat은 전부 `ResponseEntity`)
 - 페이지 응답은 `ApiResponse<PageResponse<T>>` — `PageResponse`는 `{ content, page, size, totalElements, totalPages, hasNext }`
 - 내부 API(`/internal/**`)도 같은 봉투. `client`에서 `data`를 꺼내 반환
 
 ```java
-return ResponseEntity.ok(ApiResponse.success("주문 내역을 조회했습니다.", response));
+return ApiResponse.success("주문 내역을 조회했습니다.", response);
 return ResponseEntity.status(HttpStatus.CREATED)
         .body(ApiResponse.success("상품이 등록되었습니다.", response));
 
@@ -365,10 +367,10 @@ return ResponseEntity.badRequest().body(ApiResponse.error(...));
 
 ```java
 @PatchMapping("/ship")
-public ResponseEntity<ApiResponse<SellerBulkResponse>> ship(@CurrentUser AuthUser user,
-                                                            @Valid @RequestBody SellerShipRequest request) {
+public ApiResponse<SellerBulkResponse> ship(@CurrentUser AuthUser user,
+                                            @Valid @RequestBody SellerShipRequest request) {
     SellerBulkResponse response = sellerDeliveryService.ship(user.storeId(), user.userId(), request.items());
-    return ResponseEntity.ok(ApiResponse.success("송장을 등록했습니다.", response));
+    return ApiResponse.success("송장을 등록했습니다.", response);
 }
 ```
 
@@ -516,7 +518,7 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
 - 봉투: `{ eventId, eventType, occurredAt, aggregateId, version, payload }`
 - `occurredAt`은 오프셋 포함 ISO-8601 (`2026-10-21T09:12:33+09:00`)
 - payload는 **구독자가 다시 호출하지 않아도 되도록** 필요한 값 포함 (주문자 이메일 · 금액 등)
-- payload 크기: 아웃박스 칼럼은 `MEDIUMTEXT`, SNS · SQS 한도는 256KB — 항목이 많은 이벤트는 압축 필드로 보낸다(`SettlementPaid.itemsGzip`)
+- payload 크기: 아웃박스 칼럼은 order · store `JSON`, settlement `MEDIUMTEXT`(V9, 11/5 TEXT 64KB에서 변경), SNS · SQS 한도는 256KB — 항목이 많은 이벤트는 압축 필드로 보낸다(`SettlementPaid.itemsGzip`)
 - 필드 추가는 자유, **삭제 · 이름 변경 · 의미 변경 금지** (새 이벤트 타입 또는 version 증가)
 - 이벤트 목록 · payload는 `gotgan-config/docs/events.md`에 먼저 등록 후 구현
 - 소비자는 `processed_event` 테이블로 eventId 중복 처리 방지
@@ -750,7 +752,7 @@ public abstract class BaseTimeEntity {
 
 - [ ] 도메인 패키지 안에 controller · service · repository · entity · dto · exception 구조인가?
 - [ ] 컨트롤러가 얇은가? `@CurrentUser`로 받아 원시값을 서비스에 넘기는가?
-- [ ] 응답이 `ResponseEntity<ApiResponse<T>>`인가? 컨트롤러에서 `error()`를 직접 호출하지 않는가?
+- [ ] 응답이 `ApiResponse<T>`(상태 코드를 바꿀 때 `ResponseEntity<ApiResponse<T>>`)인가? 컨트롤러에서 `error()`를 직접 호출하지 않는가?
 - [ ] `RuntimeException` 대신 도메인 예외 + ErrorCode를 쓰는가? 새 코드가 `{도메인}_{상황}` 형식이고 `docs/api/error-codes.md`에 있는가?
 - [ ] 엔티티에 `@Setter`가 없고 상태 변경이 의미 있는 메서드인가?
 - [ ] `@Transactional`이 서비스에만 있고, 원격 호출이 트랜잭션 밖에 있는가?
