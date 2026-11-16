@@ -9,6 +9,7 @@ import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
@@ -29,6 +30,7 @@ class PrometheusClientTest {
     void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/v1/query", this::handle);
+        server.createContext("/api/v1/query_range", this::handleRange);
         server.start();
     }
 
@@ -40,6 +42,15 @@ class PrometheusClientTest {
     private void handle(HttpExchange ex) throws IOException {
         String raw = ex.getRequestURI().getRawQuery();
         queries.add(URLDecoder.decode(raw.substring("query=".length()), StandardCharsets.UTF_8));
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().add("Content-Type", "application/json");
+        ex.sendResponseHeaders(status, bytes.length);
+        ex.getResponseBody().write(bytes);
+        ex.close();
+    }
+
+    private void handleRange(HttpExchange ex) throws IOException {
+        queries.add(URLDecoder.decode(ex.getRequestURI().getRawQuery(), StandardCharsets.UTF_8));
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().add("Content-Type", "application/json");
         ex.sendResponseHeaders(status, bytes.length);
@@ -80,5 +91,35 @@ class PrometheusClientTest {
         PrometheusClient client = client();
         server.stop(0);
         assertThat(client.byRoute("up")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("범위 쿼리 — start · end · step 을 초로 보내고 첫 시리즈의 [시각 ms, 값], NaN 은 뺀다")
+    void range_parses() {
+        body = """
+                {"status":"success","data":{"resultType":"matrix","result":[
+                  {"metric":{},"values":[[1794805100,"40"],[1794805105.5,"NaN"],[1794805110,"42.5"]]}
+                ]}}""";
+        Instant start = Instant.ofEpochSecond(1794805000);
+
+        assertThat(client().range("sum(k6_vus{testid=\"lt-1\"})", start, start.plusSeconds(300), Duration.ofSeconds(5)))
+                .hasValueSatisfying(s -> assertThat(s).containsExactly(
+                        new PrometheusClient.Sample(1794805100000L, 40), new PrometheusClient.Sample(1794805110000L, 42.5)));
+        assertThat(queries).containsExactly("query=sum(k6_vus{testid=\"lt-1\"})&start=1794805000&end=1794805300&step=5");
+    }
+
+    @Test
+    @DisplayName("범위 쿼리 — 결과 없음은 빈 목록, 오류 응답 · 연결 실패는 빈 Optional")
+    void range_emptyAndFailures() {
+        Instant now = Instant.ofEpochSecond(1794805000);
+        body = "{\"status\":\"success\",\"data\":{\"resultType\":\"matrix\",\"result\":[]}}";
+        assertThat(client().range("up", now, now, Duration.ofSeconds(5))).hasValue(List.of());
+
+        body = "{\"status\":\"error\"}";
+        assertThat(client().range("up", now, now, Duration.ofSeconds(5))).isEmpty();
+
+        PrometheusClient client = client();
+        server.stop(0);
+        assertThat(client.range("up", now, now, Duration.ofSeconds(5))).isEmpty();
     }
 }

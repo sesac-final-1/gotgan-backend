@@ -7,9 +7,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -17,11 +19,19 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 쿠버네티스 REST API 직접 호출 (라이브러리 없이 RestClient) — 주소 · 인증서 · 토큰은 KubernetesClientConfig 가 붙인다.
- * 권한은 Role admin-service-chaos(gotgan-config chaos-rbac.yaml): pods get · list · delete, deployments · statefulsets get · list
+ * 권한은 Role admin-service-chaos(gotgan-config chaos-rbac.yaml): pods get · list · delete, deployments · statefulsets get · list,
+ * jobs get · list · create · delete(관리자 화면 부하테스트, 11/16)
  */
 @Slf4j
 @RequiredArgsConstructor
 public class InClusterKubernetesClient implements KubernetesClient {
+
+    /** 부하테스트 Job · 파드 라벨과 어노테이션 — app 라벨은 붙이지 않는다(상태 화면이 app 라벨 파드를 서비스로 센다) */
+    public static final String LOADTEST_ID = "gotgan.loadtest/id";
+    public static final String LOADTEST_KIND = "gotgan.loadtest/kind";
+    public static final String LOADTEST_SCENARIO = "gotgan.loadtest/scenario";
+    public static final String LOADTEST_VUS = "gotgan.loadtest/vus";
+    public static final String LOADTEST_DURATION = "gotgan.loadtest/duration-sec";
 
     private final RestClient restClient;
     private final String namespace;
@@ -62,6 +72,61 @@ public class InClusterKubernetesClient implements KubernetesClient {
             }
             log.info("이미 없는 파드 - pod={}", podName);   // 그 사이 지워짐 — 목적은 이룸
         }
+    }
+
+    @Override
+    public List<LoadJob> loadJobs() {
+        JsonNode list = call(() -> restClient.get().uri("/apis/batch/v1/namespaces/{ns}/jobs?labelSelector={sel}", namespace, LOADTEST_ID)
+                .retrieve().body(JsonNode.class));
+        List<LoadJob> jobs = new ArrayList<>();
+        for (JsonNode item : list.path("items")) {
+            jobs.add(loadJob(item));
+        }
+        return jobs;
+    }
+
+    @Override
+    public void createJob(Map<String, Object> manifest) {
+        call(() -> restClient.post().uri("/apis/batch/v1/namespaces/{ns}/jobs", namespace)
+                .contentType(MediaType.APPLICATION_JSON).body(manifest).retrieve().toBodilessEntity());
+    }
+
+    @Override
+    public void deleteJob(String name) {
+        try {
+            call(() -> restClient.delete().uri("/apis/batch/v1/namespaces/{ns}/jobs/{name}?propagationPolicy=Background", namespace, name)
+                    .retrieve().toBodilessEntity());
+        } catch (SystemException e) {
+            if (!(e.getCause() instanceof HttpClientErrorException.NotFound)) {
+                throw e;
+            }
+            log.info("이미 없는 Job - job={}", name);
+        }
+    }
+
+    @Override
+    public Optional<String> loadJobPodIp(String loadTestId) {
+        JsonNode list = call(() -> restClient.get().uri("/api/v1/namespaces/{ns}/pods?labelSelector={sel}", namespace, LOADTEST_ID + "=" + loadTestId)
+                .retrieve().body(JsonNode.class));
+        for (JsonNode item : list.path("items")) {
+            String ip = item.path("status").path("podIP").asString(null);
+            if ("Running".equals(item.path("status").path("phase").asString(null)) && ip != null) {
+                return Optional.of(ip);
+            }
+        }
+        return Optional.empty();
+    }
+
+    static LoadJob loadJob(JsonNode item) {
+        JsonNode meta = item.path("metadata");
+        JsonNode annotations = meta.path("annotations");
+        JsonNode status = item.path("status");
+        String created = meta.path("creationTimestamp").asString(null);
+        return new LoadJob(meta.path("name").asString(), meta.path("labels").path(LOADTEST_ID).asString(null),
+                meta.path("labels").path(LOADTEST_KIND).asString(null), annotations.path(LOADTEST_SCENARIO).asString(null),
+                annotations.path(LOADTEST_VUS).asInt(0), annotations.path(LOADTEST_DURATION).asInt(0),
+                created == null ? null : Instant.parse(created),
+                status.path("active").asInt(0), status.path("succeeded").asInt(0), status.path("failed").asInt(0));
     }
 
     private static <T> T call(Supplier<T> request) {

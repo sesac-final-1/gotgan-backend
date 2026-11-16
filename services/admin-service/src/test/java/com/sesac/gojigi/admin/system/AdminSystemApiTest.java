@@ -4,13 +4,17 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.sesac.gojigi.admin.TestcontainersConfiguration;
+import com.sesac.gojigi.admin.system.client.K6Client;
 import com.sesac.gojigi.admin.system.client.KubernetesClient;
+import com.sesac.gojigi.admin.system.client.KubernetesClient.LoadJob;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.Pod;
 import com.sesac.gojigi.admin.system.client.PrometheusClient;
 import com.sesac.gojigi.admin.system.exception.SystemErrorCode;
@@ -39,7 +43,7 @@ import org.springframework.test.web.servlet.ResultActions;
  * 장애 시연 (F-1) — 상태 · 내리기 · 타임라인. 쿠버네티스는 가짜, DB(admindb chaos_event)는 실제.
  * 재시도 제한이 서비스별이라 테스트마다 다른 서비스를 내린다 (같은 컨텍스트가 DB 를 공유)
  */
-@SpringBootTest(properties = { "management.tracing.sampling.probability=0", "app.chaos.enabled=true" })
+@SpringBootTest(properties = { "management.tracing.sampling.probability=0", "app.chaos.enabled=true", "app.loadtest.enabled=true" })
 @Import(TestcontainersConfiguration.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -50,6 +54,7 @@ class AdminSystemApiTest {
     @Autowired MockMvc mockMvc;
     @MockitoBean KubernetesClient kubernetes;
     @MockitoBean PrometheusClient prometheus;
+    @MockitoBean K6Client k6;
 
     private final List<Pod> pods = new ArrayList<>();
 
@@ -298,5 +303,58 @@ class AdminSystemApiTest {
         statusApi().andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("SYSTEM_CLUSTER_UNAVAILABLE"));
         kill("settlement-service", "{\"scope\":\"ALL\"}").andExpect(status().isServiceUnavailable());
         events().andExpect(status().isOk());
+    }
+
+    // ── 관리자 화면 부하테스트 (11/16)
+
+    private ResultActions loadtest(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request, String body) throws Exception {
+        request.header("X-User-Id", ADMIN_ID).header("X-User-Roles", "ADMIN");
+        return mockMvc.perform(body == null ? request : request.contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
+    @Test
+    @DisplayName("부하테스트 — 시작 202 · 상태 · 사용자 수 변경 · 중지 · 계정 준비")
+    void loadtest_flow() throws Exception {
+        LoadJob running = new LoadJob("loadtest-lt-9", "lt-9", "load", "BROWSE", 50, 300, Instant.now().minusSeconds(20), 1, 0, 0);
+        when(kubernetes.loadJobs()).thenReturn(List.of());
+        when(prometheus.range(any(), any(), any(), any())).thenReturn(Optional.of(List.of()));
+
+        loadtest(post("/api/admin/system/loadtest"), "{\"scenario\":\"BROWSE\",\"vus\":50,\"durationSec\":300}")
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.data.id").exists());
+        verify(kubernetes).createJob(any());
+        loadtest(post("/api/admin/system/loadtest/accounts"), null).andExpect(status().isAccepted());
+
+        when(kubernetes.loadJobs()).thenReturn(List.of(running));
+        when(kubernetes.loadJobPodIp("lt-9")).thenReturn(Optional.of("10.0.11.171"));
+        loadtest(get("/api/admin/system/loadtest"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enabled").value(true))
+                .andExpect(jsonPath("$.data.maxVus").value(300))
+                .andExpect(jsonPath("$.data.load.state").value("RUNNING"))
+                .andExpect(jsonPath("$.data.load.scenario").value("BROWSE"))
+                .andExpect(jsonPath("$.data.accounts").doesNotExist())
+                .andExpect(jsonPath("$.data.series.vus").isArray());
+        loadtest(patch("/api/admin/system/loadtest"), "{\"vus\":200}").andExpect(status().isOk());
+        verify(k6).scale("10.0.11.171", 200);
+        loadtest(post("/api/admin/system/loadtest"), "{\"scenario\":\"CART\",\"vus\":10,\"durationSec\":60}")
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SYSTEM_LOADTEST_RUNNING"));
+        loadtest(delete("/api/admin/system/loadtest"), null).andExpect(status().isOk());
+        verify(kubernetes).deleteJob("loadtest-lt-9");
+    }
+
+    @Test
+    @DisplayName("부하테스트 — 입력 범위 밖 400, 실행 중 아님 409, ADMIN 아니면 403")
+    void loadtest_rejects() throws Exception {
+        when(kubernetes.loadJobs()).thenReturn(List.of());
+        loadtest(post("/api/admin/system/loadtest"), "{\"scenario\":\"BROWSE\",\"vus\":301,\"durationSec\":300}")
+                .andExpect(status().isBadRequest());
+        loadtest(post("/api/admin/system/loadtest"), "{\"scenario\":\"BROWSE\",\"vus\":10,\"durationSec\":5}")
+                .andExpect(status().isBadRequest());
+        loadtest(patch("/api/admin/system/loadtest"), "{\"vus\":10}")
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SYSTEM_LOADTEST_NOT_RUNNING"));
+        mockMvc.perform(get("/api/admin/system/loadtest").header("X-User-Id", 4L).header("X-User-Roles", "BUYER"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/admin/system/loadtest/accounts").header("X-User-Id", 4L).header("X-User-Roles", "SELLER"))
+                .andExpect(status().isForbidden());
+        verify(kubernetes, never()).createJob(any());
     }
 }
