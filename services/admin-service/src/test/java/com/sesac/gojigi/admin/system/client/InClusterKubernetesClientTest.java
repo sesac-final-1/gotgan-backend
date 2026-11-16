@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sesac.gojigi.admin.system.client.KubernetesClient.LoadJob;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.Pod;
 import com.sesac.gojigi.admin.system.exception.SystemErrorCode;
 import com.sesac.gojigi.admin.system.exception.SystemException;
@@ -18,6 +19,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +37,7 @@ class InClusterKubernetesClientTest {
     @TempDir Path saDir;
     private HttpServer server;
     private final List<String> requests = new CopyOnWriteArrayList<>();
+    private final List<String> bodies = new CopyOnWriteArrayList<>();
 
     @BeforeEach
     void start() throws IOException {
@@ -55,7 +58,24 @@ class InClusterKubernetesClientTest {
             respond(ex, 401, "{}");
             return;
         }
+        bodies.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        String query = ex.getRequestURI().getRawQuery();
+        if (("/api/v1" + NS + "/pods").equals(path) && query != null && query.contains("gotgan.loadtest")) {
+            respond(ex, 200, query.contains("lt-1") ? """
+                    {"items":[{"metadata":{"name":"loadtest-lt-1-x"},"status":{"phase":"Pending"}},
+                              {"metadata":{"name":"loadtest-lt-1-y"},"status":{"phase":"Running","podIP":"10.0.11.171"}}]}""" : "{\"items\":[]}");
+            return;
+        }
         switch (path) {
+            case "/apis/batch/v1" + NS + "/jobs" -> respond(ex, "POST".equals(ex.getRequestMethod()) ? 201 : 200, """
+                    {"items":[{"metadata":{"name":"loadtest-lt-1","creationTimestamp":"2026-11-16T05:00:00Z",
+                                           "labels":{"gotgan.loadtest/id":"lt-1","gotgan.loadtest/kind":"load"},
+                                           "annotations":{"gotgan.loadtest/scenario":"BROWSE","gotgan.loadtest/vus":"50","gotgan.loadtest/duration-sec":"300"}},
+                               "status":{"active":1}},
+                              {"metadata":{"name":"loadtest-lt-0","labels":{"gotgan.loadtest/id":"lt-0","gotgan.loadtest/kind":"accounts"}},
+                               "status":{"succeeded":1}}]}""");
+            case "/apis/batch/v1" + NS + "/jobs/loadtest-lt-1" -> respond(ex, 200, "{}");
+            case "/apis/batch/v1" + NS + "/jobs/gone" -> respond(ex, 404, "{}");
             case "/apis/apps/v1" + NS + "/deployments" -> respond(ex, 200, """
                     {"items":[{"metadata":{"name":"order-service"},"spec":{"replicas":2}},{"metadata":{"name":"keycloak"},"spec":{}}]}""");
             case "/apis/apps/v1" + NS + "/statefulsets" -> respond(ex, 200, """
@@ -127,6 +147,48 @@ class InClusterKubernetesClientTest {
         assertThatCode(() -> client.deletePod("gone")).doesNotThrowAnyException();
         assertUnavailable(() -> client.deletePod("forbidden"));
         assertThat(requests).contains("DELETE /api/v1" + NS + "/pods/order-service-a?gracePeriodSeconds=0");
+    }
+
+    @Test
+    @DisplayName("부하테스트 Job 목록 — 라벨 선택 · 라벨 · 어노테이션 · 상태 해석, 생성 시각이 없으면 null")
+    void loadJobs() throws IOException {
+        writeToken();
+        List<LoadJob> jobs = client().loadJobs();
+
+        assertThat(requests).anyMatch(r -> r.startsWith("GET /apis/batch/v1" + NS + "/jobs?labelSelector=gotgan.loadtest"));
+        assertThat(jobs).containsExactly(
+                new LoadJob("loadtest-lt-1", "lt-1", "load", "BROWSE", 50, 300, Instant.parse("2026-11-16T05:00:00Z"), 1, 0, 0),
+                new LoadJob("loadtest-lt-0", "lt-0", "accounts", null, 0, 0, null, 0, 1, 0));
+    }
+
+    @Test
+    @DisplayName("Job 생성 — POST 본문 JSON 그대로, 실패(403)는 503")
+    void createJob() throws IOException {
+        writeToken();
+        client().createJob(Map.of("kind", "Job", "metadata", Map.of("name", "loadtest-lt-2")));
+
+        assertThat(requests).contains("POST /apis/batch/v1" + NS + "/jobs");
+        assertThat(bodies).anyMatch(b -> b.contains("\"name\":\"loadtest-lt-2\"") && b.contains("\"kind\":\"Job\""));
+    }
+
+    @Test
+    @DisplayName("Job 삭제 — 파드까지 백그라운드 삭제, 이미 없으면(404) 무시, 권한 없음은 503")
+    void deleteJob() throws IOException {
+        writeToken();
+        KubernetesClient client = client();
+        client.deleteJob("loadtest-lt-1");
+        assertThatCode(() -> client.deleteJob("gone")).doesNotThrowAnyException();
+        assertUnavailable(() -> client.deleteJob("forbidden"));
+        assertThat(requests).contains("DELETE /apis/batch/v1" + NS + "/jobs/loadtest-lt-1?propagationPolicy=Background");
+    }
+
+    @Test
+    @DisplayName("부하테스트 파드 IP — Running 파드만, 없으면 빈 Optional")
+    void loadJobPodIp() throws IOException {
+        writeToken();
+        KubernetesClient client = client();
+        assertThat(client.loadJobPodIp("lt-1")).contains("10.0.11.171");
+        assertThat(client.loadJobPodIp("lt-9")).isEmpty();
     }
 
     @Test
