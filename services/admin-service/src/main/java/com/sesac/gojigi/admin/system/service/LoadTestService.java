@@ -34,7 +34,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 관리자 화면 부하테스트(11/16) — k6 Job 을 만들어 클러스터 안 게이트웨이로 부하를 보낸다.
- * k6 는 지표를 Prometheus 로 push(remote write, 5초)하고, 그래프는 testid 태그로 범위 조회한다.
+ * k6 는 지표를 Prometheus 로 push(remote write, 1초)하고, 그래프는 testid 태그로 범위 조회한다.
  * 실행 중 사용자 수는 k6 REST API(externally-controlled)로 바꾼다. 관리자 파드가 1개라 시작 · 계정 준비는 synchronized
  */
 @Slf4j
@@ -43,7 +43,10 @@ public class LoadTestService {
 
     static final int MAX_VUS = 300;
     static final Duration WINDOW = Duration.ofMinutes(5);
-    static final Duration STEP = Duration.ofSeconds(5);
+    /** 그래프 점 간격 — k6 가 1초마다 push 해서 시연에서 바로 반응하게(11/16 피드백) */
+    static final Duration STEP = Duration.ofSeconds(1);
+    /** rate 구간 — 1초 push 기준 5개 점. 짧을수록 장애 · 복구가 빨리 보인다 */
+    static final String RATE_WINDOW = "[5s]";
     static final int ACCOUNT_COUNT = 300;
     static final String KIND_LOAD = "load";
     static final String KIND_ACCOUNTS = "accounts";
@@ -159,17 +162,18 @@ public class LoadTestService {
         return new Run(job.id(), job.scenario(), state, job.vus(), job.durationSec(), OffsetDateTime.ofInstant(job.createdAt(), clock.getZone()));
     }
 
-    /** 최근 5분 또는 시작 시각부터(더 늦은 쪽) — testid 태그로 이 실행만 */
+    /** 최근 5분 또는 시작 시각부터(더 늦은 쪽), 1초 간격 — testid 태그로 이 실행만 */
     private Series series(LoadJob job) {
         Instant end = clock.instant();
         Instant start = job.createdAt().isAfter(end.minus(WINDOW)) ? job.createdAt() : end.minus(WINDOW);
         String t = "testid=\"" + job.id() + "\"";
-        String requests = "sum(rate(k6_http_reqs_total{" + t + "}[15s]))";
+        String requests = "sum(rate(k6_http_reqs_total{" + t + "}" + RATE_WINDOW + "))";
         return new Series(
                 range("sum(k6_vus{" + t + "})", start, end, UnaryOperator.identity()),
                 range(requests, start, end, UnaryOperator.identity()),
-                range("max(k6_http_req_duration_p95{" + t + "})", start, end, v -> v * 1000),   // 초 → ms
-                range("(sum(rate(k6_http_reqs_total{" + t + ",status!~\"2..\"}[15s])) or vector(0)) / " + requests, start, end,
+                // p95 는 네이티브 히스토그램으로 최근 5초 구간만 — k6 의 p(95) 추세 값은 테스트 전체 누적이라 한 번 튀면 내려오지 않는다
+                range("histogram_quantile(0.95, sum(rate(k6_http_req_duration_seconds{" + t + "}" + RATE_WINDOW + ")))", start, end, v -> v * 1000),   // 초 → ms
+                range("(sum(rate(k6_http_reqs_total{" + t + ",status!~\"2..\"}" + RATE_WINDOW + ")) or vector(0)) / " + requests, start, end,
                         UnaryOperator.identity()));
     }
 
@@ -186,8 +190,8 @@ public class LoadTestService {
         Map<String, String> env = new LinkedHashMap<>();
         env.put("BASE_URL", targetUrl);
         env.put("K6_PROMETHEUS_RW_SERVER_URL", remoteWriteUrl);
-        env.put("K6_PROMETHEUS_RW_TREND_STATS", "p(95),avg");
-        env.put("K6_PROMETHEUS_RW_PUSH_INTERVAL", "5s");
+        env.put("K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM", "true");   // 응답 시간을 히스토그램으로 — 구간 p95 계산용
+        env.put("K6_PROMETHEUS_RW_PUSH_INTERVAL", "1s");
         env.putAll(extraEnv);
 
         Map<String, String> labels = Map.of(LOADTEST_ID, id, LOADTEST_KIND, kind, "tier", "backend");

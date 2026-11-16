@@ -12,7 +12,7 @@ public final class LoadTestResponses {
 
     public enum RunState { RUNNING, DONE, FAILED }
 
-    /** GET — load = 가장 최근 부하 실행, accounts = 가장 최근 계정 준비(없으면 null). series 는 load 의 최근 5분(5초 간격) */
+    /** GET — load = 가장 최근 부하 실행, accounts = 가장 최근 계정 준비(없으면 null). series 는 load 의 최근 5분(1초 간격) */
     public record Status(boolean enabled, int maxVus, Run load, Run accounts, Series series) {
     }
 

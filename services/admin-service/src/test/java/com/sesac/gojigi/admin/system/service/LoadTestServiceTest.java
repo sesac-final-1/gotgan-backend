@@ -169,7 +169,7 @@ class LoadTestServiceTest {
         when(kubernetes.loadJobs()).thenReturn(List.of(job("lt-1", "load", NOW.minusSeconds(900), 0, 1, 0),
                 job("lt-2", "load", NOW.minusSeconds(60), 1, 0, 0), job("lt-0", "accounts", NOW.minusSeconds(1200), 0, 0, 1)));
         when(prometheus.range(anyString(), any(), any(), any())).thenReturn(Optional.of(List.of(new Sample(1000, 2))));
-        when(prometheus.range(contains("k6_http_req_duration_p95"), any(), any(), any())).thenReturn(Optional.of(List.of(new Sample(1000, 0.095))));
+        when(prometheus.range(contains("k6_http_req_duration_seconds"), any(), any(), any())).thenReturn(Optional.of(List.of(new Sample(1000, 0.095))));
 
         LoadTestResponses.Status status = service(true).status();
 
@@ -182,7 +182,7 @@ class LoadTestServiceTest {
         assertThat(status.series().vus()).containsExactly(new Sample(1000, 2));
         assertThat(status.series().p95Ms().get(0).v()).isEqualTo(95.0, org.assertj.core.data.Offset.offset(1e-9));
         // 시작이 5분 안이면 그 시각부터 — 60초 전
-        verify(prometheus).range(eq("sum(k6_vus{testid=\"lt-2\"})"), eq(NOW.minusSeconds(60)), eq(NOW), eq(Duration.ofSeconds(5)));
+        verify(prometheus).range(eq("sum(k6_vus{testid=\"lt-2\"})"), eq(NOW.minusSeconds(60)), eq(NOW), eq(Duration.ofSeconds(1)));
         verify(prometheus).range(contains("status!~\"2..\""), any(), any(), any());
     }
 
