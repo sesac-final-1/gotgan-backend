@@ -308,7 +308,7 @@
 |---|---|
 | 방식 | admin 이 k6 **Job** 을 만든다(이미지 `app.loadtest.image` = `grafana/k6:1.8.3`). 스크립트는 ConfigMap `loadtest-scripts`(gotgan-config `files/loadtest/demo.js` · `accounts.js`), 부하 대상은 클러스터 안 게이트웨이(`app.loadtest.target-url`) |
 | 사용자 수 변경 | k6 `externally-controlled` 실행기 + REST API(`PATCH http://{파드 IP}:6565/v1/status`). **k6 v2 에서 제거된 기능이라 1.x 고정** |
-| 그래프 | k6 → Prometheus remote write(5초, `--tag testid={id}`) → admin 이 `query_range`(최근 5분 또는 시작부터, 5초 간격) |
+| 그래프 | k6 → Prometheus remote write(1초, `--tag testid={id}`, 응답 시간은 네이티브 히스토그램) → admin 이 `query_range`(최근 5분 또는 시작부터, 1초 간격, rate 5초 구간). p95 는 `histogram_quantile` 구간 값 — k6 p(95) 추세 값은 테스트 전체 누적이라 쓰지 않음 |
 | 스위치 | `app.loadtest.enabled`(env `APP_LOADTEST_ENABLED`, 기본 `false`) — 꺼져 있으면 시작 · 계정 준비 · 사용자 수 변경 403, 조회 · 중지는 가능 |
 | 제한 | 사용자 최대 300 · 시간 30 ~ 600초 · 실행 중인 Job(부하 · 계정 준비) 하나만. Job 은 최대 시간 + 2분 뒤 강제 종료, 끝나고 5분 뒤 자동 삭제 |
 | 라벨 | Job · 파드 `gotgan.loadtest/id` · `gotgan.loadtest/kind`(load · accounts) · `tier=backend`. **`app` 라벨 없음** — 7절 상태 화면이 `app` 라벨 파드를 서비스로 센다 |

@@ -34,8 +34,8 @@ public class AdminLoadTestController {
 
     private final LoadTestService loadTestService;
 
-    @Operation(summary = "상태 · 그래프 (실행 중 2초 폴링)", description = """
-            load · accounts = 가장 최근 실행(state RUNNING/DONE/FAILED, 없으면 null). series = load 의 최근 5분 5초 간격
+    @Operation(summary = "상태 · 그래프 (실행 중 1초 폴링)", description = """
+            load · accounts = 가장 최근 실행(state RUNNING/DONE/FAILED, 없으면 null). series = load 의 최근 5분 1초 간격
             vus · rps · p95Ms · errorRate([t ms, v]). Prometheus 실패면 빈 목록, 쿠버네티스 조회 실패 503 SYSTEM_CLUSTER_UNAVAILABLE""")
     @GetMapping
     public ApiResponse<LoadTestResponses.Status> status(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
