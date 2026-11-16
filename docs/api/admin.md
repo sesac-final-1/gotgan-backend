@@ -298,3 +298,38 @@
 | `keycloak` | 제외 |
 
 > 라우트를 추가 · 이름 변경하면 `SystemCatalog.ROUTE_SERVICES` 도 고친다 — 표에 없는 id 는 지표에서 빠진다.
+
+## 8. 관리자 화면 부하테스트 (11/16)
+
+> 시스템 상태 화면에서 부하를 걸고 그래프로 보여 준다(발표 시연). 근거: 노션 「발표 시연 변경 안내 (11/16)」.
+> 전부 `ADMIN` — 7절과 같이 admin 도 한 번 더 확인.
+
+| 항목 | 규칙 |
+|---|---|
+| 방식 | admin 이 k6 **Job** 을 만든다(이미지 `app.loadtest.image` = `grafana/k6:1.8.3`). 스크립트는 ConfigMap `loadtest-scripts`(gotgan-config `files/loadtest/demo.js` · `accounts.js`), 부하 대상은 클러스터 안 게이트웨이(`app.loadtest.target-url`) |
+| 사용자 수 변경 | k6 `externally-controlled` 실행기 + REST API(`PATCH http://{파드 IP}:6565/v1/status`). **k6 v2 에서 제거된 기능이라 1.x 고정** |
+| 그래프 | k6 → Prometheus remote write(5초, `--tag testid={id}`) → admin 이 `query_range`(최근 5분 또는 시작부터, 5초 간격) |
+| 스위치 | `app.loadtest.enabled`(env `APP_LOADTEST_ENABLED`, 기본 `false`) — 꺼져 있으면 시작 · 계정 준비 · 사용자 수 변경 403, 조회 · 중지는 가능 |
+| 제한 | 사용자 최대 300 · 시간 30 ~ 600초 · 실행 중인 Job(부하 · 계정 준비) 하나만. Job 은 최대 시간 + 2분 뒤 강제 종료, 끝나고 5분 뒤 자동 삭제 |
+| 라벨 | Job · 파드 `gotgan.loadtest/id` · `gotgan.loadtest/kind`(load · accounts) · `tier=backend`. **`app` 라벨 없음** — 7절 상태 화면이 `app` 라벨 파드를 서비스로 센다 |
+| 권한 | gotgan-config `chaos-rbac.yaml` 에 batch/jobs get · list · create · delete |
+| 비밀번호 | 부하용 계정 공용 비밀번호는 Secret `loadtest-secret`(GitHub Secret `LOADTEST_PASSWORD` → secrets-sync). Job 이 `envFrom`(없어도 시작, 로그인 시나리오만 실패) |
+
+### 시나리오 `scenario`
+
+| 값 | 요청 | 로그인 |
+|---|---|---|
+| `BROWSE` | 상품 목록 → 상세 → 리뷰 · 스토어 | 없음(VU 별 가상 IP) |
+| `REVIEWS` | 리뷰 목록 · 요약 반복(review 로 트래픽을 몰아 두고 내리기 시연) | 없음 |
+| `CART` | 장바구니 담기 → 조회 → 수량 변경 → 삭제 (주문은 만들지 않음) | 부하용 계정 `loadtest+{VU 번호}@gotgan.test` |
+| `MIXED` | VU 10명 중 3명 `CART`, 7명 `BROWSE` | 일부 |
+
+### API
+
+| 메서드 · 경로 | 요청 | 응답 · 오류 |
+|---|---|---|
+| `GET /api/admin/system/loadtest` | — | `{enabled, maxVus, load, accounts, series}` — `load` · `accounts` = 가장 최근 실행 `{id, scenario, state: RUNNING/DONE/FAILED, vus, durationSec, startedAt}`(없으면 null). `series` = `load` 의 `vus` · `rps` · `p95Ms` · `errorRate`(2xx 아닌 비율) 각 `[{t: epoch ms, v}]`, Prometheus 실패면 빈 목록. 쿠버네티스 실패 503 `SYSTEM_CLUSTER_UNAVAILABLE` |
+| `POST /api/admin/system/loadtest` | `{scenario, vus 1 ~ 300, durationSec 30 ~ 600}` | 202 `{id}` · 400 `INVALID_INPUT` · 403 `SYSTEM_LOADTEST_DISABLED` · 409 `SYSTEM_LOADTEST_RUNNING` |
+| `PATCH /api/admin/system/loadtest` | `{vus 0 ~ 300}` — 0 이면 요청을 멈추고 대기 | 200 · 409 `SYSTEM_LOADTEST_NOT_RUNNING`(없음 · 파드 준비 중) · 503 `SYSTEM_LOADTEST_CONTROL_FAILED` |
+| `DELETE /api/admin/system/loadtest` | — | 200 — 실행 중인 Job 전부 삭제(없으면 그대로) |
+| `POST /api/admin/system/loadtest/accounts` | — | 202 `{id}` — 부하용 계정 300개 가입(이미 있으면 그대로, 약 1분). 매일 08:00 DB 가 새로 만들어져 시연 날 아침 한 번. 403 · 409 위와 같음 |
