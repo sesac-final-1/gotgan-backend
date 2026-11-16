@@ -2,7 +2,10 @@ package com.sesac.gojigi.admin.system.client;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +32,37 @@ public class PrometheusClient {
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder().connectTimeout(timeout).build());
         factory.setReadTimeout(timeout);
         this.restClient = restClientBuilder.clone().baseUrl(baseUrl).requestFactory(factory).build();
+    }
+
+    /**
+     * 범위 쿼리(/api/v1/query_range) — 부하테스트 그래프. 시리즈 하나(sum · max 로 묶은 쿼리)의 [시각 ms, 값] 목록.
+     * 결과가 없으면 빈 목록, 실패 · 오류 응답이면 빈 Optional
+     */
+    public Optional<List<Sample>> range(String promql, Instant start, Instant end, Duration step) {
+        JsonNode body;
+        try {
+            body = restClient.get().uri(u -> u.path("/api/v1/query_range").queryParam("query", "{q}")
+                    .queryParam("start", start.getEpochSecond()).queryParam("end", end.getEpochSecond())
+                    .queryParam("step", step.toSeconds()).build(promql)).retrieve().body(JsonNode.class);
+        } catch (RestClientException e) {
+            log.warn("Prometheus 범위 조회 실패 - {}", e.getMessage());
+            return Optional.empty();
+        }
+        if (body == null || !"success".equals(body.path("status").asString(null))) {
+            log.warn("Prometheus 범위 조회 오류 응답 - {}", body);
+            return Optional.empty();
+        }
+        List<Sample> samples = new ArrayList<>();
+        for (JsonNode point : body.path("data").path("result").path(0).path("values")) {
+            double value = Double.parseDouble(point.path(1).asString("0"));
+            if (Double.isFinite(value)) {
+                samples.add(new Sample(Math.round(point.path(0).asDouble() * 1000), value));
+            }
+        }
+        return Optional.of(samples);
+    }
+
+    public record Sample(long t, double v) {
     }
 
     /** 즉시 쿼리 — 결과 vector 를 routeId 라벨 → 값으로. 실패 · 오류 응답이면 빈 Optional */
