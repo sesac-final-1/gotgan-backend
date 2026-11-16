@@ -57,6 +57,9 @@ app:
     target-url: http://gateway-service.sesac-gojigi.svc:443   # 클러스터 안 게이트웨이 — NLB 가 TLS 를 끝내 Service 443 → 파드 8080 은 평문
     remote-write-url: ${PROMETHEUS_URL:http://prometheus.monitoring:9090}/api/v1/write   # k6 지표 push(5초) — Prometheus --web.enable-remote-write-receiver
     k6-api-url: http://{ip}:6565            # k6 REST API — 파드 IP 로 직접(Service 노출 없음)
+  monitor:                                  # 관리자 화면 실시간 모니터링(11/16) — 호출 · 트레이스 · 에러 로그. 실패하면 빈 목록
+    zipkin-url: ${ZIPKIN_URL:http://zipkin.monitoring:9411}
+    loki-url: ${LOKI_URL:http://loki.monitoring:3100}
   prometheus:                               # F-1 장애 시연 지표(/api/admin/system/metrics) — gateway 라우트 요청량 · 5xx
     url: ${PROMETHEUS_URL:http://prometheus.monitoring:9090}
     timeout: 2s                             # 연결 · 읽기 — 실패면 값 null(부분 응답), 15초 폴링이 쌓이지 않게
