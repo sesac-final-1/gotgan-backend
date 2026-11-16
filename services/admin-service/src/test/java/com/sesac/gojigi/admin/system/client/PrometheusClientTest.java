@@ -122,4 +122,36 @@ class PrometheusClientTest {
         server.stop(0);
         assertThat(client.range("up", now, now, Duration.ofSeconds(5))).isEmpty();
     }
+
+    @Test
+    @DisplayName("라벨별 범위 쿼리 — 시리즈마다 label 값 → [시각 ms, 값], 라벨 없으면 빈 문자열")
+    void rangeBy_parses() {
+        body = """
+                {"status":"success","data":{"resultType":"matrix","result":[
+                  {"metric":{"routeId":"order-service"},"values":[[100,"1.5"],[105,"NaN"]]},
+                  {"metric":{},"values":[[100,"2"]]}
+                ]}}""";
+        Instant now = Instant.ofEpochSecond(100);
+
+        assertThat(client().rangeBy("sum by (routeId)(x)", "routeId", now, now.plusSeconds(5), Duration.ofSeconds(5)))
+                .hasValueSatisfying(m -> assertThat(m)
+                        .containsEntry("order-service", List.of(new PrometheusClient.Sample(100_000, 1.5)))
+                        .containsEntry("", List.of(new PrometheusClient.Sample(100_000, 2))));
+    }
+
+    @Test
+    @DisplayName("벡터 쿼리 — 라벨 전체와 값, NaN 은 빼고 실패면 빈 Optional")
+    void vector_parses() {
+        body = """
+                {"status":"success","data":{"resultType":"vector","result":[
+                  {"metric":{"app":"order-service","pool":"HikariPool-1"},"value":[1,"20"]},
+                  {"metric":{"app":"chat-service"},"value":[1,"NaN"]}
+                ]}}""";
+        assertThat(client().vector("sum by (app)(hikaricp_connections_max)")).hasValueSatisfying(s -> assertThat(s)
+                .containsExactly(new PrometheusClient.Series(java.util.Map.of("app", "order-service", "pool", "HikariPool-1"), 20)));
+
+        body = "{\"status\":\"error\"}";
+        assertThat(client().vector("up")).isEmpty();
+        assertThat(client().rangeBy("up", "app", Instant.EPOCH, Instant.EPOCH, Duration.ofSeconds(5))).isEmpty();
+    }
 }

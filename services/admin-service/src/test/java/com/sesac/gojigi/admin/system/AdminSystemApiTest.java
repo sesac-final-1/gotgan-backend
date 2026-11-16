@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.sesac.gojigi.admin.TestcontainersConfiguration;
 import com.sesac.gojigi.admin.system.client.K6Client;
+import com.sesac.gojigi.admin.system.client.LokiClient;
+import com.sesac.gojigi.admin.system.client.ZipkinClient;
 import com.sesac.gojigi.admin.system.client.KubernetesClient;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.LoadJob;
 import com.sesac.gojigi.admin.system.client.KubernetesClient.Pod;
@@ -55,6 +57,8 @@ class AdminSystemApiTest {
     @MockitoBean KubernetesClient kubernetes;
     @MockitoBean PrometheusClient prometheus;
     @MockitoBean K6Client k6;
+    @MockitoBean ZipkinClient zipkin;
+    @MockitoBean LokiClient loki;
 
     private final List<Pod> pods = new ArrayList<>();
 
@@ -356,5 +360,31 @@ class AdminSystemApiTest {
         mockMvc.perform(post("/api/admin/system/loadtest/accounts").header("X-User-Id", 4L).header("X-User-Roles", "SELLER"))
                 .andExpect(status().isForbidden());
         verify(kubernetes, never()).createJob(any());
+    }
+
+    // ── 실시간 모니터링 (11/16)
+
+    @Test
+    @DisplayName("모니터링 — 현황 · 호출 · 장애 · 트레이스 · 분석 200, 잘못된 traceId 400, ADMIN 아니면 403")
+    void monitor_endpoints() throws Exception {
+        when(prometheus.rangeBy(any(), any(), any(), any(), any())).thenReturn(Optional.of(Map.of()));
+        when(prometheus.vector(any())).thenReturn(Optional.of(List.of()));
+        when(zipkin.recentTraces(any(), org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
+        when(zipkin.trace(any())).thenReturn(List.of());
+        when(loki.errors(any(), any(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
+
+        loadtest(get("/api/admin/system/monitor/overview"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.services[0].name").value("order-service"))
+                .andExpect(jsonPath("$.data.total.rps").isArray());
+        loadtest(get("/api/admin/system/monitor/calls"), null).andExpect(status().isOk()).andExpect(jsonPath("$.data").isArray());
+        loadtest(get("/api/admin/system/monitor/errors"), null).andExpect(status().isOk()).andExpect(jsonPath("$.data").isArray());
+        loadtest(get("/api/admin/system/monitor/traces/6afab4eb67d26e9e2d9ef9c3509a8a39"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.spans").isArray());
+        loadtest(get("/api/admin/system/monitor/summary"), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.topErrors").isArray());
+        loadtest(get("/api/admin/system/monitor/traces/not-hex!"), null).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/admin/system/monitor/overview").header("X-User-Id", 4L).header("X-User-Roles", "BUYER"))
+                .andExpect(status().isForbidden());
     }
 }
