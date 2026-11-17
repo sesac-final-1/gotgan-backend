@@ -14,8 +14,8 @@ public final class MonitorResponses {
     public record Overview(OffsetDateTime serverTime, Series total, List<ServiceSeries> services) {
     }
 
-    /** rps = 초당 요청, avgMs = 평균 응답 시간(ms), errorRate = 5xx ÷ 전체(0 ~ 1). 요청이 없는 점은 0 */
-    public record Series(List<Sample> rps, List<Sample> avgMs, List<Sample> errorRate) {
+    /** rps = 초당 요청, avgMs = 평균 응답 시간(ms), errors = 그 점 기준 최근 1분 5xx 건수(11/17 퍼센트 → 건수). 요청이 없는 점은 0 */
+    public record Series(List<Sample> rps, List<Sample> avgMs, List<Sample> errors) {
     }
 
     /** db = DB 연결 풀(파드 합) — DB 를 쓰지 않거나 조회 실패면 null */

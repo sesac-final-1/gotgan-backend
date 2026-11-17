@@ -154,4 +154,26 @@ class PrometheusClientTest {
         assertThat(client().vector("up")).isEmpty();
         assertThat(client().rangeBy("up", "app", Instant.EPOCH, Instant.EPOCH, Duration.ofSeconds(5))).isEmpty();
     }
+
+    @Test
+    @DisplayName("장애 리포트 — 지난 시각 기준 벡터(time 전달), 시리즈마다 라벨 전체 · 점 목록(matrix), 실패면 빈 Optional")
+    void vectorAt_and_matrix() {
+        body = """
+                {"status":"success","data":{"resultType":"vector","result":[{"metric":{"pod":"product-service-a"},"value":[1,"1794881208"]}]}}""";
+        assertThat(client().vector("last_over_time(kube_pod_created[1h])", Instant.ofEpochSecond(1_794_884_000)))
+                .hasValueSatisfying(s -> assertThat(s).containsExactly(
+                        new PrometheusClient.Series(java.util.Map.of("pod", "product-service-a"), 1_794_881_208)));
+        assertThat(queries.get(0)).contains("last_over_time(kube_pod_created[1h])", "time=1794884000");
+
+        body = """
+                {"status":"success","data":{"resultType":"matrix","result":[
+                  {"metric":{"routeId":"product-service","httpStatusCode":"500"},"values":[[60,"431.2"],[120,"NaN"]]}]}}""";
+        assertThat(client().matrix("sum by (routeId)(x)", Instant.ofEpochSecond(60), Instant.ofEpochSecond(120), Duration.ofMinutes(1)))
+                .hasValueSatisfying(s -> assertThat(s).containsExactly(new PrometheusClient.RangeSeries(
+                        java.util.Map.of("routeId", "product-service", "httpStatusCode", "500"), List.of(new PrometheusClient.Sample(60_000, 431.2)))));
+
+        body = "{\"status\":\"error\"}";
+        assertThat(client().matrix("up", Instant.EPOCH, Instant.EPOCH, Duration.ofMinutes(1))).isEmpty();
+        assertThat(client().vector("up", Instant.EPOCH)).isEmpty();
+    }
 }

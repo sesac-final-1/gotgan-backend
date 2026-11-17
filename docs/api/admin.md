@@ -278,14 +278,15 @@
 ### 7-4. 지표 — `GET /api/admin/system/metrics` (15초 폴링)
 
 ```json
-{ "services": [{ "name": "order-service", "requestsPerSecond": 2.0, "errorRate": 0.25 },
-               { "name": "gateway-service", "requestsPerSecond": null, "errorRate": null }] }
+{ "services": [{ "name": "order-service", "requestsPerSecond": 2.0, "errorRate": 0.25, "errorsPerMinute": 30 },
+               { "name": "gateway-service", "requestsPerSecond": null, "errorRate": null, "errorsPerMinute": null }] }
 ```
 
 - 출처: Prometheus `/api/v1/query`(`app.prometheus.url`, env `PROMETHEUS_URL`, 기본 `http://prometheus.monitoring:9090`) — 연결 · 읽기 제한 2초
 - 지표: gateway `spring_cloud_gateway_requests_seconds_count` 1분 rate — 서비스를 전부 내리면 그 서비스는 자기 5xx 를 못 세므로 gateway 에서 센다(11/6 실측: 내린 서비스는 502)
   - 요청량 `sum by (routeId)(rate(…[1m]))`, 오류 `sum by (routeId)(rate(…{httpStatusCode=~"5.."}[1m]))`
   - 라우트를 서비스로 묶어 rate 를 더한 뒤 `errorRate = 5xx ÷ 전체`(0 ~ 1, 소수 4자리) · `requestsPerSecond` 소수 2자리
+  - `errorsPerMinute` = 5xx 초당 rate × 60 — 최근 1분 5xx 건수(요청 0 이면 0). 화면 카드는 이 값을 보여 준다(11/17 퍼센트 → 건수)
 - `services` 는 7-1 과 같은 13개 · 같은 순서. 스위치가 꺼져 있어도 조회 가능
 - `null` 규칙: 요청이 0 이면 `errorRate` 만 `null`(0% 가 아님) · 라우트가 없는 서비스(gateway · keycloak · mysql · redis)는 둘 다 `null` · **Prometheus 실패면 503 이 아니라 200 에 전부 `null`**(부분 응답, 화면은 `-`)
 
@@ -341,7 +342,7 @@
 
 | 항목 | 출처 | 규칙 |
 |---|---|---|
-| 그래프 | Prometheus 게이트웨이 라우트 지표 `spring_cloud_gateway_requests_seconds_*` | 업무 서비스 수집 5초(gotgan-config #111), rate 15초 구간, 최근 3분 5초 간격. 라우트 → 서비스는 `SystemCatalog.ROUTE_SERVICES`(keycloak 제외). 평균 응답 = 합 ÷ 수, 에러율 = **5xx** ÷ 전체(4xx 는 업무 오류라 세지 않음) |
+| 그래프 | Prometheus 게이트웨이 라우트 지표 `spring_cloud_gateway_requests_seconds_*` | 업무 서비스 수집 5초(gotgan-config #111), rate 15초 구간, 최근 3분 5초 간격. 라우트 → 서비스는 `SystemCatalog.ROUTE_SERVICES`(keycloak 제외). 평균 응답 = 합 ÷ 수, `errors` = 점마다 **최근 1분 5xx 건수**(정수, 4xx 는 업무 오류라 세지 않음). 11/17 피드백으로 에러율(%) → 건수 |
 | DB 연결 풀 | `hikaricp_connections_{active,pending,max}` | 서비스(app)별 파드 합. DB 를 안 쓰는 서비스는 null |
 | 호출 | Zipkin(샘플링 1.0, 메모리 저장) | 게이트웨이 첫 구간(SERVER, 부모 없음) — 경로 `http.url` · 상태 · 소요 시간, 라우트 태그로 서비스. 관리자 시스템 화면 폴링(`/api/admin/system/**`)과 액추에이터(`/actuator/**`, Prometheus 수집 · 상태 확인)는 뺀다. `?service=` 면 그 서비스의 게이트웨이 라우트 태그(`spring.cloud.gateway.route.id`)로 Zipkin 을 바로 조회(라우트가 여러 개면 합침). 부하 중엔 수 분이면 오래된 트레이스가 밀려남 |
 | 장애 | Zipkin `outcome=SERVER_ERROR` + Loki `{level=~"WARN\|ERROR"}` | 최근 10분, RESPONSE(5xx 응답) · LOG(로그 message · traceId)를 최신순으로 합침 |
@@ -349,8 +350,50 @@
 
 | 메서드 · 경로 | 응답 |
 |---|---|
-| `GET /api/admin/system/monitor/overview` | `{serverTime, total: {rps, avgMs, errorRate}, services: [{name, series: {rps, avgMs, errorRate}, db: {active, pending, max} \| null}]}` — 점 `[{t: epoch ms, v}]` |
+| `GET /api/admin/system/monitor/overview` | `{serverTime, total: {rps, avgMs, errors}, services: [{name, series: {rps, avgMs, errors}, db: {active, pending, max} \| null}]}` — 점 `[{t: epoch ms, v}]` |
 | `GET /api/admin/system/monitor/calls?service=` | `[{traceId, timestampMs, method, path, service, status, durationMs}]` 최신순 40건. service 는 선택, 라우트 없는 이름이면 400 `INVALID_INPUT` |
 | `GET /api/admin/system/monitor/errors?service=` | `[{kind: RESPONSE/LOG, timestampMs, service, level, title, status, traceId}]` 최신순 40건. service 가 있으면 5xx 응답은 그 라우트, 로그는 그 `app` 라벨만 |
 | `GET /api/admin/system/monitor/traces/{traceId}` | `{traceId, durationMs, spans: [{id, parentId, service, name, kind, startMs, durationMs, status, error}]}` — traceId 가 16 · 32자리 16진수가 아니면 400 `INVALID_INPUT` |
 | `GET /api/admin/system/monitor/summary` | `{topErrors: [{service, api, status, count}], slowest: [{service, api, avgMs}], statuses: [{status, count}]}` |
+
+## 10. 장애 분석 리포트 (11/17)
+
+> 실시간 화면은 최근 몇 분만 보여서 "어제 퇴근 후 무슨 일이 있었나"를 볼 수 없다 → 기간을 골라 **언제 · 어디서 · 몇 건 · 왜** 를 정리한다. 근거: 11/17 피드백(퍼센트 대신 건수, 원인 분류, 운영팀 · 개발자 보고 자료).
+> `ADMIN`. 화면 `/admin/system/report` 에서 같은 기간을 HTML 보고서 한 파일(운영팀 섹션 + 개발자 섹션)로 내려받는다(프론트에서 생성).
+> 전제: 클러스터 24시간 운영(gotgan-config #112) — Prometheus · Loki 보존 7일이라 기간도 최근 7일 안.
+
+`GET /api/admin/system/report?from=&to=` — ISO-8601 시각. `from < to`, 길이 7일 이하, `from` 이 7일 전보다 늦어야 함(아니면 400 `SYSTEM_REPORT_INVALID_RANGE`). `to` 가 미래면 지금까지.
+
+구간(bucket): 기간 3시간 이하 1분 · 24시간 이하 5분 · 3일 이하 15분 · 그 이상 1시간
+
+| 응답 필드 | 내용 |
+|---|---|
+| `summary` | `{headline, issues, intendedIssues, requests, serverErrors, suspicious, rateLimited}` — `headline` 은 운영팀용 한 문장 |
+| `buckets` | 구간마다 `{t(구간 시작 ms), requests, serverErrors, byService{서비스: 5xx 건수}, rateLimited(429), notFound(404), unauthorized(401 · 403), suspicious, dbErrors, errorLogs}` |
+| `issues` | `{no, kind, startMs, endMs, services, serverErrors, suspicious, rateLimited, intended, sentence, causes[{code, label, detail}], logs[ErrorItem]}` — `logs` 는 앞 10개 이슈만, 이슈당 15줄(traceId 포함) |
+| `events` | `{t, type, service, detail}` 시간순 최대 300개 — `CHAOS_KILL` · `CHAOS_RECOVER` · `POD_START` · `POD_STOP` · `POD_RESTART` · `DEPLOY` · `LOADTEST_START` · `LOADTEST_END` · `CIRCUIT_OPEN` |
+| `suspicious` | 게이트웨이 탐색 요청 로그 최근 20줄 |
+
+이슈 묶기 — 조건이 맞는 구간을 이어 붙임(사이 1구간 빈 것까지 같은 이슈)
+
+| kind | 조건 |
+|---|---|
+| `ERROR` | 5xx > 0 · DB 오류 로그 > 0 · 차단기 열림 |
+| `ATTACK` | 게이트웨이 탐색 요청(`gateway_suspicious_requests_total`, `/.env` · `/.git` · `../` · `/wp-admin` · `.php` 등) > 0 |
+| `TRAFFIC` | 429 ≥ 10 · 요청이 평소(구간 중앙값)의 3배 이상이고 분당 100건 이상. 같은 시간 `ERROR` 이슈가 있으면 그 원인으로만 |
+
+원인 `causes.code` — 이슈 시간대(앞뒤 1구간 여유)와 겹치는 근거를 모두, 앞이 주 원인. `CHAOS` · `LOAD_TEST` 가 있으면 `intended = true`(의도한 시험)
+
+| code | 근거 |
+|---|---|
+| `CHAOS` | admindb `chaos_event` 내리기 기록(복구 시간 포함) |
+| `LOAD_TEST` | Prometheus `k6_vus{testid}` 가 있던 기간 · 최대 사용자 수 |
+| `POD_RESTART` · `OOM` | `kube_pod_container_status_restarts_total` 증가, 종료 사유 `OOMKilled` |
+| `POD_DOWN` | `kube_pod_created` 가 사라진 파드 중 장애 주입 · 배포로 설명되지 않는 것 |
+| `DEPLOY` | `kube_replicaset_created` — 새 레플리카셋 = 새 버전 배포 |
+| `DB` | Loki WARN · ERROR 로그에 SQLException · JDBC · HikariPool · deadlock 등, 또는 `hikaricp_connections_pending > 0` |
+| `SURGE` · `RATE_LIMIT` | 요청 급증(평소의 몇 배) · 429 건수 |
+| `ATTACK` | 탐색 요청 유형별 건수 |
+| `CIRCUIT` | `resilience4j_circuitbreaker_state{state="open"}` |
+| `UNKNOWN` | 근거 없음 — 개발자 섹션 로그 확인 |
+

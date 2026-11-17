@@ -1,12 +1,16 @@
 package com.sesac.gojigi.admin.system.repository;
 
 import com.sesac.gojigi.admin.system.entity.ChaosEvent;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface ChaosEventRepository extends JpaRepository<ChaosEvent, Long> {
+
+    /** 장애 리포트 — 기간 안의 내리기 기록(시간순) */
+    List<ChaosEvent> findByKilledAtBetweenOrderByKilledAtAsc(LocalDateTime from, LocalDateTime to);
 
     /** 타임라인 — 최신 20건 */
     List<ChaosEvent> findTop20ByOrderByIdDesc();

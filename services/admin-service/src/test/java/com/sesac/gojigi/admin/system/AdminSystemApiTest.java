@@ -389,4 +389,22 @@ class AdminSystemApiTest {
         mockMvc.perform(get("/api/admin/system/monitor/overview").header("X-User-Id", 4L).header("X-User-Roles", "BUYER"))
                 .andExpect(status().isForbidden());
     }
+
+    // ── 장애 분석 리포트 (11/17)
+
+    @Test
+    @DisplayName("장애 리포트 — 200(지표 없으면 이상 없음), 기간 잘못 400 SYSTEM_REPORT_INVALID_RANGE, from 없으면 400, ADMIN 아니면 403")
+    void report_endpoint() throws Exception {
+        java.time.Instant now = java.time.Instant.now();
+        String ok = "/api/admin/system/report?from=" + now.minusSeconds(3600) + "&to=" + now;
+
+        loadtest(get(ok), null).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.bucketSeconds").value(60))
+                .andExpect(jsonPath("$.data.issues").isEmpty())
+                .andExpect(jsonPath("$.data.summary.headline").value(org.hamcrest.Matchers.containsString("이상 없음")));
+        loadtest(get("/api/admin/system/report?from=" + now + "&to=" + now.minusSeconds(60)), null).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SYSTEM_REPORT_INVALID_RANGE"));
+        loadtest(get("/api/admin/system/report?to=" + now), null).andExpect(status().isBadRequest());
+        mockMvc.perform(get(ok).header("X-User-Id", 4L).header("X-User-Roles", "BUYER")).andExpect(status().isForbidden());
+    }
 }

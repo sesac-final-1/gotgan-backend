@@ -89,14 +89,53 @@ public class PrometheusClient {
 
     /** 즉시 쿼리 — 시리즈마다 라벨 전체와 값(분석 TOP 5 · DB 연결 풀). NaN 은 뺀다. 실패면 빈 Optional */
     public Optional<List<Series>> vector(String promql) {
-        return fetch(u -> u.path("/api/v1/query").queryParam("query", "{q}").build(promql)).map(result -> {
+        return toSeries(fetch(u -> u.path("/api/v1/query").queryParam("query", "{q}").build(promql)));
+    }
+
+    /** 즉시 쿼리를 지난 시각 기준으로 — 장애 리포트(어제 밤 구간의 파드 · 배포 · 부하테스트). 실패면 빈 Optional */
+    public Optional<List<Series>> vector(String promql, Instant at) {
+        return toSeries(fetch(u -> u.path("/api/v1/query").queryParam("query", "{q}").queryParam("time", at.getEpochSecond()).build(promql)));
+    }
+
+    /** 범위 쿼리 — 시리즈마다 라벨 전체와 [시각 ms, 값] 목록(장애 리포트). 실패면 빈 Optional */
+    public Optional<List<RangeSeries>> matrix(String promql, Instant start, Instant end, Duration step) {
+        return fetch(u -> u.path("/api/v1/query_range").queryParam("query", "{q}").queryParam("start", start.getEpochSecond())
+                .queryParam("end", end.getEpochSecond()).queryParam("step", step.toSeconds()).build(promql)).map(result -> {
+                    List<RangeSeries> series = new ArrayList<>();
+                    for (JsonNode s : result) {
+                        series.add(new RangeSeries(labels(s), samples(s)));
+                    }
+                    return series;
+                });
+    }
+
+    public record RangeSeries(Map<String, String> labels, List<Sample> samples) {
+    }
+
+    private static List<Sample> samples(JsonNode s) {
+        List<Sample> samples = new ArrayList<>();
+        for (JsonNode point : s.path("values")) {
+            double value = Double.parseDouble(point.path(1).asString("0"));
+            if (Double.isFinite(value)) {
+                samples.add(new Sample(Math.round(point.path(0).asDouble() * 1000), value));
+            }
+        }
+        return samples;
+    }
+
+    private static Map<String, String> labels(JsonNode s) {
+        Map<String, String> labels = new HashMap<>();
+        s.path("metric").properties().forEach(e -> labels.put(e.getKey(), e.getValue().asString("")));
+        return labels;
+    }
+
+    private static Optional<List<Series>> toSeries(Optional<JsonNode> fetched) {
+        return fetched.map(result -> {
             List<Series> series = new ArrayList<>();
             for (JsonNode s : result) {
                 double value = Double.parseDouble(s.path("value").path(1).asString("0"));
                 if (Double.isFinite(value)) {
-                    Map<String, String> labels = new HashMap<>();
-                    s.path("metric").properties().forEach(e -> labels.put(e.getKey(), e.getValue().asString("")));
-                    series.add(new Series(labels, value));
+                    series.add(new Series(labels(s), value));
                 }
             }
             return series;

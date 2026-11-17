@@ -5,7 +5,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -24,7 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class LokiClient {
 
-    static final String ERROR_QUERY = "{namespace=\"sesac-gojigi\",level=~\"WARN|ERROR\"}";
+    public static final String ERROR_QUERY = "{namespace=\"sesac-gojigi\",level=~\"WARN|ERROR\"}";
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final RestClient restClient;
@@ -37,7 +39,38 @@ public class LokiClient {
 
     /** 최근 WARN · ERROR 로그(최신순, 최대 limit) — service 가 있으면 그 서비스(app 라벨)만 */
     public List<LogLine> errors(Instant start, Instant end, int limit, String service) {
-        String query = service == null ? ERROR_QUERY : ERROR_QUERY.replace("}", ",app=\"" + service + "\"}");
+        return lines(service == null ? ERROR_QUERY : ERROR_QUERY.replace("}", ",app=\"" + service + "\"}"), start, end, limit);
+    }
+
+    /**
+     * LogQL 지표 쿼리(count_over_time 등)를 구간별로 — 장애 리포트의 시간대별 에러 로그 · DB 오류 건수.
+     * label 값 → (구간 끝 시각 ms → 값). 실패면 빈 Map
+     */
+    public Map<String, Map<Long, Double>> countBy(String logql, String label, Instant start, Instant end, Duration step) {
+        JsonNode body;
+        try {
+            body = restClient.get().uri(u -> u.path("/loki/api/v1/query_range").queryParam("query", "{q}")
+                    .queryParam("start", start.toEpochMilli() * 1_000_000).queryParam("end", end.toEpochMilli() * 1_000_000)
+                    .queryParam("step", step.toSeconds()).build(logql)).retrieve().body(JsonNode.class);
+        } catch (RestClientException e) {
+            log.warn("Loki 지표 조회 실패 - {}", e.getMessage());
+            return Map.of();
+        }
+        if (body == null) {
+            return Map.of();
+        }
+        Map<String, Map<Long, Double>> result = new HashMap<>();
+        for (JsonNode series : body.path("data").path("result")) {
+            Map<Long, Double> points = result.computeIfAbsent(series.path("metric").path(label).asString(""), k -> new HashMap<>());
+            for (JsonNode point : series.path("values")) {
+                points.merge(Math.round(point.path(0).asDouble() * 1000), Double.parseDouble(point.path(1).asString("0")), Double::sum);
+            }
+        }
+        return result;
+    }
+
+    /** 로그 줄 조회(최신순, 최대 limit) — 실패면 빈 목록 */
+    public List<LogLine> lines(String query, Instant start, Instant end, int limit) {
         JsonNode body;
         try {
             body = restClient.get().uri(u -> u.path("/loki/api/v1/query_range").queryParam("query", "{q}")
