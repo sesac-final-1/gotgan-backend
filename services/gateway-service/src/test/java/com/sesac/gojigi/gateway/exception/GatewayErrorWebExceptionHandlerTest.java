@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.netty.http.client.PrematureCloseException;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 예외 → 봉투 매핑의 모든 분기 (실제 라우팅 · 타임아웃 흐름은 config.GatewayHardeningTest) */
@@ -117,5 +118,14 @@ class GatewayErrorWebExceptionHandlerTest {
         assertThat(GatewayErrorWebExceptionHandler.isConnectFailure(
                 new RuntimeException(new RuntimeException(new ConnectException("refused"))))).isTrue();
         assertThat(GatewayErrorWebExceptionHandler.isConnectFailure(new IllegalStateException("x"))).isFalse();
+    }
+
+    @Test
+    @DisplayName("응답 전 연결 끊김(파드가 처리 중 종료) → 500 이 아니라 502 EXTERNAL_API_ERROR")
+    void prematureClose_502() {
+        Map<String, Object> closed = handle(exchange(), new RuntimeException("감쌈", PrematureCloseException.TEST_EXCEPTION));
+
+        assertThat(closed).containsEntry("status", 502).containsEntry("code", "EXTERNAL_API_ERROR");
+        assertThat(GatewayErrorWebExceptionHandler.isConnectFailure(PrematureCloseException.TEST_EXCEPTION)).isTrue();
     }
 }

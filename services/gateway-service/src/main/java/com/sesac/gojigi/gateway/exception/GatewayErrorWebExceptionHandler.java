@@ -13,11 +13,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import reactor.netty.http.client.PrematureCloseException;
 
 /**
  * 게이트웨이 처리 중 예외 → 업무 서비스와 같은 봉투 { code, message, data: null } (A-경-6c · 컨벤션 2-5).
  * 없으면 Spring 기본 오류 JSON(timestamp · path · error)이 나가 401 · 403 과 모양이 달랐다.
- * - 업무 서비스 연결 실패(파드 없음 · 연결 거부 · 연결 타임아웃) → 502 EXTERNAL_API_ERROR
+ * - 업무 서비스 연결 실패(파드 없음 · 연결 거부 · 연결 타임아웃 · 응답 전 연결 끊김) → 502 EXTERNAL_API_ERROR
+ *   응답 전 끊김(PrematureCloseException)은 파드가 처리 중에 죽은 경우(장애 주입 · OOM) — 게이트웨이 오류(500)가 아니라 업무 서비스 쪽 실패라 502 (11/17)
  * - 응답 타임아웃(httpclient.response-timeout, 게이트웨이가 504 ResponseStatusException 으로 바꿈) → 504 EXTERNAL_API_ERROR
  * - 맞는 라우트 없음 → 404 NOT_FOUND, 그 밖의 상태 코드 예외는 상태 그대로
  * - 그 밖의 예외 → 500 GLOBAL_ERROR
@@ -82,10 +84,10 @@ public class GatewayErrorWebExceptionHandler implements ErrorWebExceptionHandler
         return responder.write(exchange, status, GatewayErrorResponder.GLOBAL_ERROR, "서버 오류가 발생했습니다.");
     }
 
-    /** 원인 사슬에 연결 실패가 있는가 — Netty 의 연결 거부 · 연결 타임아웃 예외는 ConnectException 의 하위 */
+    /** 원인 사슬에 연결 실패가 있는가 — Netty 의 연결 거부 · 연결 타임아웃 예외는 ConnectException 의 하위, 응답 전 끊김은 PrematureCloseException */
     static boolean isConnectFailure(Throwable ex) {
         for (Throwable t = ex; t != null; t = t.getCause()) {
-            if (t instanceof ConnectException) {
+            if (t instanceof ConnectException || t instanceof PrematureCloseException) {
                 return true;
             }
         }
