@@ -91,7 +91,7 @@ class MonitorClientsTest {
                 ]}}""";
         LokiClient client = new LokiClient(RestClient.builder(), url());
 
-        List<LokiClient.LogLine> lines = client.errors(Instant.ofEpochMilli(0), Instant.ofEpochMilli(5000), 2);
+        List<LokiClient.LogLine> lines = client.errors(Instant.ofEpochMilli(0), Instant.ofEpochMilli(5000), 2, null);
 
         assertThat(queries.get(0)).startsWith("/loki/api/v1/query_range?").contains(LokiClient.ERROR_QUERY, "direction=backward", "limit=2");
         assertThat(lines).containsExactly(
@@ -99,7 +99,10 @@ class MonitorClientsTest {
                 new LokiClient.LogLine(2000, "order-service", "WARN", "business exception - code=CART_ITEM_NOT_FOUND", "t1"));
         assertThat(LokiClient.line("a", "WARN", 1, "plain text line").message()).isEqualTo("plain text line");
 
+        client.errors(Instant.EPOCH, Instant.EPOCH, 2, "order-service");
+        assertThat(queries.get(1)).contains("level=~\"WARN|ERROR\",app=\"order-service\"}");
+
         status = 500;
-        assertThat(client.errors(Instant.EPOCH, Instant.EPOCH, 2)).isEmpty();
+        assertThat(client.errors(Instant.EPOCH, Instant.EPOCH, 2, null)).isEmpty();
     }
 }

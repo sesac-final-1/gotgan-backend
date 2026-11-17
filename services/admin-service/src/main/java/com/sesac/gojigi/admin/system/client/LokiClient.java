@@ -35,13 +35,14 @@ public class LokiClient {
         this.restClient = restClientBuilder.clone().baseUrl(baseUrl).requestFactory(factory).build();
     }
 
-    /** 최근 WARN · ERROR 로그(최신순, 최대 limit) */
-    public List<LogLine> errors(Instant start, Instant end, int limit) {
+    /** 최근 WARN · ERROR 로그(최신순, 최대 limit) — service 가 있으면 그 서비스(app 라벨)만 */
+    public List<LogLine> errors(Instant start, Instant end, int limit, String service) {
+        String query = service == null ? ERROR_QUERY : ERROR_QUERY.replace("}", ",app=\"" + service + "\"}");
         JsonNode body;
         try {
             body = restClient.get().uri(u -> u.path("/loki/api/v1/query_range").queryParam("query", "{q}")
                     .queryParam("start", start.toEpochMilli() * 1_000_000).queryParam("end", end.toEpochMilli() * 1_000_000)
-                    .queryParam("limit", limit).queryParam("direction", "backward").build(ERROR_QUERY)).retrieve().body(JsonNode.class);
+                    .queryParam("limit", limit).queryParam("direction", "backward").build(query)).retrieve().body(JsonNode.class);
         } catch (RestClientException e) {
             log.warn("Loki 조회 실패 - {}", e.getMessage());
             return List.of();
@@ -51,10 +52,10 @@ public class LokiClient {
         }
         List<LogLine> lines = new ArrayList<>();
         for (JsonNode stream : body.path("data").path("result")) {
-            String service = stream.path("stream").path("app").asString("");
+            String app = stream.path("stream").path("app").asString("");
             String level = stream.path("stream").path("level").asString("");
             for (JsonNode value : stream.path("values")) {
-                lines.add(line(service, level, Long.parseLong(value.path(0).asString("0")) / 1_000_000, value.path(1).asString("")));
+                lines.add(line(app, level, Long.parseLong(value.path(0).asString("0")) / 1_000_000, value.path(1).asString("")));
             }
         }
         lines.sort(Comparator.comparingLong(LogLine::timestampMs).reversed());
