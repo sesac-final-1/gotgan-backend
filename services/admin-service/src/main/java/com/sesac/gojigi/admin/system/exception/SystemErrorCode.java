@@ -18,7 +18,8 @@ public enum SystemErrorCode implements ErrorCode {
     SYSTEM_LOADTEST_DISABLED(HttpStatus.FORBIDDEN, "부하테스트 기능이 꺼져 있습니다."),
     SYSTEM_LOADTEST_RUNNING(HttpStatus.CONFLICT, "이미 실행 중인 부하테스트가 있습니다."),
     SYSTEM_LOADTEST_NOT_RUNNING(HttpStatus.CONFLICT, "실행 중인 부하테스트가 없거나 아직 준비 중입니다."),
-    SYSTEM_LOADTEST_CONTROL_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "부하 생성기에 연결할 수 없습니다.");
+    SYSTEM_LOADTEST_CONTROL_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "부하 생성기에 연결할 수 없습니다."),
+    SYSTEM_REPORT_INVALID_RANGE(HttpStatus.BAD_REQUEST, "조회 기간이 올바르지 않습니다. 최근 7일 안에서 골라 주세요.");
 
     private final HttpStatus status;
     private final String message;

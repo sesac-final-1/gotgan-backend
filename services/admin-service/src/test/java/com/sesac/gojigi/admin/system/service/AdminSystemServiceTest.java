@@ -57,7 +57,7 @@ class AdminSystemServiceTest {
     }
 
     @Test
-    @DisplayName("지표 — 라우트를 서비스로 더해 비율, 요청 0 이면 errorRate null, 라우트 없는 서비스는 둘 다 null · 꺼져 있어도 조회")
+    @DisplayName("지표 — 라우트를 서비스로 더해 비율 · 분당 5xx 건수, 요청 0 이면 errorRate null, 라우트 없는 서비스는 모두 null · 꺼져 있어도 조회")
     void metrics_aggregates() {
         AdminSystemService service = service(false);
         when(prometheus.byRoute(AdminSystemService.REQUESTS_QUERY)).thenReturn(Optional.of(Map.of(
@@ -67,11 +67,11 @@ class AdminSystemServiceTest {
         SystemResponses.Metrics metrics = service.metrics();
 
         assertThat(metrics.services()).hasSize(13);
-        assertThat(metric(metrics, "order-service")).isEqualTo(new SystemResponses.ServiceMetric("order-service", 4.0, 0.25));
-        assertThat(metric(metrics, "user-service")).isEqualTo(new SystemResponses.ServiceMetric("user-service", 4.0, 0.1));
-        assertThat(metric(metrics, "review-service")).isEqualTo(new SystemResponses.ServiceMetric("review-service", 0.0, null));
-        assertThat(metric(metrics, "chat-service")).isEqualTo(new SystemResponses.ServiceMetric("chat-service", 0.0, null));
-        assertThat(metric(metrics, "gateway-service")).isEqualTo(new SystemResponses.ServiceMetric("gateway-service", null, null));
+        assertThat(metric(metrics, "order-service")).isEqualTo(new SystemResponses.ServiceMetric("order-service", 4.0, 0.25, 60L));
+        assertThat(metric(metrics, "user-service")).isEqualTo(new SystemResponses.ServiceMetric("user-service", 4.0, 0.1, 24L));
+        assertThat(metric(metrics, "review-service")).isEqualTo(new SystemResponses.ServiceMetric("review-service", 0.0, null, 0L));
+        assertThat(metric(metrics, "chat-service")).isEqualTo(new SystemResponses.ServiceMetric("chat-service", 0.0, null, 0L));
+        assertThat(metric(metrics, "gateway-service")).isEqualTo(new SystemResponses.ServiceMetric("gateway-service", null, null, null));
         verifyNoInteractions(kubernetes);
     }
 

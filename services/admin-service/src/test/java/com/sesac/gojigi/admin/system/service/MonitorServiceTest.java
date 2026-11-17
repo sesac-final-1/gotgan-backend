@@ -56,7 +56,7 @@ class MonitorServiceTest {
     }
 
     @Test
-    @DisplayName("현황 — 라우트를 서비스로 합치고(user-auth + user-service), 평균 ms · 에러율 계산, 총합, DB 연결 풀")
+    @DisplayName("현황 — 라우트를 서비스로 합치고(user-auth + user-service), 평균 ms · 5xx 건수 계산, 총합, DB 연결 풀")
     void overview() {
         when(prometheus.rangeBy(eq(MonitorService.COUNT_BY_ROUTE), any(), any(), any(), any())).thenReturn(Optional.of(Map.of(
                 "user-auth", List.of(new Sample(1000, 2), new Sample(6000, 0)),
@@ -81,12 +81,12 @@ class MonitorServiceTest {
         assertThat(user.series().avgMs()).containsExactly(new Sample(1000, 100), new Sample(6000, 0));
         assertThat(user.db()).isEqualTo(new MonitorResponses.Db(3, 0, 20));
         MonitorResponses.ServiceSeries product = overview.services().stream().filter(s -> s.name().equals("product-service")).findFirst().orElseThrow();
-        assertThat(product.series().errorRate()).containsExactly(new Sample(1000, 0.1));
+        assertThat(product.series().errors()).containsExactly(new Sample(1000, 1));   // 최근 1분 5xx 건수
         assertThat(product.series().avgMs()).containsExactly(new Sample(1000, 50));
         assertThat(product.db()).isNull();
         assertThat(overview.services()).extracting(MonitorResponses.ServiceSeries::name).doesNotContain("keycloak", "mysql", "gateway-service");
         assertThat(overview.total().rps()).contains(new Sample(1000, 14));                      // keycloak 99 는 빠짐
-        assertThat(overview.total().errorRate()).contains(new Sample(1000, 0.0714));
+        assertThat(overview.total().errors()).contains(new Sample(1000, 1));
     }
 
     @Test

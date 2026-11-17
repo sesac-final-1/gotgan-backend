@@ -51,7 +51,8 @@ public class MonitorService {
     static final String GW = "spring_cloud_gateway_requests_seconds";
     static final String COUNT_BY_ROUTE = "sum by (routeId)(rate(" + GW + "_count[15s]))";
     static final String SUM_BY_ROUTE = "sum by (routeId)(rate(" + GW + "_sum[15s]))";
-    static final String ERRORS_BY_ROUTE = "sum by (routeId)(rate(" + GW + "_count{httpStatusCode=~\"5..\"}[15s]))";
+    /** 5xx 건수 — 점마다 최근 1분 동안 몇 건(11/17 피드백: 퍼센트 대신 건수) */
+    static final String ERRORS_BY_ROUTE = "sum by (routeId)(increase(" + GW + "_count{httpStatusCode=~\"5..\"}[1m]))";
 
     /** 분석 대상 — 액추에이터 · 스트림 · WebSocket 과 이 화면 자체 폴링(/api/admin/system/**, 1 ~ 2초)은 뺀다(느린 API 순위를 자기 조회가 차지했음, 11/17) */
     static final String APP_FILTER = "namespace=\"sesac-gojigi\",app!=\"gateway-service\",uri!~\"/actuator.*|UNKNOWN|.*stream.*|/ws.*|/api/admin/system.*\"";
@@ -112,21 +113,21 @@ public class MonitorService {
         return total;
     }
 
-    /** 요청 수 시각 기준으로 평균 응답(ms) = 합 ÷ 수, 에러율 = 5xx ÷ 수. 요청이 0 이면 둘 다 0 */
+    /** 요청 수 시각 기준으로 평균 응답(ms) = 합 ÷ 수(요청 0 이면 0), errors = 최근 1분 5xx 건수(정수) */
     static MonitorResponses.Series series(TreeMap<Long, Double> count, TreeMap<Long, Double> sum, TreeMap<Long, Double> errors) {
         List<Sample> rps = new ArrayList<>();
         List<Sample> avgMs = new ArrayList<>();
-        List<Sample> errorRate = new ArrayList<>();
+        List<Sample> errorCount = new ArrayList<>();
         if (count != null) {
             count.forEach((t, c) -> {
                 rps.add(new Sample(t, round(c, 2)));
                 double s = sum == null ? 0 : sum.getOrDefault(t, 0.0);
                 double e = errors == null ? 0 : errors.getOrDefault(t, 0.0);
                 avgMs.add(new Sample(t, c > 0 ? round(s / c * 1000, 1) : 0));
-                errorRate.add(new Sample(t, c > 0 ? round(Math.min(1, e / c), 4) : 0));
+                errorCount.add(new Sample(t, Math.round(e)));
             });
         }
-        return new MonitorResponses.Series(rps, avgMs, errorRate);
+        return new MonitorResponses.Series(rps, avgMs, errorCount);
     }
 
     /** 서비스별 DB 연결 풀 — 파드 합. 조회 실패면 빈 맵 */

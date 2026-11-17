@@ -8,8 +8,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,5 +106,30 @@ class MonitorClientsTest {
 
         status = 500;
         assertThat(client.errors(Instant.EPOCH, Instant.EPOCH, 2, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Loki 리포트용 — 지표 쿼리를 라벨 · 구간 끝 시각(ms)별로 합치고, 줄 조회는 아무 쿼리나, 실패면 빈 결과")
+    void loki_countBy_and_lines() {
+        body = """
+                {"status":"success","data":{"resultType":"matrix","result":[
+                  {"metric":{"app":"order-service"},"values":[[60,"3"],[120,"1"]]},
+                  {"metric":{"app":"order-service"},"values":[[60,"2"]]}]}}""";
+        LokiClient client = new LokiClient(RestClient.builder(), url());
+
+        Map<String, Map<Long, Double>> counts = client.countBy("sum by (app)(count_over_time({a=\"b\"}[60s]))", "app",
+                Instant.ofEpochSecond(60), Instant.ofEpochSecond(120), Duration.ofMinutes(1));
+
+        assertThat(counts).containsEntry("order-service", Map.of(60_000L, 5.0, 120_000L, 1.0));
+        assertThat(queries.get(0)).contains("count_over_time", "step=60");
+
+        body = """
+                {"status":"success","data":{"resultType":"streams","result":[
+                  {"stream":{"app":"gateway-service","level":"WARN"},"values":[["2000000000","{\\"message\\":\\"의심 요청 type=secret-file\\"}"]]}]}}""";
+        assertThat(client.lines("{app=\"gateway-service\"} |= \"의심 요청\"", Instant.EPOCH, Instant.ofEpochSecond(5), 5))
+                .extracting(LokiClient.LogLine::message).containsExactly("의심 요청 type=secret-file");
+
+        status = 500;
+        assertThat(client.countBy("x", "app", Instant.EPOCH, Instant.EPOCH, Duration.ofMinutes(1))).isEmpty();
     }
 }

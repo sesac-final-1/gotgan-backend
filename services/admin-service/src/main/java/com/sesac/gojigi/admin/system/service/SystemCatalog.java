@@ -71,24 +71,26 @@ public final class SystemCatalog {
 
     /**
      * 서비스별 지표 — 라우트 rate 를 서비스로 더한 뒤 비율. 요청 0 이면 errorRate null.
-     * 라우트가 없는 서비스(gateway · keycloak · mysql · redis)는 둘 다 null
+     * errorsPerMinute = 5xx 초당 rate × 60 (최근 1분 건수, 요청 0 이면 0).
+     * 라우트가 없는 서비스(gateway · keycloak · mysql · redis)는 모두 null
      */
     public static List<ServiceMetric> serviceMetrics(Map<String, Double> totalByRoute, Map<String, Double> errorByRoute) {
         Map<String, Double> totals = byService(totalByRoute);
         Map<String, Double> errors = byService(errorByRoute);
         return SERVICES.stream().map(t -> {
             if (!ROUTE_SERVICES.containsValue(t.name())) {
-                return new ServiceMetric(t.name(), null, null);
+                return new ServiceMetric(t.name(), null, null, null);
             }
             double total = totals.getOrDefault(t.name(), 0.0);
-            Double errorRate = total > 0 ? round(errors.getOrDefault(t.name(), 0.0) / total, 4) : null;
-            return new ServiceMetric(t.name(), round(total, 2), errorRate);
+            double error = errors.getOrDefault(t.name(), 0.0);
+            Double errorRate = total > 0 ? round(error / total, 4) : null;
+            return new ServiceMetric(t.name(), round(total, 2), errorRate, Math.round(error * 60));
         }).toList();
     }
 
     /** Prometheus 조회 실패 — 모든 서비스 값 null (부분 응답) */
     public static List<ServiceMetric> unknownMetrics() {
-        return SERVICES.stream().map(t -> new ServiceMetric(t.name(), null, null)).toList();
+        return SERVICES.stream().map(t -> new ServiceMetric(t.name(), null, null, null)).toList();
     }
 
     private static Map<String, Double> byService(Map<String, Double> byRoute) {
