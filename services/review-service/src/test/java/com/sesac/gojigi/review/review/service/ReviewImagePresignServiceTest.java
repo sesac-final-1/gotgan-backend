@@ -72,7 +72,7 @@ class ReviewImagePresignServiceTest {
     }
 
     @Test
-    @DisplayName("0장 · 4장은 400 REVIEW_IMAGE_INVALID, 발급하지 않는다")
+    @DisplayName("0장, 4장은 400 REVIEW_IMAGE_INVALID, 발급하지 않는다")
     void presign_zeroOrFourFiles_throwsInvalid() {
         FileItem jpg = new FileItem("image/jpeg", 1_000L);
 
@@ -84,13 +84,13 @@ class ReviewImagePresignServiceTest {
         verifyNoInteractions(reviewImageClient);
     }
 
-    @ParameterizedTest(name = "{0} · {1}바이트")
+    @ParameterizedTest(name = "{0}, {1}바이트")
     @CsvSource({
-            "image/gif, 1000, 2번째 파일: 사진은 JPG · PNG · WEBP 만 올릴 수 있습니다.",
+            "image/gif, 1000, 2번째 파일: 사진은 JPG, PNG, WEBP 만 올릴 수 있습니다.",
             "image/jpeg, 0, 2번째 파일: 사진은 10MB 이하만 올릴 수 있습니다.",
             "image/jpeg, 10485761, 2번째 파일: 사진은 10MB 이하만 올릴 수 있습니다."
     })
-    @DisplayName("형식 · 크기 위반은 몇 번째 파일인지 알려 주고 전체 거절")
+    @DisplayName("형식, 크기 위반은 몇 번째 파일인지 알려 주고 전체 거절")
     void presign_invalidFile_rejectsAll(String contentType, long size, String message) {
         assertThatThrownBy(() -> service.presign(4L, request(new FileItem("image/jpeg", 1_000L), new FileItem(contentType, size))))
                 .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_IMAGE_INVALID)

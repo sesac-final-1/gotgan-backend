@@ -15,7 +15,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
 /**
- * 리뷰 사진 — 저장(작성 · 수정 때 통째로 교체)과 조회. URL = IMAGES_BASE_URL/{key} (product ImageUrls 와 같음).
+ * 리뷰 사진 — 저장(작성, 수정 때 통째로 교체)과 조회. URL = IMAGES_BASE_URL/{key} (product ImageUrls 와 같음).
  * 목록은 리뷰 ID 묶음으로 한 번에 읽어 N+1 을 피한다. 순서(sort_order)대로, 사진 없는 리뷰는 빈 목록.
  */
 @Component
@@ -47,7 +47,7 @@ public class ReviewImages {
         return byReviewId(List.of(reviewId)).getOrDefault(reviewId, List.of());
     }
 
-    /** 공개 · 판매자 · 관리자 응답은 URL 만 */
+    /** 공개, 판매자, 관리자 응답은 URL 만 */
     public static List<String> urls(List<ReviewImageResponse> images) {
         return images.stream().map(ReviewImageResponse::url).toList();
     }

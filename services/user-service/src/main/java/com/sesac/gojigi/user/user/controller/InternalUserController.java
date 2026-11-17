@@ -37,8 +37,8 @@ public class InternalUserController {
 
     @Operation(summary = "회원 목록", description = """
             탈퇴 회원 제외, 최신 가입순 서버 페이징 (page 0부터, size 1~100 기본 20).
-            q = 이름 또는 이메일 부분 일치(대소문자 무시), status = ACTIVE · SUSPENDED (생략 = 전체).
-            point = 포인트 잔액, totalSpent = 누적 구매확정 금액. 에러: 400 INVALID_INPUT(page · size 범위, 없는 status)""")
+            q = 이름 또는 이메일 부분 일치(대소문자 무시), status = ACTIVE, SUSPENDED (생략 = 전체).
+            point = 포인트 잔액, totalSpent = 누적 구매확정 금액. 에러: 400 INVALID_INPUT(page, size 범위, 없는 status)""")
     @GetMapping
     public ApiResponse<PageResponse<AdminUserSummaryResponse>> search(
             @RequestParam(required = false) @Size(max = 100) String q,
@@ -49,20 +49,20 @@ public class InternalUserController {
     }
 
     @Operation(summary = "회원 상세", description = """
-            목록 항목 + 연락처 · 상태 사유(statusReason, 마지막 정지 · 해제 사유) · 정지 시각 · 정지 종료 시각(null = 영구).
-            에러: 404 USER_NOT_FOUND(없는 회원 · 탈퇴)""")
+            목록 항목 + 연락처, 상태 사유(statusReason, 마지막 정지, 해제 사유), 정지 시각, 정지 종료 시각(null = 영구).
+            에러: 404 USER_NOT_FOUND(없는 회원, 탈퇴)""")
     @GetMapping("/{userId}")
     public ApiResponse<AdminUserDetailResponse> detail(@PathVariable Long userId) {
         return ApiResponse.success("회원 정보를 조회했습니다.", adminUserService.getDetail(userId));
     }
 
-    @Operation(summary = "이용정지 · 해제", description = """
+    @Operation(summary = "이용정지, 해제", description = """
             status=SUSPENDED: 정지 — days(1~365) 일 뒤 자동 해제, 생략하면 영구. Keycloak 계정 비활성 + 모든 세션 종료(Refresh Token 전부 무효)
-            → 재로그인 · 재발급 불가, 남은 Access Token 은 gateway 차단 목록으로 401.
-            status=ACTIVE: 해제 — Keycloak 계정 활성 · 차단 목록 삭제 (days 무시). 사유는 둘 다 필수. 응답은 바뀐 회원 상세.
+            → 재로그인, 재발급 불가, 남은 Access Token 은 gateway 차단 목록으로 401.
+            status=ACTIVE: 해제 — Keycloak 계정 활성, 차단 목록 삭제 (days 무시). 사유는 둘 다 필수. 응답은 바뀐 회원 상세.
             X-User-Id(선택) = 처리한 관리자, 로그용.
-            에러: 400 USER_STATUS_REASON_REQUIRED · 400 INVALID_INPUT(status 없음 · days 범위 · 사유 255자 초과)
-            · 404 USER_NOT_FOUND(없는 회원 · 탈퇴) · 409 USER_INVALID_STATUS_TRANSITION(이미 정지 · 이미 정상)""")
+            에러: 400 USER_STATUS_REASON_REQUIRED, 400 INVALID_INPUT(status 없음, days 범위, 사유 255자 초과)
+            - 404 USER_NOT_FOUND(없는 회원, 탈퇴), 409 USER_INVALID_STATUS_TRANSITION(이미 정지, 이미 정상)""")
     @PatchMapping("/{userId}/status")
     public ApiResponse<AdminUserDetailResponse> changeStatus(@PathVariable Long userId,
             @Valid @RequestBody ChangeUserStatusRequest request,

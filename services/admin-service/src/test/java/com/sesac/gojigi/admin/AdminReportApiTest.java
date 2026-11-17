@@ -42,7 +42,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 신고 (10/26 B안) — 접수 · 대상별 묶음 · 상세 · 처리. review · user 클라이언트는 가짜, DB(admindb) · 서킷 · 오류 전달은 실제.
+ * 신고 (10/26 B안) — 접수, 대상별 묶음, 상세, 처리. review, user 클라이언트는 가짜, DB(admindb), 서킷, 오류 전달은 실제.
  * 대상 ID 는 테스트마다 새로 (같은 컨텍스트가 DB 를 공유)
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -79,7 +79,7 @@ class AdminReportApiTest {
                 StandardCharsets.UTF_8);
     }
 
-    /** 리뷰 하나를 review 응답으로 흉내 — 작성자 · 스토어 지정 */
+    /** 리뷰 하나를 review 응답으로 흉내 — 작성자, 스토어 지정 */
     private long review(long authorId, long storeId, String content) {
         long reviewId = SEQ.incrementAndGet();
         when(reviewClient.get(reviewId)).thenReturn(ok("""
@@ -104,7 +104,7 @@ class AdminReportApiTest {
     }
 
     @Test
-    @DisplayName("리뷰 신고 — 201 OPEN · 신고 당시 본문 요약, 같은 사람 재신고 409, 내 리뷰 400, 리뷰에 없는 사유 400, 없는 리뷰는 review 404 그대로")
+    @DisplayName("리뷰 신고 — 201 OPEN, 신고 당시 본문 요약, 같은 사람 재신고 409, 내 리뷰 400, 리뷰에 없는 사유 400, 없는 리뷰는 review 404 그대로")
     void reportReview_rules() throws Exception {
         long reviewId = review(77L, 3L, "별로예요 ㅡㅡ");
 
@@ -131,7 +131,7 @@ class AdminReportApiTest {
     }
 
     @Test
-    @DisplayName("판매자 검토 요청 — SELLER · 내 스토어 리뷰만(다른 스토어 403), 구매자는 SELLER_REQUEST 를 쓸 수 없음")
+    @DisplayName("판매자 검토 요청 — SELLER, 내 스토어 리뷰만(다른 스토어 403), 구매자는 SELLER_REQUEST 를 쓸 수 없음")
     void sellerRequest_ownStoreOnly() throws Exception {
         long mine = review(BUYER_ID, SELLER_STORE, "배송이 느려요");
         long others = review(BUYER_ID, 9L, "배송이 느려요");
@@ -160,7 +160,7 @@ class AdminReportApiTest {
     }
 
     @Test
-    @DisplayName("관리자 — 대상별 묶음(열린 2건) → 상세 → 블라인드: review 에 사유 전달 · 열린 신고 2건 RESOLVED · 목록에 마지막 조치")
+    @DisplayName("관리자 — 대상별 묶음(열린 2건) → 상세 → 블라인드: review 에 사유 전달, 열린 신고 2건 RESOLVED, 목록에 마지막 조치")
     void admin_listDetailBlind() throws Exception {
         long reviewId = review(77L, 3L, "광고 링크 http://spam");
         report(BUYER_ID, "BUYER", null, reviewReport(reviewId, "SPAM")).andExpect(status().isCreated());
@@ -177,12 +177,12 @@ class AdminReportApiTest {
                 .andExpect(jsonPath("$.data.actions.length()").value(0));
 
         when(reviewClient.blind(eq(reviewId), any())).thenReturn(ok("{\"reviewId\":%d,\"blinded\":true}".formatted(reviewId)));
-        resolve("REVIEW", reviewId, "{\"action\":\"BLIND\",\"reason\":\"광고 · 스팸\"}")
+        resolve("REVIEW", reviewId, "{\"action\":\"BLIND\",\"reason\":\"광고, 스팸\"}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.closedReports").value(2))
                 .andExpect(jsonPath("$.data.action.action").value("BLIND"))
                 .andExpect(jsonPath("$.data.target.blinded").value(true));
-        verify(reviewClient).blind(reviewId, json.readTree("{\"blinded\":true,\"reason\":\"광고 · 스팸\"}"));
+        verify(reviewClient).blind(reviewId, json.readTree("{\"blinded\":true,\"reason\":\"광고, 스팸\"}"));
         org.assertj.core.api.Assertions.assertThat(reportRepository.findByTargetTypeAndTargetIdOrderByIdDesc(ReportTargetType.REVIEW, reviewId))
                 .allMatch(r -> r.getStatus() == ReportStatus.RESOLVED && r.getModerationActionId() != null);
 
@@ -213,7 +213,7 @@ class AdminReportApiTest {
     }
 
     @Test
-    @DisplayName("처리 거절 — 대상에 맞지 않는 조치 · 정지가 아닌데 days 400, 기각은 대상 서비스 호출 없이 DISMISSED")
+    @DisplayName("처리 거절 — 대상에 맞지 않는 조치, 정지가 아닌데 days 400, 기각은 대상 서비스 호출 없이 DISMISSED")
     void admin_resolveRules() throws Exception {
         long reviewId = review(77L, 3L, "그냥 그래요");
         report(BUYER_ID, "BUYER", null, reviewReport(reviewId, "ETC"));
@@ -230,7 +230,7 @@ class AdminReportApiTest {
     }
 
     @Test
-    @DisplayName("review 장애 — 블라인드 502, 조치를 남기지 않고 신고는 OPEN 그대로 · 상세는 신고만 보여 줌(targetError)")
+    @DisplayName("review 장애 — 블라인드 502, 조치를 남기지 않고 신고는 OPEN 그대로, 상세는 신고만 보여 줌(targetError)")
     void admin_reviewDown_recordsNothing() throws Exception {
         long reviewId = review(77L, 3L, "욕설");
         report(BUYER_ID, "BUYER", null, reviewReport(reviewId, "ABUSE"));

@@ -23,21 +23,21 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 주문 통계 (ORD-10 /internal/stats/orders) — 집계는 데이터 주인인 order 가 하고, store · admin 대시보드는 합치기만 한다.
- * order · claim 을 함께 읽으므로 두 도메인 밖의 stats 패키지에 둔다 (claim → order 한 방향 의존 유지).
+ * 주문 통계 (ORD-10 /internal/stats/orders) — 집계는 데이터 주인인 order 가 하고, store, admin 대시보드는 합치기만 한다.
+ * order, claim 을 함께 읽으므로 두 도메인 밖의 stats 패키지에 둔다 (claim → order 한 방향 의존 유지).
  */
 @Service
 @RequiredArgsConstructor
 public class OrderStatsService {
 
-    /** 매출 · 거래액에서 빼는 상품주문 — 결제 전 · 취소 완료 · 반품 완료 */
+    /** 매출, 거래액에서 빼는 상품주문 — 결제 전, 취소 완료, 반품 완료 */
     private static final Set<OrderItemStatus> NOT_SALES = Set.of(OrderItemStatus.ORDERED, OrderItemStatus.CANCELLED,
             OrderItemStatus.RETURNED);
-    /** 진행 중 클레임 — 요청됐거나 승인 후 환불 · 재배송 진행 중 */
+    /** 진행 중 클레임 — 요청됐거나 승인 후 환불, 재배송 진행 중 */
     private static final Set<ClaimStatus> OPEN_CLAIMS = ClaimStatus.OPEN;
     /**
-     * 진행 중 상품주문 — 결제 완료 ~ 배송 완료(구매확정 전) + 취소 · 반품 · 교환 요청 (store 폐점 조건, 10/20 협업요청).
-     * 구매확정 · 취소 완료 · 반품 완료는 끝난 주문. 배송 완료를 넣는 이유: 폐점 뒤 구매확정되면 정산 건이 새로 생긴다.
+     * 진행 중 상품주문 — 결제 완료 ~ 배송 완료(구매확정 전) + 취소, 반품, 교환 요청 (store 폐점 조건, 10/20 협업요청).
+     * 구매확정, 취소 완료, 반품 완료는 끝난 주문. 배송 완료를 넣는 이유: 폐점 뒤 구매확정되면 정산 건이 새로 생긴다.
      */
     private static final Set<OrderItemStatus> IN_PROGRESS = Set.of(OrderItemStatus.PAYMENT_DONE,
             OrderItemStatus.PREPARING, OrderItemStatus.SHIPPING, OrderItemStatus.DELIVERED,
@@ -61,7 +61,7 @@ public class OrderStatsService {
                 orderItemRepository.sumStoreSales(storeId, NOT_SALES, today, today.plusDays(1)));
     }
 
-    /** 구매자 주문 통계 — user 탈퇴 검사. 진행 중 기준은 스토어 통계(IN_PROGRESS · OPEN_CLAIMS)와 같다 */
+    /** 구매자 주문 통계 — user 탈퇴 검사. 진행 중 기준은 스토어 통계(IN_PROGRESS, OPEN_CLAIMS)와 같다 */
     @Transactional(readOnly = true)
     public BuyerOrderStatsResponse getBuyerStats(Long buyerId) {
         return new BuyerOrderStatsResponse(buyerId,
@@ -69,7 +69,7 @@ public class OrderStatsService {
                 orderClaimRepository.countByOrderItemOrderBuyerIdAndStatusIn(buyerId, OPEN_CLAIMS));
     }
 
-    /** 오늘(KST) 포함 최근 days 일의 결제일별 거래액 · 주문 수, 오래된 날부터 — 거래가 없는 날은 0. storeId 가 null 이면 전체 */
+    /** 오늘(KST) 포함 최근 days 일의 결제일별 거래액, 주문 수, 오래된 날부터 — 거래가 없는 날은 0. storeId 가 null 이면 전체 */
     @Transactional(readOnly = true)
     public List<DailyOrderStatsResponse> getDailyStats(Long storeId, int days) {
         LocalDate today = LocalDate.now(clock);

@@ -99,7 +99,7 @@ class BlockedUserFilterTest {
     }
 
     @Test
-    @DisplayName("토큰 없음(공개 경로) · user_id 없는 토큰은 확인하지 않고 통과")
+    @DisplayName("토큰 없음(공개 경로), user_id 없는 토큰은 확인하지 않고 통과")
     void filter_anonymousOrUnlinked_skipsCheck() {
         run(null);
         assertThat(forwarded).isTrue();
@@ -112,7 +112,7 @@ class BlockedUserFilterTest {
     }
 
     @Test
-    @DisplayName("헤더 주입(-1) · 라우팅보다 먼저 실행된다")
+    @DisplayName("헤더 주입(-1), 라우팅보다 먼저 실행된다")
     void order_runsBeforeHeaderInjection() {
         assertThat(filter.getOrder()).isEqualTo(-2);
     }

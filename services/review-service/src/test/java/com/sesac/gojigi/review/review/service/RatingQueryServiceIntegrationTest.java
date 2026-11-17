@@ -21,7 +21,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-/** 여러 상품 · 스토어 평점 — 순서 · 중복 · 0 채움 · 블라인드/삭제 제외 (MySQL 8.4 + Flyway) */
+/** 여러 상품, 스토어 평점 — 순서, 중복, 0 채움, 블라인드/삭제 제외 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, RatingQueryService.class })
@@ -29,7 +29,7 @@ import org.springframework.test.context.ActiveProfiles;
 class RatingQueryServiceIntegrationTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 28, 10, 0);
-    /** 다른 테스트가 커밋한 리뷰와 섞이지 않게 이 테스트만의 상품 · 스토어 ID */
+    /** 다른 테스트가 커밋한 리뷰와 섞이지 않게 이 테스트만의 상품, 스토어 ID */
     private static final long SHIRT = 9201L;
     private static final long PANTS = 9202L;
     private static final long NO_REVIEW = 9299L;
@@ -57,14 +57,14 @@ class RatingQueryServiceIntegrationTest {
         saveReview(STORE_A, SHIRT, 5);
         saveReview(STORE_A, SHIRT, 4);
         saveReview(STORE_A, SHIRT, 4);
-        saveReview(STORE_A, SHIRT, 1).blind("욕설 · 비방", NOW);
+        saveReview(STORE_A, SHIRT, 1).blind("욕설, 비방", NOW);
         saveReview(STORE_A, PANTS, 2).softDelete(NOW);
         saveReview(STORE_B, PANTS, 3);
         reviewRepository.flush();
     }
 
     @Test
-    @DisplayName("상품 — 요청 순서대로 · 중복은 한 번 · 리뷰 없으면 0, 블라인드 · 삭제 제외 평균은 둘째 자리")
+    @DisplayName("상품 — 요청 순서대로, 중복은 한 번, 리뷰 없으면 0, 블라인드, 삭제 제외 평균은 둘째 자리")
     void rateProducts_inRequestOrderWithZeros() {
         List<ProductRatingResponse> ratings = ratingQueryService.rateProducts(List.of(NO_REVIEW, SHIRT, PANTS, SHIRT));
 

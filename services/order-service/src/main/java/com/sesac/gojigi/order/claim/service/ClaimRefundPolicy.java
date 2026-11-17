@@ -9,7 +9,7 @@ import java.util.Set;
  */
 public final class ClaimRefundPolicy {
 
-    /** 판매자 귀책 — 반품 배송비를 받지 않는다 (스펙: 불량 · 오배송은 전액) */
+    /** 판매자 귀책 — 반품 배송비를 받지 않는다 (스펙: 불량, 오배송은 전액) */
     private static final Set<ClaimReasonCode> SELLER_FAULT = Set.of(ClaimReasonCode.DEFECTIVE,
             ClaimReasonCode.WRONG_DELIVERY);
     /** 반품 배송비 = 스토어 기본 배송비 × 2 (왕복) */

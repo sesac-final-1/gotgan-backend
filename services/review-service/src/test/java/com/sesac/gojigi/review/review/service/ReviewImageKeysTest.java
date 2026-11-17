@@ -17,14 +17,14 @@ class ReviewImageKeysTest {
     private static final String MINE = "reviews/4/7f3c9e2a-1b2c-4d5e-8f90-a1b2c3d4e5f6.jpg";
 
     @Test
-    @DisplayName("사진 없음(null · 빈 목록)은 빈 목록")
+    @DisplayName("사진 없음(null, 빈 목록)은 빈 목록")
     void check_noImages_returnsEmpty() {
         assertThat(ReviewImageKeys.check(4L, null, Set.of())).isEmpty();
         assertThat(ReviewImageKeys.check(4L, List.of(), Set.of())).isEmpty();
     }
 
     @Test
-    @DisplayName("내 키 3장 · jpg · png · webp 는 순서 그대로 통과")
+    @DisplayName("내 키 3장, jpg, png, webp 는 순서 그대로 통과")
     void check_ownKeys_pass() {
         List<String> keys = List.of(MINE, "reviews/4/b.png", "reviews/4/c.webp");
 
@@ -34,7 +34,7 @@ class ReviewImageKeysTest {
     @ParameterizedTest
     @ValueSource(strings = { "reviews/5/a.jpg", "reviews/44/a.jpg", "products/4/a.jpg", "reviews/4/a.gif",
             "reviews/4/../5/a.jpg", "reviews/4/a.jpg?x=1" })
-    @DisplayName("남의 · 다른 위치 · 다른 형식 키는 400 REVIEW_IMAGE_INVALID")
+    @DisplayName("남의, 다른 위치, 다른 형식 키는 400 REVIEW_IMAGE_INVALID")
     void check_notOwnKey_throwsInvalid(String key) {
         assertThatThrownBy(() -> ReviewImageKeys.check(4L, List.of(key), Set.of()))
                 .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_IMAGE_INVALID)
@@ -42,7 +42,7 @@ class ReviewImageKeysTest {
     }
 
     @Test
-    @DisplayName("4장 · 중복 · null 키는 400 REVIEW_IMAGE_INVALID")
+    @DisplayName("4장, 중복, null 키는 400 REVIEW_IMAGE_INVALID")
     void check_tooManyDuplicateOrNull_throwsInvalid() {
         assertThatThrownBy(() -> ReviewImageKeys.check(4L, List.of("reviews/4/a.jpg", "reviews/4/b.jpg", "reviews/4/c.jpg",
                 "reviews/4/d.jpg"), Set.of()))

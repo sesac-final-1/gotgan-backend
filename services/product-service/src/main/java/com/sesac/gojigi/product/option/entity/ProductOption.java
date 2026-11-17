@@ -20,10 +20,10 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
 
 /**
- * 옵션 조합 · 재고 (productdb product_option). 조합 1개 = 1행, 옵션 없는 상품도 값이 null 인 기본 조합 1행.
+ * 옵션 조합, 재고 (productdb product_option). 조합 1개 = 1행, 옵션 없는 상품도 값이 null 인 기본 조합 1행.
  * 재고 차감은 엔티티가 아니라 저장소의 조건부 UPDATE(stock >= :qty) 로 한다 — 동시 주문에서 읽고-쓰기 경합을 피하려고 (재고 예약 PR).
  * 구성 변경으로 사라진 조합은 소프트 삭제 — 삭제된 조합도 재고 복원 대상이라 전역 필터를 걸지 않는다.
- * @DynamicUpdate — 판매자 수정(추가금 · 삭제)이 그 사이 주문이 바꾼 stock 을 덮어쓰지 않게 바뀐 컬럼만 UPDATE.
+ * @DynamicUpdate — 판매자 수정(추가금, 삭제)이 그 사이 주문이 바꾼 stock 을 덮어쓰지 않게 바뀐 컬럼만 UPDATE.
  */
 @Getter
 @Entity
@@ -68,8 +68,8 @@ public class ProductOption extends BaseTimeEntity {
     }
 
     /**
-     * 구매 가능 (product.md 공통 "노출 · 구매 가능") — 판매중 · 카테고리 사용 중 · 스토어 운영 중 · 상품 · 옵션 삭제 안 됨.
-     * 카테고리 사용 여부(하위 · 상위 둘 다)는 엔티티 밖 정보라 받는다. 품절(stock 0)은 따로 본다 — 4절 조회 · 1절 예약이 같이 쓴다.
+     * 구매 가능 (product.md 공통 "노출, 구매 가능") — 판매중, 카테고리 사용 중, 스토어 운영 중, 상품, 옵션 삭제 안 됨.
+     * 카테고리 사용 여부(하위, 상위 둘 다)는 엔티티 밖 정보라 받는다. 품절(stock 0)은 따로 본다 — 4절 조회, 1절 예약이 같이 쓴다.
      */
     public boolean isPurchasable(boolean categoryActive) {
         return deletedAt == null && product.getDeletedAt() == null && HiddenReason.of(product, categoryActive) == null;
@@ -85,7 +85,7 @@ public class ProductOption extends BaseTimeEntity {
         this.extraPrice = extraPrice;
     }
 
-    /** 구성 변경으로 빠진 조합 — 지난 주문 · 장바구니 · 재고 이력이 ID 를 참조해 행은 남긴다 */
+    /** 구성 변경으로 빠진 조합 — 지난 주문, 장바구니, 재고 이력이 ID 를 참조해 행은 남긴다 */
     public void delete(LocalDateTime now) {
         this.deletedAt = now;
     }

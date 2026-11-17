@@ -55,8 +55,8 @@ class EventOutboxServiceTest {
         assertThat(row.isSent()).isFalse();
         assertThat(row.getAttemptCount()).isEqualTo(MAX_ATTEMPTS + 2);
         String logs = output.getOut();
-        assertThat(logs.split("발행기가 다시 보냄", -1)).hasSize(MAX_ATTEMPTS);          // 1 · 2회째
+        assertThat(logs.split("발행기가 다시 보냄", -1)).hasSize(MAX_ATTEMPTS);          // 1, 2회째
         assertThat(logs.split("회 실패 — 수동 확인 필요", -1)).hasSize(2);               // 한도(3회째) 한 번만 error
-        assertThat(logs.split("계속 실패 — 수동 확인 필요", -1)).hasSize(3);              // 4 · 5회째 한 줄 warn
+        assertThat(logs.split("계속 실패 — 수동 확인 필요", -1)).hasSize(3);              // 4, 5회째 한 줄 warn
     }
 }

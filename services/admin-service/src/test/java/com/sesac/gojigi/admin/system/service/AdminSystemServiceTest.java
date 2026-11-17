@@ -32,7 +32,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-/** 내리기 규칙 중 통합 테스트로 만들기 어려운 것 — 꺼짐 · 1분 지난 뒤 복구 중 · 일부만 지우고 실패 */
+/** 내리기 규칙 중 통합 테스트로 만들기 어려운 것 — 꺼짐, 1분 지난 뒤 복구 중, 일부만 지우고 실패 */
 class AdminSystemServiceTest {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -57,7 +57,7 @@ class AdminSystemServiceTest {
     }
 
     @Test
-    @DisplayName("지표 — 라우트를 서비스로 더해 비율 · 분당 5xx 건수, 요청 0 이면 errorRate null, 라우트 없는 서비스는 모두 null · 꺼져 있어도 조회")
+    @DisplayName("지표 — 라우트를 서비스로 더해 비율, 분당 5xx 건수, 요청 0 이면 errorRate null, 라우트 없는 서비스는 모두 null, 꺼져 있어도 조회")
     void metrics_aggregates() {
         AdminSystemService service = service(false);
         when(prometheus.byRoute(AdminSystemService.REQUESTS_QUERY)).thenReturn(Optional.of(Map.of(
@@ -177,7 +177,7 @@ class AdminSystemServiceTest {
     }
 
     @Test
-    @DisplayName("시나리오 중간 삭제 실패 — 앞 서비스 · 지운 만큼은 기록하고 503 을 그대로 던짐, 뒤 서비스는 안 지움 · 사유는 공백 제거")
+    @DisplayName("시나리오 중간 삭제 실패 — 앞 서비스, 지운 만큼은 기록하고 503 을 그대로 던짐, 뒤 서비스는 안 지움, 사유는 공백 제거")
     void scenario_partialFailure_recordsDeleted() {
         AdminSystemService service = service(true);
         when(kubernetes.desiredReplicas()).thenReturn(Map.of("order-service", 2, "product-service", 2, "payment-service", 2));

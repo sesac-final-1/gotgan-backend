@@ -29,7 +29,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 인증 — 비밀번호 검증 · 토큰 발급 · 계정 저장은 Keycloak, user-service 는 대리 호출 + userdb 회원 연결 (가이드라인 08장).
+ * 인증 — 비밀번호 검증, 토큰 발급, 계정 저장은 Keycloak, user-service 는 대리 호출 + userdb 회원 연결 (가이드라인 08장).
  * Keycloak 호출 동안 DB 커넥션을 잡지 않도록 트랜잭션은 단계별로 짧게 (TransactionTemplate).
  */
 @Slf4j
@@ -50,11 +50,11 @@ public class AuthService {
     }
 
     /**
-     * 회원가입 (users.keycloak_id 주석 · keycloak README):
+     * 회원가입 (users.keycloak_id 주석, keycloak README):
      * 1. userdb 행 생성 (커밋해야 user_id 가 나온다) → 2. Keycloak 계정 생성(user_id 속성) → 3. keycloak_id 연결 → 4. 자동 로그인.
      * 2 가 실패하면 1 의 행을 지운다 (가입 실패 보상 — 회원 물리 삭제 금지의 유일한 예외).
-     * 2 의 결과를 모르면(타임아웃 · 5xx) 계정이 남았을 수 있어 응답 뒤에 정리한다 (SignupOrphanCleaner). 그래도 남은 계정은 재가입 때 지운다 (createKeycloakAccount).
-     * 3 · 4 의 실패는 가입을 되돌리지 않는다 — keycloak_id 는 첫 로그인 때도 연결되고, 로그인은 다시 하면 된다.
+     * 2 의 결과를 모르면(타임아웃, 5xx) 계정이 남았을 수 있어 응답 뒤에 정리한다 (SignupOrphanCleaner). 그래도 남은 계정은 재가입 때 지운다 (createKeycloakAccount).
+     * 3, 4 의 실패는 가입을 되돌리지 않는다 — keycloak_id 는 첫 로그인 때도 연결되고, 로그인은 다시 하면 된다.
      */
     public SignupResult signup(SignupRequest request) {
         String email = request.normalizedEmail();
@@ -84,21 +84,21 @@ public class AuthService {
 
     /**
      * 로그인 — Keycloak Direct Grant 로 토큰을 받고, 토큰의 user_id 로 회원을 찾아 응답을 만든다.
-     * Keycloak 호출은 트랜잭션 밖 · 회원 갱신(keycloak_id 연결 · 마지막 로그인)만 트랜잭션 — 외부 호출 동안 DB 커넥션을 잡지 않는다.
+     * Keycloak 호출은 트랜잭션 밖, 회원 갱신(keycloak_id 연결, 마지막 로그인)만 트랜잭션 — 외부 호출 동안 DB 커넥션을 잡지 않는다.
      */
     public LoginResult login(LoginRequest request) {
         KeycloakTokenResponse token = keycloakClientAdapter.passwordGrant(request.email(), request.password());
         AccessTokenClaims claims = AccessTokenClaims.parse(token.accessToken(), jsonMapper);
         User user = transactionTemplate.execute(status -> recordLogin(claims));
         LoginResponse response = LoginResponse.of(token.accessToken(), token.expiresIn(), user, claims);
-        log.info("로그인 userId={} roles={}", user.getId(), claims.roles());   // 이메일 · 토큰은 남기지 않음 (컨벤션 5-6)
+        log.info("로그인 userId={} roles={}", user.getId(), claims.roles());   // 이메일, 토큰은 남기지 않음 (컨벤션 5-6)
 
         return new LoginResult(response, token.refreshToken(), token.refreshExpiresIn());
     }
 
     /**
      * 토큰 재발급 — Refresh 쿠키로 새 Access Token 을 받고(Refresh Token 도 바뀐다) 로그인과 같은 응답을 만든다.
-     * 쿠키 없음 · 만료 · 로그아웃된 세션은 AUTH_SESSION_EXPIRED. 탈퇴 · 정지 회원은 로그인과 같이 막는다 (마지막 로그인은 기록하지 않음).
+     * 쿠키 없음, 만료, 로그아웃된 세션은 AUTH_SESSION_EXPIRED. 탈퇴, 정지 회원은 로그인과 같이 막는다 (마지막 로그인은 기록하지 않음).
      */
     public LoginResult refresh(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
@@ -112,7 +112,7 @@ public class AuthService {
     }
 
     /**
-     * 소셜 로그인 시작 — state · PKCE 를 만들고 Keycloak 로그인 주소(kc_idp_hint=제공자)를 돌려준다.
+     * 소셜 로그인 시작 — state, PKCE 를 만들고 Keycloak 로그인 주소(kc_idp_hint=제공자)를 돌려준다.
      * 컨트롤러가 state 를 HttpOnly 쿠키에 담고 브라우저를 그 주소로 보낸다.
      */
     public SocialLoginStart startSocialLogin(String providerAlias) {
@@ -122,17 +122,17 @@ public class AuthService {
 
     /**
      * 소셜 로그인 콜백 (keycloak README 소셜 로그인):
-     * 1. 쿠키의 state 와 돌려받은 state 비교 · 제공자 오류 확인
+     * 1. 쿠키의 state 와 돌려받은 state 비교, 제공자 오류 확인
      * 2. code → 토큰 (PKCE)
      * 3. 첫 소셜 로그인(토큰에 user_id 없음): users 행 생성 → Keycloak 계정에 user_id 저장 → 토큰 재발급(user_id 클레임 포함)
      *    같은 이메일의 자체 계정은 Keycloak 이 비밀번호 확인 후 연결해서 처음부터 user_id 가 있다
-     * 4. 로그인 기록 (keycloak_id 연결 · 마지막 로그인)
+     * 4. 로그인 기록 (keycloak_id 연결, 마지막 로그인)
      * 브라우저 리다이렉트로 끝나서 예외 대신 결과로 돌려준다 — 실패 원인은 여기서 warn 한 번.
      */
     public SocialLoginResult completeSocialLogin(String cookieValue, String code, String returnedState, String providerError) {
         SocialLoginState login = SocialLoginState.fromCookieValue(cookieValue);
         if (login == null || !login.matches(returnedState) || providerError != null || code == null) {
-            log.warn("소셜 로그인 콜백 거절 — 쿠키 {} · state {} · 제공자 오류 {}",
+            log.warn("소셜 로그인 콜백 거절 — 쿠키 {}, state {}, 제공자 오류 {}",
                     login == null ? "없음/형식 오류" : "있음", login != null && login.matches(returnedState) ? "일치" : "불일치",
                     providerError);
             return SocialLoginResult.failure(AuthErrorCode.AUTH_SOCIAL_LOGIN_FAILED.getCode());
@@ -206,7 +206,7 @@ public class AuthService {
      * 쿠키가 없거나 Keycloak 이 실패해도 예외를 던지지 않는다 — 브라우저 쪽 로그아웃(쿠키 삭제)은 항상 끝나야 한다.
      * Access Token 은 만료(최대 30분)까지 남는다 — 프론트가 메모리에서 버리는 것으로 끝 (blacklist:{jti} 는 Could).
      *
-     * @return Keycloak 세션을 끝냈으면 true (쿠키 없음 · 실패면 false)
+     * @return Keycloak 세션을 끝냈으면 true (쿠키 없음, 실패면 false)
      */
     public boolean logout(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
@@ -228,7 +228,7 @@ public class AuthService {
 
     /**
      * 로그 전용 — Refresh Token(JWT)의 sub(Keycloak 사용자 ID)로 회원을 찾는다. 서명 검증 없이 읽으므로 판단에 쓰지 않는다
-     * (세션 종료 판단은 Keycloak 이 한다). 읽을 수 없는 토큰 · 연결 안 된 계정이면 null.
+     * (세션 종료 판단은 Keycloak 이 한다). 읽을 수 없는 토큰, 연결 안 된 계정이면 null.
      */
     private Long userIdForLog(String refreshToken) {
         try {
@@ -240,16 +240,16 @@ public class AuthService {
     }
 
     /**
-     * 탈퇴 시 Keycloak 계정 삭제 — 로그인 · Refresh 가 더 이상 되지 않는다.
-     * 회원 행 처리 · 실패 시 정책은 호출하는 쪽(UserService.withdraw)이 정한다.
+     * 탈퇴 시 Keycloak 계정 삭제 — 로그인, Refresh 가 더 이상 되지 않는다.
+     * 회원 행 처리, 실패 시 정책은 호출하는 쪽(UserService.withdraw)이 정한다.
      */
     public void deleteAccount(String keycloakId, String email) {
         keycloakClientAdapter.deleteUser(keycloakId, email);
     }
 
     /**
-     * 이용정지 시 Keycloak 계정 비활성 + 모든 세션 종료 — 새 로그인 · Refresh 가 막히고 발급된 Refresh Token 이 전부 무효.
-     * 회원 행 처리 · 실패 시 정책은 호출하는 쪽(UserStatusService)이 정한다.
+     * 이용정지 시 Keycloak 계정 비활성 + 모든 세션 종료 — 새 로그인, Refresh 가 막히고 발급된 Refresh Token 이 전부 무효.
+     * 회원 행 처리, 실패 시 정책은 호출하는 쪽(UserStatusService)이 정한다.
      */
     public void suspendAccount(String keycloakId, String email) {
         keycloakClientAdapter.disableUser(keycloakId, email);
@@ -261,8 +261,8 @@ public class AuthService {
     }
 
     /**
-     * 비밀번호 확인 — 현재 비밀번호로 Direct Grant. 불일치 · 임시 잠금(AUTH_INVALID_CREDENTIALS)은 false, 정지 · 장애는 예외 그대로.
-     * 확인하느라 생긴 Keycloak 세션은 바로 끝낸다 — 회원이 쓰던 세션 · 토큰과는 별개 (실패해도 확인 결과는 그대로).
+     * 비밀번호 확인 — 현재 비밀번호로 Direct Grant. 불일치, 임시 잠금(AUTH_INVALID_CREDENTIALS)은 false, 정지, 장애는 예외 그대로.
+     * 확인하느라 생긴 Keycloak 세션은 바로 끝낸다 — 회원이 쓰던 세션, 토큰과는 별개 (실패해도 확인 결과는 그대로).
      */
     public boolean verifyPassword(String email, String password) {
         KeycloakTokenResponse token;
@@ -283,7 +283,7 @@ public class AuthService {
         return true;
     }
 
-    /** 비밀번호 변경 — 이메일과 같은 비밀번호는 realm 정책(notUsername)이라 먼저 막는다. 기존 세션 · 토큰은 그대로 둔다 */
+    /** 비밀번호 변경 — 이메일과 같은 비밀번호는 realm 정책(notUsername)이라 먼저 막는다. 기존 세션, 토큰은 그대로 둔다 */
     public void changePassword(String keycloakId, String email, String newPassword) {
         if (newPassword.equalsIgnoreCase(email)) {
             throw new AuthException(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
@@ -329,7 +329,7 @@ public class AuthService {
     }
 
     private void deleteUserRow(Long userId) {
-        log.warn("가입 보상 — Keycloak 계정 생성 · 연결 실패로 회원 행 삭제 userId={}", userId);
+        log.warn("가입 보상 — Keycloak 계정 생성, 연결 실패로 회원 행 삭제 userId={}", userId);
         transactionTemplate.execute(status -> {
             userRepository.deleteById(userId);
             return null;
@@ -356,7 +356,7 @@ public class AuthService {
         }
     }
 
-    /** 토큰의 user_id 로 연결된 활성 회원 — 연결 안 됨 · 탈퇴는 AUTH_ACCOUNT_NOT_LINKED, 정지는 AUTH_ACCOUNT_DISABLED */
+    /** 토큰의 user_id 로 연결된 활성 회원 — 연결 안 됨, 탈퇴는 AUTH_ACCOUNT_NOT_LINKED, 정지는 AUTH_ACCOUNT_DISABLED */
     private User loadLinkedActiveUser(AccessTokenClaims claims) {
         if (claims.userId() == null) {
             throw new AuthException(AuthErrorCode.AUTH_ACCOUNT_NOT_LINKED);   // Keycloak 속성 user_id 미설정
@@ -372,7 +372,7 @@ public class AuthService {
     private User recordLogin(AccessTokenClaims claims) {
         User user = loadLinkedActiveUser(claims);
         if (user.getKeycloakId() == null) {
-            user.linkKeycloak(claims.keycloakId());   // 시드 계정 · 가입 직후 미연결 — 첫 로그인 때 연결
+            user.linkKeycloak(claims.keycloakId());   // 시드 계정, 가입 직후 미연결 — 첫 로그인 때 연결
             log.info("Keycloak 계정 연결 userId={}", user.getId());
         }
         user.recordLogin(LocalDateTime.now(clock));

@@ -33,8 +33,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 상품 이미지 업로드 주소 발급 (POST /api/seller/products/images/presign, product.md 17절) — 실제 MySQL · Flyway.
- * S3 서명은 ProductImageClientTest 가 보고, 여기서는 클라이언트를 목으로 바꿔 요청 검사 · 헤더 · 등록 API 와 키 모양이 맞는지 본다.
+ * 상품 이미지 업로드 주소 발급 (POST /api/seller/products/images/presign, product.md 17절) — 실제 MySQL, Flyway.
+ * S3 서명은 ProductImageClientTest 가 보고, 여기서는 클라이언트를 목으로 바꿔 요청 검사, 헤더, 등록 API 와 키 모양이 맞는지 본다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게.
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -64,7 +64,7 @@ class SellerProductImageApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("발급한 키 그대로 상품 등록이 통과한다 — 200 요청 순서 · 내 스토어 키 · 만료 +09:00 → 등록 201")
+    @DisplayName("발급한 키 그대로 상품 등록이 통과한다 — 200 요청 순서, 내 스토어 키, 만료 +09:00 → 등록 201")
     void presign_validFiles_keysAcceptedByRegister() throws Exception {
         // given
         given(productImageClient.presignUpload(anyString(), anyString(), anyLong()))
@@ -107,7 +107,7 @@ class SellerProductImageApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("files 없음 · 크기 없음 — 400 INVALID_INPUT")
+    @DisplayName("files 없음, 크기 없음 — 400 INVALID_INPUT")
     void presign_missingFields_invalidInput() throws Exception {
         presign("1", "{}").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         presign("1", "{\"files\":[{\"contentType\":\"image/png\"}]}")

@@ -10,7 +10,7 @@ import org.springframework.web.client.support.RestClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
 /**
- * Keycloak 클라이언트 — 공통 RestClient.Builder(연결 2초 · 읽기 3초)를 복제한다.
+ * Keycloak 클라이언트 — 공통 RestClient.Builder(연결 2초, 읽기 3초)를 복제한다.
  * - KeycloakClient: realm OIDC 주소 + client 인증 헤더(Basic)
  * - KeycloakAdminClient: Admin API 주소, 인증은 호출마다 서비스 계정 Bearer 토큰 (Basic 헤더를 붙이지 않는다)
  */

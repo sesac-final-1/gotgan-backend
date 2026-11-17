@@ -5,7 +5,7 @@ import com.sesac.gojigi.order.order.entity.OrderItem;
 
 /**
  * OrderItemShipped payload (docs/events.md) — 알림 Lambda(배송 시작 메일).
- * buyerId · ordererName · productName · optionName 은 10/21 추가분 (gotgan-config #34).
+ * buyerId, ordererName, productName, optionName 은 10/21 추가분 (gotgan-config #34).
  */
 public record OrderItemShippedPayload(Long orderItemId, String orderNo, Long buyerId, String ordererEmail,
                                       String ordererName, String productName, String optionName, String courier,

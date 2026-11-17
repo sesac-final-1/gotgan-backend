@@ -9,10 +9,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.util.WebUtils;
 
 /**
- * 인증 쿠키 읽기 · 만들기 — 이름 · 경로 · Secure 는 설정(app.auth.*)에서 받는다 (컨벤션 4-4).
- * - Refresh Token: HttpOnly · Secure · SameSite=Strict · Path=/api/auth — 프론트 JS 가 읽지 못하고 /api/auth/** 요청에만 실린다
- * - 소셜 로그인 state · PKCE: HttpOnly · SameSite=Lax · Path=/api/auth/social · 10분 — Keycloak(다른 사이트)에서 돌아오는 이동에도 실려야 해서 Lax
- * 지우기는 같은 이름 · 경로에 Max-Age=0 으로 덮어쓴다 (경로가 다르면 브라우저가 지우지 않음).
+ * 인증 쿠키 읽기, 만들기 — 이름, 경로, Secure 는 설정(app.auth.*)에서 받는다 (컨벤션 4-4).
+ * - Refresh Token: HttpOnly, Secure, SameSite=Strict, Path=/api/auth — 프론트 JS 가 읽지 못하고 /api/auth/** 요청에만 실린다
+ * - 소셜 로그인 state, PKCE: HttpOnly, SameSite=Lax, Path=/api/auth/social, 10분 — Keycloak(다른 사이트)에서 돌아오는 이동에도 실려야 해서 Lax
+ * 지우기는 같은 이름, 경로에 Max-Age=0 으로 덮어쓴다 (경로가 다르면 브라우저가 지우지 않음).
  */
 @Component
 public class AuthCookies {
@@ -55,7 +55,7 @@ public class AuthCookies {
         return refreshCookie("", Duration.ZERO);
     }
 
-    /** 소셜 로그인 시작 — state · PKCE 쿠키 (10분) */
+    /** 소셜 로그인 시작 — state, PKCE 쿠키 (10분) */
     public String social(String value) {
         return socialCookie(value, SOCIAL_COOKIE_MAX_AGE);
     }

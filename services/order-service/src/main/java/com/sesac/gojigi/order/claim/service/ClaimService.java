@@ -14,7 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 반품 · 교환 신청 (CLM-03 · 04) · 클레임 환불 예정액 — 스토어 기본 배송비(store)를 트랜잭션 밖에서 읽고 ClaimTxService 에 넘긴다.
+ * 반품, 교환 신청 (CLM-03, 04), 클레임 환불 예정액 — 스토어 기본 배송비(store)를 트랜잭션 밖에서 읽고 ClaimTxService 에 넘긴다.
  * 취소(CLM-01)는 Saga 라 CancelOrderItemSaga 가 맡는다.
  */
 @Service
@@ -34,21 +34,21 @@ public class ClaimService {
                     target.storeShippingFeeIfLast(), target.cashLeft());
             case RETURN -> ClaimRefundPolicy.ret(item.getItemAmt(), item.getUsedPoint(),
                     returnShippingFee(item, reasonCode), target.cashLeft());
-            case EXCHANGE -> new Refund(0L, 0L, 0L);   // 같은 옵션 재배송 — 결제 · 재고 변동 없음, 교환 배송비 받지 않음
+            case EXCHANGE -> new Refund(0L, 0L, 0L);   // 같은 옵션 재배송 — 결제, 재고 변동 없음, 교환 배송비 받지 않음
         };
         return new ClaimPreviewResponse(item.getId(), type, reasonCode, item.getItemAmt(), refund.shippingFee(),
                 ClaimRefundPolicy.sellerFault(reasonCode), refund.refundAmt(), refund.restorePoint(),
                 type == ClaimType.EXCHANGE ? 0L : item.revocablePoint());
     }
 
-    /** 반품 · 교환 신청 — 먼저 신청 가능 여부를 확인하고 스토어 배송비를 읽은 뒤, 주문을 잠근 트랜잭션에서 다시 확인하고 접수 */
+    /** 반품, 교환 신청 — 먼저 신청 가능 여부를 확인하고 스토어 배송비를 읽은 뒤, 주문을 잠근 트랜잭션에서 다시 확인하고 접수 */
     public ClaimResponse requestReturnOrExchange(Long buyerId, String orderNo, ClaimCreateRequest request) {
         ClaimTarget target = claimTx.find(buyerId, orderNo, request.orderItemId(), request.type());
         long fee = request.type() == ClaimType.RETURN ? returnShippingFee(target.item(), request.reasonCode()) : 0L;
         return claimTx.openReturnOrExchange(buyerId, orderNo, request, fee);
     }
 
-    /** 구매자 철회 (반품 · 교환, 판매자 승인 전) */
+    /** 구매자 철회 (반품, 교환, 판매자 승인 전) */
     public ClaimDetailResponse withdraw(Long buyerId, Long claimId) {
         return claimTx.withdraw(buyerId, claimId);
     }

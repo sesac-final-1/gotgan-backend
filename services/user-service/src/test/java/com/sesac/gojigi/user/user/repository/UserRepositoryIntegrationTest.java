@@ -59,7 +59,7 @@ class UserRepositoryIntegrationTest {
     }
 
     @Test
-    @DisplayName("탈퇴한 회원은 포인트를 적립 · 차감할 수 없다")
+    @DisplayName("탈퇴한 회원은 포인트를 적립, 차감할 수 없다")
     void addPointAndDeductPoint_whenUserDeleted_returnsZero() {
         // given
         User user = saveUserWithPoint("c@gotgan.com", 100L);
@@ -67,7 +67,7 @@ class UserRepositoryIntegrationTest {
         found.softDelete(LocalDateTime.now());
         userRepository.flush();
 
-        // when · then
+        // when, then
         assertThat(userRepository.addPoint(user.getId(), 50L)).isZero();
         assertThat(userRepository.deductPoint(user.getId(), 50L)).isZero();
     }
@@ -94,7 +94,7 @@ class UserRepositoryIntegrationTest {
         userRepository.findById(user.getId()).orElseThrow().softDelete(LocalDateTime.now());
         userRepository.flush();
 
-        // when · then
+        // when, then
         assertThat(userRepository.existsByEmail("e@gotgan.com")).isTrue();
         assertThat(userRepository.findByIdAndDeletedAtIsNull(user.getId())).isEmpty();
     }

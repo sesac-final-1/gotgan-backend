@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 관리자 신고 관리 — 역할(ADMIN)은 게이트웨이가 확인한다 */
-@Tag(name = "관리자 신고 관리", description = "대상별 신고 묶음 · 상세 · 처리(리뷰 블라인드 · 회원 정지 · 기각) — 인가: ADMIN")
+@Tag(name = "관리자 신고 관리", description = "대상별 신고 묶음, 상세, 처리(리뷰 블라인드, 회원 정지, 기각) — 인가: ADMIN")
 @RestController
 @RequestMapping("/api/admin/reports")
 @RequiredArgsConstructor
@@ -36,7 +36,7 @@ public class AdminReportController {
         return ApiResponse.success("신고 목록을 조회했습니다.", adminReportService.list(targetType));
     }
 
-    @Operation(summary = "신고 상세", description = "신고 목록 · 조치 이력 + 대상 현재 값(review · user — 불러오지 못하면 target null + targetError)")
+    @Operation(summary = "신고 상세", description = "신고 목록, 조치 이력 + 대상 현재 값(review, user — 불러오지 못하면 target null + targetError)")
     @GetMapping("/{targetType}/{targetId}")
     public ApiResponse<ReportResponses.TargetDetail> detail(@Parameter(hidden = true) @CurrentUser AuthUser admin,
                                                             @PathVariable ReportTargetType targetType, @PathVariable Long targetId) {
@@ -44,8 +44,8 @@ public class AdminReportController {
     }
 
     @Operation(summary = "신고 처리", description = """
-            {action, reason, days?} — REVIEW: BLIND · UNBLIND, USER: SUSPEND(days 1~365, 생략 = 영구) · UNSUSPEND, 공통: DISMISS.
-            대상 서비스 호출 성공 후 조치 기록 + 열린 신고 일괄 닫기. 400 REPORT_ACTION_NOT_ALLOWED · 대상 서비스 오류 그대로""")
+            {action, reason, days?} — REVIEW: BLIND, UNBLIND, USER: SUSPEND(days 1~365, 생략 = 영구), UNSUSPEND, 공통: DISMISS.
+            대상 서비스 호출 성공 후 조치 기록 + 열린 신고 일괄 닫기. 400 REPORT_ACTION_NOT_ALLOWED, 대상 서비스 오류 그대로""")
     @PostMapping("/{targetType}/{targetId}/resolve")
     public ApiResponse<ReportResponses.Resolved> resolve(@Parameter(hidden = true) @CurrentUser AuthUser admin,
                                                          @PathVariable ReportTargetType targetType, @PathVariable Long targetId,

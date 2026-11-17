@@ -14,9 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 재고 복원 (PRD-09, product.md 3절) — 취소 · 반품 Saga. claimId 멱등(ref_key = claim-{claimId}).
+ * 재고 복원 (PRD-09, product.md 3절) — 취소, 반품 Saga. claimId 멱등(ref_key = claim-{claimId}).
  * 순서: ① 옵션 행 잠금(없으면 404) ② 같은 claimId RESTORE 기록이 있으면 아무것도 안 함 ③ stock + qty + RESTORE 기록.
- * 옵션 · 상품이 판매중지 · 삭제돼도 복원한다 — 결제완료 즉시 취소 Saga 가 이미 부르고, 실패하면 같은 claimId 로 다시 부른다.
+ * 옵션, 상품이 판매중지, 삭제돼도 복원한다 — 결제완료 즉시 취소 Saga 가 이미 부르고, 실패하면 같은 claimId 로 다시 부른다.
  * 복원 수량이 실제 판매 수량을 넘는지는 product 가 알 수 없다(order 가 클레임 수량 그대로 보냄).
  */
 @Slf4j

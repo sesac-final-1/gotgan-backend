@@ -47,7 +47,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 결제 확인 [요청 2] · 결제 대기 만료 · Saga 복구 — 검증 결과별 확정 · 보상 · 결제 대기 유지 */
+/** 결제 확인 [요청 2], 결제 대기 만료, Saga 복구 — 검증 결과별 확정, 보상, 결제 대기 유지 */
 @ExtendWith(MockitoExtension.class)
 class PlaceOrderSagaPaymentTest {
 
@@ -69,7 +69,7 @@ class PlaceOrderSagaPaymentTest {
     private Order order;
     private SagaInstance instance;
 
-    /** 결제 대기 주문 — 65,000원 · 포인트 2,000 사용(OrderFixtures), 상품주문 옵션 11 × 2 */
+    /** 결제 대기 주문 — 65,000원, 포인트 2,000 사용(OrderFixtures), 상품주문 옵션 11 × 2 */
     @BeforeEach
     void setUp() {
         order = OrderFixtures.order();
@@ -133,7 +133,7 @@ class PlaceOrderSagaPaymentTest {
         }
 
         @Test
-        @DisplayName("이미 PAID — payment 를 부르지 않고 같은 응답 (새로고침 · 재전송)")
+        @DisplayName("이미 PAID — payment 를 부르지 않고 같은 응답 (새로고침, 재전송)")
         void confirm_alreadyPaid_sameResponse() {
             // given
             order.markPaid(LocalDateTime.of(2026, 10, 22, 12, 0));
@@ -153,7 +153,7 @@ class PlaceOrderSagaPaymentTest {
             given(sagaTx.getPlaceOrder(1L)).willReturn(instance);
             willThrow(new OrderException(OrderErrorCode.ORDER_PAYMENT_NOT_COMPLETED)).given(payment).verify(VERIFY);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
                     .extracting(e -> ((OrderException) e).getErrorCode())
                     .isEqualTo(OrderErrorCode.ORDER_PAYMENT_NOT_COMPLETED);
@@ -168,21 +168,21 @@ class PlaceOrderSagaPaymentTest {
             given(sagaTx.getPlaceOrder(1L)).willReturn(instance);
             willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR)).given(payment).verify(VERIFY);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
                     .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
             verify(sagaTx, never()).startCompensating(any(), any());
         }
 
         @Test
-        @DisplayName("금액 불일치 · 끝난 결제 — 전부 역순 보상 → 주문 FAILED 후 409 ORDER_PAYMENT_FAILED")
+        @DisplayName("금액 불일치, 끝난 결제 — 전부 역순 보상 → 주문 FAILED 후 409 ORDER_PAYMENT_FAILED")
         void confirm_paymentFailed_compensates() {
             // given
             given(sagaTx.getPlaceOrder(1L)).willReturn(instance);
             givenItems();
             willThrow(new OrderException(OrderErrorCode.ORDER_PAYMENT_FAILED)).given(payment).verify(VERIFY);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
                     .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_PAYMENT_FAILED);
             verifyCompensatedAll();
@@ -196,7 +196,7 @@ class PlaceOrderSagaPaymentTest {
             order.markFailed();
             given(sagaTx.getPlaceOrder(1L)).willReturn(instance);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
                     .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATUS);
             verifyNoInteractions(payment);
@@ -209,7 +209,7 @@ class PlaceOrderSagaPaymentTest {
             instance.startCompensating("이전 실패");
             given(sagaTx.getPlaceOrder(1L)).willReturn(instance);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
                     .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATUS);
             verifyNoInteractions(payment);
@@ -227,7 +227,7 @@ class PlaceOrderSagaPaymentTest {
             }
 
             @Test
-            @DisplayName("먼저 커밋된 PAID(409) · 동시 갱신(낙관 락) — 다시 읽어 PAID 면 같은 성공 응답, Saga 단계를 완료로 다시 맞춘다")
+            @DisplayName("먼저 커밋된 PAID(409), 동시 갱신(낙관 락) — 다시 읽어 PAID 면 같은 성공 응답, Saga 단계를 완료로 다시 맞춘다")
             void confirm_paidByOther_sameResponse() {
                 // given
                 given(orderTx.getMine(BUYER_ID, ORDER_NO)).willReturn(order, paidByOther(), order, paidByOther());
@@ -255,7 +255,7 @@ class PlaceOrderSagaPaymentTest {
                 given(payment.verify(VERIFY)).willReturn(paid());
                 willThrow(new ObjectOptimisticLockingFailureException(Order.class, 1L)).given(orderTx).markPaid(1L);
 
-                // when · then
+                // when, then
                 assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
                         .isInstanceOf(ObjectOptimisticLockingFailureException.class);
                 verify(sagaTx, never()).complete(any());
@@ -311,7 +311,7 @@ class PlaceOrderSagaPaymentTest {
         }
 
         @Test
-        @DisplayName("payment 장애 · 그 밖의 주문 예외 — 아무것도 바꾸지 않고 다음 주기에 다시")
+        @DisplayName("payment 장애, 그 밖의 주문 예외 — 아무것도 바꾸지 않고 다음 주기에 다시")
         void expire_unknown_leavesForNextRun() {
             // given
             willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR))
@@ -328,7 +328,7 @@ class PlaceOrderSagaPaymentTest {
         }
 
         @Test
-        @DisplayName("주문이 이미 PAID · FAILED — payment 를 부르지 않고 Saga 기록만 맞춘다")
+        @DisplayName("주문이 이미 PAID, FAILED — payment 를 부르지 않고 Saga 기록만 맞춘다")
         void expire_orderFinished_syncsSagaOnly() {
             // given
             order.markPaid(LocalDateTime.of(2026, 10, 22, 12, 0));
@@ -353,7 +353,7 @@ class PlaceOrderSagaPaymentTest {
     class Recover {
 
         @Test
-        @DisplayName("멈춘 Saga · 보상 재시도 — 처음부터 전부 역순 보상")
+        @DisplayName("멈춘 Saga, 보상 재시도 — 처음부터 전부 역순 보상")
         void recover_compensatesAll() {
             // given
             givenItems();
@@ -426,7 +426,7 @@ class PlaceOrderSagaPaymentTest {
                 given(payment.verify(VERIFY)).willReturn(paid());
                 willThrow(new OrderException(OrderErrorCode.ORDER_INVALID_STATUS)).given(orderTx).markPaid(1L);   // 이미 FAILED
 
-                // when · then
+                // when, then
                 assertThatThrownBy(() -> saga.confirm(BUYER_ID, ORDER_NO))
                         .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATUS);
                 verify(sagaTx, never()).complete(any());                                      // 결제 환불은 보상 쪽 payment.cancel 이 맡음

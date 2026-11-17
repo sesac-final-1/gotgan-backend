@@ -6,7 +6,7 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
- * 재고 원장. 예약 · 해제는 옵션 행을 먼저 잠근 뒤 여기를 읽는다 — 잠금이 트랜잭션의 첫 쿼리라
+ * 재고 원장. 예약, 해제는 옵션 행을 먼저 잠근 뒤 여기를 읽는다 — 잠금이 트랜잭션의 첫 쿼리라
  * 이 조회가 보는 스냅샷은 잠금을 얻은 뒤(앞 요청 커밋 뒤)로 잡힌다 (MySQL REPEATABLE READ: 첫 일반 읽기 때 스냅샷).
  */
 public interface StockHistoryRepository extends JpaRepository<StockHistory, Long> {

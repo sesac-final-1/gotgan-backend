@@ -1,19 +1,19 @@
-# store-service API 계약 (설계 — 10/20 · 10/22 · 10/26)
+# store-service API 계약 (설계 — 10/20, 10/22, 10/26)
 
-담당 박지연. 입점 신청(`/api/seller/apply/**`) · 판매자 스토어(`/api/seller/store/**` · `/api/seller/dashboard`) · 공개 스토어(`/api/stores/**`) · 다른 서비스(user · admin · order)가 부르는 `/internal/**` 의 **계약**입니다. 엔드포인트마다 PR 하나로 구현하면서 해당 절을 이 문서에 추가합니다. 코드가 정본(springdoc)이고, 이 문서는 호출하는 쪽이 지킬 규칙 설명으로 남깁니다.
-근거: 스펙 STR-01~14, storedb V1 · V2, 노션 "10/20 회원 탈퇴 — 판매자는 스토어 폐점 후 탈퇴" 답변 · "10/21 판매자 전환 — 입점 신청 · 승인은 store 쪽 API" 요청 · "10/23 구지훈 - 답변 필요 내용" J-A(3~9절 관리자 내부 계약), 컨벤션 4-7.
+담당 박지연. 입점 신청(`/api/seller/apply/**`), 판매자 스토어(`/api/seller/store/**`, `/api/seller/dashboard`), 공개 스토어(`/api/stores/**`), 다른 서비스(user, admin, order)가 부르는 `/internal/**` 의 **계약**입니다. 엔드포인트마다 PR 하나로 구현하면서 해당 절을 이 문서에 추가합니다. 코드가 정본(springdoc)이고, 이 문서는 호출하는 쪽이 지킬 규칙 설명으로 남깁니다.
+근거: 스펙 STR-01~14, storedb V1, V2, 노션 "10/20 회원 탈퇴 — 판매자는 스토어 폐점 후 탈퇴" 답변, "10/21 판매자 전환 — 입점 신청, 승인은 store 쪽 API" 요청, "10/23 구지훈 - 답변 필요 내용" J-A(3~9절 관리자 내부 계약), 컨벤션 4-7.
 
 ## 공통
 
 | 항목 | 값 |
 |---|---|
-| 주소 | 화면: 게이트웨이 `https://api.gotgan.click` — `/api/stores/**` · `/api/seller/apply/**` · `/api/seller/store/**` · `/api/seller/dashboard`<br>내부: `STORE_SERVICE_URI=http://store-service:8082` (ConfigMap) — `/internal/**` 는 게이트웨이 라우트 없음, 클러스터 내부 전용 |
-| 응답 | `ApiResponse<T>` 봉투 (컨벤션 2-4). 오류는 `code` · `message`, `data: null` |
+| 주소 | 화면: 게이트웨이 `https://api.gotgan.click` — `/api/stores/**`, `/api/seller/apply/**`, `/api/seller/store/**`, `/api/seller/dashboard`<br>내부: `STORE_SERVICE_URI=http://store-service:8082` (ConfigMap) — `/internal/**` 는 게이트웨이 라우트 없음, 클러스터 내부 전용 |
+| 응답 | `ApiResponse<T>` 봉투 (컨벤션 2-4). 오류는 `code`, `message`, `data: null` |
 | 금액 | `long`, 원 단위 |
 | 시각 | ISO-8601 오프셋 포함 (Asia/Seoul) |
 | 인가 | 공개 GET: 로그인 없음 / 입점 신청: BUYER / 판매자: SELLER + `X-Store-Id` 헤더의 스토어만 / 내부: 헤더 없음 |
 
-### 스토어 상태 `status` (10/20 결정 · 휴면 없음 10/23)
+### 스토어 상태 `status` (10/20 결정, 휴면 없음 10/23)
 
 | 값 | 뜻 | 거는 쪽 → 푸는 쪽 |
 |---|---|---|
@@ -21,14 +21,14 @@
 | `SUSPENDED` | 정지 | 관리자 → 관리자 (사유 필수) |
 | `CLOSED` | 폐점 — **되돌릴 수 없는 마지막 상태**. 판매자 탈퇴 조건 | 판매자 (폐점 API 12절) |
 
-- 폐점은 `deleted_at` 이 아니라 `status` 로 표현합니다. 폐점한 스토어도 주문 · 정산 내역과 내부 API 에서 계속 조회되어야 하기 때문입니다. `deleted_at` 은 컨벤션 3-5 소프트 삭제 자리로만 두고, 채워진 스토어는 모든 조회에서 없는 것으로 봅니다.
+- 폐점은 `deleted_at` 이 아니라 `status` 로 표현합니다. 폐점한 스토어도 주문, 정산 내역과 내부 API 에서 계속 조회되어야 하기 때문입니다. `deleted_at` 은 컨벤션 3-5 소프트 삭제 자리로만 두고, 채워진 스토어는 모든 조회에서 없는 것으로 봅니다.
 - 상태 값은 늘어날 수 있습니다. 호출하는 쪽은 `ACTIVE` 인지 아닌지(또는 필요한 값인지)로 판단하고, 모르는 값이 와도 실패하지 않게 해 주세요.
 
 ---
 
-## 1. 스토어 상세 (내부) — `GET /internal/stores/{storeId}` (STR-14 · 회원 탈퇴 · 주문 배송비)
+## 1. 스토어 상세 (내부) — `GET /internal/stores/{storeId}` (STR-14, 회원 탈퇴, 주문 배송비)
 
-user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부를 확인할 때, admin-service 스토어 관리(관리자 스토어 상세 — 아래 관리자용 필드)가 부릅니다. chat-service 도 채팅 상대 표시 이름(`storeName`)과 정지 · 폐점 스토어의 새 스토어 톡 차단(`status` 가 `ACTIVE` 가 아니면 · 404 도 차단, 그 밖의 실패는 막지 않음 — `chat.md` D-1)에 씁니다(1분 캐시). order-service 는 주문 생성 때 스토어별 배송비 계산에 씁니다(아래 배송 정책). DB 조회만 하므로 재시도 가능(GET).
+user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부를 확인할 때, admin-service 스토어 관리(관리자 스토어 상세 — 아래 관리자용 필드)가 부릅니다. chat-service 도 채팅 상대 표시 이름(`storeName`)과 정지, 폐점 스토어의 새 스토어 톡 차단(`status` 가 `ACTIVE` 가 아니면, 404 도 차단, 그 밖의 실패는 막지 않음 — `chat.md` D-1)에 씁니다(1분 캐시). order-service 는 주문 생성 때 스토어별 배송비 계산에 씁니다(아래 배송 정책). DB 조회만 하므로 재시도 가능(GET).
 
 ```json
 {
@@ -51,12 +51,12 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
 | 스토어 있음 (상태 무관, `CLOSED` 포함) | 조회 | **200** `{storeId, userId, storeName, status, shippingFee, freeShippingThreshold, courier, …관리자용 필드}` | user: `status == CLOSED` 일 때만 탈퇴 진행. `userId` 가 요청자와 다르면 탈퇴 거부 권장. order: 아래 규칙으로 배송비 계산 |
-| 없는 스토어 · 소프트 삭제된 스토어 | — | **404** `STORE_NOT_FOUND` | user: 탈퇴 거부(안전한 쪽). 서킷 실패로 세지 않음 |
+| 없는 스토어, 소프트 삭제된 스토어 | — | **404** `STORE_NOT_FOUND` | user: 탈퇴 거부(안전한 쪽). 서킷 실패로 세지 않음 |
 | `storeId` 가 숫자가 아님 | — | **400** `INVALID_INPUT` | 호출 코드 버그 |
-| store 장애 · 타임아웃 | — | 연결 실패 · 5xx | user: 서킷 `store` 로 집계, 탈퇴 차단 |
+| store 장애, 타임아웃 | — | 연결 실패, 5xx | user: 서킷 `store` 로 집계, 탈퇴 차단 |
 
-- 응답 필드는 **추가만** 합니다. 호출하는 쪽은 모르는 필드를 무시해 주세요 — `RestClient.builder()` 기본 변환기가 무시하므로 user · order · chat 은 그대로 동작합니다(10/29 확인).
-- **관리자용 필드 (10/29 구현, 아래 8절 "1절 확장")**: `slug` · `ownerName` · `companyName` · `bizRegNo`(대표자 · 상호 · 사업자번호는 원래 신청서 — store 에 없음) · `csPhone` · `grade` · `dispatchNote` · `statusReason` · `applicationId` · `createdAt` · `statusHistory[{fromStatus, toStatus, actor, reason, changedAt}]`(오래된 순, 개설 `null → ACTIVE` 부터). 조회가 신청서 · 이력 2번 늘지만 user · order 호출 빈도에서 무시할 수준(10/26 설계 정리 8).
+- 응답 필드는 **추가만** 합니다. 호출하는 쪽은 모르는 필드를 무시해 주세요 — `RestClient.builder()` 기본 변환기가 무시하므로 user, order, chat 은 그대로 동작합니다(10/29 확인).
+- **관리자용 필드 (10/29 구현, 아래 8절 "1절 확장")**: `slug`, `ownerName`, `companyName`, `bizRegNo`(대표자, 상호, 사업자번호는 원래 신청서 — store 에 없음), `csPhone`, `grade`, `dispatchNote`, `statusReason`, `applicationId`, `createdAt`, `statusHistory[{fromStatus, toStatus, actor, reason, changedAt}]`(오래된 순, 개설 `null → ACTIVE` 부터). 조회가 신청서, 이력 2번 늘지만 user, order 호출 빈도에서 무시할 수준(10/26 설계 정리 8).
 
 **배송 정책 (10/28 추가, 배송비 A안)** — store 는 규칙만 알려 주고 계산은 order 가 합니다.
 
@@ -66,11 +66,11 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 | `freeShippingThreshold` | long 원 | 무료배송 기준 금액 | **무료배송 없음** |
 | `courier` | string | 기본 택배사 이름 (예: `CJ대한통운`) | 아직 안 정함 (승인 직후) |
 
-- 배송비 = 한 주문에서 **이 스토어 상품 합계**(가격 × 수량)가 `freeShippingThreshold` 이상이면 0원, 아니면 `shippingFee`. 스토어마다 한 번만 붙습니다(상품 · 수량별 배송비 없음).
+- 배송비 = 한 주문에서 **이 스토어 상품 합계**(가격 × 수량)가 `freeShippingThreshold` 이상이면 0원, 아니면 `shippingFee`. 스토어마다 한 번만 붙습니다(상품, 수량별 배송비 없음).
 - 주문 시점 배송비는 order 가 스냅샷으로 저장합니다 — 판매자가 나중에 바꿔도 기존 주문은 그대로.
 - 따로 `/shipping-policy` API 는 두지 않습니다(10/26 결정). 여러 스토어 일괄 조회도 없음 — 주문의 스토어 수만큼 호출.
 
-## 2. 입점 신청 — `POST /api/seller/apply` (STR-01 · 02 · 11)
+## 2. 입점 신청 — `POST /api/seller/apply` (STR-01, 02, 11)
 
 구매자(BUYER)가 입점 신청 화면(`/seller/apply`, 4단계 폼)을 제출합니다. 신청자는 게이트웨이가 넣는 `X-User-Id` 이고, 승인 때 `StoreApproved.userId` 로 그대로 나갑니다. 서류는 먼저 2-1절 presign 으로 S3 에 올리고 받은 키를 보냅니다.
 
@@ -113,45 +113,45 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 
 | 필드 | 규칙 |
 |---|---|
-| `bizType` | `INDIVIDUAL` · `CORPORATE`. 서류 종류는 같고 심사 기준만 다름 |
-| `companyName` · `ownerName` | 필수, 100자 · 50자 이하 |
+| `bizType` | `INDIVIDUAL`, `CORPORATE`. 서류 종류는 같고 심사 기준만 다름 |
+| `companyName`, `ownerName` | 필수, 100자, 50자 이하 |
 | `bizRegNo` | `000-00-00000` 형식 (하이픈 포함) |
 | `ecommerceRegNo` | 필수, 50자 이하 |
 | `managerPhone` | `010-0000-0000` 형식. 승인 때 스토어 고객 문의 연락처(`cs_phone`)로 복사 |
 | `managerEmail` | 이메일 형식, 100자 이하. **심사 결과 메일 수신 주소 = `StoreApproved.sellerEmail`** |
 | `businessAddress` | 필수, 255자 이하 |
 | `storeName` | 필수, 50자 이하 |
-| `slug` | 3~30자, 영소문자 · 숫자 · `-`, `-` 로 시작 · 끝 금지, 예약어(`admin` · `seller` · `new` · `api` · `me`) · 숫자만 금지(`/store/{id}` 와 구분, 14-3). 승인 후 변경 불가 |
-| `categoryId` | 필수, 양수. 상위 카테고리 존재 · 사용 여부는 **store 가 확인하지 않음**(심사 참고용 — 설계 정리 4) |
-| `intro` | 선택, 5000자 이하. HTML 은 sanitizer 로 정화해 저장(서식 · 문단 · 링크만) |
-| `representativeProducts` | **2~10개**. `name`(100자 이하) · `subCategory`(세부 분류 이름, 50자 이하) 필수 · `price` 1 이상. 심사 화면 표시용이라 받은 모양 그대로 JSON 컬럼에 저장 |
-| `expectedMonthlySales` | 선택. `UNDER_5M` · `FROM_5M_TO_20M` · `FROM_20M_TO_100M` · `OVER_100M` |
+| `slug` | 3~30자, 영소문자, 숫자, `-`, `-` 로 시작, 끝 금지, 예약어(`admin`, `seller`, `new`, `api`, `me`), 숫자만 금지(`/store/{id}` 와 구분, 14-3). 승인 후 변경 불가 |
+| `categoryId` | 필수, 양수. 상위 카테고리 존재, 사용 여부는 **store 가 확인하지 않음**(심사 참고용 — 설계 정리 4) |
+| `intro` | 선택, 5000자 이하. HTML 은 sanitizer 로 정화해 저장(서식, 문단, 링크만) |
+| `representativeProducts` | **2~10개**. `name`(100자 이하), `subCategory`(세부 분류 이름, 50자 이하) 필수, `price` 1 이상. 심사 화면 표시용이라 받은 모양 그대로 JSON 컬럼에 저장 |
+| `expectedMonthlySales` | 선택. `UNDER_5M`, `FROM_5M_TO_20M`, `FROM_20M_TO_100M`, `OVER_100M` |
 | `salesChannel` | 선택, 255자 이하 |
-| `settlementAccount` | `bank` 30자 · `number` 30자 · `holder` 50자, 모두 필수. 승인 때 `StoreApproved.settlementAccount` 로 그대로 |
-| `agreements` | 필수 약관 `sellerTerms` · `electronicFinance` · `privacy` 모두 `true`. `marketing` 은 선택(없으면 `false`). 동의 시각은 서버가 기록 |
+| `settlementAccount` | `bank` 30자, `number` 30자, `holder` 50자, 모두 필수. 승인 때 `StoreApproved.settlementAccount` 로 그대로 |
+| `agreements` | 필수 약관 `sellerTerms`, `electronicFinance`, `privacy` 모두 `true`. `marketing` 은 선택(없으면 `false`). 동의 시각은 서버가 기록 |
 
 **서류 `documents`** — 위반은 모두 400 `APPLY_DOCUMENT_INVALID`, 메시지에 어느 서류가 왜 틀렸는지 적습니다.
 
 | 항목 | 규칙 |
 |---|---|
-| 종류 · 개수 | `BUSINESS_REG` · `ECOMMERCE_REG` · `BANK_COPY` 각 1개, `PRODUCT_PHOTO` 3~10개. 업종별 추가 서류 없음 |
+| 종류, 개수 | `BUSINESS_REG`, `ECOMMERCE_REG`, `BANK_COPY` 각 1개, `PRODUCT_PHOTO` 3~10개. 업종별 추가 서류 없음 |
 | 키 | `applications/{X-User-Id}/{UUID}.{확장자}` — presign 이 만든 **내 키만**. 목록 안 중복 금지 |
-| 파일 | S3 에서 실제 파일을 확인(`HeadObject`)해 형식 · 크기를 저장. PDF · JPG · PNG(상품 사진은 JPG · PNG만), 10MB 이하, 올라가지 않은 키는 거절 |
+| 파일 | S3 에서 실제 파일을 확인(`HeadObject`)해 형식, 크기를 저장. PDF, JPG, PNG(상품 사진은 JPG, PNG만), 10MB 이하, 올라가지 않은 키는 거절 |
 | 발급일 3개월 이내 | 시스템이 검사하지 않음 — 관리자 심사(STR-10) |
 
-**처리 · 응답** — 아래 순서로 확인하고, 처음 걸린 것을 돌려줍니다.
+**처리, 응답** — 아래 순서로 확인하고, 처음 걸린 것을 돌려줍니다.
 
 | 경우 | 처리 | 응답 | 화면 권장 처리 |
 |---|---|---|---|
 | `X-User-Id` 없음 | — | **401** `UNAUTHORIZED` | 로그인으로 |
 | 형식 오류 (위 입력 규칙) | — | **400** `INVALID_INPUT` | 해당 입력 칸 안내 |
 | 이미 스토어가 있음 — **폐점(`CLOSED`) 포함** | — | **409** `APPLY_STORE_ALREADY_EXISTS` | 판매자센터로 (1인 1스토어) |
-| 진행 중 신청(`PENDING` · `SUPPLEMENT`)이 있음 | — | **409** `APPLY_IN_PROGRESS` | 내 신청 상태 화면으로 |
+| 진행 중 신청(`PENDING`, `SUPPLEMENT`)이 있음 | — | **409** `APPLY_IN_PROGRESS` | 내 신청 상태 화면으로 |
 | 가장 최근 반려 후 30일이 안 지남 | — | **409** `APPLY_REAPPLY_RESTRICTED` | 메시지의 재신청 가능일 표시 |
-| `slug` 가 스토어(폐점 포함) · 진행 중 신청과 겹침 | — | **409** `APPLY_SLUG_DUPLICATED` | 스토어 주소 칸 재입력 |
-| `storeName` 이 스토어(폐점 포함) · 진행 중 신청과 겹침 (공백 · 대소문자 무시) | — | **409** `APPLY_STORE_NAME_DUPLICATED` | 스토어명 칸 재입력 |
+| `slug` 가 스토어(폐점 포함), 진행 중 신청과 겹침 | — | **409** `APPLY_SLUG_DUPLICATED` | 스토어 주소 칸 재입력 |
+| `storeName` 이 스토어(폐점 포함), 진행 중 신청과 겹침 (공백, 대소문자 무시) | — | **409** `APPLY_STORE_NAME_DUPLICATED` | 스토어명 칸 재입력 |
 | 서류 규칙 위반 | — | **400** `APPLY_DOCUMENT_INVALID` | 메시지대로 서류 다시 올리기 |
-| S3 확인 실패 (장애 · 타임아웃) | 저장 안 함 | **502** `EXTERNAL_API_ERROR` | 잠시 후 다시 제출 |
+| S3 확인 실패 (장애, 타임아웃) | 저장 안 함 | **502** `EXTERNAL_API_ERROR` | 잠시 후 다시 제출 |
 | 정상 | 신청서 `PENDING` + 서류 행 + 이력(`NULL → PENDING`, `APPLICANT`)을 한 트랜잭션으로 저장 | **201** 아래 응답 | 접수 완료 화면 |
 
 ```json
@@ -167,8 +167,8 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 }
 ```
 
-- **접수번호 `applicationNo`** = `AP-{제출 연월 yyMM}-{applicationId, 3자리 이상}`. 저장하지 않고 응답마다 계산하는 **표시 전용** 값입니다. API 경로 · 식별에는 숫자 `applicationId` 를 씁니다. 번호는 달마다 001 부터 다시 시작하지 않습니다.
-- 진행 중 확인은 서비스 검증이라, 동시에 두 번 제출하면 2건이 생길 수 있습니다(제출 버튼 중복 클릭 방지로 줄임). 스토어는 승인 때 `uk_store_user_id` 가 하나만 허용하므로 나머지는 관리자가 반려합니다. 신청끼리 slug · 스토어명이 겹친 경우도 승인 때 `uk_store_slug` · `uk_store_store_name` 이 막고, 관리자가 보완요청으로 변경을 안내합니다(STR-04).
+- **접수번호 `applicationNo`** = `AP-{제출 연월 yyMM}-{applicationId, 3자리 이상}`. 저장하지 않고 응답마다 계산하는 **표시 전용** 값입니다. API 경로, 식별에는 숫자 `applicationId` 를 씁니다. 번호는 달마다 001 부터 다시 시작하지 않습니다.
+- 진행 중 확인은 서비스 검증이라, 동시에 두 번 제출하면 2건이 생길 수 있습니다(제출 버튼 중복 클릭 방지로 줄임). 스토어는 승인 때 `uk_store_user_id` 가 하나만 허용하므로 나머지는 관리자가 반려합니다. 신청끼리 slug, 스토어명이 겹친 경우도 승인 때 `uk_store_slug`, `uk_store_store_name` 이 막고, 관리자가 보완요청으로 변경을 안내합니다(STR-04).
 - 이 API 는 이벤트를 발행하지 않습니다. `StoreApproved` 는 승인 API(5절)에서 발행합니다.
 
 ## 2-1. 입점 서류 업로드 주소 발급 — `POST /api/seller/apply/documents/presign` (STR-02)
@@ -192,27 +192,27 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 | 경우 | 처리 | 응답 | 화면 권장 처리 |
 |---|---|---|---|
 | `X-User-Id` 없음 | — | **401** `UNAUTHORIZED` | 로그인으로 |
-| `files` 누락 · 항목 null · 모르는 `docType` · `contentType` 빈 값 · `size` 누락 | — | **400** `INVALID_INPUT` | 호출 코드 버그 |
+| `files` 누락, 항목 null, 모르는 `docType`, `contentType` 빈 값, `size` 누락 | — | **400** `INVALID_INPUT` | 호출 코드 버그 |
 | 개수가 1~13개 밖 | 발급 안 함 | **400** `APPLY_DOCUMENT_INVALID` | 나눠서 다시 요청 |
-| 형식 위반 — 서류 3종은 PDF · JPG · PNG, 상품 사진은 JPG · PNG | 발급 안 함(하나만 틀려도 전체) | **400** `APPLY_DOCUMENT_INVALID`, 메시지에 "n번째 파일" | 그 파일만 다시 고르기 |
-| 크기 0 이하 · 10MB 초과 | 발급 안 함 | **400** `APPLY_DOCUMENT_INVALID`, 메시지에 "n번째 파일" | 〃 |
+| 형식 위반 — 서류 3종은 PDF, JPG, PNG, 상품 사진은 JPG, PNG | 발급 안 함(하나만 틀려도 전체) | **400** `APPLY_DOCUMENT_INVALID`, 메시지에 "n번째 파일" | 그 파일만 다시 고르기 |
+| 크기 0 이하, 10MB 초과 | 발급 안 함 | **400** `APPLY_DOCUMENT_INVALID`, 메시지에 "n번째 파일" | 〃 |
 | 자격 증명을 얻지 못함 | — | **502** `EXTERNAL_API_ERROR` | 잠시 후 다시 |
 | 정상 | 키 `applications/{X-User-Id}/{UUID}.{pdf\|jpg\|png}`(확장자는 파일 이름이 아니라 `contentType` 으로), presigned PUT 10분 | **200** | 아래 업로드 순서 |
 
 **업로드 순서**: ① 이 API → ② 파일마다 `uploadUrl` 로 `PUT` — `Content-Type` 은 요청의 `contentType` 과 같게, 본문은 발급 때 말한 크기의 파일 그대로 → ③ 2절 `documents[]` 에 `{docType, key, originalName}` 으로 제출.
 
-- **`Content-Type` · `Content-Length` 가 서명에 들어갑니다.** 발급 때와 다른 형식 · 크기로 PUT 하면 S3 가 **403**(`SignatureDoesNotMatch`) — 10MB 넘는 파일은 버킷에 올라가지 않습니다. 브라우저 `fetch(url, {method: 'PUT', body: file, headers: {'Content-Type': file.type}})` 는 `Content-Length` 를 자동으로 붙이므로 따로 할 일은 없습니다. 만료(10분) 뒤 PUT 도 403 → 다시 발급.
-- **서류 구성(3종 각 1 + 사진 3~10)은 여기서 보지 않고 2절 제출 때 검사합니다.** 폼 단계마다 나눠 불러도 됩니다. 이미 스토어가 있는지 · 진행 중 신청이 있는지도 2절에서 확인합니다.
-- 2절은 S3 `HeadObject` 로 형식 · 크기를 **다시** 확인합니다(같은 기준). 이 API 는 1차 관문입니다.
-- 서명은 `Content-Type` 만 보고 내용은 보지 않으므로, 올라온 파일은 Lambda `upload-guard`(10/27, `serverless/upload-guard`)가 앞부분 바이트로 실제 PDF · JPG · PNG 인지 확인해 아니면 **지웁니다**(알림 메일). 지워진 키로 2절을 제출하면 S3 에 없는 파일로 400 `APPLY_DOCUMENT_INVALID`.
-- 서명은 store 안에서 계산하므로 S3 를 호출하지 않습니다. 버킷 CORS(PUT · HEAD, vercel · `localhost:5173`) · store IRSA `s3:PutObject` 는 설정돼 있습니다.
+- **`Content-Type`, `Content-Length` 가 서명에 들어갑니다.** 발급 때와 다른 형식, 크기로 PUT 하면 S3 가 **403**(`SignatureDoesNotMatch`) — 10MB 넘는 파일은 버킷에 올라가지 않습니다. 브라우저 `fetch(url, {method: 'PUT', body: file, headers: {'Content-Type': file.type}})` 는 `Content-Length` 를 자동으로 붙이므로 따로 할 일은 없습니다. 만료(10분) 뒤 PUT 도 403 → 다시 발급.
+- **서류 구성(3종 각 1 + 사진 3~10)은 여기서 보지 않고 2절 제출 때 검사합니다.** 폼 단계마다 나눠 불러도 됩니다. 이미 스토어가 있는지, 진행 중 신청이 있는지도 2절에서 확인합니다.
+- 2절은 S3 `HeadObject` 로 형식, 크기를 **다시** 확인합니다(같은 기준). 이 API 는 1차 관문입니다.
+- 서명은 `Content-Type` 만 보고 내용은 보지 않으므로, 올라온 파일은 Lambda `upload-guard`(10/27, `serverless/upload-guard`)가 앞부분 바이트로 실제 PDF, JPG, PNG 인지 확인해 아니면 **지웁니다**(알림 메일). 지워진 키로 2절을 제출하면 S3 에 없는 파일로 400 `APPLY_DOCUMENT_INVALID`.
+- 서명은 store 안에서 계산하므로 S3 를 호출하지 않습니다. 버킷 CORS(PUT, HEAD, vercel, `localhost:5173`), store IRSA `s3:PutObject` 는 설정돼 있습니다.
 - 올리고 신청하지 않은 파일은 버킷에 남습니다(정리 규칙 없음 — 학습 프로젝트라 보류).
 
 ---
 
 ## 2-2. 내 입점 신청 상태 — `GET /api/seller/apply/me` (STR-08)
 
-신청자(구매자)가 자기 신청의 진행 상황을 봅니다 — 접수 타임라인 · 보완요청 · 반려 사유. `X-User-Id` 본인의 **가장 최근 신청 1건**(진행 중 신청은 1건뿐이고, 반려 뒤 재신청하면 새 신청이 최신).
+신청자(구매자)가 자기 신청의 진행 상황을 봅니다 — 접수 타임라인, 보완요청, 반려 사유. `X-User-Id` 본인의 **가장 최근 신청 1건**(진행 중 신청은 1건뿐이고, 반려 뒤 재신청하면 새 신청이 최신).
 
 ```json
 {
@@ -236,16 +236,16 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 
 | 필드 | 값 |
 |---|---|
-| `statusReason` | 반려 · 보완요청 사유, 그 밖에는 `null` |
+| `statusReason` | 반려, 보완요청 사유, 그 밖에는 `null` |
 | `supplementDueAt` | `SUPPLEMENT` 일 때만 — 보완요청 시각 + 7일(7절, 지나면 자동 반려) |
 | `reapplyAvailableAt` | `REJECTED` 일 때만 — 반려 시각 + 30일(2절 재신청 제한과 같은 기준) |
 | `storeId` | `APPROVED` 일 때만 — 판매자 권한은 다음 토큰부터(5절) |
 | `history` | 4절과 같은 모양, 오래된 순 |
 | `requestedDocs` | `SUPPLEMENT` 일 때만 — 다시 낼 서류 종류(7절 요청 그대로, enum). 서류가 아닌 내용 보완이면 `[]`, 10/29(V5) 전 보완요청은 `null` |
-| `submitted` | **제출한 신청 내용(10/30 추가, 상태 무관)** — 재제출(2-3절)로 고칠 수 있는 항목의 지금 값: `bizType` · `companyName` · `ownerName` · `bizRegNo` · `ecommerceRegNo` · `managerPhone` · `managerEmail` · `businessAddress` · `categoryId` · `intro` · `representativeProducts` · `expectedMonthlySales` · `salesChannel` · `settlementAccount{bank, number, holder}` · `marketingAgreed` · `documents[{docType, originalName, uploadedAt}]`. 스토어명 · 주소는 위 `storeName` · `slug` |
+| `submitted` | **제출한 신청 내용(10/30 추가, 상태 무관)** — 재제출(2-3절)로 고칠 수 있는 항목의 지금 값: `bizType`, `companyName`, `ownerName`, `bizRegNo`, `ecommerceRegNo`, `managerPhone`, `managerEmail`, `businessAddress`, `categoryId`, `intro`, `representativeProducts`, `expectedMonthlySales`, `salesChannel`, `settlementAccount{bank, number, holder}`, `marketingAgreed`, `documents[{docType, originalName, uploadedAt}]`. 스토어명, 주소는 위 `storeName`, `slug` |
 
 - `submitted` 는 재제출 화면이 지금 값을 채워 보여 주고 **바뀐 칸만 보내기** 위한 것입니다. 본인 신청만 조회되므로(`X-User-Id`) 계좌도 그대로 줍니다.
-- `submitted.documents` 는 지금 서류만(재제출로 바뀐 이전 제출본 제외), 종류별 · 올린 순서. 파일 열람 주소(presigned GET)는 넣지 않습니다 — 화면은 파일 이름만 보여 주고, 다시 올릴 때는 2-1절로 새로 받습니다.
+- `submitted.documents` 는 지금 서류만(재제출로 바뀐 이전 제출본 제외), 종류별, 올린 순서. 파일 열람 주소(presigned GET)는 넣지 않습니다 — 화면은 파일 이름만 보여 주고, 다시 올릴 때는 2-1절로 새로 받습니다.
 - 게이트웨이 `/api/seller/apply/**` 는 BUYER — 승인된 판매자도 BUYER 역할을 갖고 있어 승인 뒤에도 조회됩니다.
 
 ## 2-3. 보완 재제출 — `PATCH /api/seller/apply/{applicationId}/resubmit` (STR-09)
@@ -267,53 +267,53 @@ user-service 판매자 탈퇴(`DELETE /api/users/me`)가 스토어 폐점 여부
 
 | 항목 | 규칙 |
 |---|---|
-| 고칠 수 있는 항목 | `bizType` · `ownerName` · `bizRegNo`(아래 사업자 정보) · `storeName` · `slug`(아래 스토어명 · 주소) · `companyName` · `ecommerceRegNo` · `managerPhone` · `managerEmail` · `businessAddress` · `categoryId` · `intro` · `representativeProducts`(보내면 목록 전체 교체) · `expectedMonthlySales` · `salesChannel`(11/3 추가) · `settlementAccount`(보내면 세 값 모두) — 형식은 2절과 같고 빈 문자열로 지울 수 없음(`intro` 만 `""` 로 소개 없음) |
-| 사업자 정보 | `bizType` · `ownerName` · `bizRegNo` 중 하나라도 **실제로 바뀌면 사업자등록증(`BUSINESS_REG`)도 다시** — 보완요청에 없어도 받고, 없으면 400. 지금 값 그대로 보내면 바뀐 것이 아님 |
-| 스토어명 · 주소 | 바꾸면 신청(2절)과 같은 중복 확인 — 스토어(폐점 포함) · **자기를 뺀** 진행 중 신청과 겹치면 409. 승인 때 이름이 겹쳐 보완요청된 신청(5절)이 이 길로 바꿉니다. 지금 값 그대로면 확인 안 함 |
-| `documents` | 보완요청 서류(`requestedDocs`)를 **모두** 다시, 그 밖의 종류는 안 됨. 낸 종류마다 2절 규칙(한 장 서류 1개 · 상품 사진 3~10장 — 사진은 묶음 전체 교체) · 내 `applications/{userId}/` 키 · S3 에서 형식 · 크기 확인(2-1절 presign 으로 올림) |
+| 고칠 수 있는 항목 | `bizType`, `ownerName`, `bizRegNo`(아래 사업자 정보), `storeName`, `slug`(아래 스토어명, 주소), `companyName`, `ecommerceRegNo`, `managerPhone`, `managerEmail`, `businessAddress`, `categoryId`, `intro`, `representativeProducts`(보내면 목록 전체 교체), `expectedMonthlySales`, `salesChannel`(11/3 추가), `settlementAccount`(보내면 세 값 모두) — 형식은 2절과 같고 빈 문자열로 지울 수 없음(`intro` 만 `""` 로 소개 없음) |
+| 사업자 정보 | `bizType`, `ownerName`, `bizRegNo` 중 하나라도 **실제로 바뀌면 사업자등록증(`BUSINESS_REG`)도 다시** — 보완요청에 없어도 받고, 없으면 400. 지금 값 그대로 보내면 바뀐 것이 아님 |
+| 스토어명, 주소 | 바꾸면 신청(2절)과 같은 중복 확인 — 스토어(폐점 포함), **자기를 뺀** 진행 중 신청과 겹치면 409. 승인 때 이름이 겹쳐 보완요청된 신청(5절)이 이 길로 바꿉니다. 지금 값 그대로면 확인 안 함 |
+| `documents` | 보완요청 서류(`requestedDocs`)를 **모두** 다시, 그 밖의 종류는 안 됨. 낸 종류마다 2절 규칙(한 장 서류 1개, 상품 사진 3~10장 — 사진은 묶음 전체 교체), 내 `applications/{userId}/` 키, S3 에서 형식, 크기 확인(2-1절 presign 으로 올림) |
 | 내용 보완(`requestedDocs: []`) | `documents` 없이 고친 항목만 보내면 됨. 아무 항목도 없는 `{}` 도 "확인했다" 로 접수 |
 
 | 경우 | 처리 | 응답 | 화면 권장 처리 |
 |---|---|---|---|
-| 보완요청 중 · 기한 전 · 규칙 통과 | 신청 `PENDING`(사유 · 요청 서류 비움) + 같은 종류 이전 서류는 이전 제출본(`current: false`) + 새 서류 + 이력 `APPLICANT` | **200** | 2-2절 다시 조회(타임라인에 재제출) |
+| 보완요청 중, 기한 전, 규칙 통과 | 신청 `PENDING`(사유, 요청 서류 비움) + 같은 종류 이전 서류는 이전 제출본(`current: false`) + 새 서류 + 이력 `APPLICANT` | **200** | 2-2절 다시 조회(타임라인에 재제출) |
 | 보완요청 중이 아님 / 기한(보완요청 + 7일)이 지남 | — | **409** `APPLY_INVALID_STATUS`(문구로 구분) | 2-2절 다시 조회 |
-| 바꾼 주소 · 스토어명이 겹침 | — | **409** `APPLY_SLUG_DUPLICATED` · `APPLY_STORE_NAME_DUPLICATED` | 다른 값 입력 |
-| 저장 순간 자동 반려 · 관리자 처리가 먼저 끝남(`@Version`) | 한쪽만 반영 | **409** `APPLY_INVALID_STATUS` | 2-2절 다시 조회 |
-| 요청 서류 빠짐 · 요청 밖 종류 · 사업자 정보를 바꾸고 사업자등록증 없음 · 개수 · 남의 키 · S3 에 없음 · 형식 · 크기 | — | **400** `APPLY_DOCUMENT_INVALID` | 안내 문구 그대로, 해당 서류 다시 올리기 |
+| 바꾼 주소, 스토어명이 겹침 | — | **409** `APPLY_SLUG_DUPLICATED`, `APPLY_STORE_NAME_DUPLICATED` | 다른 값 입력 |
+| 저장 순간 자동 반려, 관리자 처리가 먼저 끝남(`@Version`) | 한쪽만 반영 | **409** `APPLY_INVALID_STATUS` | 2-2절 다시 조회 |
+| 요청 서류 빠짐, 요청 밖 종류, 사업자 정보를 바꾸고 사업자등록증 없음, 개수, 남의 키, S3 에 없음, 형식, 크기 | — | **400** `APPLY_DOCUMENT_INVALID` | 안내 문구 그대로, 해당 서류 다시 올리기 |
 | 형식 오류(위 규칙) | — | **400** `INVALID_INPUT` | 입력 안내 |
-| 없는 신청 · **남의 신청** | — | **404** `APPLY_NOT_FOUND`(있는지 알려 주지 않음) | 2-2절로 |
+| 없는 신청, **남의 신청** | — | **404** `APPLY_NOT_FOUND`(있는지 알려 주지 않음) | 2-2절로 |
 | 사용자 헤더 없음 / S3 확인 실패 | — | **401** `UNAUTHORIZED` / **502** `EXTERNAL_API_ERROR` | — |
 
-- 이력 사유에 바뀐 것을 남깁니다 — 예: `재제출 — 서류: 통신판매업 신고증 / 수정: 상호 · 정산 계좌`. 관리자 상세(4절) `history` 에 그대로 보이고, 이전 서류와 비교는 `documents[].current`.
+- 이력 사유에 바뀐 것을 남깁니다 — 예: `재제출 — 서류: 통신판매업 신고증 / 수정: 상호, 정산 계좌`. 관리자 상세(4절) `history` 에 그대로 보이고, 이전 서류와 비교는 `documents[].current`.
 - 이벤트는 발행하지 않습니다(`events.md` 에 없음) — 관리자는 목록(3절)의 심사대기에서 다시 봅니다.
 - 같은 신청에 보완요청 → 재제출을 여러 번 할 수 있습니다(7절 `eventId` 가 보완요청마다 새 값인 이유).
 
 ## 관리자 내부 API 공통 (3~9절, 호출자 admin-service)
 
-admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받아 그대로 부르는 API 입니다. 관리자 인가는 게이트웨이 · admin 이 끝냈다고 보고 store 는 다시 확인하지 않습니다.
+admin-service 가 `/api/admin/applications/**`, `/api/admin/stores/**` 를 받아 그대로 부르는 API 입니다. 관리자 인가는 게이트웨이, admin 이 끝냈다고 보고 store 는 다시 확인하지 않습니다.
 
 | 항목 | 규칙 |
 |---|---|
-| 목록 | **페이징 없이 전체 배열** — 컨벤션 4-7(관리자 입점 심사 · 스토어는 전체 1회 로드 + 화면에서 검색 · 정렬 · 페이징). `status` 는 선택 필터, 생략하면 전체 |
-| 처리자 | 상태를 바꾼 쪽은 `actor` = `APPLICANT`(신청자) · `ADMIN` · `SYSTEM`(7일 자동 반려) / 스토어는 `SELLER` · `ADMIN`. **관리자 개인은 저장하지 않음**(storedb V1) — 화면의 "곳간 운영팀 · 정다은" 같은 이름은 내려 주지 않습니다 |
-| 사유 | 반려 · 보완요청 · 정지 · 해제는 사유 필수, 255자 이하. 비거나 길면 400 `INVALID_INPUT` |
+| 목록 | **페이징 없이 전체 배열** — 컨벤션 4-7(관리자 입점 심사, 스토어는 전체 1회 로드 + 화면에서 검색, 정렬, 페이징). `status` 는 선택 필터, 생략하면 전체 |
+| 처리자 | 상태를 바꾼 쪽은 `actor` = `APPLICANT`(신청자), `ADMIN`, `SYSTEM`(7일 자동 반려) / 스토어는 `SELLER`, `ADMIN`. **관리자 개인은 저장하지 않음**(storedb V1) — 화면의 "곳간 운영팀, 정다은" 같은 이름은 내려 주지 않습니다 |
+| 사유 | 반려, 보완요청, 정지, 해제는 사유 필수, 255자 이하. 비거나 길면 400 `INVALID_INPUT` |
 | 이벤트 | 상태 변경과 같은 트랜잭션에서 아웃박스(storedb `outbox_event`)에 남기고 커밋 직후 발행. 발행이 실패해도 API 응답은 그대로이고 발행기가 30초마다 다시 보냄 — **최소 1회 전달**(같은 `eventId` 봉투가 두 번 올 수 있음, 구독자 `processed_event` 로 거름) |
-| 구현 시기 | 구현됨: 3 · 4 · 5 · 6 · 7 · 8 · 9절 · 1절 확장(10/29) — 관리자 내부 API 모두 구현 |
+| 구현 시기 | 구현됨: 3, 4, 5, 6, 7, 8, 9절, 1절 확장(10/29) — 관리자 내부 API 모두 구현 |
 
 ### 입점 신청 상태 `status`
 
 | 값 | 뜻 | 바뀌는 곳 |
 |---|---|---|
-| `PENDING` | 심사대기 | 신청(2절) · 재제출(2-3절) |
+| `PENDING` | 심사대기 | 신청(2절), 재제출(2-3절) |
 | `SUPPLEMENT` | 보완요청 — 신청자 재제출 대기 | 보완요청(7절) |
 | `APPROVED` | 승인 — 스토어 생성됨 | 승인(5절) |
-| `REJECTED` | 반려 | 반려(6절) · 7일 미보완 자동 반려(7-1절) |
+| `REJECTED` | 반려 | 반려(6절), 7일 미보완 자동 반려(7-1절) |
 
 ## 3. 입점 신청 목록 (내부) — `GET /internal/applications?status=` (STR-03)
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
-| `status` 없음 · 위 4개 값 중 하나 | 조회, 제출 최신순 | **200** 배열 (없으면 `[]`) | 화면 탭 · 건수는 전체를 받아 클라이언트에서 계산 |
+| `status` 없음, 위 4개 값 중 하나 | 조회, 제출 최신순 | **200** 배열 (없으면 `[]`) | 화면 탭, 건수는 전체를 받아 클라이언트에서 계산 |
 | `status` 가 모르는 값 | — | **400** `INVALID_INPUT` | 호출 코드 버그 |
 
 ```json
@@ -336,9 +336,9 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 - 카테고리 이름은 store 가 갖고 있지 않습니다 — admin 이 product 카테고리 목록으로 `categoryId` 를 이름으로 바꿔 주세요.
 - 접수번호 `applicationNo` 는 2절과 같은 계산값입니다.
 
-## 4. 입점 신청 상세 (내부) — `GET /internal/applications/{applicationId}` (STR-03 · 10)
+## 4. 입점 신청 상세 (내부) — `GET /internal/applications/{applicationId}` (STR-03, 10)
 
-신청서 전체 + 서류 열람 주소 + 상태 이력 + 같은 사업자번호의 이전 신청 · 스토어(중복 입점 확인 근거)를 돌려줍니다.
+신청서 전체 + 서류 열람 주소 + 상태 이력 + 같은 사업자번호의 이전 신청, 스토어(중복 입점 확인 근거)를 돌려줍니다.
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
@@ -402,10 +402,10 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 | 필드 | 설명 |
 |---|---|
 | `storeId` | 승인된 신청이면 만들어진 스토어 ID, 아니면 `null` |
-| `documents` | 지금 서류(`current: true`)와 재제출로 바뀐 이전 서류(`false`)를 모두 담음 — 이전 제출본과 비교용(STR-09). 종류별 · 올린 순서 |
-| `documents[].url` | seller-docs 버킷 presigned GET, **10분** 만료. 서명은 store 안에서 계산하므로 S3 장애여도 상세는 200. 서명용 자격 증명을 얻지 못하면 상세는 그대로 200 이고 `url` · `urlExpiresAt` 이 `null` |
+| `documents` | 지금 서류(`current: true`)와 재제출로 바뀐 이전 서류(`false`)를 모두 담음 — 이전 제출본과 비교용(STR-09). 종류별, 올린 순서 |
+| `documents[].url` | seller-docs 버킷 presigned GET, **10분** 만료. 서명은 store 안에서 계산하므로 S3 장애여도 상세는 200. 서명용 자격 증명을 얻지 못하면 상세는 그대로 200 이고 `url`, `urlExpiresAt` 이 `null` |
 | `history` | 오래된 순. 신청자 재제출(`SUPPLEMENT → PENDING`, `APPLICANT`)과 자동 반려(`SYSTEM`)도 여기에 |
-| `sameBizRegNo` | 같은 사업자등록번호의 **이 신청을 뺀** 다른 신청 · 스토어(폐점 포함, 소프트 삭제 제외). `stores[]` 는 `{storeId, storeName, status}` |
+| `sameBizRegNo` | 같은 사업자등록번호의 **이 신청을 뺀** 다른 신청, 스토어(폐점 포함, 소프트 삭제 제외). `stores[]` 는 `{storeId, storeName, status}` |
 | 체크리스트 | **서버는 받지도 검사하지도 않음**(STR-10 "체크 결과는 저장하지 않음") — 화면이 네 항목을 모두 체크해야 승인 버튼을 켬. 중복 입점 판단 근거가 `sameBizRegNo` |
 
 ## 5. 입점 승인 (내부) — `PATCH /internal/applications/{applicationId}/approve` (STR-04)
@@ -414,14 +414,14 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
-| `PENDING` · `SUPPLEMENT` | 스토어 생성(스토어명 · 주소 · 소개 복사, `cs_phone` = 담당자 휴대폰) + 스토어 이력(`NULL → ACTIVE`, `ADMIN`) + 신청 `APPROVED` + 신청 이력을 한 트랜잭션으로 | **200** `{applicationId, status: "APPROVED", storeId, decidedAt}` | 상세 다시 조회 |
-| 이미 `APPROVED` · `REJECTED` | — | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 (다른 관리자가 먼저 처리) |
+| `PENDING`, `SUPPLEMENT` | 스토어 생성(스토어명, 주소, 소개 복사, `cs_phone` = 담당자 휴대폰) + 스토어 이력(`NULL → ACTIVE`, `ADMIN`) + 신청 `APPROVED` + 신청 이력을 한 트랜잭션으로 | **200** `{applicationId, status: "APPROVED", storeId, decidedAt}` | 상세 다시 조회 |
+| 이미 `APPROVED`, `REJECTED` | — | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 (다른 관리자가 먼저 처리) |
 | 신청자에게 이미 스토어가 있음 (폐점 포함) | — | **409** `APPLY_STORE_ALREADY_EXISTS` | 반려 |
-| 스토어 주소 · 스토어명이 그사이 다른 스토어와 겹침 | — | **409** `APPLY_SLUG_DUPLICATED` · `APPLY_STORE_NAME_DUPLICATED` | 보완요청으로 변경 안내 (STR-04) |
-| 승인 · 재제출 · 자동 반려가 동시에 저장됨 | 한쪽만 반영(`@Version`) | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 |
+| 스토어 주소, 스토어명이 그사이 다른 스토어와 겹침 | — | **409** `APPLY_SLUG_DUPLICATED`, `APPLY_STORE_NAME_DUPLICATED` | 보완요청으로 변경 안내 (STR-04) |
+| 승인, 재제출, 자동 반려가 동시에 저장됨 | 한쪽만 반영(`@Version`) | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 |
 | 없는 신청 | — | **404** `APPLY_NOT_FOUND` | 목록으로 |
 
-**발행 이벤트 `StoreApproved`** (config `docs/events.md`, 구독 user · settlement · 알림 Lambda · admin 알림 센터)
+**발행 이벤트 `StoreApproved`** (config `docs/events.md`, 구독 user, settlement, 알림 Lambda, admin 알림 센터)
 
 ```json
 { "storeId": 3, "userId": 4, "storeName": "곳간상회", "sellerEmail": "seller@example.com",
@@ -431,7 +431,7 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 - `userId` = 신청 때의 `X-User-Id`, `sellerEmail` = 신청서 `managerEmail`.
 - `eventId` 는 신청 ID 로 정해지는 값(`StoreApproved:{applicationId}` 의 이름 기반 UUID)이라 **다시 보내도 같은 `eventId`** — 구독자 `processed_event` 가 중복을 걸러 줍니다(노션 10/23 user 요청). `occurredAt` = 응답의 `decidedAt` 이라 다시 보내도 같습니다(admin 알림함 키).
 - 승인과 같은 트랜잭션에서 아웃박스에 남겨 커밋 직후 보냅니다. SNS 가 실패하거나 1초 넘게 걸리면 응답은 그대로 200 이고 발행기가 30초마다 다시 보냅니다(10회 실패 시 store error 로그). 승인 응답이 SNS 때문에 admin read-timeout(3초)을 넘지 않습니다.
-- 판매자 권한은 user 가 이 이벤트를 받아 Keycloak 에 `store_id` · `SELLER` 를 넣은 뒤 **다음 토큰부터** 반영됩니다. 승인 응답 시점에는 아직 판매자센터에 못 들어갈 수 있습니다.
+- 판매자 권한은 user 가 이 이벤트를 받아 Keycloak 에 `store_id`, `SELLER` 를 넣은 뒤 **다음 토큰부터** 반영됩니다. 승인 응답 시점에는 아직 판매자센터에 못 들어갈 수 있습니다.
 
 ## 6. 입점 반려 (내부) — `PATCH /internal/applications/{applicationId}/reject` (STR-05)
 
@@ -439,12 +439,12 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
-| `PENDING` · `SUPPLEMENT` | 신청 `REJECTED` · `statusReason` = 사유 + 이력. 30일 재신청 제한은 이 시각부터 | **200** `{applicationId, status: "REJECTED", decidedAt}` | 상세 다시 조회 |
-| 사유 없음 · 255자 초과 | — | **400** `INVALID_INPUT` | 사유 입력 안내 |
-| 이미 `APPROVED` · `REJECTED` · 동시 저장 | — | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 |
+| `PENDING`, `SUPPLEMENT` | 신청 `REJECTED`, `statusReason` = 사유 + 이력. 30일 재신청 제한은 이 시각부터 | **200** `{applicationId, status: "REJECTED", decidedAt}` | 상세 다시 조회 |
+| 사유 없음, 255자 초과 | — | **400** `INVALID_INPUT` | 사유 입력 안내 |
+| 이미 `APPROVED`, `REJECTED`, 동시 저장 | — | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 |
 | 없는 신청 | — | **404** `APPLY_NOT_FOUND` | 목록으로 |
 
-**발행 이벤트 `StoreApplicationRejected`** (구독 알림 Lambda — 반려 메일 · admin 알림 센터 — 화면 알림)
+**발행 이벤트 `StoreApplicationRejected`** (구독 알림 Lambda — 반려 메일, admin 알림 센터 — 화면 알림)
 `{applicationId, userId, storeName, sellerEmail, reason, decidedAt}` — 이름은 `serverless/order-notification` 이 읽는 그대로.
 
 ## 7. 입점 보완요청 (내부) — `PATCH /internal/applications/{applicationId}/supplement` (STR-09)
@@ -455,24 +455,24 @@ admin-service 가 `/api/admin/applications/**` · `/api/admin/stores/**` 를 받
 
 | 필드 | 규칙 |
 |---|---|
-| `message` | 필수, 255자 이하. `statusReason` · 이력 사유로 저장 |
-| `requestedDocs` | 다시 낼 서류 종류 `BUSINESS_REG` · `ECOMMERCE_REG` · `BANK_COPY` · `PRODUCT_PHOTO`, 0~4개 · 중복 금지(서류가 아닌 내용 보완이면 `[]`) |
-| 기한 | 받지 않음 — 서버가 **보완요청 시각 + 보완 기한(운영 7일)**으로 계산(`dueAt`). 재제출(2-3절) · 자동 반려(7-1절)와 같은 기준 |
+| `message` | 필수, 255자 이하. `statusReason`, 이력 사유로 저장 |
+| `requestedDocs` | 다시 낼 서류 종류 `BUSINESS_REG`, `ECOMMERCE_REG`, `BANK_COPY`, `PRODUCT_PHOTO`, 0~4개, 중복 금지(서류가 아닌 내용 보완이면 `[]`) |
+| 기한 | 받지 않음 — 서버가 **보완요청 시각 + 보완 기한(운영 7일)**으로 계산(`dueAt`). 재제출(2-3절), 자동 반려(7-1절)와 같은 기준 |
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
 | `PENDING` | 신청 `SUPPLEMENT` + 이력 | **200** `{applicationId, status: "SUPPLEMENT", dueAt}` | 상세 다시 조회 |
-| 이미 `SUPPLEMENT` · `APPROVED` · `REJECTED` · 동시 저장 | — | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 (보완 중이면 재제출을 기다림) |
+| 이미 `SUPPLEMENT`, `APPROVED`, `REJECTED`, 동시 저장 | — | **409** `APPLY_INVALID_STATUS` | 상세 다시 조회 (보완 중이면 재제출을 기다림) |
 | 형식 오류 (위 규칙) | — | **400** `INVALID_INPUT` | 입력 안내 |
 | 없는 신청 | — | **404** `APPLY_NOT_FOUND` | 목록으로 |
 
-**발행 이벤트 `StoreApplicationSupplementRequested`** (구독 알림 Lambda — 보완요청 메일 · admin 알림 센터 — 화면 알림)
-`{applicationId, userId, storeName, sellerEmail, requestedDocs[], message, dueAt}`. 메일에 그대로 찍히므로 `requestedDocs` 는 **한글 이름**(`사업자등록증` · `통신판매업 신고증` · `통장 사본` · `상품 사진`)으로 바꿔 보냅니다. 요청 본문의 enum 과 다릅니다.
+**발행 이벤트 `StoreApplicationSupplementRequested`** (구독 알림 Lambda — 보완요청 메일, admin 알림 센터 — 화면 알림)
+`{applicationId, userId, storeName, sellerEmail, requestedDocs[], message, dueAt}`. 메일에 그대로 찍히므로 `requestedDocs` 는 **한글 이름**(`사업자등록증`, `통신판매업 신고증`, `통장 사본`, `상품 사진`)으로 바꿔 보냅니다. 요청 본문의 enum 과 다릅니다.
 
 - `aggregateId` = 신청 ID, `occurredAt` = 보완요청 시각, `dueAt` = 그 시각 + 7일(`+09:00`).
-- `eventId` 는 **보완요청마다 새 값**입니다 — 보완 → 재제출 → 다시 보완으로 한 신청에 여러 번 생길 수 있어 승인 · 반려처럼 신청 ID 로 고정하지 않습니다. 발행기가 다시 보낼 때는 아웃박스에 저장된 같은 값입니다.
+- `eventId` 는 **보완요청마다 새 값**입니다 — 보완 → 재제출 → 다시 보완으로 한 신청에 여러 번 생길 수 있어 승인, 반려처럼 신청 ID 로 고정하지 않습니다. 발행기가 다시 보낼 때는 아웃박스에 저장된 같은 값입니다.
 - 서류 중복(`["BANK_COPY", "BANK_COPY"]`)도 400 `INVALID_INPUT` 입니다.
-- `requestedDocs` 는 신청에 저장합니다(storedb V5 `requested_docs`, 10/29) — 신청자 화면(2-2절)이 다시 낼 서류를 보여 주고, 재제출(2-3절)이 빠진 서류를 검사합니다. 재제출 · 승인 · 반려 때 비웁니다.
+- `requestedDocs` 는 신청에 저장합니다(storedb V5 `requested_docs`, 10/29) — 신청자 화면(2-2절)이 다시 낼 서류를 보여 주고, 재제출(2-3절)이 빠진 서류를 검사합니다. 재제출, 승인, 반려 때 비웁니다.
 
 ## 7-1. 보완 기한 지난 신청 자동 반려 (스케줄러, STR-09)
 
@@ -480,21 +480,21 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 
 | 항목 | 내용 |
 |---|---|
-| 기한 | 설정 `app.apply.supplement-due`(환경 변수 `APPLY_SUPPLEMENT_DUE`), **기본 7일**. 보완요청 이벤트 `dueAt` · 2-2절 `supplementDueAt` · 2-3절 재제출 검사가 모두 이 값 — 시연 때만 짧게(예: `3m`) |
+| 기한 | 설정 `app.apply.supplement-due`(환경 변수 `APPLY_SUPPLEMENT_DUE`), **기본 7일**. 보완요청 이벤트 `dueAt`, 2-2절 `supplementDueAt`, 2-3절 재제출 검사가 모두 이 값 — 시연 때만 짧게(예: `3m`) |
 | 주기 | 앞 실행이 끝나고 10분마다(`app.scheduler.supplement-expiry.interval`), 한 번에 100건, ShedLock `store-supplement-expiry`(파드 2개여도 한 곳만) |
-| 처리 | 관리자 반려(6절)와 같음 — 신청 `REJECTED` · 사유 고정 **"보완 기한 안에 다시 제출하지 않아 자동 반려되었습니다."** · 요청 서류 비움 · 이력 `SYSTEM` · `StoreApplicationRejected`(`eventId` 는 6절과 같은 신청 ID 고정값) |
+| 처리 | 관리자 반려(6절)와 같음 — 신청 `REJECTED`, 사유 고정 **"보완 기한 안에 다시 제출하지 않아 자동 반려되었습니다."**, 요청 서류 비움, 이력 `SYSTEM`, `StoreApplicationRejected`(`eventId` 는 6절과 같은 신청 ID 고정값) |
 | 경계 | 재제출은 기한 **전**까지만(2-3절), 자동 반려는 기한 **정각부터** — 둘 다 되거나 둘 다 안 되는 시각이 없음 |
 | 재제출과 동시 | 신청 `@Version` — 먼저 저장된 쪽만 반영. 스케줄러가 지면 그 건만 건너뛰고(warn), 다음 주기엔 `PENDING` 이라 대상이 아님 |
-| 늦음 | 재제출은 기한 정각부터 막히므로, 주기만큼 늦어도 상태 · 반려 메일 · 벨 시각만 늦어짐(최대 10분) |
+| 늦음 | 재제출은 기한 정각부터 막히므로, 주기만큼 늦어도 상태, 반려 메일, 벨 시각만 늦어짐(최대 10분) |
 
-- 반려 메일(알림 Lambda) · 신청자 벨(admin 알림 센터) · 30일 재신청 제한(2절)이 관리자 반려와 똑같이 동작합니다. 관리자 상세(4절) `history` 에 `actor: SYSTEM` 으로 보입니다.
+- 반려 메일(알림 Lambda), 신청자 벨(admin 알림 센터), 30일 재신청 제한(2절)이 관리자 반려와 똑같이 동작합니다. 관리자 상세(4절) `history` 에 `actor: SYSTEM` 으로 보입니다.
 - 설정을 짧게 바꾸면 **이미 보완요청 중인 신청(시연 시드 102 포함)도 바로 대상**이 됩니다 — 시연 환경에서 바꿀 때는 팀과 맞춥니다.
 
 ## 8. 스토어 목록 (내부) — `GET /internal/stores?status=` (STR-14)
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
-| `status` 없음 · `ACTIVE` · `SUSPENDED` · `CLOSED` | 소프트 삭제 제외, 개설 최신순 | **200** 배열 (없으면 `[]`) | 검색 · 정렬 · 페이징은 화면에서 |
+| `status` 없음, `ACTIVE`, `SUSPENDED`, `CLOSED` | 소프트 삭제 제외, 개설 최신순 | **200** 배열 (없으면 `[]`) | 검색, 정렬, 페이징은 화면에서 |
 | `status` 가 모르는 값 | — | **400** `INVALID_INPUT` | 호출 코드 버그 |
 
 ```json
@@ -505,28 +505,28 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 ]
 ```
 
-- 대표자 · 사업자번호는 원래 신청서(`store.store_application_id`)에서 가져옵니다.
+- 대표자, 사업자번호는 원래 신청서(`store.store_application_id`)에서 가져옵니다.
 - 스토어 상세(관리자 상세 화면)는 1절을 씁니다 — 1절 응답에 관리자용 필드와 상태 이력을 **추가**했습니다(아래 "1절 확장").
 
-**1절 확장 (10/29 구현)** — 기존 7개 필드(배송 정책 포함) 뒤에 붙습니다. user · order · chat 은 기존 필드만 읽으면 됩니다. 정지 · 해제(9절) 응답도 같은 모양입니다.
-`slug` · `ownerName` · `companyName` · `bizRegNo` · `csPhone` · `grade` · `dispatchNote` · `statusReason` · `applicationId` · `createdAt` · `statusHistory[{fromStatus, toStatus, actor, reason, changedAt}]`(오래된 순)
+**1절 확장 (10/29 구현)** — 기존 7개 필드(배송 정책 포함) 뒤에 붙습니다. user, order, chat 은 기존 필드만 읽으면 됩니다. 정지, 해제(9절) 응답도 같은 모양입니다.
+`slug`, `ownerName`, `companyName`, `bizRegNo`, `csPhone`, `grade`, `dispatchNote`, `statusReason`, `applicationId`, `createdAt`, `statusHistory[{fromStatus, toStatus, actor, reason, changedAt}]`(오래된 순)
 
-## 9. 스토어 정지 · 해제 (내부) — `PATCH /internal/stores/{storeId}/status` (STR-13)
+## 9. 스토어 정지, 해제 (내부) — `PATCH /internal/stores/{storeId}/status` (STR-13)
 
-요청 `{ "status": "SUSPENDED", "reason": "허위 광고 신고 3건 확인" }` — `status` 는 `SUSPENDED`(정지) · `ACTIVE`(해제)만, `reason` 필수 255자 이하.
+요청 `{ "status": "SUSPENDED", "reason": "허위 광고 신고 3건 확인" }` — `status` 는 `SUSPENDED`(정지), `ACTIVE`(해제)만, `reason` 필수 255자 이하.
 
 | 경우 | 처리 | 응답 | 호출자 권장 처리 |
 |---|---|---|---|
-| `ACTIVE → SUSPENDED` · `SUSPENDED → ACTIVE` | 상태 · `statusReason` 변경 + 스토어 이력(`ADMIN`) | **200** 1절 응답 | 상세 갱신 |
-| 이미 그 상태 | 바꾸지 않음 · 이벤트 없음 | **200** 1절 응답 (멱등 — 두 번 눌러도 안전) | 그대로 |
+| `ACTIVE → SUSPENDED`, `SUSPENDED → ACTIVE` | 상태, `statusReason` 변경 + 스토어 이력(`ADMIN`) | **200** 1절 응답 | 상세 갱신 |
+| 이미 그 상태 | 바꾸지 않음, 이벤트 없음 | **200** 1절 응답 (멱등 — 두 번 눌러도 안전) | 그대로 |
 | 폐점(`CLOSED`) 스토어 | — | **409** `STORE_INVALID_STATUS_TRANSITION` | "폐점한 스토어는 바꿀 수 없음" 안내 |
-| `status` 가 `CLOSED` · 그 밖의 값, 사유 없음 · 255자 초과 | — | **400** `INVALID_INPUT` | 폐점은 판매자만(`PATCH /api/seller/store/close`, 12절) |
-| 없는 스토어 · 소프트 삭제 | — | **404** `STORE_NOT_FOUND` | 목록으로 |
+| `status` 가 `CLOSED`, 그 밖의 값, 사유 없음, 255자 초과 | — | **400** `INVALID_INPUT` | 폐점은 판매자만(`PATCH /api/seller/store/close`, 12절) |
+| 없는 스토어, 소프트 삭제 | — | **404** `STORE_NOT_FOUND` | 목록으로 |
 
-**발행 이벤트 `StoreStatusChanged`** `{storeId, status}` (구독 product — 상품 노출 숨김 · settlement — 지급 보류). 구독자는 `occurredAt` 으로 옛 이벤트를 거릅니다(events.md A안). 같은 이벤트를 폐점 API 도 `CLOSED` 로 발행합니다.
+**발행 이벤트 `StoreStatusChanged`** `{storeId, status}` (구독 product — 상품 노출 숨김, settlement — 지급 보류). 구독자는 `occurredAt` 으로 옛 이벤트를 거릅니다(events.md A안). 같은 이벤트를 폐점 API 도 `CLOSED` 로 발행합니다.
 
-- `aggregateId` = 스토어 ID, `occurredAt` = 상태를 바꾼 시각. `eventId` 는 **변경마다 새 값**(한 스토어에 정지 · 해제가 여러 번 생김), 발행기가 다시 보낼 때는 아웃박스에 저장된 같은 값입니다.
-- 정지 · 해제 · 폐점이 동시에 들어와도 스토어 행을 잠가(`SELECT … FOR UPDATE`) 차례로 처리합니다 — DB 최종 상태와 이벤트 `occurredAt` 순서가 어긋나지 않습니다.
+- `aggregateId` = 스토어 ID, `occurredAt` = 상태를 바꾼 시각. `eventId` 는 **변경마다 새 값**(한 스토어에 정지, 해제가 여러 번 생김), 발행기가 다시 보낼 때는 아웃박스에 저장된 같은 값입니다.
+- 정지, 해제, 폐점이 동시에 들어와도 스토어 행을 잠가(`SELECT … FOR UPDATE`) 차례로 처리합니다 — DB 최종 상태와 이벤트 `occurredAt` 순서가 어긋나지 않습니다.
 
 ## 10. 오류 코드 (`docs/api/error-codes.md`)
 
@@ -534,47 +534,47 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 
 | 코드 | HTTP | enum | 언제 |
 |---|---|---|---|
-| `STORE_NOT_FOUND` | 404 | `StoreErrorCode` | 없거나 소프트 삭제된 스토어 (1 · 9절) |
-| `STORE_INVALID_STATUS_TRANSITION` | 409 | `StoreErrorCode` | 폐점 스토어 정지 · 해제 (9절) |
+| `STORE_NOT_FOUND` | 404 | `StoreErrorCode` | 없거나 소프트 삭제된 스토어 (1, 9절) |
+| `STORE_INVALID_STATUS_TRANSITION` | 409 | `StoreErrorCode` | 폐점 스토어 정지, 해제 (9절) |
 | `STORE_ORDERS_IN_PROGRESS` | 409 | `StoreErrorCode` | 폐점 — order 진행 중 상품주문 1건 이상, 메시지에 건수 (12절) |
-| `STORE_SETTLEMENT_OUTSTANDING` | 409 | `StoreErrorCode` | 폐점 — settlement 미정산(집계 전 · 지급 예정 · 보류), 메시지에 금액 합 (12절) |
-| `STORE_CLOSED` | 409 | `StoreErrorCode` | 폐점 스토어 설정 수정 · 대표 이미지 업로드 주소 (13-2 · 13-3절) |
+| `STORE_SETTLEMENT_OUTSTANDING` | 409 | `StoreErrorCode` | 폐점 — settlement 미정산(집계 전, 지급 예정, 보류), 메시지에 금액 합 (12절) |
+| `STORE_CLOSED` | 409 | `StoreErrorCode` | 폐점 스토어 설정 수정, 대표 이미지 업로드 주소 (13-2, 13-3절) |
 | `APPLY_NOT_FOUND` | 404 | `ApplyErrorCode` | 없는 입점 신청 (4~7절) |
-| `APPLY_INVALID_STATUS` | 409 | `ApplyErrorCode` | 승인 · 반려 · 보완요청을 할 수 없는 신청 상태, 동시 저장에서 진 쪽 (5~7절) |
-| `APPLY_STORE_ALREADY_EXISTS` | 409 | `ApplyErrorCode` | 신청자에게 이미 스토어가 있음 — 폐점 포함 (2 · 5절) |
-| `APPLY_IN_PROGRESS` | 409 | `ApplyErrorCode` | 심사대기 · 보완요청 중인 신청이 있음 (2절) |
+| `APPLY_INVALID_STATUS` | 409 | `ApplyErrorCode` | 승인, 반려, 보완요청을 할 수 없는 신청 상태, 동시 저장에서 진 쪽 (5~7절) |
+| `APPLY_STORE_ALREADY_EXISTS` | 409 | `ApplyErrorCode` | 신청자에게 이미 스토어가 있음 — 폐점 포함 (2, 5절) |
+| `APPLY_IN_PROGRESS` | 409 | `ApplyErrorCode` | 심사대기, 보완요청 중인 신청이 있음 (2절) |
 | `APPLY_REAPPLY_RESTRICTED` | 409 | `ApplyErrorCode` | 반려 후 30일 안에 다시 신청 (2절, STR-11) |
-| `APPLY_SLUG_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어 주소가 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
-| `APPLY_STORE_NAME_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어명이 스토어 · 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
-| `APPLY_DOCUMENT_INVALID` | 400 | `ApplyErrorCode` | 서류 종류 · 개수 · 형식 · 크기 · 키 위반, S3 에 없는 파일 (2절), 업로드 주소 발급의 개수 · 형식 · 크기 위반 (2-1절) |
-| `INVALID_INPUT` (공통) | 400 | `CommonErrorCode` | 경로 · 요청 형식 오류, 사유 누락 · 255자 초과 (6 · 7 · 9절), 설정 형식 · 남의 이미지 키 (13-2절), 이미지 형식 · 크기 (13-3절) |
-| `UNAUTHORIZED` (공통) | 401 | `CommonErrorCode` | 사용자 헤더 없음 (2 · 2-1 · 12절) |
+| `APPLY_SLUG_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어 주소가 스토어, 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
+| `APPLY_STORE_NAME_DUPLICATED` | 409 | `ApplyErrorCode` | 스토어명이 스토어, 진행 중 신청과 겹침 (2절), 승인 때 다른 스토어와 겹침 (5절) |
+| `APPLY_DOCUMENT_INVALID` | 400 | `ApplyErrorCode` | 서류 종류, 개수, 형식, 크기, 키 위반, S3 에 없는 파일 (2절), 업로드 주소 발급의 개수, 형식, 크기 위반 (2-1절) |
+| `INVALID_INPUT` (공통) | 400 | `CommonErrorCode` | 경로, 요청 형식 오류, 사유 누락, 255자 초과 (6, 7, 9절), 설정 형식, 남의 이미지 키 (13-2절), 이미지 형식, 크기 (13-3절) |
+| `UNAUTHORIZED` (공통) | 401 | `CommonErrorCode` | 사용자 헤더 없음 (2, 2-1, 12절) |
 | `FORBIDDEN` (공통) | 403 | `CommonErrorCode` | `X-Store-Id` 없음 — 스토어가 없는 판매자 (12절) |
-| `EXTERNAL_API_ERROR` (공통) | 502 | `CommonErrorCode` | S3 확인 실패 (2절), 업로드 주소 발급 실패 — 자격 증명 (2-1절), order · settlement 확인 실패 · 서킷 OPEN (12절) |
+| `EXTERNAL_API_ERROR` (공통) | 502 | `CommonErrorCode` | S3 확인 실패 (2절), 업로드 주소 발급 실패 — 자격 증명 (2-1절), order, settlement 확인 실패, 서킷 OPEN (12절) |
 
-호출하는 서비스는 404 · 400 을 자기 도메인 코드로 바꾸거나 그대로 전달하고, **서킷 실패로 세지 않습니다**(`ignore-exceptions` = `BusinessException`).
+호출하는 서비스는 404, 400 을 자기 도메인 코드로 바꾸거나 그대로 전달하고, **서킷 실패로 세지 않습니다**(`ignore-exceptions` = `BusinessException`).
 
 ## 11. 호출 쪽 준비 사항
 
 **user (이경석)**
 - ~~`MockStoreClient` 를 `@HttpExchange` 클라이언트(`GET /internal/stores/{storeId}`)로 교체~~ — **완료(#183)**. 서킷 브레이커 인스턴스 이름은 **`store`**, 재시도 가능(GET).
-- user-service `StoreStatus` enum 값(ACTIVE · SUSPENDED · CLOSED)은 이 문서와 같습니다. 바꿀 것 없음.
+- user-service `StoreStatus` enum 값(ACTIVE, SUSPENDED, CLOSED)은 이 문서와 같습니다. 바꿀 것 없음.
 - 폐점 API(12절)부터 `CLOSED` 스토어가 생깁니다 — user 는 #183 으로 `MockStoreClient` 를 지우고 1절을 실제로 부르므로, **폐점한 판매자는 이 API 배포부터 탈퇴할 수 있습니다**. 폐점 전 탈퇴는 그대로 409 `USER_SELLER_STORE_NOT_CLOSED`.
 
-**admin (구지훈)**: 3~9절을 기준으로 먼저 개발해 주세요. 서킷 브레이커 이름은 **`store`**, 재시도는 GET(3 · 4 · 8 · 1절)만.
-- 목록(3 · 8절)은 전체 배열이라 `PageResponse` 로 감싸지 않습니다. 스펙 STR-03 의 "서버 페이징" 문구는 컨벤션 4-7 과 어긋나 이 문서를 따릅니다.
+**admin (구지훈)**: 3~9절을 기준으로 먼저 개발해 주세요. 서킷 브레이커 이름은 **`store`**, 재시도는 GET(3, 4, 8, 1절)만.
+- 목록(3, 8절)은 전체 배열이라 `PageResponse` 로 감싸지 않습니다. 스펙 STR-03 의 "서버 페이징" 문구는 컨벤션 4-7 과 어긋나 이 문서를 따릅니다.
 - 신청 전체의 처리 이력을 한 화면에 모으는 API 는 만들지 않습니다 — 신청별 이력은 4절 `history`. 화면에 꼭 필요하면 요청해 주세요.
 - 처리자 이름이 없습니다(`actor` 만) — 목업의 관리자 이름 표시는 "관리자"처럼 바꿔 주세요.
-- 업종별 추가 서류가 없어져(10/22) 체크리스트의 인증서 항목 · 보완요청 예시 "KC 인증서 제출" · 카테고리별 추가 서류 표시는 빼 주세요. 보완요청 서류 선택지는 7절 4종입니다.
-- 목록의 카테고리 이름 · 관리자 대시보드 "심사 대기 · 보완 중" 건수는 3절 배열로 계산해 주세요(따로 통계 API 없음).
+- 업종별 추가 서류가 없어져(10/22) 체크리스트의 인증서 항목, 보완요청 예시 "KC 인증서 제출", 카테고리별 추가 서류 표시는 빼 주세요. 보완요청 서류 선택지는 7절 4종입니다.
+- 목록의 카테고리 이름, 관리자 대시보드 "심사 대기, 보완 중" 건수는 3절 배열로 계산해 주세요(따로 통계 API 없음).
 
-**user (이경석)**: 승인(5절)의 `StoreApproved` 는 다시 보내도 `eventId` 가 같습니다. 승인 PR 이 머지되면 노션으로 알리니 테스트 메시지(user 6 · store 3)를 실제 모양에 맞춰 주세요.
+**user (이경석)**: 승인(5절)의 `StoreApproved` 는 다시 보내도 `eventId` 가 같습니다. 승인 PR 이 머지되면 노션으로 알리니 테스트 메시지(user 6, store 3)를 실제 모양에 맞춰 주세요.
 
-**settlement · product**: 정지 · 해제(9절)부터 `StoreStatusChanged` 가 실제로 발행됩니다(4주차).
+**settlement, product**: 정지, 해제(9절)부터 `StoreStatusChanged` 가 실제로 발행됩니다(4주차).
 
 **user (이경석)**: `StoreApproved` 는 승인 API PR 부터 발행됩니다(2절은 발행 없음). 신청 단계에서 기존 스토어 회원을 409 `APPLY_STORE_ALREADY_EXISTS` 로 막습니다(요청 4번).
 
-**frontend (박지연 — `features/store`)**: 서류는 2-1절 발급 → S3 PUT → 받은 `key` 를 2절 `documents[].key` 로. 4단계 폼 값을 2절 요청 모양으로 매핑. "모두 동의"는 필수 3개만 켜고 마케팅은 따로 체크 · 카테고리별 추가 서류 안내 제거 · 접수 완료 화면의 접수번호는 응답 `applicationNo`.
+**frontend (박지연 — `features/store`)**: 서류는 2-1절 발급 → S3 PUT → 받은 `key` 를 2절 `documents[].key` 로. 4단계 폼 값을 2절 요청 모양으로 매핑. "모두 동의"는 필수 3개만 켜고 마케팅은 따로 체크, 카테고리별 추가 서류 안내 제거, 접수 완료 화면의 접수번호는 응답 `applicationNo`.
 
 ## 12. 스토어 폐점 (판매자) — `PATCH /api/seller/store/close` (STR-13)
 
@@ -582,21 +582,21 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 
 | 경우 | 처리 | 응답 | 호출자(화면) 권장 처리 |
 |---|---|---|---|
-| 운영 중 · 정지 중, 진행 중 주문 0 · 미정산 없음 | `CLOSED` · 사유 비움 + 스토어 이력(`SELLER`) + `StoreStatusChanged{CLOSED}` | **200** `{storeId, status: "CLOSED", closedAt}` | 폐점 완료 안내 → 탈퇴 안내. 판매자센터는 다음 로그인부터 쓸 수 없음(역할은 user 담당) |
+| 운영 중, 정지 중, 진행 중 주문 0, 미정산 없음 | `CLOSED`, 사유 비움 + 스토어 이력(`SELLER`) + `StoreStatusChanged{CLOSED}` | **200** `{storeId, status: "CLOSED", closedAt}` | 폐점 완료 안내 → 탈퇴 안내. 판매자센터는 다음 로그인부터 쓸 수 없음(역할은 user 담당) |
 | 이미 폐점 | 다른 서비스를 부르지 않고 그대로 | **200** (멱등, `closedAt` = 처음 폐점 시각) | 그대로 |
-| order 진행 중 상품주문 ≥ 1 | — | **409** `STORE_ORDERS_IN_PROGRESS` "진행 중인 주문 n건이 모두 끝난 뒤 폐점할 수 있습니다." | 메시지 그대로 · 주문 관리로 |
-| settlement 미정산 있음(`clear=false`) | — | **409** `STORE_SETTLEMENT_OUTSTANDING` "미정산 n원 — 지급 완료(매주 목요일) 후 폐점할 수 있습니다." | 메시지 그대로 · 정산 내역으로 |
-| order · settlement 장애 · 타임아웃 · 서킷 OPEN | 확인할 수 없으면 **거절** | **502** `EXTERNAL_API_ERROR` | 잠시 후 다시 |
+| order 진행 중 상품주문 ≥ 1 | — | **409** `STORE_ORDERS_IN_PROGRESS` "진행 중인 주문 n건이 모두 끝난 뒤 폐점할 수 있습니다." | 메시지 그대로, 주문 관리로 |
+| settlement 미정산 있음(`clear=false`) | — | **409** `STORE_SETTLEMENT_OUTSTANDING` "미정산 n원 — 지급 완료(매주 목요일) 후 폐점할 수 있습니다." | 메시지 그대로, 정산 내역으로 |
+| order, settlement 장애, 타임아웃, 서킷 OPEN | 확인할 수 없으면 **거절** | **502** `EXTERNAL_API_ERROR` | 잠시 후 다시 |
 | `X-Store-Id` 없음 / 사용자 헤더 없음 | — | **403** `FORBIDDEN` / **401** `UNAUTHORIZED` | — |
 | 없거나 소프트 삭제된 스토어 | — | **404** `STORE_NOT_FOUND` | — |
 
-- **확인 순서**: order `GET /internal/stats/orders?storeId=` 의 `inProgressCount`(ORD-10) → settlement `GET /internal/settlements/outstanding?storeId=` 의 `clear`. 둘 다 통과하면 스토어 행을 잠가(`FOR UPDATE`, 9절과 같은 잠금) 바꿉니다. **HTTP 호출은 잠금 · 트랜잭션 밖**에서 해 다른 서비스가 느려도 스토어 행을 잡고 있지 않습니다 — 확인과 폐점 사이에 새 주문이 들어올 틈은 아주 짧고, 폐점 즉시 product 가 상품을 숨깁니다.
-- 서킷 브레이커 **`order` · `settlement`**(이름 = 대상 서비스), 두 호출 모두 GET 이라 재시도 1회. 4xx 는 store 쪽 호출 버그로 보고 502(서킷 실패로 세지 않음).
-- 미정산 금액 = `unsettledPayoutAmt + scheduledPayoutAmt + heldPayoutAmt`(settlement.md 폐점 · 탈퇴 조건).
+- **확인 순서**: order `GET /internal/stats/orders?storeId=` 의 `inProgressCount`(ORD-10) → settlement `GET /internal/settlements/outstanding?storeId=` 의 `clear`. 둘 다 통과하면 스토어 행을 잠가(`FOR UPDATE`, 9절과 같은 잠금) 바꿉니다. **HTTP 호출은 잠금, 트랜잭션 밖**에서 해 다른 서비스가 느려도 스토어 행을 잡고 있지 않습니다 — 확인과 폐점 사이에 새 주문이 들어올 틈은 아주 짧고, 폐점 즉시 product 가 상품을 숨깁니다.
+- 서킷 브레이커 **`order`, `settlement`**(이름 = 대상 서비스), 두 호출 모두 GET 이라 재시도 1회. 4xx 는 store 쪽 호출 버그로 보고 502(서킷 실패로 세지 않음).
+- 미정산 금액 = `unsettledPayoutAmt + scheduledPayoutAmt + heldPayoutAmt`(settlement.md 폐점, 탈퇴 조건).
 - **정지 중에도 폐점 가능** — 막으면 정지된 판매자는 탈퇴할 수 없음. 정지 사유는 폐점하면서 지웁니다(이력에는 남음).
-- 발행 `StoreStatusChanged{storeId, status: "CLOSED"}` — 9절과 같은 규칙(`eventId` 매번 새 값 · `occurredAt` = 폐점 시각). product 는 상품 숨김(#169), settlement 는 지급 보류.
+- 발행 `StoreStatusChanged{storeId, status: "CLOSED"}` — 9절과 같은 규칙(`eventId` 매번 새 값, `occurredAt` = 폐점 시각). product 는 상품 숨김(#169), settlement 는 지급 보류.
 
-## 13. 판매자 내 스토어 — `GET` · `PUT /api/seller/store` · 대표 이미지 업로드 주소 (STR-06)
+## 13. 판매자 내 스토어 — `GET`, `PUT /api/seller/store`, 대표 이미지 업로드 주소 (STR-06)
 
 판매자 스토어 설정 화면이 부릅니다. 스토어 = `X-Store-Id`.
 
@@ -616,18 +616,18 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 
 | 경우 | 응답 |
 |---|---|
-| 스토어 있음 (정지 · 폐점 포함) | **200** 위 응답 |
+| 스토어 있음 (정지, 폐점 포함) | **200** 위 응답 |
 | `X-Store-Id` 없음 / 사용자 헤더 없음 | **403** `FORBIDDEN` / **401** `UNAUTHORIZED` |
 | 없거나 소프트 삭제된 스토어 | **404** `STORE_NOT_FOUND` |
 
 | 필드 | 설명 |
 |---|---|
-| `storeName` · `slug` | 읽기만 — 주소는 변경 불가, 스토어명 변경은 관리자 승인 필요(P2) |
-| `imageKey` · `imageUrl` | 대표 이미지(images 버킷 `stores/` 공개 경로) — `imageUrl = IMAGES_BASE_URL/{imageKey}`(product 와 같은 규칙). 없으면 둘 다 `null` → 화면은 `color` 아바타 |
+| `storeName`, `slug` | 읽기만 — 주소는 변경 불가, 스토어명 변경은 관리자 승인 필요(P2) |
+| `imageKey`, `imageUrl` | 대표 이미지(images 버킷 `stores/` 공개 경로) — `imageUrl = IMAGES_BASE_URL/{imageKey}`(product 와 같은 규칙). 없으면 둘 다 `null` → 화면은 `color` 아바타 |
 | `color` | `#RRGGBB` — 승인 때 기본값 `#5b6b4a` |
 | `csPhone` | 승인 때 신청서 담당자 휴대폰을 복사, 이후 판매자가 수정(신청서 기록은 그대로) |
-| `shippingFee` · `freeShippingThreshold` · `courier` · `dispatchNote` | 1절 배송 정책과 같은 값 — 승인 직후 3,000원 · `null` · `null` · `null` → 화면은 "배송 정책을 확인해 주세요" 안내 |
-| `ownerName` · `bizRegNo` | 원래 신청서(store 에 없음) — 바뀌면 새 사업자라 재심사 |
+| `shippingFee`, `freeShippingThreshold`, `courier`, `dispatchNote` | 1절 배송 정책과 같은 값 — 승인 직후 3,000원, `null`, `null`, `null` → 화면은 "배송 정책을 확인해 주세요" 안내 |
+| `ownerName`, `bizRegNo` | 원래 신청서(store 에 없음) — 바뀌면 새 사업자라 재심사 |
 
 ### 13-2. 수정 — `PUT /api/seller/store`
 
@@ -640,28 +640,28 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 
 | 필드 | 규칙 |
 |---|---|
-| `intro` | 선택, 5000자 이하 — 저장 전 서버 정화(2절 신청서와 같은 정책: 서식 · 문단 · 링크만). 비면 `null` |
-| `imageKey` | `null` = 이미지 없음 · **지금 키 그대로** = 유지 · 새 키는 업로드 주소 발급으로 받은 **`stores/{내 storeId}/{영숫자-}.(jpg·png·webp)`** 모양만(S3 존재는 확인 안 함 — product 와 같음). 그 밖은 400 |
+| `intro` | 선택, 5000자 이하 — 저장 전 서버 정화(2절 신청서와 같은 정책: 서식, 문단, 링크만). 비면 `null` |
+| `imageKey` | `null` = 이미지 없음, **지금 키 그대로** = 유지, 새 키는 업로드 주소 발급으로 받은 **`stores/{내 storeId}/{영숫자-}.(jpg, png, webp)`** 모양만(S3 존재는 확인 안 함 — product 와 같음). 그 밖은 400 |
 | `color` | 필수, `#RRGGBB` — 화면은 6색 중 선택(서버는 형식만: 시드 색이 팔레트 밖이라). 소문자로 저장 |
-| `csPhone` | 필수, `0X-XXXX-XXXX` 형식(휴대 · 지역 · 070) |
+| `csPhone` | 필수, `0X-XXXX-XXXX` 형식(휴대, 지역, 070) |
 | `shippingFee` | 필수, 0 ~ 100,000원 (0 = 무료) |
 | `freeShippingThreshold` | `null` = 무료배송 없음, 있으면 1 ~ 10,000,000원 |
-| `courier` · `dispatchNote` | 선택, 30자 · 100자 이하. 공백뿐이면 `null` |
+| `courier`, `dispatchNote` | 선택, 30자, 100자 이하. 공백뿐이면 `null` |
 
 | 경우 | 응답 |
 |---|---|
-| 운영 중 · 정지 중 | **200** 바뀐 설정 |
+| 운영 중, 정지 중 | **200** 바뀐 설정 |
 | 폐점 스토어 | **409** `STORE_CLOSED` |
-| 형식 오류 · 남의 이미지 키 | **400** `INVALID_INPUT` |
-| `X-Store-Id` 없음 / 사용자 헤더 없음 / 없는 스토어 | **403** · **401** · **404** `STORE_NOT_FOUND` |
+| 형식 오류, 남의 이미지 키 | **400** `INVALID_INPUT` |
+| `X-Store-Id` 없음 / 사용자 헤더 없음 / 없는 스토어 | **403**, **401**, **404** `STORE_NOT_FOUND` |
 
-- 스토어명 · 주소 · 상태 · 등급은 바꾸지 않습니다.
+- 스토어명, 주소, 상태, 등급은 바꾸지 않습니다.
 - **이미 들어온 주문의 배송비는 그대로**입니다 — order 가 주문 때 1절을 읽어 `order_store_shipment` 에 스냅샷. 그래서 이벤트를 발행하지 않습니다.
 - 스토어 행을 잠그고 바꿉니다(9절과 같은 `FOR UPDATE`) — `store` 에 버전 컬럼이 없어, 그 사이 관리자가 바꾼 상태를 판매자 저장이 덮어쓰지 않게.
 
 ### 13-3. 대표 이미지 업로드 주소 — `POST /api/seller/store/image/presign`
 
-브라우저가 S3 에 **직접** 올립니다(입점 서류 2-1절 · product 17절과 같은 방식).
+브라우저가 S3 에 **직접** 올립니다(입점 서류 2-1절, product 17절과 같은 방식).
 
 ```json
 { "contentType": "image/jpeg", "size": 834512 }
@@ -671,22 +671,22 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 
 | 경우 | 응답 |
 |---|---|
-| `image/jpeg` · `image/png` · `image/webp`, 1바이트 ~ 10MB | **200** — 키 `stores/{storeId}/{UUID}.{jpg\|png\|webp}`(확장자는 형식으로 정함), 주소 10분 |
-| 형식 · 크기 위반, 값 없음 | **400** `INVALID_INPUT` |
+| `image/jpeg`, `image/png`, `image/webp`, 1바이트 ~ 10MB | **200** — 키 `stores/{storeId}/{UUID}.{jpg\|png\|webp}`(확장자는 형식으로 정함), 주소 10분 |
+| 형식, 크기 위반, 값 없음 | **400** `INVALID_INPUT` |
 | 폐점 스토어 | **409** `STORE_CLOSED` |
-| `X-Store-Id` 없음 / 사용자 헤더 없음 / 없는 스토어 | **403** · **401** · **404** `STORE_NOT_FOUND` |
+| `X-Store-Id` 없음 / 사용자 헤더 없음 / 없는 스토어 | **403**, **401**, **404** `STORE_NOT_FOUND` |
 | 서명용 자격 증명(IRSA)을 못 얻음 | **502** `EXTERNAL_API_ERROR` |
 
 **업로드 순서**: ① 이 API → ② 브라우저가 `uploadUrl` 로 `PUT`(요청 `Content-Type` 을 발급 때와 같게) → ③ 13-2절 `imageKey` 에 키를 넣어 저장.
 
-- `Content-Type` · 크기는 서명에 들어갑니다 — 발급 때 말한 형식 · 크기와 다른 파일은 S3 가 403. 화면은 `file.type` · `file.size` 를 그대로 보내면 됩니다.
+- `Content-Type`, 크기는 서명에 들어갑니다 — 발급 때 말한 형식, 크기와 다른 파일은 S3 가 403. 화면은 `file.type`, `file.size` 를 그대로 보내면 됩니다.
 - 버킷 `sesac-gojigi-images-4380` 의 `stores/` 는 공개 읽기, 쓰기는 presigned PUT 만(store IRSA `s3:PutObject images/stores/*`). 주소는 리전 가상 호스트(`버킷.s3.ap-northeast-2.amazonaws.com`) — 프론트 CSP 가 허용하는 모양.
-- 올라온 파일은 Lambda `upload-guard` 가 앞부분 바이트로 실제 JPG · PNG · WEBP 인지 확인해 아니면 지웁니다(product 17절과 같음). 13-2절은 S3 존재를 확인하지 않으므로 지워진 키는 깨진 이미지로 보입니다.
-- 올리고 저장하지 않은 파일 · 교체 전 옛 이미지는 S3 에 남습니다(삭제 권한 없음 — product 와 같이 보류).
+- 올라온 파일은 Lambda `upload-guard` 가 앞부분 바이트로 실제 JPG, PNG, WEBP 인지 확인해 아니면 지웁니다(product 17절과 같음). 13-2절은 S3 존재를 확인하지 않으므로 지워진 키는 깨진 이미지로 보입니다.
+- 올리고 저장하지 않은 파일, 교체 전 옛 이미지는 S3 에 남습니다(삭제 권한 없음 — product 와 같이 보류).
 
-## 14. 공개 스토어 — `GET /api/stores` · `GET /api/stores/{storeId}` · `GET /api/stores/slug/{slug}` (STR-12)
+## 14. 공개 스토어 — `GET /api/stores`, `GET /api/stores/{storeId}`, `GET /api/stores/slug/{slug}` (STR-12)
 
-구매자 스토어 목록(`/stores`) · 스토어 홈(`/store/:id`) 화면이 부릅니다. 로그인 없이 호출(게이트웨이 `GET /api/stores/**` 공개).
+구매자 스토어 목록(`/stores`), 스토어 홈(`/store/:id`) 화면이 부릅니다. 로그인 없이 호출(게이트웨이 `GET /api/stores/**` 공개).
 
 ### 14-1. 목록 — `GET /api/stores`
 
@@ -707,13 +707,13 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 
 | 필드 | 설명 |
 |---|---|
-| `storeId` | 숫자 — 스토어 홈 경로 · 상품 목록 `storeId` 필터에 그대로 |
+| `storeId` | 숫자 — 스토어 홈 경로, 상품 목록 `storeId` 필터에 그대로 |
 | `categoryId` | 입점 신청 때 고른 상위 카테고리(신청서 값, store 에 없음). 이름은 카테고리 트리 API(product 8절)로 바꿈 — 카테고리 탭 필터용 |
 | `intro` | 서버 정화된 HTML — 화면은 `safeHtml` 을 한 번 더 거쳐 표시 |
-| `imageUrl` · `color` | 대표 이미지(13-1 과 같은 규칙) — 없으면 `null` → `color` 아바타 |
-| `grade` | `SPROUT` · `POWER` · `BIG_POWER`(화면 표시 새싹 · 파워 · 빅파워) |
+| `imageUrl`, `color` | 대표 이미지(13-1 과 같은 규칙) — 없으면 `null` → `color` 아바타 |
+| `grade` | `SPROUT`, `POWER`, `BIG_POWER`(화면 표시 새싹, 파워, 빅파워) |
 
-- 정지 · 폐점 · 소프트 삭제 스토어는 빠집니다. 정지가 풀리면 다시 나옵니다.
+- 정지, 폐점, 소프트 삭제 스토어는 빠집니다. 정지가 풀리면 다시 나옵니다.
 - 상품 미리보기는 상품 목록 API(product 9절, `storeId` 필터) — store 는 상품을 모릅니다.
 - 관심고객 수는 팔로우 기능이 범위 밖이라 없습니다(스펙 STR-12).
 
@@ -732,35 +732,35 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | 경우 | 응답 | 화면 권장 처리 |
 |---|---|---|
 | 운영 중(`ACTIVE`) | **200** 위 응답 | 스토어 홈 |
-| 정지(`SUSPENDED`) · 폐점(`CLOSED`) | **200** `{storeId, storeName, status}` 만, 나머지 필드 `null` | "○○은(는) 현재 운영하지 않는 스토어입니다" 안내 — 오류 응답은 `data: null` 이라 이름을 줄 수 없어 200 |
+| 정지(`SUSPENDED`), 폐점(`CLOSED`) | **200** `{storeId, storeName, status}` 만, 나머지 필드 `null` | "○○은(는) 현재 운영하지 않는 스토어입니다" 안내 — 오류 응답은 `data: null` 이라 이름을 줄 수 없어 200 |
 | 없거나 소프트 삭제 | **404** `STORE_NOT_FOUND` | "존재하지 않는 스토어" |
 | 숫자 아님(예: slug) | **400** `INVALID_INPUT` | — |
 
 | 필드 | 설명 |
 |---|---|
-| 목록과 같은 필드 | `slug` · `categoryId` · `intro` · `imageUrl` · `color` · `grade` · `createdAt` — 14-1 과 같은 의미 |
-| `status` | 목록에는 없음(운영 중만 나오므로). 홈은 정지 · 폐점도 응답하므로 이 값으로 화면을 나눔 |
-| `ownerName` · `bizRegNo` | 판매자 정보 — 원래 신청서(store 에 없음). 정지 · 폐점이면 `null` |
+| 목록과 같은 필드 | `slug`, `categoryId`, `intro`, `imageUrl`, `color`, `grade`, `createdAt` — 14-1 과 같은 의미 |
+| `status` | 목록에는 없음(운영 중만 나오므로). 홈은 정지, 폐점도 응답하므로 이 값으로 화면을 나눔 |
+| `ownerName`, `bizRegNo` | 판매자 정보 — 원래 신청서(store 에 없음). 정지, 폐점이면 `null` |
 | `csPhone` | 고객 문의 연락처(판매자가 13-2 에서 수정) |
-| `shippingFee` · `freeShippingThreshold` · `courier` · `dispatchNote` | 배송 안내 — 1절 · 13-1 과 같은 값(`freeShippingThreshold: null` = 무료배송 없음) |
+| `shippingFee`, `freeShippingThreshold`, `courier`, `dispatchNote` | 배송 안내 — 1절, 13-1 과 같은 값(`freeShippingThreshold: null` = 무료배송 없음) |
 
-- 정지가 풀리면 다시 홈 전체가 나옵니다. 상품은 정지 · 폐점 동안 product 가 숨깁니다(product 9절).
+- 정지가 풀리면 다시 홈 전체가 나옵니다. 상품은 정지, 폐점 동안 product 가 숨깁니다(product 9절).
 
 ### 14-3. 스토어 홈(주소로) — `GET /api/stores/slug/{slug}`
 
-판매자가 입점 신청 때 정한 스토어 주소(`/store/{slug}`)로 들어온 화면이 부릅니다. 응답 · 정지 · 폐점 처리는 14-2 와 같습니다.
+판매자가 입점 신청 때 정한 스토어 주소(`/store/{slug}`)로 들어온 화면이 부릅니다. 응답, 정지, 폐점 처리는 14-2 와 같습니다.
 
 | 경우 | 응답 | 화면 권장 처리 |
 |---|---|---|
 | 운영 중 | **200** 14-2 응답 | 스토어 홈 |
-| 정지 · 폐점 | **200** `{storeId, storeName, status}` 만 | "운영하지 않는 스토어" 안내 |
+| 정지, 폐점 | **200** `{storeId, storeName, status}` 만 | "운영하지 않는 스토어" 안내 |
 | 없거나 소프트 삭제 | **404** `STORE_NOT_FOUND` | "존재하지 않는 스토어" |
 
 - 화면 주소 `/store/{값}` 은 값이 숫자면 14-2, 아니면 이 API 를 부릅니다. 그래서 숫자만으로 된 `slug` 는 만들 수 없습니다(2절)
 
 ## 15. 판매자 대시보드 — `GET /api/seller/dashboard` (STR-07)
 
-판매자센터 첫 화면(`/seller`)이 부릅니다. store `dashboard` 패키지가 order · product · settlement 통계를 **동시에** 불러 하위 응답을 **그대로** 담습니다(admin 대시보드 `GET /api/admin/dashboard` 와 같은 방식). 본문 없음.
+판매자센터 첫 화면(`/seller`)이 부릅니다. store `dashboard` 패키지가 order, product, settlement 통계를 **동시에** 불러 하위 응답을 **그대로** 담습니다(admin 대시보드 `GET /api/admin/dashboard` 와 같은 방식). 본문 없음.
 
 ```json
 {
@@ -776,22 +776,22 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | 경우 | 처리 | 응답 | 화면 권장 처리 |
 |---|---|---|---|
 | 모두 성공 | 네 영역 동시 호출 | **200** 위 응답, `unavailable: []` | 그대로 |
-| 일부 서비스 장애 · 타임아웃 · 서킷 OPEN · 4xx | 그 영역만 `null` | **200** `unavailable: ["order", …]` | 그 카드만 "일시적으로 불러올 수 없음" — 나머지는 정상 표시 |
-| 정지 · 폐점 스토어 | 상태를 보지 않고 그대로 | **200** | 내 스토어 조회(13-1) `status` 로 배너("정지 중 — 상품이 쇼핑몰에 노출되지 않습니다" · "폐점한 스토어입니다") |
+| 일부 서비스 장애, 타임아웃, 서킷 OPEN, 4xx | 그 영역만 `null` | **200** `unavailable: ["order", …]` | 그 카드만 "일시적으로 불러올 수 없음" — 나머지는 정상 표시 |
+| 정지, 폐점 스토어 | 상태를 보지 않고 그대로 | **200** | 내 스토어 조회(13-1) `status` 로 배너("정지 중 — 상품이 쇼핑몰에 노출되지 않습니다", "폐점한 스토어입니다") |
 | `X-Store-Id` 없음 / 사용자 헤더 없음 | — | **403** `FORBIDDEN` / **401** `UNAUTHORIZED` | — |
 
 | 영역 | 출처 | 값 |
 |---|---|---|
-| `order` | order `GET /internal/stats/orders?storeId=` | 할 일(`toConfirmCount` 발주확인 대기 · `toShipCount` 송장 대기 · `claimCount` 진행 중 클레임) · `todaySalesAmt` 오늘(KST) 결제금액 · `inProgressCount`(폐점 조건, 12절) |
-| `orderDaily` | order `GET /internal/stats/orders/daily?storeId=&days=30` | 오늘 포함 최근 30일 결제일별, 오래된 날부터 · 빈 날 0 — 일별 결제금액 차트 · 전일 대비 · 30일 합계 |
-| `product` | product `GET /internal/stats/products?storeId=` 의 `store` | 판매중 · 재고 부족(1~19) · 품절 · 판매중지 수, 재고 적은 순 10개(product.md 5절) |
-| `settlement` | settlement `GET /internal/stats/settlements?storeId=` 의 `store` | 이번 주 정산 예정(`pendingItemCount` · `pendingPayoutAmt`) · 다음 지급(`nextPayout`, 없으면 `null`) · 최근 지급 8주 |
+| `order` | order `GET /internal/stats/orders?storeId=` | 할 일(`toConfirmCount` 발주확인 대기, `toShipCount` 송장 대기, `claimCount` 진행 중 클레임), `todaySalesAmt` 오늘(KST) 결제금액, `inProgressCount`(폐점 조건, 12절) |
+| `orderDaily` | order `GET /internal/stats/orders/daily?storeId=&days=30` | 오늘 포함 최근 30일 결제일별, 오래된 날부터, 빈 날 0 — 일별 결제금액 차트, 전일 대비, 30일 합계 |
+| `product` | product `GET /internal/stats/products?storeId=` 의 `store` | 판매중, 재고 부족(1~19), 품절, 판매중지 수, 재고 적은 순 10개(product.md 5절) |
+| `settlement` | settlement `GET /internal/stats/settlements?storeId=` 의 `store` | 이번 주 정산 예정(`pendingItemCount`, `pendingPayoutAmt`), 다음 지급(`nextPayout`, 없으면 `null`), 최근 지급 8주 |
 
-- **`unavailable` 값**: `order` · `orderDaily` · `product` · `settlement`(응답 필드 이름 그대로, 필드 순서대로).
+- **`unavailable` 값**: `order`, `orderDaily`, `product`, `settlement`(응답 필드 이름 그대로, 필드 순서대로).
 - 하위 필드는 각 서비스 계약을 따릅니다 — 하위 응답에 필드가 늘면 store 를 고치지 않아도 그대로 나옵니다.
-- 서킷 브레이커 **`order` · `product` · `settlement`**(이름 = 대상 서비스, 폐점과 같은 인스턴스 공유), 모두 GET 이라 재시도 1회 · 타임아웃 연결 2초 · 읽기 3초. 응답 시간은 가장 느린 한 곳 기준.
+- 서킷 브레이커 **`order`, `product`, `settlement`**(이름 = 대상 서비스, 폐점과 같은 인스턴스 공유), 모두 GET 이라 재시도 1회, 타임아웃 연결 2초, 읽기 3초. 응답 시간은 가장 느린 한 곳 기준.
 - **정지 중 상품 수**: product 는 상품 상태만 세므로 정지 스토어도 `onSaleCount` 가 그대로 나옵니다(실제로는 쇼핑몰에서 숨김) → 화면 배너로 안내.
-- 넣지 않은 것: 스토어 평점 · 새 리뷰(화면이 review `GET /api/seller/reviews/summary` · 리뷰 목록), 미답변 문의 · 톡(review · chat API), 최근 주문 목록(order 판매자 주문 API).
+- 넣지 않은 것: 스토어 평점, 새 리뷰(화면이 review `GET /api/seller/reviews/summary`, 리뷰 목록), 미답변 문의, 톡(review, chat API), 최근 주문 목록(order 판매자 주문 API).
 
 ## 10/20 설계 정리
 
@@ -800,7 +800,7 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | 1 | 폐점 표현 | `status = CLOSED` 추가 (`deleted_at` 아님). `status` 는 VARCHAR 라 DDL 변경 없음 |
 | 2 | 내부 상세 응답 | `{storeId, userId, storeName, status}` 로 시작, 필드는 추가만 |
 | 3 | 소프트 삭제된 스토어 | 내부 API 도 404 (컨벤션 3-5 활성 조회 조건). 폐점은 삭제가 아니라서 200 |
-| 4 | 판매자 폐점 API · 조건 | 다음 PR. 진행 중 주문(order) · 미정산(settlement) 확인 방법은 담당자와 협의 후 결정. 그때 `events.md` 의 `StoreStatusChanged.status` 값 목록에 `CLOSED` 추가 |
+| 4 | 판매자 폐점 API, 조건 | 다음 PR. 진행 중 주문(order), 미정산(settlement) 확인 방법은 담당자와 협의 후 결정. 그때 `events.md` 의 `StoreStatusChanged.status` 값 목록에 `CLOSED` 추가 |
 
 ## 10/22 설계 정리 (입점 신청)
 
@@ -809,11 +809,11 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | 1 | 대표 상품 개수 | 2~10개 (화면 기준으로 스펙 STR-01 을 3 → 2 로 수정). V1 컬럼 주석의 "3개 이상"은 머지된 파일이라 그대로 둠 |
 | 2 | 요청 필드 이름 | storedb 컬럼명의 camelCase. 정산 계좌만 `StoreApproved` 와 같은 `settlementAccount{bank, number, holder}` 객체 |
 | 3 | 대표 상품 세부 분류 | id 가 아니라 **이름**(`subCategory`)으로 받아 그대로 저장 — 심사 표시 전용이라 product 조회 없이 보여 주기 위해 |
-| 4 | 카테고리 검증 | 형식만(`@Positive`). product 호출은 하지 않음 — `category_id` 는 심사 참고용이고 정산 · 이벤트에 쓰이지 않음. **`category_id` 가 심사 밖(상품 등록 범위 · 이벤트 · 구매자 화면)에 쓰이게 되면** product 확인을 붙이되 장애 때는 통과(fail-open) |
-| 5 | 서류 | 업종과 무관하게 4종(`CATEGORY_CERT` 는 쓰지 않음 — V1 주석에만 남음). 상품 사진 3~10장 · JPG/PNG. 형식 · 크기는 클라이언트 값이 아니라 S3 `HeadObject` 로 확인해 저장 |
+| 4 | 카테고리 검증 | 형식만(`@Positive`). product 호출은 하지 않음 — `category_id` 는 심사 참고용이고 정산, 이벤트에 쓰이지 않음. **`category_id` 가 심사 밖(상품 등록 범위, 이벤트, 구매자 화면)에 쓰이게 되면** product 확인을 붙이되 장애 때는 통과(fail-open) |
+| 5 | 서류 | 업종과 무관하게 4종(`CATEGORY_CERT` 는 쓰지 않음 — V1 주석에만 남음). 상품 사진 3~10장, JPG/PNG. 형식, 크기는 클라이언트 값이 아니라 S3 `HeadObject` 로 확인해 저장 |
 | 6 | 접수번호 | 컬럼 없이 `AP-{yyMM}-{id}` 계산 (V3 없음, 동시성 문제 없음). 달마다 001 부터 시작하지 않는 것은 받아들임 |
-| 7 | 약관 | 필수 3개 + 선택 1개를 객체로 받고, 저장은 `terms_agreed_at`(서버 시각) · `marketing_agreed` 두 컬럼. 약관 버전은 저장하지 않음 |
-| 8 | 폐점 판매자 재입점 | 막음 — `uk_store_user_id` · `uk_store_slug` · `uk_store_store_name` 이 폐점 스토어 행에도 걸려 승인이 실패하므로 신청 단계에서 같은 기준으로 거절. 재입점이 필요해지면 UK 를 바꾸는 V 파일 결정 필요 |
+| 7 | 약관 | 필수 3개 + 선택 1개를 객체로 받고, 저장은 `terms_agreed_at`(서버 시각), `marketing_agreed` 두 컬럼. 약관 버전은 저장하지 않음 |
+| 8 | 폐점 판매자 재입점 | 막음 — `uk_store_user_id`, `uk_store_slug`, `uk_store_store_name` 이 폐점 스토어 행에도 걸려 승인이 실패하므로 신청 단계에서 같은 기준으로 거절. 재입점이 필요해지면 UK 를 바꾸는 V 파일 결정 필요 |
 
 ## 10/26 설계 정리 (입점 서류 업로드 주소)
 
@@ -821,9 +821,9 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 |---|---|---|
 | 1 | 경로 | `/api/seller/apply/documents/presign` — 2절과 같은 줄기. 게이트웨이 `/api/seller/apply/**` = BUYER 규칙(뼈대부터 있음)이라 수정 없음. 시트의 `/api/store-applications/...` 는 쓰지 않음 |
 | 2 | 모양 | product 17절처럼 여러 개를 한 번에(`files[]` → 같은 순서 배열). 서류마다 허용 형식이 달라 `docType` 추가. 원본 파일명은 받지 않음(2절 `originalName`) |
-| 3 | 만료 | 10분 — product presigned PUT · 4절 presigned GET 과 같게 |
+| 3 | 만료 | 10분 — product presigned PUT, 4절 presigned GET 과 같게 |
 | 4 | 크기 서명 | `Content-Length` 를 서명에 포함 → 큰 파일은 업로드 단계에서 403. product 이미지 presign(4주차)도 같은 방식으로 맞출 예정 |
-| 5 | 검사 범위 | 개수 1~13 · 형식 · 크기만. 서류 구성 · 기존 스토어 · 진행 중 신청은 2절에서 — 발급은 가볍게 |
+| 5 | 검사 범위 | 개수 1~13, 형식, 크기만. 서류 구성, 기존 스토어, 진행 중 신청은 2절에서 — 발급은 가볍게 |
 
 ## 10/26 설계 정리 (관리자 내부 API)
 
@@ -832,20 +832,20 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | 1 | 목록 페이징 | 없음 — 전체 배열 + `status` 선택 필터 (컨벤션 4-7, 지훈 님 관리자 화면이 `useClientTable` 로 전체를 받아 탭 건수까지 계산) |
 | 2 | 전체 처리 이력 API | 만들지 않음 — 관리자 화면 전용이라 필요하면 admin 쪽 요청으로. 신청별 이력은 상세에 포함 |
 | 3 | 서류 열람 | 상세 조회 때 presigned GET 10분. 이전 제출본(`is_current = false`)도 비교용으로 포함 |
-| 4 | 체크리스트 | 서버는 받지도 검사하지도 않음(STR-10). 중복 입점 근거로 같은 사업자번호의 다른 신청 · 스토어를 상세에 포함(`idx_store_application_biz_reg_no`) |
+| 4 | 체크리스트 | 서버는 받지도 검사하지도 않음(STR-10). 중복 입점 근거로 같은 사업자번호의 다른 신청, 스토어를 상세에 포함(`idx_store_application_biz_reg_no`) |
 | 5 | 보완요청 본문 | `{message, requestedDocs[]}`, 기한은 서버가 +7일. 이벤트의 `requestedDocs` 는 메일용 한글 이름. ~~`requestedDocs` 는 DB 에 저장하지 않음~~ → **10/29 V5 로 저장**(보완 재제출 설계 정리 3) |
 | 6 | 승인 이벤트 재발행 | `eventId` = `StoreApproved:{applicationId}` 이름 기반 UUID — 신청 하나에 항상 같은 값. 10/28 부터 아웃박스로 발행(아래 10/28 설계 정리) |
-| 7 | 정지 · 해제 | `SUSPENDED ↔ ACTIVE` 만. 같은 상태면 200 멱등(이벤트 없음 — product 카테고리 `PATCH` 와 같은 방식), `CLOSED` 는 409, 요청에 `CLOSED` 는 400(폐점은 판매자 API) |
-| 8 | 관리자 스토어 상세 | 새 경로 없이 1절 응답에 필드 추가(필드는 추가만 규칙). 상태 이력 조회가 하나 늘지만 user · order 호출 빈도에서 무시할 수준 |
-| 9 | 처리자 | `actor` 종류만, 관리자 ID · 이름 없음(storedb V1 그대로) |
+| 7 | 정지, 해제 | `SUSPENDED ↔ ACTIVE` 만. 같은 상태면 200 멱등(이벤트 없음 — product 카테고리 `PATCH` 와 같은 방식), `CLOSED` 는 409, 요청에 `CLOSED` 는 400(폐점은 판매자 API) |
+| 8 | 관리자 스토어 상세 | 새 경로 없이 1절 응답에 필드 추가(필드는 추가만 규칙). 상태 이력 조회가 하나 늘지만 user, order 호출 빈도에서 무시할 수준 |
+| 9 | 처리자 | `actor` 종류만, 관리자 ID, 이름 없음(storedb V1 그대로) |
 
 ## 10/28 설계 정리 (이벤트 발행)
 
 | # | 항목 | 정한 내용 |
 |---|---|---|
-| 1 | 발행 방식 | 아웃박스(storedb V4 `outbox_event`, backend #165) — order · settlement 와 같은 방식. 커밋 직후 1회 + 발행기(30초, ShedLock `store-event-outbox`)가 실패 · 남은 행을 다시. 커밋 직후 발행만 하면 SNS 장애 때 `StoreApproved` 가 사라져 판매자 권한이 안 붙음 |
-| 2 | SNS 타임아웃 | 호출 1초 · 시도 500ms — admin read-timeout 3초 안에 응답(타임아웃 예산). 늦으면 발행기에 맡김 |
-| 3 | `eventId` · `occurredAt` | 부르는 쪽이 정해 아웃박스 행에 저장 — 승인은 신청 ID 이름 기반 UUID · 승인 시각. 다시 보내도 같은 봉투 |
+| 1 | 발행 방식 | 아웃박스(storedb V4 `outbox_event`, backend #165) — order, settlement 와 같은 방식. 커밋 직후 1회 + 발행기(30초, ShedLock `store-event-outbox`)가 실패, 남은 행을 다시. 커밋 직후 발행만 하면 SNS 장애 때 `StoreApproved` 가 사라져 판매자 권한이 안 붙음 |
+| 2 | SNS 타임아웃 | 호출 1초, 시도 500ms — admin read-timeout 3초 안에 응답(타임아웃 예산). 늦으면 발행기에 맡김 |
+| 3 | `eventId`, `occurredAt` | 부르는 쪽이 정해 아웃박스 행에 저장 — 승인은 신청 ID 이름 기반 UUID, 승인 시각. 다시 보내도 같은 봉투 |
 | 4 | 실패 로그 | 9회까지 warn, 10회째 error + 스택 한 번, 그 뒤 한 줄 warn(컨벤션 2-8 반복 실패는 첫 회만 스택) |
 | 5 | 한도에 닿은 행 (11/3) | 10회 실패한 행은 `NEW` 그대로 두고 발행기 조회에서 뺀다(`attempt_count < max-attempts`) — 영구 실패 행이 50건 창을 막아 새 이벤트가 안 나가던 문제. 원인을 고친 뒤 다시 보내려면 `UPDATE outbox_event SET attempt_count = 0 WHERE status = 'NEW' AND attempt_count >= 10 AND event_id = '<eventId>';` → 다음 주기(30초)에 같은 `eventId` 로 발행 |
 
@@ -855,19 +855,19 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 |---|---|---|
 | 1 | 이미 폐점 | 200 멱등 — 다른 서비스를 부르지 않음, `closedAt` 은 처음 폐점 시각(마지막 CLOSED 이력) |
 | 2 | 정지 중 폐점 | 허용 — 판매자 탈퇴가 폐점 뒤라 막으면 정지된 판매자는 탈퇴 불가. 정지 사유는 지움 |
-| 3 | 본문 · 사유 | 없음(스펙에 사유 입력 없음), 이력 `actor = SELLER` · 사유 NULL |
-| 4 | 응답 | `{storeId, status, closedAt}` — 1절 상세는 내부 · 관리자용이라 판매자 화면에 맞지 않음 |
-| 5 | 확인 위치 | order · settlement 확인은 잠금 · 트랜잭션 밖, 통과 뒤 행 잠금 안에서 다시 상태 확인(동시 요청은 한쪽만 이력 · 이벤트) |
-| 6 | 장애 응답 | 502 `EXTERNAL_API_ERROR` — 스펙 "장애 · 타임아웃이면 거절". 서킷 이름은 설정의 `orderClient` · `settlementClient` 를 `order` · `settlement` 로 바꿈 |
-| 7 | 응답 필드 호환 | store 가 order · settlement 응답의 일부 필드만 읽어도 됨 — `RestClient.builder()` 기본 변환기가 모르는 필드를 무시(어댑터 테스트로 확인). 1절 확장으로 store 응답 필드가 늘어도 order · user · chat 은 같은 이유로 영향 없음 |
+| 3 | 본문, 사유 | 없음(스펙에 사유 입력 없음), 이력 `actor = SELLER`, 사유 NULL |
+| 4 | 응답 | `{storeId, status, closedAt}` — 1절 상세는 내부, 관리자용이라 판매자 화면에 맞지 않음 |
+| 5 | 확인 위치 | order, settlement 확인은 잠금, 트랜잭션 밖, 통과 뒤 행 잠금 안에서 다시 상태 확인(동시 요청은 한쪽만 이력, 이벤트) |
+| 6 | 장애 응답 | 502 `EXTERNAL_API_ERROR` — 스펙 "장애, 타임아웃이면 거절". 서킷 이름은 설정의 `orderClient`, `settlementClient` 를 `order`, `settlement` 로 바꿈 |
+| 7 | 응답 필드 호환 | store 가 order, settlement 응답의 일부 필드만 읽어도 됨 — `RestClient.builder()` 기본 변환기가 모르는 필드를 무시(어댑터 테스트로 확인). 1절 확장으로 store 응답 필드가 늘어도 order, user, chat 은 같은 이유로 영향 없음 |
 
 ## 10/29 설계 정리 (내 신청 상태)
 
 | # | 항목 | 정한 내용 |
 |---|---|---|
 | 1 | 신청 없음 | 200 `data: null` — 정상 상태라 404 로 두지 않음(공통 핸들러가 업무 예외마다 warn 을 남김) |
-| 2 | 여러 건 | 가장 최근 1건(제출 시각 · ID 역순). 지난 반려 이력이 필요하면 그때 목록으로 |
-| 3 | 기한 · 재신청 시각 | 서버가 계산해 내려 줌 — 화면이 7일 · 30일 규칙을 따로 갖지 않게 |
+| 2 | 여러 건 | 가장 최근 1건(제출 시각, ID 역순). 지난 반려 이력이 필요하면 그때 목록으로 |
+| 3 | 기한, 재신청 시각 | 서버가 계산해 내려 줌 — 화면이 7일, 30일 규칙을 따로 갖지 않게 |
 | 4 | 서류 | 넣지 않음 — 재제출(STR-09) 때. 재제출 때는 `requestedDocs` 만 추가(보완 재제출 설계 정리 3) |
 
 ## 10/29 설계 정리 (보완 재제출)
@@ -875,58 +875,58 @@ API 가 아니라 store-service 안의 스케줄러입니다. **보완요청 시
 | # | 항목 | 정한 내용 |
 |---|---|---|
 | 1 | 경로 | 시트 "Api 명세서" 그대로 `PATCH /api/seller/apply/{applicationId}/resubmit` — 남의 신청 ID 는 404 |
-| 2 | 고칠 수 있는 범위 | 서류 + 신청서 일부 항목(시트 "신청 본문 중 수정 필드"). 내용 보완(`requestedDocs: []`)이 반려 → 30일 뒤 재신청으로 가지 않게. 고정 항목 없음 — 스토어명 · 주소 · 사업자 정보도 아래 9 · 10 규칙으로 고침 |
-| 3 | 요청 서류 저장 | storedb V5 `requested_docs` JSON — 10/26 결정(저장 안 함)을 바꿈. 화면 표시 · 재제출 검사에 필요. V5 전 보완요청(`null`)은 낸 종류의 개수만 검사 |
+| 2 | 고칠 수 있는 범위 | 서류 + 신청서 일부 항목(시트 "신청 본문 중 수정 필드"). 내용 보완(`requestedDocs: []`)이 반려 → 30일 뒤 재신청으로 가지 않게. 고정 항목 없음 — 스토어명, 주소, 사업자 정보도 아래 9, 10 규칙으로 고침 |
+| 3 | 요청 서류 저장 | storedb V5 `requested_docs` JSON — 10/26 결정(저장 안 함)을 바꿈. 화면 표시, 재제출 검사에 필요. V5 전 보완요청(`null`)은 낸 종류의 개수만 검사 |
 | 4 | 서류 검사 | 신청(2절)과 같은 코드 — 개수 규칙을 종류별로 나눠 재제출은 낸 종류만, S3 확인은 트랜잭션 밖 |
 | 5 | 기한 | 보완요청 + 7일이 지나면 자동 반려 전이라도 409 — 스케줄러 주기 사이에 늦은 재제출이 들어오지 않게 |
-| 6 | 동시 처리 | 신청 `@Version` — 재제출 · 자동 반려 · 관리자 처리 중 먼저 저장한 쪽만(스펙 STR-09) |
+| 6 | 동시 처리 | 신청 `@Version` — 재제출, 자동 반려, 관리자 처리 중 먼저 저장한 쪽만(스펙 STR-09) |
 | 7 | 이벤트 | 없음 — `events.md` 에 재제출 이벤트가 없고 관리자는 심사대기 목록으로 확인. 알림이 필요하면 지훈 님과 이벤트부터 정함 |
-| 8 | 이력 사유 | 바뀐 서류 · 항목 이름을 남김 — 관리자가 무엇이 바뀌었는지 상세에서 바로 봄 |
-| 9 | 사업자 정보 수정 | 사업자 구분 · 대표자 · 사업자등록번호도 고칠 수 있음, 단 바뀌면 사업자등록증 필수. 승인 전이라 어차피 재심사이고 사업자번호는 중복 검사 대상이 아님(`sameBizRegNo` 는 조회 때 계산). 실제 번호 변경(법인 전환 등)은 드물고 오타 · 다른 사업장 번호가 주된 경우 — 그것 때문에 반려 → 30일 재신청까지 가지 않게. 서류를 같이 받아 관리자가 새 번호를 확인 |
-| 10 | 스토어명 · 주소 수정 | 바꾸면 신청과 같은 중복 확인(자기 신청 제외). 스펙 STR-04 "겹치면 보완요청으로 변경 후 재제출" · STR-01 "신청 · 재제출 때 다시 확인" 그대로 — 막으면 그 신청자는 반려 → 30일 재신청뿐. 확인과 저장 사이에 다른 신청이 같은 값을 가져가면 승인 때 UNIQUE 로 다시 막힘(5절) |
+| 8 | 이력 사유 | 바뀐 서류, 항목 이름을 남김 — 관리자가 무엇이 바뀌었는지 상세에서 바로 봄 |
+| 9 | 사업자 정보 수정 | 사업자 구분, 대표자, 사업자등록번호도 고칠 수 있음, 단 바뀌면 사업자등록증 필수. 승인 전이라 어차피 재심사이고 사업자번호는 중복 검사 대상이 아님(`sameBizRegNo` 는 조회 때 계산). 실제 번호 변경(법인 전환 등)은 드물고 오타, 다른 사업장 번호가 주된 경우 — 그것 때문에 반려 → 30일 재신청까지 가지 않게. 서류를 같이 받아 관리자가 새 번호를 확인 |
+| 10 | 스토어명, 주소 수정 | 바꾸면 신청과 같은 중복 확인(자기 신청 제외). 스펙 STR-04 "겹치면 보완요청으로 변경 후 재제출", STR-01 "신청, 재제출 때 다시 확인" 그대로 — 막으면 그 신청자는 반려 → 30일 재신청뿐. 확인과 저장 사이에 다른 신청이 같은 값을 가져가면 승인 때 UNIQUE 로 다시 막힘(5절) |
 
 ## 10/29 설계 정리 (보완 기한 자동 반려)
 
 | # | 항목 | 정한 내용 |
 |---|---|---|
-| 1 | 대상 | 보완요청 시각 + 기한 ≤ 지금 — 재제출이 막히는 기준과 같은 경계(틈 · 겹침 없음) |
-| 2 | 주기 · 잠금 | 10분 · 100건 · ShedLock — order 자동 배송완료와 같은 모양. 재제출은 이미 막혀 늦어도 상태 · 메일 시각만 늦음 |
+| 1 | 대상 | 보완요청 시각 + 기한 ≤ 지금 — 재제출이 막히는 기준과 같은 경계(틈, 겹침 없음) |
+| 2 | 주기, 잠금 | 10분, 100건, ShedLock — order 자동 배송완료와 같은 모양. 재제출은 이미 막혀 늦어도 상태, 메일 시각만 늦음 |
 | 3 | 처리 단위 | 건마다 트랜잭션, 실패는 warn 후 다음 건 — 한 건 충돌로 전체가 멈추지 않게 |
-| 4 | 반려 코드 | 관리자 반려와 같은 저장 · 이벤트(공용 메서드), 이력만 `SYSTEM` · 사유 고정(기한 숫자 없음 — 설정값이라) |
-| 5 | 기한 설정값 | `app.apply.supplement-due` 기본 7일 — 시연에서 7일을 기다릴 수 없어 order `auto-deliver-after` 처럼. 짧게 쓸지 · 시연 방법은 팀과 정함(시드 102 영향) |
+| 4 | 반려 코드 | 관리자 반려와 같은 저장, 이벤트(공용 메서드), 이력만 `SYSTEM`, 사유 고정(기한 숫자 없음 — 설정값이라) |
+| 5 | 기한 설정값 | `app.apply.supplement-due` 기본 7일 — 시연에서 7일을 기다릴 수 없어 order `auto-deliver-after` 처럼. 짧게 쓸지, 시연 방법은 팀과 정함(시드 102 영향) |
 | 6 | 동시 처리 | `@Version` — 스펙 STR-09 "진 쪽은 실패, 스케줄러는 다음 실행에서 재확인" |
 
 ## 10/29 설계 정리 (판매자 스토어 설정)
 
 | # | 항목 | 정한 내용 |
 |---|---|---|
-| 1 | PR 범위 | STR-06 을 조회(13-1) · 수정(13-2) · 대표 이미지 업로드 주소(13-3)로 나눔 — 엔드포인트 하나씩 |
+| 1 | PR 범위 | STR-06 을 조회(13-1), 수정(13-2), 대표 이미지 업로드 주소(13-3)로 나눔 — 엔드포인트 하나씩 |
 | 2 | 색 | 형식(`#RRGGBB`)만 — 시드 색(`#d0701f` 등)이 화면 6색 팔레트 밖이라 팔레트로 막으면 시드 스토어가 저장 불가. 팔레트는 화면 몫 |
-| 3 | 연락처 | 휴대 · 지역 · 070 모두 — 시드가 유선(`064-…` · `02-…`), 신청서 담당자 휴대폰(휴대만)과 다름 |
+| 3 | 연락처 | 휴대, 지역, 070 모두 — 시드가 유선(`064-…`, `02-…`), 신청서 담당자 휴대폰(휴대만)과 다름 |
 | 4 | 이미지 키 | 모양 검사만(내 `stores/{storeId}/`) + 지금 키 유지 — product 와 같은 방식, 업로드 검사 Lambda 가 위장 파일을 지움 |
 | 5 | 폐점 스토어 | 409 `STORE_CLOSED`(새 코드) — 닫힌 스토어 설정은 의미 없음. 정지 중은 수정 가능 |
 | 6 | 동시 수정 | 행 잠금 — 버전 컬럼 없는 테이블이라 판매자 저장(전체 컬럼 UPDATE)이 관리자 상태 변경을 덮어쓰지 않게 |
 | 7 | 이벤트 | 없음 — 배송비는 주문 때 스냅샷 |
-| 8 | 이미지 업로드 주소 | 한 장 `{contentType, size}` — 대표 이미지는 1장이라 배열 없음. 형식 · 크기 위반은 공통 `INVALID_INPUT`(파일 하나라 "n번째 파일" 전용 코드 불필요). 형식은 upload-guard `stores/` 허용(jpg · png · webp), 크기는 product 와 같은 10MB |
+| 8 | 이미지 업로드 주소 | 한 장 `{contentType, size}` — 대표 이미지는 1장이라 배열 없음. 형식, 크기 위반은 공통 `INVALID_INPUT`(파일 하나라 "n번째 파일" 전용 코드 불필요). 형식은 upload-guard `stores/` 허용(jpg, png, webp), 크기는 product 와 같은 10MB |
 
 ## 10/29 설계 정리 (공개 스토어)
 
 | # | 항목 | 정한 내용 |
 |---|---|---|
-| 1 | PR 범위 | 목록(14-1) · 스토어 홈(14-2)을 PR 2개로 |
+| 1 | PR 범위 | 목록(14-1), 스토어 홈(14-2)을 PR 2개로 |
 | 2 | 목록 범위 | 운영 중만, 개설 최신순, 페이징 없음 — 스토어 수가 수십 개 수준이고 화면이 전체를 받아 카테고리 탭으로 거름 |
 | 3 | 카테고리 | 신청서 `category_id` 조인. 10/22 설계 정리 4 의 "구매자 화면에 쓰이면 product 확인" 은 붙이지 않음 — 탭 필터에만 쓰고, 없는 ID 면 화면에서 이름이 비는 정도 |
 | 4 | 경로 키 | 숫자 `storeId`(스펙 경로 `{id}`, 상품 상세 채팅 버튼이 숫자 id 필요) — `slug` 는 응답에만 |
-| 5 | 정지 · 폐점 홈 | 200 + `{storeId, storeName, status}` 만 — 화면 안내에 이름이 필요한데 오류 응답은 `data: null`. 판매자 정보(대표자 · 사업자번호 · 연락처)는 내보내지 않음. 신청서도 읽지 않음 |
-| 6 | 필드 이름 | 표의 `openedAt` · `representativeName` 대신 기존 응답(8 · 13절)과 같은 `createdAt` · `ownerName` — 화면 변환 함수가 API 마다 달라지지 않게 |
+| 5 | 정지, 폐점 홈 | 200 + `{storeId, storeName, status}` 만 — 화면 안내에 이름이 필요한데 오류 응답은 `data: null`. 판매자 정보(대표자, 사업자번호, 연락처)는 내보내지 않음. 신청서도 읽지 않음 |
+| 6 | 필드 이름 | 표의 `openedAt`, `representativeName` 대신 기존 응답(8, 13절)과 같은 `createdAt`, `ownerName` — 화면 변환 함수가 API 마다 달라지지 않게 |
 
 ## 10/30 설계 정리 (판매자 대시보드)
 
 | # | 항목 | 정한 내용 |
 |---|---|---|
 | 1 | 응답 모양 | 하위 통계를 JsonNode 로 그대로(admin 대시보드와 같음) — store 가 필드를 골라 DTO 로 만들면 하위 API 가 바뀔 때마다 store 도 고쳐야 함 |
-| 2 | 부분 응답 | 한 곳이 실패해도 200 + 그 영역 `null` + `unavailable[]`(스펙 STR-07 · 시연 ②) — 4xx 도 같은 처리(store 쪽 버그라 warn 로그) |
-| 3 | 정지 · 폐점 | 상태를 보지 않음, storedb 도 읽지 않음 — 정지 중에도 남은 주문 · 정산을 처리해야 하고, 하위 통계는 없는 스토어도 0 으로 답함. 배너는 화면이 13-1 `status` 로 |
-| 4 | 범위 | order · product · settlement 만 — 평점 · 리뷰 · 문의 · 최근 주문은 화면이 각 서비스 API 를 직접(노션 10/28 별점 API 안내와 같음) |
-| 5 | 일별 기간 | 30일 고정 — 화면 차트 · "최근 30일 매출" 카드. 쿼리 파라미터로 열지 않음 |
+| 2 | 부분 응답 | 한 곳이 실패해도 200 + 그 영역 `null` + `unavailable[]`(스펙 STR-07, 시연 ②) — 4xx 도 같은 처리(store 쪽 버그라 warn 로그) |
+| 3 | 정지, 폐점 | 상태를 보지 않음, storedb 도 읽지 않음 — 정지 중에도 남은 주문, 정산을 처리해야 하고, 하위 통계는 없는 스토어도 0 으로 답함. 배너는 화면이 13-1 `status` 로 |
+| 4 | 범위 | order, product, settlement 만 — 평점, 리뷰, 문의, 최근 주문은 화면이 각 서비스 API 를 직접(노션 10/28 별점 API 안내와 같음) |
+| 5 | 일별 기간 | 30일 고정 — 화면 차트, "최근 30일 매출" 카드. 쿼리 파라미터로 열지 않음 |
 

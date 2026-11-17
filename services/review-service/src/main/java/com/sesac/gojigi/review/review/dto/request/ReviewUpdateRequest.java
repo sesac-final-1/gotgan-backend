@@ -9,7 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
-/** 내 리뷰 수정 (review.md 2절) — 작성과 같은 규칙, 통째로 바꾼다(요약 · 사이즈 체감을 비우면 지워짐) */
+/** 내 리뷰 수정 (review.md 2절) — 작성과 같은 규칙, 통째로 바꾼다(요약, 사이즈 체감을 비우면 지워짐) */
 public record ReviewUpdateRequest(
         @Schema(description = "별점 1~5", example = "4")
         @NotNull(message = "별점을 선택해 주세요.")
@@ -25,7 +25,7 @@ public record ReviewUpdateRequest(
         @Size(min = 20, max = 2000, message = "리뷰 내용은 20~2,000자로 입력해 주세요.")
         String content,
 
-        @Schema(description = "사이즈 체감 — 패션 · 신발가방만, 그 외 생략", example = "LARGE")
+        @Schema(description = "사이즈 체감 — 패션, 신발가방만, 그 외 생략", example = "LARGE")
         ReviewFit fit,
 
         @Schema(description = "사진 0~3개 — 통째로 바꾼다(비우면 사진 삭제). 기존 사진은 그 키를 그대로, 새 사진은 업로드 주소 발급 키",

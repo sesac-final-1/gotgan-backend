@@ -18,15 +18,15 @@ import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 쿠버네티스 REST API 직접 호출 (라이브러리 없이 RestClient) — 주소 · 인증서 · 토큰은 KubernetesClientConfig 가 붙인다.
- * 권한은 Role admin-service-chaos(gotgan-config chaos-rbac.yaml): pods get · list · delete, deployments · statefulsets get · list,
- * jobs get · list · create · delete(관리자 화면 부하테스트, 11/16)
+ * 쿠버네티스 REST API 직접 호출 (라이브러리 없이 RestClient) — 주소, 인증서, 토큰은 KubernetesClientConfig 가 붙인다.
+ * 권한은 Role admin-service-chaos(gotgan-config chaos-rbac.yaml): pods get, list, delete, deployments, statefulsets get, list,
+ * jobs get, list, create, delete(관리자 화면 부하테스트, 11/16)
  */
 @Slf4j
 @RequiredArgsConstructor
 public class InClusterKubernetesClient implements KubernetesClient {
 
-    /** 부하테스트 Job · 파드 라벨과 어노테이션 — app 라벨은 붙이지 않는다(상태 화면이 app 라벨 파드를 서비스로 센다) */
+    /** 부하테스트 Job, 파드 라벨과 어노테이션 — app 라벨은 붙이지 않는다(상태 화면이 app 라벨 파드를 서비스로 센다) */
     public static final String LOADTEST_ID = "gotgan.loadtest/id";
     public static final String LOADTEST_KIND = "gotgan.loadtest/kind";
     public static final String LOADTEST_SCENARIO = "gotgan.loadtest/scenario";
@@ -133,7 +133,7 @@ public class InClusterKubernetesClient implements KubernetesClient {
         try {
             return request.get();
         } catch (RestClientException e) {
-            log.warn("쿠버네티스 API 호출 실패 - {}", e.getMessage());   // 클러스터 밖(로컬) · 권한 없음(403) · 타임아웃
+            log.warn("쿠버네티스 API 호출 실패 - {}", e.getMessage());   // 클러스터 밖(로컬), 권한 없음(403), 타임아웃
             throw new SystemException(SystemErrorCode.SYSTEM_CLUSTER_UNAVAILABLE, e);
         }
     }

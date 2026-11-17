@@ -27,8 +27,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 판매자 리뷰 관리 (REV-06, review.md 6 · 7절) — 내 스토어 리뷰 목록 · 평점 요약 · 답글 작성 · 수정. 담당 이경석.
- * 스토어는 게이트웨이가 넣는 X-Store-Id 만 본다. 다른 스토어 · 삭제된 리뷰는 없는 것으로(404).
+ * 판매자 리뷰 관리 (REV-06, review.md 6, 7절) — 내 스토어 리뷰 목록, 평점 요약, 답글 작성, 수정. 담당 이경석.
+ * 스토어는 게이트웨이가 넣는 X-Store-Id 만 본다. 다른 스토어, 삭제된 리뷰는 없는 것으로(404).
  */
 @Slf4j
 @Service
@@ -70,7 +70,7 @@ public class SellerReviewService {
                 tabCounts);
     }
 
-    /** 답글 작성 · 수정 — 리뷰당 1개라 덮어쓴다. 블라인드된 리뷰에는 달 수 없다(B안 요청서) */
+    /** 답글 작성, 수정 — 리뷰당 1개라 덮어쓴다. 블라인드된 리뷰에는 달 수 없다(B안 요청서) */
     @Transactional
     public ReviewReplyResponse reply(Long storeId, Long reviewId, ReviewReplyRequest request) {
         requireStore(storeId);

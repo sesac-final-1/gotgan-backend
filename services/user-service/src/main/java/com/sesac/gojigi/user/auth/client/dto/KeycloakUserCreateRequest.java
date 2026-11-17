@@ -6,7 +6,7 @@ import java.util.Map;
 /**
  * Keycloak UserRepresentation 중 가입에 필요한 필드만.
  * username = email (realm 설정 — 로그인 ID 가 이메일), user_id 속성은 User Profile 에 선언된 관리자 전용 속성.
- * 이름 · 휴대폰의 주인은 userdb 라 Keycloak 에는 넣지 않는다.
+ * 이름, 휴대폰의 주인은 userdb 라 Keycloak 에는 넣지 않는다.
  */
 public record KeycloakUserCreateRequest(
         String username,

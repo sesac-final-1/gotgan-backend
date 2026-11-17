@@ -20,7 +20,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     List<OrderItem> findByOrderIdOrderByIdAsc(Long orderId);
 
     /**
-     * 판매자 주문 목록 — 내 스토어 · statuses 상태, q 가 있으면 상품주문번호 · 구매자 · 수령인 · 상품명 · 송장번호 부분 일치.
+     * 판매자 주문 목록 — 내 스토어, statuses 상태, q 가 있으면 상품주문번호, 구매자, 수령인, 상품명, 송장번호 부분 일치.
      * 최신 주문 먼저. 주문(스냅샷)을 함께 읽어 행마다 다시 조회하지 않는다.
      */
     @Query(value = """
@@ -50,7 +50,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     List<Long> findIdsByStatusAndShippedAtBefore(@Param("status") OrderItemStatus status,
                                                  @Param("before") LocalDateTime before, Limit limit);
 
-    /** 자동 배송완료 대상 — 교환 재배송 중(교환요청 · 재배송 발송이 직전 배송완료보다 뒤)이고 재배송이 before 보다 이른 상품주문 ID */
+    /** 자동 배송완료 대상 — 교환 재배송 중(교환요청, 재배송 발송이 직전 배송완료보다 뒤)이고 재배송이 before 보다 이른 상품주문 ID */
     @Query("""
             select i.id from OrderItem i
             where i.status = com.sesac.gojigi.order.order.entity.OrderItemStatus.EXCHANGE_REQUESTED

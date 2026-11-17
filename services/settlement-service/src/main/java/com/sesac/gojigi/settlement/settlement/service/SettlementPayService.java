@@ -9,7 +9,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 /**
- * 지급 실행 (단건 · 일괄, STL-06) — 정산서마다 따로 커밋해서 일부가 실패해도 나머지는 지급된다.
+ * 지급 실행 (단건, 일괄, STL-06) — 정산서마다 따로 커밋해서 일부가 실패해도 나머지는 지급된다.
  * 응답 {success[], failed[{id, code}]} — 같은 ids 를 다시 보내면 이미 지급된 건은 SETTLE_INVALID_STATUS 로 실패 목록에 들어간다(이중 지급 없음).
  */
 @Service

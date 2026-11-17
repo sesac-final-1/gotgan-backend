@@ -12,7 +12,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class StoreTest {
 
     @Test
-    @DisplayName("승인으로 만든 스토어는 신청서 값을 그대로 갖고, 운영중 · 기본 배송비 3,000원 · 무료배송 없음으로 시작한다")
+    @DisplayName("승인으로 만든 스토어는 신청서 값을 그대로 갖고, 운영중, 기본 배송비 3,000원, 무료배송 없음으로 시작한다")
     void open_whenApproved_startsActiveWithDefaultShipping() {
         // when
         Store store = Store.open(27L, 4L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
@@ -31,12 +31,12 @@ class StoreTest {
     }
 
     @Test
-    @DisplayName("관리자 정지 — 상태 · 사유가 바뀌고 true, 이미 그 상태면 아무것도 안 바꾸고 false")
+    @DisplayName("관리자 정지 — 상태, 사유가 바뀌고 true, 이미 그 상태면 아무것도 안 바꾸고 false")
     void changeStatusByAdmin_whenDifferentOrSame_changesOnlyOnce() {
         // given
         Store store = Store.open(27L, 4L, "곳간상회", "gotgan", null, "010-0000-1234");
 
-        // when · then
+        // when, then
         assertThat(store.changeStatusByAdmin(StoreStatus.SUSPENDED, "허위 광고")).isTrue();
         assertThat(store.getStatus()).isEqualTo(StoreStatus.SUSPENDED);
         assertThat(store.getStatusReason()).isEqualTo("허위 광고");
@@ -50,13 +50,13 @@ class StoreTest {
     }
 
     @Test
-    @DisplayName("폐점 스토어는 정지 · 해제 모두 409 STORE_INVALID_STATUS_TRANSITION 이고 상태가 그대로다")
+    @DisplayName("폐점 스토어는 정지, 해제 모두 409 STORE_INVALID_STATUS_TRANSITION 이고 상태가 그대로다")
     void changeStatusByAdmin_whenClosed_throwsInvalidTransition() {
         // given
         Store store = Store.open(27L, 4L, "곳간상회", "gotgan", null, "010-0000-1234");
         ReflectionTestUtils.setField(store, "status", StoreStatus.CLOSED);
 
-        // when · then
+        // when, then
         for (StoreStatus target : new StoreStatus[]{StoreStatus.ACTIVE, StoreStatus.SUSPENDED}) {
             assertThatThrownBy(() -> store.changeStatusByAdmin(target, "사유"))
                     .isInstanceOf(BusinessException.class)
@@ -73,7 +73,7 @@ class StoreTest {
         Store store = Store.open(27L, 4L, "곳간상회", "gotgan", null, "010-0000-1234");
         store.changeStatusByAdmin(StoreStatus.SUSPENDED, "허위 광고");
 
-        // when · then
+        // when, then
         assertThat(store.close()).isTrue();
         assertThat(store.getStatus()).isEqualTo(StoreStatus.CLOSED);
         assertThat(store.getStatusReason()).isNull();
@@ -81,7 +81,7 @@ class StoreTest {
     }
 
     @Test
-    @DisplayName("설정 수정 — 값이 들어가고 색은 소문자, 공백뿐인 택배사 · 출고 안내는 null, 폐점이면 409")
+    @DisplayName("설정 수정 — 값이 들어가고 색은 소문자, 공백뿐인 택배사, 출고 안내는 null, 폐점이면 409")
     void updateSettings_setsValuesAndRejectsClosed() {
         // given
         Store store = Store.open(27L, 4L, "곳간상회", "gotgan", null, "010-0000-1234");

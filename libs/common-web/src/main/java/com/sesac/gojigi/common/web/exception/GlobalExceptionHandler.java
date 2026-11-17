@@ -18,8 +18,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 /**
  * 예외 → ApiResponse 변환은 여기서만 (컨벤션 2-5). 서비스는 throw 만, 컨트롤러는 try-catch 없음.
  * HTTP 상태는 ErrorCode 의 status, 본문은 { code, message, data: null }.
- * Spring 이 던지는 4xx 성격 예외(400 묶음 · 404 · 405)를 빠짐없이 잡아 500 GLOBAL_ERROR 로 새지 않게 한다
- * (트러블슈팅 10/16 · 10/19, 405 는 10/20 박지연 제안).
+ * Spring 이 던지는 4xx 성격 예외(400 묶음, 404, 405)를 빠짐없이 잡아 500 GLOBAL_ERROR 로 새지 않게 한다
+ * (트러블슈팅 10/16, 10/19, 405 는 10/20 박지연 제안).
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -45,13 +45,13 @@ public class GlobalExceptionHandler {
         return badRequest(message);
     }
 
-    /** @RequestParam 제약(@Pattern 등) · List<@Valid ...> 본문 검증 실패 — Spring 6.1+ 기본 메서드 검증 */
+    /** @RequestParam 제약(@Pattern 등), List<@Valid ...> 본문 검증 실패 — Spring 6.1+ 기본 메서드 검증 */
     @ExceptionHandler(HandlerMethodValidationException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodValidation(HandlerMethodValidationException e) {
         return badRequest(CommonErrorCode.INVALID_INPUT.getMessage());
     }
 
-    /** 타입 불일치 · 필수 파라미터 누락 · 본문 파싱 실패 */
+    /** 타입 불일치, 필수 파라미터 누락, 본문 파싱 실패 */
     @ExceptionHandler({ MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class,
             HttpMessageNotReadableException.class })
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(Exception e) {

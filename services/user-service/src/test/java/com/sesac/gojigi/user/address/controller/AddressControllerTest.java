@@ -51,7 +51,7 @@ class AddressControllerTest {
             {"label":"집","name":"김곳간","phone":"010-1234-5678","zip":"06236","addr":"서울특별시 강남구 테헤란로 152","detail":"21층","main":true}""";
 
     @Test
-    @DisplayName("등록 — 201, 명세 필드 이름(id · label · name · phone · zip · addr · detail · main)으로 응답")
+    @DisplayName("등록 — 201, 명세 필드 이름(id, label, name, phone, zip, addr, detail, main)으로 응답")
     void create() throws Exception {
         given(addressService.create(eq(4L), any())).willReturn(
                 new AddressResponse(10L, "집", "김곳간", "010-1234-5678", "06236", "서울특별시 강남구 테헤란로 152", "21층", true));
@@ -65,7 +65,7 @@ class AddressControllerTest {
     }
 
     @Test
-    @DisplayName("형식 오류 — 우편번호 5자리 아님 · 휴대폰 아님 · 받는 분 없음은 400, 서비스 호출 없음")
+    @DisplayName("형식 오류 — 우편번호 5자리 아님, 휴대폰 아님, 받는 분 없음은 400, 서비스 호출 없음")
     void create_validation() throws Exception {
         for (String body : new String[] {
                 BODY.replace("\"06236\"", "\"1234\""),

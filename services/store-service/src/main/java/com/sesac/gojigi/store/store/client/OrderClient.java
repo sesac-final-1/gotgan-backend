@@ -10,7 +10,7 @@ import org.springframework.web.service.annotation.HttpExchange;
 @HttpExchange("/internal/stats/orders")
 public interface OrderClient {
 
-    /** 스토어 주문 통계 — 없는 스토어도 0 · 200 */
+    /** 스토어 주문 통계 — 없는 스토어도 0, 200 */
     @GetExchange
     ApiResponse<OrderStatsResponse> storeStats(@RequestParam Long storeId);
 }

@@ -40,7 +40,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 결제완료 단계 취소 Saga — 결제 부분 취소 → 재고 복원 → 포인트 환원 · 회수 → 완료, 멈추면 그 단계부터 다시 */
+/** 결제완료 단계 취소 Saga — 결제 부분 취소 → 재고 복원 → 포인트 환원, 회수 → 완료, 멈추면 그 단계부터 다시 */
 @ExtendWith(MockitoExtension.class)
 class CancelOrderItemSagaTest {
 
@@ -57,7 +57,7 @@ class CancelOrderItemSagaTest {
     @InjectMocks
     private CancelOrderItemSaga saga;
 
-    /** 환불 8,000 · 포인트 2,000 환원 · 적립 300 회수 · 옵션 11 × 2 */
+    /** 환불 8,000, 포인트 2,000 환원, 적립 300 회수, 옵션 11 × 2 */
     private static CancelContext ctx(long refundAmt) {
         return new CancelContext(7L, "saga-c1", 789L, ClaimType.CANCEL, 456L, ORDER_NO, 4L, 11L, 2, refundAmt, 2_000L,
                 300L);
@@ -68,7 +68,7 @@ class CancelOrderItemSagaTest {
     }
 
     @Test
-    @DisplayName("끝까지 — 결제 부분 취소 → 재고 복원 → 포인트 환원 · 회수 → 완료, 단계마다 기록 · COMPLETED 응답")
+    @DisplayName("끝까지 — 결제 부분 취소 → 재고 복원 → 포인트 환원, 회수 → 완료, 단계마다 기록, COMPLETED 응답")
     void request_allSteps_completed() {
         // given
         givenOpened(8_000L);
@@ -102,7 +102,7 @@ class CancelOrderItemSagaTest {
     }
 
     @Test
-    @DisplayName("결제 취소 미확정(409 PAYMENT_CANCEL_PENDING · 장애) — 재고 · 포인트를 건드리지 않고 재시도 기록, APPROVED 응답")
+    @DisplayName("결제 취소 미확정(409 PAYMENT_CANCEL_PENDING, 장애) — 재고, 포인트를 건드리지 않고 재시도 기록, APPROVED 응답")
     void request_paymentCancelPending_stopsAndSchedulesRetry() {
         // given
         givenOpened(8_000L);
@@ -157,7 +157,7 @@ class CancelOrderItemSagaTest {
     }
 
     @Test
-    @DisplayName("반품 · 교환은 아직 — 400 CLAIM_TYPE_NOT_SUPPORTED, 접수하지 않음")
+    @DisplayName("반품, 교환은 아직 — 400 CLAIM_TYPE_NOT_SUPPORTED, 접수하지 않음")
     void request_returnNotSupported() {
         assertThatThrownBy(() -> saga.request(4L, ORDER_NO,
                 new ClaimCreateRequest(456L, ClaimType.RETURN, ClaimReasonCode.DEFECTIVE, null)))

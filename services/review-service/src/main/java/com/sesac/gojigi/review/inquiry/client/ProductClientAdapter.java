@@ -20,7 +20,7 @@ public class ProductClientAdapter {
 
     private final ProductClient productClient;
 
-    /** 문의 등록 스냅샷 — 없는 · 삭제된 상품(404)은 INQUIRY_PRODUCT_NOT_FOUND */
+    /** 문의 등록 스냅샷 — 없는, 삭제된 상품(404)은 INQUIRY_PRODUCT_NOT_FOUND */
     @Retry(name = CIRCUIT)
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "getProductFallback")
     public ProductSummaryResponse getProduct(Long productId) {

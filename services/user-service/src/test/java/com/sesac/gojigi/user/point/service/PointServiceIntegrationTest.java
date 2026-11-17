@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 실제 MySQL — 조건부 UPDATE 로 잔액이 맞게 바뀌는지, sagaId 멱등 · 동시 요청에서 한 번만 차감되는지.
+ * 실제 MySQL — 조건부 UPDATE 로 잔액이 맞게 바뀌는지, sagaId 멱등, 동시 요청에서 한 번만 차감되는지.
  * 서비스가 TransactionTemplate 으로 직접 커밋해야 해서 테스트 트랜잭션으로 감싸지 않는다 (끝나고 직접 정리).
  */
 @DataJpaTest
@@ -79,7 +79,7 @@ class PointServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("사용 → 잔액 차감 · USE 이력, 같은 sagaId 재요청은 차감 없이 같은 결과")
+    @DisplayName("사용 → 잔액 차감, USE 이력, 같은 sagaId 재요청은 차감 없이 같은 결과")
     void use_thenRetry_deductsOnce() {
         Long userId = memberWith1000();
         UsePointRequest request = new UsePointRequest("saga-1", userId, "20261022-0001", 300L);
@@ -96,7 +96,7 @@ class PointServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("잔액 부족 — 409 POINT_INSUFFICIENT, 잔액 · 이력 그대로")
+    @DisplayName("잔액 부족 — 409 POINT_INSUFFICIENT, 잔액, 이력 그대로")
     void use_insufficient_keepsBalance() {
         Long userId = memberWith1000();
 
@@ -137,7 +137,7 @@ class PointServiceIntegrationTest {
     @DisplayName("다른 sagaId 동시 사용 — 잔액보다 많이는 못 쓴다 (조건부 UPDATE, 음수 없음)")
     void use_concurrentDifferentSagas_neverNegative() throws Exception {
         Long userId = memberWith1000();
-        int threads = 8;   // 300P × 8 = 2,400P 요청 · 잔액 1,000P → 3건만 성공
+        int threads = 8;   // 300P × 8 = 2,400P 요청, 잔액 1,000P → 3건만 성공
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         List<Future<Boolean>> futures = new ArrayList<>();
@@ -227,7 +227,7 @@ class PointServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("관리자 회원 포인트 — 이력이 없으면 잔액 + 빈 페이지, 탈퇴 · 없는 회원은 USER_NOT_FOUND")
+    @DisplayName("관리자 회원 포인트 — 이력이 없으면 잔액 + 빈 페이지, 탈퇴, 없는 회원은 USER_NOT_FOUND")
     void getUserPoints_emptyAndNotFound() {
         Long member = memberWith1000();
 
@@ -246,7 +246,7 @@ class PointServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("늦게 도착한 사용 — 취소(보상)가 먼저 오면 해제 표식, 뒤늦은 같은 sagaId 사용은 409 POINT_USE_RELEASED · 차감 없음")
+    @DisplayName("늦게 도착한 사용 — 취소(보상)가 먼저 오면 해제 표식, 뒤늦은 같은 sagaId 사용은 409 POINT_USE_RELEASED, 차감 없음")
     void use_afterCancel_isRejected() {
         Long userId = memberWith1000();
 
@@ -276,7 +276,7 @@ class PointServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("같은 sagaId 의 사용 · 취소가 동시에 — 어느 순서든 잔액은 원래대로 (사용 성공 + 환원 또는 사용 거절)")
+    @DisplayName("같은 sagaId 의 사용, 취소가 동시에 — 어느 순서든 잔액은 원래대로 (사용 성공 + 환원 또는 사용 거절)")
     void concurrentUseAndCancel_neverLosesPoints() throws Exception {
         Long userId = memberWith1000();
         int rounds = 10;

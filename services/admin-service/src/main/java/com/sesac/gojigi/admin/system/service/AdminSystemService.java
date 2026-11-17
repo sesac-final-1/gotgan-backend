@@ -30,7 +30,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * 장애 시연 — 파드 상태로 서비스 · 기능 상태를 계산하고, 허용 목록 서비스의 파드를 지운다.
+ * 장애 시연 — 파드 상태로 서비스, 기능 상태를 계산하고, 허용 목록 서비스의 파드를 지운다.
  * 복구 시각은 별도 감시 없이 상태 조회(화면 2초 폴링)가 "내린 뒤 원하는 수만큼 Ready" 를 처음 본 때 기록한다
  */
 @Slf4j
@@ -62,7 +62,7 @@ public class AdminSystemService {
         this.chaosEnabled = chaosEnabled;
     }
 
-    /** 서비스별 요청량 · 오류율 — Prometheus 가 안 되면 200 에 값 null (status 와 달리 503 아님) */
+    /** 서비스별 요청량, 오류율 — Prometheus 가 안 되면 200 에 값 null (status 와 달리 503 아님) */
     public SystemResponses.Metrics metrics() {
         Optional<Map<String, Double>> requests = prometheus.byRoute(REQUESTS_QUERY);
         Optional<Map<String, Double>> errors = requests.isPresent() ? prometheus.byRoute(ERRORS_QUERY) : Optional.empty();
@@ -71,7 +71,7 @@ public class AdminSystemService {
                 : SystemCatalog.unknownMetrics());
     }
 
-    /** 서비스 상태 + 사용자 기능 — 쿠버네티스 조회 실패면 503 (화면은 마지막 값 유지 · "연결 끊김") */
+    /** 서비스 상태 + 사용자 기능 — 쿠버네티스 조회 실패면 503 (화면은 마지막 값 유지, "연결 끊김") */
     public SystemResponses.Status status() {
         Instant now = clock.instant();
         Map<String, Integer> desired = kubernetes.desiredReplicas();
@@ -90,7 +90,7 @@ public class AdminSystemService {
     }
 
     /**
-     * 내리기 — 꺼짐 403 · 허용 목록 밖 400 · 서비스당 1분 · 복구 중 409. ONE = Ready 파드 1개(이름순 첫 번째), ALL = 지워지는 중이 아닌 파드 전부.
+     * 내리기 — 꺼짐 403, 허용 목록 밖 400, 서비스당 1분, 복구 중 409. ONE = Ready 파드 1개(이름순 첫 번째), ALL = 지워지는 중이 아닌 파드 전부.
      * 관리자 파드가 1개라 동시 요청은 synchronized 로 막는다
      */
     public synchronized SystemResponses.Killed kill(String name, KillRequest request, Long actorId) {
@@ -117,8 +117,8 @@ public class AdminSystemService {
     }
 
     /**
-     * 시나리오 — 레플리카 2 이상인 내릴 수 있는 서비스마다 Ready 파드 1개씩(ONE) 한 번에 지운다. 서비스마다 1행씩 기록(타임라인 · 복구 시간 그대로).
-     * 대상이 하나라도 1분 제한 · 정상(UP) 아님이면 아무것도 지우지 않는다 — 남은 파드가 없으면 「1개씩 지워도 괜찮다」가 성립하지 않으므로
+     * 시나리오 — 레플리카 2 이상인 내릴 수 있는 서비스마다 Ready 파드 1개씩(ONE) 한 번에 지운다. 서비스마다 1행씩 기록(타임라인, 복구 시간 그대로).
+     * 대상이 하나라도 1분 제한, 정상(UP) 아님이면 아무것도 지우지 않는다 — 남은 파드가 없으면 「1개씩 지워도 괜찮다」가 성립하지 않으므로
      */
     public synchronized SystemResponses.ScenarioKilled killOneEach(ScenarioRequest request, Long actorId) {
         requireEnabled();

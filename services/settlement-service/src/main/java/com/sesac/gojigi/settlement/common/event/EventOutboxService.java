@@ -26,7 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  * 이벤트 아웃박스 — 이벤트를 업무 트랜잭션 안에서 event_outbox 에 남기고, 커밋 후 SNS 로 보낸다 (V7).
  * ① enqueue: 업무 트랜잭션 안에서만(MANDATORY) — 업무가 롤백되면 이벤트도 남지 않는다
  * ② 커밋 직후 바로 한 번 발행(AFTER_COMMIT) — 정상일 때 지연 없음
- * ③ 실패 · 미발행은 발행기(publish-interval, ShedLock)가 다시 — SNS 가 죽어도 지급은 진행되고 복구되면 자동으로 나간다
+ * ③ 실패, 미발행은 발행기(publish-interval, ShedLock)가 다시 — SNS 가 죽어도 지급은 진행되고 복구되면 자동으로 나간다
  * 최소 1회 전달: 같은 행을 두 번 보낼 수 있으나 eventId 가 같아 소비자가 거른다. 시도 한도에 닿으면 ERROR 로그 한 번(수동 확인), 그 뒤 실패는 한 줄 WARN.
  * 한도에 닿은 행은 발행기 대상에서 빠진다(PENDING 그대로) — 다시 보내려면 attempt_count = 0 (11/3, docs/api/settlement.md 6절)
  */
@@ -66,7 +66,7 @@ public class EventOutboxService {
         this.maxAttempts = maxAttempts;
     }
 
-    /** 업무 트랜잭션 안에서 이벤트를 남긴다 — 봉투(eventId · occurredAt)는 여기서 정해 다시 보내도 같다 */
+    /** 업무 트랜잭션 안에서 이벤트를 남긴다 — 봉투(eventId, occurredAt)는 여기서 정해 다시 보내도 같다 */
     @Transactional(propagation = Propagation.MANDATORY)
     public <T> String enqueue(String eventType, String aggregateId, T payload) {
         EventEnvelope<T> envelope = new EventEnvelope<>(UUID.randomUUID().toString(), eventType,
@@ -83,7 +83,7 @@ public class EventOutboxService {
         send(enqueued.outboxId());
     }
 
-    /** 발행기 — 커밋 직후 발행이 실패했거나(SNS 장애 · 타임아웃) 그 사이 파드가 죽어 남은 행 */
+    /** 발행기 — 커밋 직후 발행이 실패했거나(SNS 장애, 타임아웃) 그 사이 파드가 죽어 남은 행 */
     @Scheduled(fixedDelayString = "${app.events.outbox.publish-interval:30s}",
             initialDelayString = "${app.events.outbox.initial-delay:20s}")
     @SchedulerLock(name = "settlement-event-outbox", lockAtMostFor = "5m")

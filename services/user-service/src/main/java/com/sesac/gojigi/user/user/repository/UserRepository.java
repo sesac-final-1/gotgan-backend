@@ -16,7 +16,7 @@ import org.springframework.data.repository.query.Param;
 
 /**
  * 회원 — 활성 조회는 deleted_at IS NULL (컨벤션 3-5).
- * point_balance · total_confirmed_amt 는 동시 변경 경합이 있어 조건부 UPDATE 로만 바꾼다 (컨벤션 2-6 동시성).
+ * point_balance, total_confirmed_amt 는 동시 변경 경합이 있어 조건부 UPDATE 로만 바꾼다 (컨벤션 2-6 동시성).
  * UPDATE 는 영속성 컨텍스트를 거치지 않으므로 clearAutomatically — 같은 트랜잭션에서 다시 읽으면 DB 값을 본다.
  */
 public interface UserRepository extends JpaRepository<User, Long> {
@@ -33,13 +33,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u from User u where u.id = :userId and u.deletedAt is null")
     Optional<User> findByIdForUpdate(@Param("userId") Long userId);
 
-    /** 포인트 사용 — 잔액이 모자라면 0건 (음수 금지 · 동시 차감 경합 방지). 반환값 0 이면 POINT_INSUFFICIENT */
+    /** 포인트 사용 — 잔액이 모자라면 0건 (음수 금지, 동시 차감 경합 방지). 반환값 0 이면 POINT_INSUFFICIENT */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update User u set u.pointBalance = u.pointBalance - :amount "
             + "where u.id = :userId and u.deletedAt is null and u.pointBalance >= :amount")
     int deductPoint(@Param("userId") Long userId, @Param("amount") long amount);
 
-    /** 포인트 적립 · 사용 환원 — 반환값 0 이면 회원 없음 */
+    /** 포인트 적립, 사용 환원 — 반환값 0 이면 회원 없음 */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update User u set u.pointBalance = u.pointBalance + :amount where u.id = :userId and u.deletedAt is null")
     int addPoint(@Param("userId") Long userId, @Param("amount") long amount);
@@ -50,9 +50,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     int addConfirmedAmount(@Param("userId") Long userId, @Param("amount") long amount);
 
     /**
-     * 관리자 회원 목록 — 탈퇴 제외, 최신 가입순. status · pattern 이 null 이면 조건 없음.
-     * pattern 은 이름 또는 이메일 부분 일치 LIKE 패턴 (escape 문자 '!' — 서비스에서 % · _ · ! 를 이스케이프해 넘긴다).
-     * 대소문자 구분 없음 (utf8mb4_unicode_ci). 앞 % 라 이름 · 이메일 인덱스는 못 탄다 — 회원 수가 늘면 검색 방식 재검토.
+     * 관리자 회원 목록 — 탈퇴 제외, 최신 가입순. status, pattern 이 null 이면 조건 없음.
+     * pattern 은 이름 또는 이메일 부분 일치 LIKE 패턴 (escape 문자 '!' — 서비스에서 %, _, ! 를 이스케이프해 넘긴다).
+     * 대소문자 구분 없음 (utf8mb4_unicode_ci). 앞 % 라 이름, 이메일 인덱스는 못 탄다 — 회원 수가 늘면 검색 방식 재검토.
      */
     @Query(value = "select u from User u where u.deletedAt is null"
             + " and (:status is null or u.status = :status)"

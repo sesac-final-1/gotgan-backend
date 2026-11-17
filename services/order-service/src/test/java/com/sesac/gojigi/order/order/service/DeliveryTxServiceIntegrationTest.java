@@ -58,7 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 발주확인 · 송장 등록 · 배송완료 · 자동 배송완료 대상 + 이벤트 아웃박스(커밋 후 발행 · 실패 재발행) — MySQL 8.4 + Flyway */
+/** 발주확인, 송장 등록, 배송완료, 자동 배송완료 대상 + 이벤트 아웃박스(커밋 후 발행, 실패 재발행) — MySQL 8.4 + Flyway */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, DeliveryTxService.class, EventOutboxService.class,
@@ -119,7 +119,7 @@ class DeliveryTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("발주확인 → 송장 등록(mock 송장번호) → 배송완료 — 상태 · 시각 · 이력, 송장 · 배송완료 이벤트를 커밋 후 발행")
+    @DisplayName("발주확인 → 송장 등록(mock 송장번호) → 배송완료 — 상태, 시각, 이력, 송장, 배송완료 이벤트를 커밋 후 발행")
     void prepareShipDeliver() throws Exception {
         // given
         OrderItem item = paidItem();
@@ -152,12 +152,12 @@ class DeliveryTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("거절 — 남의 스토어 404 · 지금 상태에서 안 되는 전이 409 (중복 송장 등록 · 배송준비 전 송장)")
+    @DisplayName("거절 — 남의 스토어 404, 지금 상태에서 안 되는 전이 409 (중복 송장 등록, 배송준비 전 송장)")
     void rejects() {
         // given
         OrderItem item = paidItem();
 
-        // when · then
+        // when, then
         assertCode(() -> deliveryTx.prepare(STORE + 1, SELLER, item.getId()), OrderErrorCode.ORDER_ITEM_NOT_FOUND);
         assertCode(() -> deliveryTx.ship(STORE, SELLER, item.getId(), "CJ대한통운", "1234567890"),
                 OrderErrorCode.ORDER_INVALID_STATUS);
@@ -195,7 +195,7 @@ class DeliveryTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("SNS 발행 실패 — 행은 NEW 로 남고 시도 횟수 · 사유를 기록, 발행기가 다시 보내면 SENT")
+    @DisplayName("SNS 발행 실패 — 행은 NEW 로 남고 시도 횟수, 사유를 기록, 발행기가 다시 보내면 SENT")
     void outbox_retriesFailedPublish() {
         // given — 커밋 직후 발행 실패
         OrderItem item = paidItem();
@@ -221,7 +221,7 @@ class DeliveryTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("SNS 발행이 한도(2회)까지 실패 — 행은 NEW 로 남고 시도 2 · 사유 기록, 그 뒤 발행기는 다시 보내지 않음")
+    @DisplayName("SNS 발행이 한도(2회)까지 실패 — 행은 NEW 로 남고 시도 2, 사유 기록, 그 뒤 발행기는 다시 보내지 않음")
     void outbox_stopsAtMaxAttempts() {
         // given — 커밋 직후 1회 + 발행기 1회 모두 실패
         OrderItem item = paidItem();
@@ -273,7 +273,7 @@ class DeliveryTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("구매확정 — 구매자 본인 배송완료만 CONFIRMED · confirmedAt · 이력, OrderItemConfirmed 커밋 후 발행, 자동 대상 · 시스템 확정")
+    @DisplayName("구매확정 — 구매자 본인 배송완료만 CONFIRMED, confirmedAt, 이력, OrderItemConfirmed 커밋 후 발행, 자동 대상, 시스템 확정")
     void confirm() throws Exception {
         // given — 배송완료 2건
         OrderItem mine = paidItem();

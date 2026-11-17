@@ -15,8 +15,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 상품문의 · 판매자 답변 (REV-07~09). 소프트 삭제. 비밀글은 작성자 · 해당 스토어 판매자만 본문 확인.
- * 본문 · 답변은 서비스 계층에서 sanitizer 로 정화한 값이 들어온다.
+ * 상품문의, 판매자 답변 (REV-07~09). 소프트 삭제. 비밀글은 작성자, 해당 스토어 판매자만 본문 확인.
+ * 본문, 답변은 서비스 계층에서 sanitizer 로 정화한 값이 들어온다.
  */
 @Getter
 @Entity
@@ -38,7 +38,7 @@ public class ProductInquiry extends BaseTimeEntity {
     @Column(name = "store_id", nullable = false, updatable = false)
     private Long storeId;
 
-    /** 등록 시점 스냅샷 (V6) — 조회 화면은 product · user 를 다시 부르지 않는다 */
+    /** 등록 시점 스냅샷 (V6) — 조회 화면은 product, user 를 다시 부르지 않는다 */
     @Column(name = "product_name", nullable = false, length = 200, updatable = false)
     private String productName;
 
@@ -76,13 +76,13 @@ public class ProductInquiry extends BaseTimeEntity {
         this.secret = secret;
     }
 
-    /** 작성자 수정 — 본문 · 비밀글 여부만 (답변 전에만, 서비스가 검사) */
+    /** 작성자 수정 — 본문, 비밀글 여부만 (답변 전에만, 서비스가 검사) */
     public void edit(String content, boolean secret) {
         this.content = content;
         this.secret = secret;
     }
 
-    /** 판매자 답변 작성 · 수정 — 1개라 덮어쓴다 */
+    /** 판매자 답변 작성, 수정 — 1개라 덮어쓴다 */
     public void answer(String answerContent, LocalDateTime answeredAt) {
         this.answerContent = answerContent;
         this.answeredAt = answeredAt;
@@ -111,7 +111,7 @@ public class ProductInquiry extends BaseTimeEntity {
         return Objects.equals(this.storeId, storeId);
     }
 
-    /** 본문을 볼 수 있는지 — 공개글은 누구나, 비밀글은 작성자 · 해당 스토어 판매자만 (비로그인은 null) */
+    /** 본문을 볼 수 있는지 — 공개글은 누구나, 비밀글은 작성자, 해당 스토어 판매자만 (비로그인은 null) */
     public boolean isReadableBy(Long viewerUserId, Long viewerStoreId) {
         return !secret || isOwnedBy(viewerUserId) || belongsToStore(viewerStoreId);
     }

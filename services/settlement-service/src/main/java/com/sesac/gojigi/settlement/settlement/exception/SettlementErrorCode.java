@@ -13,7 +13,7 @@ public enum SettlementErrorCode implements ErrorCode {
     SETTLE_NOT_FOUND(HttpStatus.NOT_FOUND, "정산서를 찾을 수 없습니다."),
     SETTLE_AGGREGATE_CONFLICT(HttpStatus.CONFLICT, "다른 집계가 진행 중입니다. 잠시 후 다시 시도해 주세요."),
     SETTLE_INVALID_STATUS(HttpStatus.CONFLICT, "현재 정산 상태에서 처리할 수 없는 요청입니다."),
-    SETTLE_STORE_PAYOUT_HELD(HttpStatus.CONFLICT, "정지 · 폐점 스토어는 지급할 수 없습니다."),
+    SETTLE_STORE_PAYOUT_HELD(HttpStatus.CONFLICT, "정지, 폐점 스토어는 지급할 수 없습니다."),
     SETTLE_PAYOUT_ACCOUNT_MISSING(HttpStatus.CONFLICT, "정산 계좌 정보가 없어 지급할 수 없습니다."),
     SETTLE_HOLD_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "보류 사유를 입력해 주세요."),
     SETTLE_REPORT_NOT_READY(HttpStatus.CONFLICT, "지급 완료된 정산만 명세서를 받을 수 있습니다.");

@@ -22,9 +22,9 @@ import org.springframework.stereotype.Component;
 /**
  * 들어오는 STOMP 프레임 검사 (chat.md 6절). 여기서 던지면 STOMP ERROR 프레임이 나가고 화면은 연결을 닫는다.
  * <ul>
- *   <li>CONNECT — Authorization: Bearer 토큰을 Keycloak JWKS 로 검증 · 탈퇴 차단 확인 → 연결 사용자(ChatPrincipal). 거절이면 서버가 곧 닫음</li>
- *   <li>SUBSCRIBE — /sub/rooms/{id} 는 방 멤버만(관리자 읽기 전용 포함) · /user/queue/errors 만 그 밖에 허용. 구독하면 접속 중 표시</li>
- *   <li>SEND — 토큰이 만료됐으면 거절(다시 연결해 새 토큰으로) · 연결 뒤 정지 · 탈퇴된 회원 거절 · /pub 밖(브로커 주소 /sub · /user)은 거절 — 멤버 검사 · 저장 없이 구독자에게 바로 가지 않게</li>
+ *   <li>CONNECT — Authorization: Bearer 토큰을 Keycloak JWKS 로 검증, 탈퇴 차단 확인 → 연결 사용자(ChatPrincipal). 거절이면 서버가 곧 닫음</li>
+ *   <li>SUBSCRIBE — /sub/rooms/{id} 는 방 멤버만(관리자 읽기 전용 포함), /user/queue/errors 만 그 밖에 허용. 구독하면 접속 중 표시</li>
+ *   <li>SEND — 토큰이 만료됐으면 거절(다시 연결해 새 토큰으로), 연결 뒤 정지, 탈퇴된 회원 거절, /pub 밖(브로커 주소 /sub, /user)은 거절 — 멤버 검사, 저장 없이 구독자에게 바로 가지 않게</li>
  *   <li>UNSUBSCRIBE — 접속 중 표시 해제 (연결 끊김은 ChatSessionEvents)</li>
  * </ul>
  */

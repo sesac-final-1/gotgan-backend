@@ -10,7 +10,7 @@ public enum HiddenReason {
     CATEGORY_INACTIVE,
     STORE_INACTIVE;
 
-    /** 보이면 null. categoryActive = 하위 · 상위 카테고리 모두 사용 중 */
+    /** 보이면 null. categoryActive = 하위, 상위 카테고리 모두 사용 중 */
     public static HiddenReason of(Product product, boolean categoryActive) {
         if (product.getStatus() == ProductStatus.STOPPED) {
             return STOPPED;

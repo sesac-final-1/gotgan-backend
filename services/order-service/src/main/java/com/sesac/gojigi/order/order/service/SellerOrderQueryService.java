@@ -19,12 +19,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 판매자 주문 조회 (목록 · 상세) — 내 스토어 상품주문만, 결제 전(ORDERED)은 판매자에게 보이지 않는다 */
+/** 판매자 주문 조회 (목록, 상세) — 내 스토어 상품주문만, 결제 전(ORDERED)은 판매자에게 보이지 않는다 */
 @Service
 @RequiredArgsConstructor
 public class SellerOrderQueryService {
 
-    /** 판매자에게 보이는 상태 — 결제 대기 · 실패 주문의 상품주문(ORDERED)만 뺀다 */
+    /** 판매자에게 보이는 상태 — 결제 대기, 실패 주문의 상품주문(ORDERED)만 뺀다 */
     static final Set<OrderItemStatus> VISIBLE = EnumSet.complementOf(EnumSet.of(OrderItemStatus.ORDERED));
 
     private final OrderItemRepository orderItemRepository;
@@ -41,7 +41,7 @@ public class SellerOrderQueryService {
         return new SellerOrderItemListResponse(statusCounts(storeId), PageResponse.from(items));
     }
 
-    /** 상세 — 없거나 남의 스토어 · 결제 전 상품주문은 같은 404 */
+    /** 상세 — 없거나 남의 스토어, 결제 전 상품주문은 같은 404 */
     @Transactional(readOnly = true)
     public SellerOrderItemResponse get(Long storeId, Long orderItemId) {
         requireStore(storeId);

@@ -19,8 +19,8 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
 /**
- * 입점 서류 버킷(비공개 seller-docs) — 업로드 주소 발급(presigned PUT) · 심사 열람 주소 발급(presigned GET)과,
- * 업로드된 파일의 형식 · 크기를 S3 에서 직접 확인(HeadObject)한다 (클라이언트 값을 믿지 않음).
+ * 입점 서류 버킷(비공개 seller-docs) — 업로드 주소 발급(presigned PUT), 심사 열람 주소 발급(presigned GET)과,
+ * 업로드된 파일의 형식, 크기를 S3 에서 직접 확인(HeadObject)한다 (클라이언트 값을 믿지 않음).
  */
 @Slf4j
 @Component
@@ -38,7 +38,7 @@ public class SellerDocumentClient {
         this.bucket = bucket;
     }
 
-    /** presigned PUT — 서명 · 실패 처리는 스토어 대표 이미지와 같은 {@link PresignedPut} */
+    /** presigned PUT — 서명, 실패 처리는 스토어 대표 이미지와 같은 {@link PresignedPut} */
     public PresignedUpload presignUpload(String key, String contentType, long size) {
         return PresignedPut.sign(s3Presigner, bucket, key, contentType, size, "입점 서류");
     }
@@ -58,7 +58,7 @@ public class SellerDocumentClient {
         }
     }
 
-    /** 파일이 없으면 empty, S3 장애 · 권한 오류는 EXTERNAL_API_ERROR(502) */
+    /** 파일이 없으면 empty, S3 장애, 권한 오류는 EXTERNAL_API_ERROR(502) */
     public Optional<FileMeta> head(String key) {
         try {
             HeadObjectResponse response = s3Client.headObject(b -> b.bucket(bucket).key(key));

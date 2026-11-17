@@ -21,8 +21,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * 상품 · 옵션 조합 · 이미지 ↔ productdb 스키마(Flyway V1~V2) 매핑 — 컨텍스트가 뜨면 ddl-auto: validate 통과
- * (stock INT UNSIGNED · description TEXT · discount_rate DECIMAL 포함). 저장 후 영속성 컨텍스트를 비우고 다시 읽는다.
+ * 상품, 옵션 조합, 이미지 ↔ productdb 스키마(Flyway V1~V2) 매핑 — 컨텍스트가 뜨면 ddl-auto: validate 통과
+ * (stock INT UNSIGNED, description TEXT, discount_rate DECIMAL 포함). 저장 후 영속성 컨텍스트를 비우고 다시 읽는다.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -55,7 +55,7 @@ class ProductRepositoryTest {
     }
 
     @Test
-    @DisplayName("상품 · 옵션 2개 · 이미지 2개를 함께 저장하고 다시 읽는다 (이미지는 sortOrder 순)")
+    @DisplayName("상품, 옵션 2개, 이미지 2개를 함께 저장하고 다시 읽는다 (이미지는 sortOrder 순)")
     void save_withOptionsAndImages_persistsAllByCascade() {
         // given
         Product product = product("컬러", "사이즈");
@@ -140,7 +140,7 @@ class ProductRepositoryTest {
         em.flush();
         em.clear();
 
-        // when · then
+        // when, then
         assertThat(productRepository.findByIdAndDeletedAtIsNull(id)).isPresent();
     }
 }

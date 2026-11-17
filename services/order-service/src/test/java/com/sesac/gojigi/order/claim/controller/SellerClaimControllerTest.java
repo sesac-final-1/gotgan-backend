@@ -65,7 +65,7 @@ class SellerClaimControllerTest {
     }
 
     @Test
-    @DisplayName("목록 · 상세 — 기본 단계 OPEN · 페이징 기본값, 단계 값이 잘못되면 400")
+    @DisplayName("목록, 상세 — 기본 단계 OPEN, 페이징 기본값, 단계 값이 잘못되면 400")
     void listAndGet() throws Exception {
         given(claimQueryService.listSeller(1L, ClaimStage.OPEN, null, 0, 20)).willReturn(new SellerClaimListResponse(
                 Map.of(ClaimStage.OPEN, 1L), Map.of(ClaimType.RETURN, 1L),
@@ -80,7 +80,7 @@ class SellerClaimControllerTest {
     }
 
     @Test
-    @DisplayName("승인 · 거부(사유 필수) · 재배송 송장 — 스토어 · 판매자로 처리")
+    @DisplayName("승인, 거부(사유 필수), 재배송 송장 — 스토어, 판매자로 처리")
     void approveRejectReship() throws Exception {
         given(sellerClaimTx.approve(1L, 789L)).willReturn(claim(ClaimType.RETURN, ClaimStatus.APPROVED));
         given(sellerClaimTx.reject(1L, 70L, 789L, "사용 흔적")).willReturn(claim(ClaimType.RETURN, ClaimStatus.REJECTED));

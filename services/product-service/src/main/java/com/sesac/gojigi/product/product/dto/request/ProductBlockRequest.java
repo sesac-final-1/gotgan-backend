@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** 강제 판매중지 · 해제 (6-2절) — blocked=true 면 reason 필수(빈 값은 서비스가 PRODUCT_BLOCK_REASON_REQUIRED) */
+/** 강제 판매중지, 해제 (6-2절) — blocked=true 면 reason 필수(빈 값은 서비스가 PRODUCT_BLOCK_REASON_REQUIRED) */
 public record ProductBlockRequest(
         @Schema(description = "true = 강제 판매중지, false = 해제", example = "true")
         @NotNull(message = "판매중지 여부를 입력해 주세요.")

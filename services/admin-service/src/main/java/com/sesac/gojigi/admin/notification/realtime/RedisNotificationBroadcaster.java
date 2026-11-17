@@ -13,7 +13,7 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 
 /**
  * 파드 간 전달 (기본) — 알림을 채널 notify:{받는 쪽} 에 발행하고, 모든 파드가 notify:* 를 구독해 자기 연결에 전달한다.
- * Redis 가 잠깐 안 되면 실시간 전달만 빠지고 알림함에는 이미 쌓여 있다(화면이 다시 연결 · 새로고침하면 보임).
+ * Redis 가 잠깐 안 되면 실시간 전달만 빠지고 알림함에는 이미 쌓여 있다(화면이 다시 연결, 새로고침하면 보임).
  */
 @Slf4j
 @Configuration

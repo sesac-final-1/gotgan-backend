@@ -57,7 +57,7 @@ import org.springframework.web.client.HttpServerErrorException;
 
 /**
  * 내부 API 4개 + 웹훅을 HTTP 로 호출해 계약(docs/api/payment.md)대로 응답하는지 — 실제 MySQL + 가짜 포트원(PortOneClient mock).
- * 어댑터 · 서킷 브레이커는 실제 빈. 테스트마다 다른 orderNo 를 써서 서로 영향이 없게 한다.
+ * 어댑터, 서킷 브레이커는 실제 빈. 테스트마다 다른 orderNo 를 써서 서로 영향이 없게 한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -135,7 +135,7 @@ class PaymentApiIntegrationTest {
     class Prepare {
 
         @Test
-        @DisplayName("처음은 201 READY · pay-{orderNo}, 같은 금액 재요청은 200 같은 결제, 다른 금액은 409")
+        @DisplayName("처음은 201 READY, pay-{orderNo}, 같은 금액 재요청은 200 같은 결제, 다른 금액은 409")
         void prepare_idempotentByOrderNo() throws Exception {
             String orderNo = newOrderNo();
 
@@ -164,7 +164,7 @@ class PaymentApiIntegrationTest {
     class Verify {
 
         @Test
-        @DisplayName("포트원 PAID + 금액 일치면 PAID · 결제수단 · 결제 시각(KST) 기록, 재요청은 포트원을 다시 부르지 않음")
+        @DisplayName("포트원 PAID + 금액 일치면 PAID, 결제수단, 결제 시각(KST) 기록, 재요청은 포트원을 다시 부르지 않음")
         void verify_paid() throws Exception {
             String orderNo = newOrderNo();
             prepare(orderNo, AMOUNT);
@@ -181,7 +181,7 @@ class PaymentApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("포트원 미결제 · 결제창을 연 적 없음 → 409 PAYMENT_NOT_COMPLETED, 상태는 READY 그대로")
+        @DisplayName("포트원 미결제, 결제창을 연 적 없음 → 409 PAYMENT_NOT_COMPLETED, 상태는 READY 그대로")
         void verify_notCompleted_keepsReady() throws Exception {
             String orderNo = newOrderNo();
             prepare(orderNo, AMOUNT);
@@ -195,7 +195,7 @@ class PaymentApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("금액 불일치 → 포트원 전액 자동 취소 · 취소 기록 · FAILED · 409 PAYMENT_AMOUNT_MISMATCH · 지표 증가")
+        @DisplayName("금액 불일치 → 포트원 전액 자동 취소, 취소 기록, FAILED, 409 PAYMENT_AMOUNT_MISMATCH, 지표 증가")
         void verify_amountMismatch_autoCancels() throws Exception {
             String orderNo = newOrderNo();
             prepare(orderNo, AMOUNT);
@@ -237,7 +237,7 @@ class PaymentApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("예외 처리기 로그에도 orderNo · sagaId 가 MDC 로 붙고, 요청이 끝나면 지워진다 (OBS-02)")
+        @DisplayName("예외 처리기 로그에도 orderNo, sagaId 가 MDC 로 붙고, 요청이 끝나면 지워진다 (OBS-02)")
         void verify_exceptionLog_hasBusinessKeys() throws Exception {
             Logger handlerLogger = (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
             ListAppender<ILoggingEvent> logs = new ListAppender<>();
@@ -297,7 +297,7 @@ class PaymentApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("주문 Saga 보상(전액): 결제 없음 → data null / READY · 포트원 결제 없음 → FAILED, 포트원 취소 안 함")
+        @DisplayName("주문 Saga 보상(전액): 결제 없음 → data null / READY, 포트원 결제 없음 → FAILED, 포트원 취소 안 함")
         void cancelAll_nothingToRefund() throws Exception {
             cancel(newOrderNo(), "order-saga-1", null).andExpect(status().isOk())
                     .andExpect(jsonPath("$.data").doesNotExist());
@@ -312,7 +312,7 @@ class PaymentApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("주문 Saga 보상(전액): READY 인데 포트원에 결제가 있으면(타임아웃 등) 포트원 취소 후 FAILED · sagaId 기록")
+        @DisplayName("주문 Saga 보상(전액): READY 인데 포트원에 결제가 있으면(타임아웃 등) 포트원 취소 후 FAILED, sagaId 기록")
         void cancelAll_readyButPaidAtPortOne_refunds() throws Exception {
             String orderNo = newOrderNo();
             prepare(orderNo, AMOUNT);
@@ -353,7 +353,7 @@ class PaymentApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("orderNo 누락은 400 INVALID_INPUT · 없는 경로는 404 NOT_FOUND (500 아님)")
+    @DisplayName("orderNo 누락은 400 INVALID_INPUT, 없는 경로는 404 NOT_FOUND (500 아님)")
     void commonErrors_notGlobalError() throws Exception {
         mockMvc.perform(get("/internal/payments")).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
@@ -380,7 +380,7 @@ class PaymentApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("서명이 틀리면 400 PAYMENT_WEBHOOK_INVALID_SIGNATURE · 처리 안 함")
+        @DisplayName("서명이 틀리면 400 PAYMENT_WEBHOOK_INVALID_SIGNATURE, 처리 안 함")
         void webhook_invalidSignature_400() throws Exception {
             String orderNo = newOrderNo();
             prepare(orderNo, AMOUNT);
@@ -421,7 +421,7 @@ class PaymentApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("모르는 type · 결제와 무관한 웹훅은 200 무시")
+        @DisplayName("모르는 type, 결제와 무관한 웹훅은 200 무시")
         void webhook_unknownType_ignored() throws Exception {
             send("{\"type\":\"BillingKey.Issued\",\"data\":{\"billingKey\":\"bk-1\"}}", true).andExpect(status().isOk());
             send("{\"type\":\"Transaction.Paid\",\"data\":{\"paymentId\":\"pay-unknown\"}}", true).andExpect(status().isOk());

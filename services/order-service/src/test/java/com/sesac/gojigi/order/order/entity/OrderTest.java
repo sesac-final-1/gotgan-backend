@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** 주문 상태 전이 — PENDING 에서만 PAID · FAILED */
+/** 주문 상태 전이 — PENDING 에서만 PAID, FAILED */
 class OrderTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 22, 12, 0);
@@ -63,7 +63,7 @@ class OrderTest {
         Order order = OrderFixtures.order();
         order.markFailed();
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> order.markPaid(NOW)).isInstanceOf(OrderException.class)
                 .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATUS);
         assertThatThrownBy(order::markFailed).isInstanceOf(OrderException.class);

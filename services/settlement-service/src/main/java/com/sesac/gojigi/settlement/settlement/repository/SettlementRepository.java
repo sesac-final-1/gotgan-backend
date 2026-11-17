@@ -21,7 +21,7 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
 
     List<Settlement> findByStoreIdAndStatus(Long storeId, SettlementStatus status);
 
-    /** 관리자 대시보드 지급예정 · 보류 — [status, 건수, 지급액 합] (행을 읽지 않고 DB 에서 합산) */
+    /** 관리자 대시보드 지급예정, 보류 — [status, 건수, 지급액 합] (행을 읽지 않고 DB 에서 합산) */
     @Query("""
             select s.status, count(s), coalesce(sum(s.payoutAmt), 0) from Settlement s
              where s.status in :statuses group by s.status

@@ -1,8 +1,8 @@
 spring:
   application:
-    name: admin-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+    name: admin-service                  # 지표, 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
 
-  # admindb — 신고 · 조치 이력만 (ADR-0001 예외, 10/26). 다른 서비스 데이터는 갖지 않는다
+  # admindb — 신고, 조치 이력만 (ADR-0001 예외, 10/26). 다른 서비스 데이터는 갖지 않는다
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/admindb?connectionTimeZone=Asia/Seoul
     username: ${DB_USERNAME:admin}            # 클러스터에서는 secrets-sync 가 만든 admin-service-secret → 환경 변수
@@ -31,7 +31,7 @@ app:
   client:
     connect-timeout: 2s                     # 모든 동기 호출 공통 (RestClientConfig 가 읽음)
     read-timeout: 3s
-    settlement-batch-read-timeout: 28s      # 집계 · 일괄 지급만 — 5,000건 집계 5.6 ~ 11.6초(k6 11/5 · 11/6) · gateway 이 경로 30초보다 짧게
+    settlement-batch-read-timeout: 28s      # 집계, 일괄 지급만 — 5,000건 집계 5.6 ~ 11.6초(k6 11/5, 11/6), gateway 이 경로 30초보다 짧게
     store-url: ${STORE_SERVICE_URI:http://localhost:8082}
     product-url: ${PRODUCT_SERVICE_URI:http://localhost:8083}
     settlement-url: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}
@@ -40,33 +40,33 @@ app:
     review-url: ${REVIEW_SERVICE_URI:http://localhost:8087}
   notification:                             # 알림 센터 (NTF-08, 10/27)
     inbox-table: ${INBOX_TABLE:sesac-gojigi-inbox}
-    realtime: ${NOTIFICATION_REALTIME:redis} # redis = 파드 간 전달 · local = 이 파드에 연결된 화면에만(테스트 · 로컬)
-    heartbeat: 25s                          # SSE 연결 유지 — NLB idle 350초 · 브라우저 · 프록시가 끊지 않게
-    queues:                                 # 이벤트 구독 큐 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
+    realtime: ${NOTIFICATION_REALTIME:redis} # redis = 파드 간 전달, local = 이 파드에 연결된 화면에만(테스트, 로컬)
+    heartbeat: 25s                          # SSE 연결 유지 — NLB idle 350초, 브라우저, 프록시가 끊지 않게
+    queues:                                 # 이벤트 구독 큐 — URL 이 비면(로컬, 테스트) 폴러를 띄우지 않는다
       store: ${ADMIN_STORE_EVENTS_QUEUE_URL:}
       order: ${ADMIN_ORDER_EVENTS_QUEUE_URL:}
       settlement: ${ADMIN_SETTLEMENT_EVENTS_QUEUE_URL:}
-  chaos:                                    # F-1 장애 시연 (11/7) — 파드 상태 · 내리기. 권한은 gotgan-config chaos-rbac.yaml
-    enabled: ${APP_CHAOS_ENABLED:false}     # 내리기만 막는다(상태 · 타임라인 조회는 항상). 시연 때만 Helm values 에서 true
+  chaos:                                    # F-1 장애 시연 (11/7) — 파드 상태, 내리기. 권한은 gotgan-config chaos-rbac.yaml
+    enabled: ${APP_CHAOS_ENABLED:false}     # 내리기만 막는다(상태, 타임라인 조회는 항상). 시연 때만 Helm values 에서 true
     kubernetes-url: https://kubernetes.default.svc
     namespace: sesac-gojigi
-    service-account-dir: /var/run/secrets/kubernetes.io/serviceaccount   # token · ca.crt — 클러스터 밖에는 없어 조회가 503
-  loadtest:                                 # 관리자 화면 부하테스트(11/16) — k6 Job. 권한 · 스크립트는 gotgan-config chaos-rbac.yaml · loadtest-configmap.yaml
-    enabled: ${APP_LOADTEST_ENABLED:false}  # 시작 · 계정 준비 · 사용자 수 변경을 막는다(조회 · 중지는 항상). 발표 기간만 Helm values 에서 true
+    service-account-dir: /var/run/secrets/kubernetes.io/serviceaccount   # token, ca.crt — 클러스터 밖에는 없어 조회가 503
+  loadtest:                                 # 관리자 화면 부하테스트(11/16) — k6 Job. 권한, 스크립트는 gotgan-config chaos-rbac.yaml, loadtest-configmap.yaml
+    enabled: ${APP_LOADTEST_ENABLED:false}  # 시작, 계정 준비, 사용자 수 변경을 막는다(조회, 중지는 항상). 발표 기간만 Helm values 에서 true
     image: grafana/k6:1.8.3                 # externally-controlled(실행 중 사용자 수 변경)가 k6 v2 에서 빠져 1.x 고정
     target-url: http://gateway-service.sesac-gojigi.svc:443   # 클러스터 안 게이트웨이 — NLB 가 TLS 를 끝내 Service 443 → 파드 8080 은 평문
     remote-write-url: ${PROMETHEUS_URL:http://prometheus.monitoring:9090}/api/v1/write   # k6 지표 push(5초) — Prometheus --web.enable-remote-write-receiver
     k6-api-url: http://{ip}:6565            # k6 REST API — 파드 IP 로 직접(Service 노출 없음)
-  monitor:                                  # 관리자 화면 실시간 모니터링(11/16) — 호출 · 트레이스 · 에러 로그. 실패하면 빈 목록
+  monitor:                                  # 관리자 화면 실시간 모니터링(11/16) — 호출, 트레이스, 에러 로그. 실패하면 빈 목록
     zipkin-url: ${ZIPKIN_URL:http://zipkin.monitoring:9411}
     loki-url: ${LOKI_QUERY_URL:http://loki.monitoring.svc.cluster.local:3100}   # 조회 주소. 공용 LOKI_URL 은 로그 전송(push) 주소라 쓰지 않는다(11/17, 조회가 404 였음)
-  prometheus:                               # F-1 장애 시연 지표(/api/admin/system/metrics) — gateway 라우트 요청량 · 5xx
+  prometheus:                               # F-1 장애 시연 지표(/api/admin/system/metrics) — gateway 라우트 요청량, 5xx
     url: ${PROMETHEUS_URL:http://prometheus.monitoring:9090}
-    timeout: 2s                             # 연결 · 읽기 — 실패면 값 null(부분 응답), 15초 폴링이 쌓이지 않게
+    timeout: 2s                             # 연결, 읽기 — 실패면 값 null(부분 응답), 15초 폴링이 쌓이지 않게
 
 resilience4j:
   circuitbreaker:
-    circuit-breaker-aspect-order: 1         # 서킷이 바깥 · 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 502 로 바꿔 재시도가 안 걸린다
+    circuit-breaker-aspect-order: 1         # 서킷이 바깥, 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 502 로 바꿔 재시도가 안 걸린다
     configs:
       default:
         sliding-window-size: 10
@@ -76,7 +76,7 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
       remote:                               # 다른 서비스 호출 ({domain}/client/*ClientAdapter) — 인스턴스 이름 = 대상 서비스
         base-config: default
-        record-exceptions:                  # 장애로 세는 것: 연결 실패 · 타임아웃 · 5xx
+        record-exceptions:                  # 장애로 세는 것: 연결 실패, 타임아웃, 5xx
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
         ignore-exceptions:                  # 4xx(대상 서비스의 code 를 그대로 전달하는 BusinessException)는 세지 않음
@@ -84,15 +84,15 @@ resilience4j:
     instances:
       user: { base-config: remote }
       settlement: { base-config: remote }
-      product: { base-config: remote }      # 카테고리 관리 · 관리자 상품 · 상품 통계
+      product: { base-config: remote }      # 카테고리 관리, 관리자 상품, 상품 통계
       order: { base-config: remote }        # 대시보드 주문 통계
-      store: { base-config: remote }        # 입점 심사 · 스토어 관리 (store.md #97 계약)
-      review: { base-config: remote }       # 신고 — 리뷰 조회 · 블라인드
+      store: { base-config: remote }        # 입점 심사, 스토어 관리 (store.md #97 계약)
+      review: { base-config: remote }       # 신고 — 리뷰 조회, 블라인드
   retry:
     retry-aspect-order: 2
     configs:
       default:
-        max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST · PUT · PATCH 는 재시도 금지)
+        max-attempts: 2                     # 재시도는 멱등 GET 에만 (POST, PUT, PATCH 는 재시도 금지)
         wait-duration: 200ms
         retry-exceptions:
           - org.springframework.web.client.ResourceAccessException
@@ -102,8 +102,8 @@ resilience4j:
     instances:
       user: { base-config: default }        # UserClientAdapter 의 GET 에만
       settlement: { base-config: default }  # SettlementClientAdapter 의 GET 에만
-      product: { base-config: default }     # ProductClientAdapter#categories · AdminProductClientAdapter 의 GET 에만
-      order: { base-config: default }       # OrderClientAdapter#platformStats · dailyStats
+      product: { base-config: default }     # ProductClientAdapter#categories, AdminProductClientAdapter 의 GET 에만
+      order: { base-config: default }       # OrderClientAdapter#platformStats, dailyStats
       store: { base-config: default }       # StoreClientAdapter 의 GET 에만
       review: { base-config: default }      # ReviewClientAdapter#get 에만
 
@@ -119,7 +119,7 @@ management:
   endpoint:
     health:
       probes:
-        enabled: true                       # /actuator/health/liveness · readiness
+        enabled: true                       # /actuator/health/liveness, readiness
   health:
     circuitbreakers:
       enabled: false                        # 서킷이 열려도 내 파드는 건강함 — 다른 서비스 장애로 재시작되지 않게

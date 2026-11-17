@@ -10,7 +10,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 방마다 읽은 위치 — reader_key 는 USER#{id} · STORE#{id} · ADMIN. 쓰기는 ChatReadRepository.markRead 만 */
+/** 방마다 읽은 위치 — reader_key 는 USER#{id}, STORE#{id}, ADMIN. 쓰기는 ChatReadRepository.markRead 만 */
 @Getter
 @Entity
 @Table(name = "chat_read")

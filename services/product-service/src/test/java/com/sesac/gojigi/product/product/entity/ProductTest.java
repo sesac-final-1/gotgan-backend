@@ -8,7 +8,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * 상품 엔티티 규칙 — 할인가 계산(10원 단위 반올림) · 강제 판매중지 상태 전이 (product.md 6-2 · 13절).
+ * 상품 엔티티 규칙 — 할인가 계산(10원 단위 반올림), 강제 판매중지 상태 전이 (product.md 6-2, 13절).
  */
 class ProductTest {
 
@@ -40,7 +40,7 @@ class ProductTest {
     }
 
     @Test
-    @DisplayName("새 상품은 스토어 운영중 · 삭제 안 됨으로 시작한다")
+    @DisplayName("새 상품은 스토어 운영중, 삭제 안 됨으로 시작한다")
     void builder_new_startsStoreActiveAndNotDeleted() {
         // when
         Product product = product(10_000L, 0, ProductStatus.STOPPED);

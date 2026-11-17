@@ -56,9 +56,9 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * 결제 취소 · 환불의 장애 시나리오 — "모든 단계가 실패할 수 있다"를 하나씩 재현한다 (docs/api/payment.md 8절).
- * 포트원 응답 끊김 · 조회 실패 · 처리 중(REQUESTED) · 확정 거절 · 포트원 성공 후 DB 기록 실패 · 기록 밖의 취소.
- * 공통 기대: 돈(포트원)과 기록(payment · payment_cancel)이 어긋난 채 끝나지 않고, 같은 취소가 두 번 나가지 않는다.
+ * 결제 취소, 환불의 장애 시나리오 — "모든 단계가 실패할 수 있다"를 하나씩 재현한다 (docs/api/payment.md 8절).
+ * 포트원 응답 끊김, 조회 실패, 처리 중(REQUESTED), 확정 거절, 포트원 성공 후 DB 기록 실패, 기록 밖의 취소.
+ * 공통 기대: 돈(포트원)과 기록(payment, payment_cancel)이 어긋난 채 끝나지 않고, 같은 취소가 두 번 나가지 않는다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -182,7 +182,7 @@ class PaymentCancelFailureIntegrationTest {
     }
 
     @Test
-    @DisplayName("응답도 끊기고 조회도 실패하면 409 PAYMENT_CANCEL_PENDING · PENDING 기록 — 같은 sagaId 재요청이 대조로 확정하고 포트원 취소는 1번만")
+    @DisplayName("응답도 끊기고 조회도 실패하면 409 PAYMENT_CANCEL_PENDING, PENDING 기록 — 같은 sagaId 재요청이 대조로 확정하고 포트원 취소는 1번만")
     void timeoutAndLookupFailure_pendingThenResolvedOnRetry() throws Exception {
         String orderNo = paidOrder();
         String sagaId = "saga-" + orderNo;
@@ -205,7 +205,7 @@ class PaymentCancelFailureIntegrationTest {
     }
 
     @Test
-    @DisplayName("포트원에 닿지 않은 취소(흔적 없음 · 잔액 그대로)는 재요청 때 같은 잔액 조건으로 다시 보낸다")
+    @DisplayName("포트원에 닿지 않은 취소(흔적 없음, 잔액 그대로)는 재요청 때 같은 잔액 조건으로 다시 보낸다")
     void neverReachedPortOne_resentOnRetry() throws Exception {
         String orderNo = paidOrder();
         String sagaId = "saga-" + orderNo;
@@ -240,7 +240,7 @@ class PaymentCancelFailureIntegrationTest {
         assertThat(onlyCancel(orderNo).getPortoneCancellationId()).isEqualTo("c-prev");
     }
 
-    // ── 포트원 처리 중 · 확정 거절
+    // ── 포트원 처리 중, 확정 거절
 
     @Test
     @DisplayName("포트원 REQUESTED(처리 중)는 성공으로 치지 않는다 — PENDING, 웹훅이 오면 조회로 확정")
@@ -262,7 +262,7 @@ class PaymentCancelFailureIntegrationTest {
     }
 
     @Test
-    @DisplayName("포트원 확정 거절은 FAILED · 502 — 같은 sagaId 재요청은 최신 잔액으로 다시 시도하고 기록은 1건")
+    @DisplayName("포트원 확정 거절은 FAILED, 502 — 같은 sagaId 재요청은 최신 잔액으로 다시 시도하고 기록은 1건")
     void definitiveRejection_failedThenRetried() throws Exception {
         String orderNo = paidOrder();
         String sagaId = "saga-" + orderNo;
@@ -318,10 +318,10 @@ class PaymentCancelFailureIntegrationTest {
         assertThat(onlyCancel(orderNo).getPortoneCancellationId()).isEqualTo("c-db");
     }
 
-    // ── 자동 환불 (금액 불일치 · 늦은 결제) — 다시 요청할 주체가 없어 스케줄러가 끝까지
+    // ── 자동 환불 (금액 불일치, 늦은 결제) — 다시 요청할 주체가 없어 스케줄러가 끝까지
 
     @Test
-    @DisplayName("금액 불일치 환불 응답이 끊겨도 409 AMOUNT_MISMATCH · FAILED 는 바로 확정, 환불은 복구 스케줄러가 마무리")
+    @DisplayName("금액 불일치 환불 응답이 끊겨도 409 AMOUNT_MISMATCH, FAILED 는 바로 확정, 환불은 복구 스케줄러가 마무리")
     void mismatchRefundTimeout_finishedByScheduler() throws Exception {
         String orderNo = readyOrder();
         doReturn(portOne("PAID", 1_000L, 0)).when(portOneClient).getPayment("pay-" + orderNo);
@@ -415,7 +415,7 @@ class PaymentCancelFailureIntegrationTest {
     // ── 기록 밖의 취소
 
     @Test
-    @DisplayName("내 취소 흔적은 없는데 포트원 잔액이 바뀌었으면(콘솔 취소 등) 자동으로 다시 보내지 않고 PENDING · 수동 확인")
+    @DisplayName("내 취소 흔적은 없는데 포트원 잔액이 바뀌었으면(콘솔 취소 등) 자동으로 다시 보내지 않고 PENDING, 수동 확인")
     void balanceChangedOutsideRecords_notResent() throws Exception {
         String orderNo = paidOrder();
         doThrow(timeout()).when(portOneClient).cancel(eq("pay-" + orderNo), any());

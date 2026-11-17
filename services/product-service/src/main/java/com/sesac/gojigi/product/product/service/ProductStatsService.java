@@ -13,8 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 상품 통계 (PRD-11 · product.md 5절) — 판매자 대시보드(store) · 관리자 대시보드(admin)가 병렬로 부른다.
- * 삭제 안 된 ON_SALE 상품만 옵션 재고 합계로 나눈다 (카테고리 · 스토어 상태는 보지 않음 — 판매자는 자기 상품 현황을 그대로 봐야 하므로).
+ * 상품 통계 (PRD-11, product.md 5절) — 판매자 대시보드(store), 관리자 대시보드(admin)가 병렬로 부른다.
+ * 삭제 안 된 ON_SALE 상품만 옵션 재고 합계로 나눈다 (카테고리, 스토어 상태는 보지 않음 — 판매자는 자기 상품 현황을 그대로 봐야 하므로).
  */
 @Service
 @RequiredArgsConstructor

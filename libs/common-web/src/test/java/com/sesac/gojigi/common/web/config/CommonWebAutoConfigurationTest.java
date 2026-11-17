@@ -19,7 +19,7 @@ class CommonWebAutoConfigurationTest {
     private final AutoConfigurations config = AutoConfigurations.of(CommonWebAutoConfiguration.class);
 
     @Test
-    @DisplayName("Servlet 앱에서는 공통 예외 핸들러 · userId MDC 필터가 등록된다")
+    @DisplayName("Servlet 앱에서는 공통 예외 핸들러, userId MDC 필터가 등록된다")
     void servlet() {
         new WebApplicationContextRunner().withConfiguration(config)
                 .run(context -> {
@@ -46,7 +46,7 @@ class CommonWebAutoConfigurationTest {
     }
 
     @Test
-    @DisplayName("WebFlux(gateway) · 비웹 앱에서는 켜지지 않는다")
+    @DisplayName("WebFlux(gateway), 비웹 앱에서는 켜지지 않는다")
     void notServlet() {
         new ReactiveWebApplicationContextRunner().withConfiguration(config)
                 .run(context -> assertThat(context).doesNotHaveBean(CommonWebAutoConfiguration.class));

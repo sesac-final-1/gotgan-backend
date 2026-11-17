@@ -22,11 +22,11 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 이벤트 아웃박스 (order · settlement EventOutboxService 와 같은 방식) — 이벤트를 업무 트랜잭션 안에서 outbox_event 에 남기고, 커밋 후 SNS 로 보낸다.
+ * 이벤트 아웃박스 (order, settlement EventOutboxService 와 같은 방식) — 이벤트를 업무 트랜잭션 안에서 outbox_event 에 남기고, 커밋 후 SNS 로 보낸다.
  * ① enqueue: 업무 트랜잭션 안에서만(MANDATORY) — 업무가 롤백되면 이벤트도 남지 않는다
  * ② 커밋 직후 바로 한 번 발행(AFTER_COMMIT) — 정상일 때 지연 없음, SNS 는 1초에서 끊는다(AwsConfig)
- * ③ 실패 · 미발행은 발행기(publish-interval, ShedLock)가 다시 — SNS 가 죽어도 업무는 진행되고 복구되면 자동으로 나간다
- * 최소 1회 전달: 같은 행을 두 번 보낼 수 있으나 eventId 가 같아 소비자가 거른다. eventId · occurredAt 은 부르는 쪽이 정해 행에 남긴다.
+ * ③ 실패, 미발행은 발행기(publish-interval, ShedLock)가 다시 — SNS 가 죽어도 업무는 진행되고 복구되면 자동으로 나간다
+ * 최소 1회 전달: 같은 행을 두 번 보낼 수 있으나 eventId 가 같아 소비자가 거른다. eventId, occurredAt 은 부르는 쪽이 정해 행에 남긴다.
  * 시도 한도(max-attempts)에 닿으면 ERROR 로그 한 번 후 발행기 대상에서 빠진다(NEW 그대로) — 다시 보내려면 attempt_count = 0 (11/3)
  */
 @Slf4j
@@ -83,7 +83,7 @@ public class EventOutboxService {
         send(enqueued.outboxId());
     }
 
-    /** 발행기 — 커밋 직후 발행이 실패했거나(SNS 장애 · 타임아웃) 그 사이 파드가 죽어 남은 행 */
+    /** 발행기 — 커밋 직후 발행이 실패했거나(SNS 장애, 타임아웃) 그 사이 파드가 죽어 남은 행 */
     @Scheduled(fixedDelayString = "${app.events.outbox.publish-interval:30s}",
             initialDelayString = "${app.events.outbox.initial-delay:20s}")
     @SchedulerLock(name = "store-event-outbox", lockAtMostFor = "5m")
@@ -120,7 +120,7 @@ public class EventOutboxService {
                 .ifPresent(r -> r.markSent(LocalDateTime.now(clock))));
     }
 
-    /** 봉투 JSON (docs/events.md) — 행에 남긴 payload · eventId · occurred_at 으로 만들어 다시 보내도 같다 */
+    /** 봉투 JSON (docs/events.md) — 행에 남긴 payload, eventId, occurred_at 으로 만들어 다시 보내도 같다 */
     private String envelope(OutboxEvent row) {
         JsonNode payload = jsonMapper.readTree(row.getPayload());
         return jsonMapper.writeValueAsString(new EventEnvelope<>(row.getEventId(), row.getEventType(),

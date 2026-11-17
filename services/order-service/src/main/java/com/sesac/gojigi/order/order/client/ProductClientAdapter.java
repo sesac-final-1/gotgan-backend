@@ -14,8 +14,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 
 /**
- * product-service 호출 — 서킷 브레이커 "product". 재시도는 조회(GET)만, 재고 예약 · 해제는 Saga 가 sagaId 로 다시 부른다.
- * 실패 변환 규칙은 RemoteCalls, 응답별 처리는 docs/api/product.md 1 · 2절.
+ * product-service 호출 — 서킷 브레이커 "product". 재시도는 조회(GET)만, 재고 예약, 해제는 Saga 가 sagaId 로 다시 부른다.
+ * 실패 변환 규칙은 RemoteCalls, 응답별 처리는 docs/api/product.md 1, 2절.
  */
 @Component
 @RequiredArgsConstructor
@@ -26,7 +26,7 @@ public class ProductClientAdapter {
 
     private final ProductClient productClient;
 
-    /** 가격 · 구매 가능 조회 — 응답에서 빠진 옵션은 호출 쪽이 구매 불가로 처리 */
+    /** 가격, 구매 가능 조회 — 응답에서 빠진 옵션은 호출 쪽이 구매 불가로 처리 */
     @Retry(name = CIRCUIT)
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "getOptionsFallback")
     public List<ProductOptionResponse> getOptions(List<Long> optionIds) {
@@ -37,7 +37,7 @@ public class ProductClientAdapter {
         }
     }
 
-    /** 재고 예약 (Saga STOCK_RESERVED) — 재고 부족 · 구매 불가 · 없는 옵션은 주문 예외로 */
+    /** 재고 예약 (Saga STOCK_RESERVED) — 재고 부족, 구매 불가, 없는 옵션은 주문 예외로 */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "reserveFallback")
     public void reserve(StockReserveRequest request) {
         try {
@@ -64,7 +64,7 @@ public class ProductClientAdapter {
         }
     }
 
-    /** 재고 복원 (취소 · 반품 Saga STOCK_RESTORED) — claimId 멱등, 실패하면 Saga 가 같은 claimId 로 다시 부른다 */
+    /** 재고 복원 (취소, 반품 Saga STOCK_RESTORED) — claimId 멱등, 실패하면 Saga 가 같은 claimId 로 다시 부른다 */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "restoreFallback")
     public void restore(StockRestoreRequest request) {
         try {

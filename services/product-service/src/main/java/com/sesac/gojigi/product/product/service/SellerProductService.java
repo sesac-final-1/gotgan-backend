@@ -50,8 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 판매자 상품 목록 · 등록 · 수정 · 상세 · 재고 수정 · 판매중지/재개 · 삭제 (PRD-01 · 02 · 03 · 04 · 05 · 15, product.md 11 ~ 16절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
- * 정지 · 폐점 스토어도 등록은 받되 숨김으로 시작한다 — store_status 스냅샷(StoreStatusChanged) 기준, 행이 없으면 운영 중.
+ * 판매자 상품 목록, 등록, 수정, 상세, 재고 수정, 판매중지/재개, 삭제 (PRD-01, 02, 03, 04, 05, 15, product.md 11 ~ 16절). 목록은 관리자 스토어 상품 목록(6-1절)도 같이 쓴다. 스토어 = 게이트웨이가 넣은 X-Store-Id — 역할 확인은 게이트웨이 몫.
+ * 정지, 폐점 스토어도 등록은 받되 숨김으로 시작한다 — store_status 스냅샷(StoreStatusChanged) 기준, 행이 없으면 운영 중.
  */
 @Slf4j
 @Service
@@ -65,7 +65,7 @@ public class SellerProductService {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    /** 상세 설명에 허용할 태그 — 글자 서식 · 문단 · 링크 · 이미지 · 표. script · style · on* 속성은 지운다 */
+    /** 상세 설명에 허용할 태그 — 글자 서식, 문단, 링크, 이미지, 표. script, style, on* 속성은 지운다 */
     private static final PolicyFactory DESCRIPTION_POLICY = Sanitizers.FORMATTING.and(Sanitizers.BLOCKS)
             .and(Sanitizers.LINKS).and(Sanitizers.IMAGES).and(Sanitizers.TABLES);
 
@@ -77,8 +77,8 @@ public class SellerProductService {
     private final Clock clock;
 
     /**
-     * 스토어 상품 전체 (11절 · 6-1절) — 페이징 · 필터 없음(화면이 셈 · 검색 · 정렬, 프론트 컨벤션 4-7), 삭제된 상품만 빠짐, 등록일 최신 순.
-     * 재고 합계 · 대표 이미지는 상품마다 컬렉션을 읽지 않고 묶음 쿼리 두 번으로.
+     * 스토어 상품 전체 (11절, 6-1절) — 페이징, 필터 없음(화면이 셈, 검색, 정렬, 프론트 컨벤션 4-7), 삭제된 상품만 빠짐, 등록일 최신 순.
+     * 재고 합계, 대표 이미지는 상품마다 컬렉션을 읽지 않고 묶음 쿼리 두 번으로.
      */
     public List<SellerProductResponse> list(Long storeId) {
         List<Product> products = productRepository.findByStoreIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(storeId);
@@ -139,9 +139,9 @@ public class SellerProductService {
     }
 
     /**
-     * 수정 (13절 PUT) — 등록과 같은 본문 · 같은 검사, status 는 무시하고 재고 · 판매 상태는 바꾸지 않는다(BLOCKED 도 수정 가능, 상태 그대로).
-     * 옵션은 productOptionId 로 맞춘다: 있으면 추가금만 · 없으면 새 조합 · 요청에 없는 기존 조합은 소프트 삭제.
-     * 이미지는 요청 순서대로 다시 저장 — 내 스토어 상품에 이미 붙어 있는 키(이 상품 · 시드 이미지 포함)는 모양 검사 없이 받는다.
+     * 수정 (13절 PUT) — 등록과 같은 본문, 같은 검사, status 는 무시하고 재고, 판매 상태는 바꾸지 않는다(BLOCKED 도 수정 가능, 상태 그대로).
+     * 옵션은 productOptionId 로 맞춘다: 있으면 추가금만, 없으면 새 조합, 요청에 없는 기존 조합은 소프트 삭제.
+     * 이미지는 요청 순서대로 다시 저장 — 내 스토어 상품에 이미 붙어 있는 키(이 상품, 시드 이미지 포함)는 모양 검사 없이 받는다.
      */
     @Transactional
     public SellerProductDetailResponse update(Long storeId, Long productId, ProductCreateRequest request) {
@@ -159,14 +159,14 @@ public class SellerProductService {
                 sanitizeDescription(request.description()), request.material().strip(), request.origin().strip(),
                 optionNames.isEmpty() ? null : optionNames.getFirst(), optionNames.size() < 2 ? null : optionNames.get(1));
         product.replaceImages(imageKeys);
-        productRepository.flush();   // 새 조합 ID · 수정 시각을 응답에 담으려고
+        productRepository.flush();   // 새 조합 ID, 수정 시각을 응답에 담으려고
         log.info("상품 수정 - storeId={}, productId={}, options={}", storeId, productId, options.size());
         return SellerProductDetailResponse.of(product, category, top, imageUrls);
     }
 
     /**
-     * 삭제 (16절) — 상태와 상관없이(BLOCKED 포함) 상품만 소프트 삭제, 옵션 · 재고 이력은 그대로.
-     * 지난 주문은 스냅샷이라 영향 없고, 장바구니에 담긴 옵션은 4절 조회에서 purchasable=false · 예약은 409 가 된다.
+     * 삭제 (16절) — 상태와 상관없이(BLOCKED 포함) 상품만 소프트 삭제, 옵션, 재고 이력은 그대로.
+     * 지난 주문은 스냅샷이라 영향 없고, 장바구니에 담긴 옵션은 4절 조회에서 purchasable=false, 예약은 409 가 된다.
      */
     @Transactional
     public void delete(Long storeId, Long productId) {
@@ -208,7 +208,7 @@ public class SellerProductService {
     }
 
     /**
-     * 판매중지 · 재개 (15절) — 건마다 따로: 하나가 실패해도 나머지는 반영(예외 대신 failed 에 담음, 트랜잭션은 하나).
+     * 판매중지, 재개 (15절) — 건마다 따로: 하나가 실패해도 나머지는 반영(예외 대신 failed 에 담음, 트랜잭션은 하나).
      * 상품 행을 먼저 잠가 최신 상태를 본다 — 그 사이 관리자가 강제 판매중지했으면 BLOCKED 로 실패 처리(차단이 풀리지 않게).
      * 이미 그 상태면 성공(멱등), 재고 0 이어도 재개 가능(품절로 보임).
      */
@@ -216,9 +216,9 @@ public class SellerProductService {
     public ProductStatusChangeResponse changeStatus(Long storeId, ProductStatusChangeRequest request) {
         ProductStatus status = request.status();
         if (status != ProductStatus.ON_SALE && status != ProductStatus.STOPPED) {
-            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "판매 상태는 ON_SALE · STOPPED 만 선택할 수 있습니다.");
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "판매 상태는 ON_SALE, STOPPED 만 선택할 수 있습니다.");
         }
-        List<Long> ids = List.copyOf(new LinkedHashSet<>(request.productIds()));   // 같은 ID 는 한 번 · 요청 순서 유지
+        List<Long> ids = List.copyOf(new LinkedHashSet<>(request.productIds()));   // 같은 ID 는 한 번, 요청 순서 유지
 
         // 반드시 트랜잭션의 첫 쿼리 — 이후 판단이 잠금을 얻은 뒤의 최신 상태로
         Map<Long, Product> products = productRepository.findAllByIdForUpdate(ids).stream()
@@ -252,7 +252,7 @@ public class SellerProductService {
                 .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));
     }
 
-    /** 기존 조합은 추가금만(값이 다르면 400) · 새 조합은 추가 · 요청에 없는 기존 조합은 소프트 삭제 */
+    /** 기존 조합은 추가금만(값이 다르면 400), 새 조합은 추가, 요청에 없는 기존 조합은 소프트 삭제 */
     private void applyOptions(Product product, List<OptionSpec> specs) {
         Map<Long, ProductOption> live = product.getOptions().stream()
                 .filter(o -> o.getDeletedAt() == null)
@@ -277,7 +277,7 @@ public class SellerProductService {
         live.values().stream().filter(o -> !kept.contains(o.getId())).forEach(o -> o.delete(now));
     }
 
-    /** 사용 중인 하위만 — 없거나 · 상위이거나 · 꺼진 카테고리는 같은 코드 (CAT-03, product 자기 DB 로 검증) */
+    /** 사용 중인 하위만 — 없거나, 상위이거나, 꺼진 카테고리는 같은 코드 (CAT-03, product 자기 DB 로 검증) */
     private Category getSubCategory(Long categoryId) {
         return categoryRepository.findById(categoryId)
                 .filter(c -> !c.isTop() && c.isActive())
@@ -301,7 +301,7 @@ public class SellerProductService {
         return names;
     }
 
-    /** 조합 1~100개 · 그룹 수와 값 개수가 맞음 · 조합 중복 없음 · 추가금 · 재고 0 이상. 그룹이 없으면 값이 null 인 1개만 */
+    /** 조합 1~100개, 그룹 수와 값 개수가 맞음, 조합 중복 없음, 추가금, 재고 0 이상. 그룹이 없으면 값이 null 인 1개만 */
     private static List<OptionSpec> checkOptions(int groupCount, List<OptionItem> items) {
         if (items == null || items.isEmpty() || items.size() > MAX_OPTIONS) {
             throw invalidOption("옵션 조합은 1~100개여야 합니다.");
@@ -344,8 +344,8 @@ public class SellerProductService {
     }
 
     /**
-     * 1~5개 · 중복 없음 · presign 이 발급하는 내 스토어 키 모양(products/{storeId}/{UUID}.{jpg|png|webp}) 또는 내 스토어 상품에 이미 붙어 있는 키.
-     * S3 존재 확인은 하지 않는다. 남의 스토어 상품에 붙은 키 · 삭제된 상품의 키는 모양이 아니면 거절.
+     * 1~5개, 중복 없음, presign 이 발급하는 내 스토어 키 모양(products/{storeId}/{UUID}.{jpg|png|webp}) 또는 내 스토어 상품에 이미 붙어 있는 키.
+     * S3 존재 확인은 하지 않는다. 남의 스토어 상품에 붙은 키, 삭제된 상품의 키는 모양이 아니면 거절.
      */
     private static List<String> checkImageKeys(Long storeId, List<String> keys, Set<String> attachedKeys) {
         if (keys == null || keys.isEmpty() || keys.size() > MAX_IMAGES) {
@@ -361,13 +361,13 @@ public class SellerProductService {
         return keys;
     }
 
-    /** 등록은 ON_SALE(기본) · STOPPED 만 — BLOCKED 는 관리자만 */
+    /** 등록은 ON_SALE(기본), STOPPED 만 — BLOCKED 는 관리자만 */
     private static ProductStatus initialStatus(ProductStatus status) {
         if (status == null) {
             return ProductStatus.ON_SALE;
         }
         if (status == ProductStatus.BLOCKED) {
-            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "판매 상태는 ON_SALE · STOPPED 만 선택할 수 있습니다.");
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT, "판매 상태는 ON_SALE, STOPPED 만 선택할 수 있습니다.");
         }
         return status;
     }
@@ -393,7 +393,7 @@ public class SellerProductService {
 
     private static void checkOptionText(String text) {
         if (text.length() > MAX_OPTION_TEXT) {
-            throw invalidOption("옵션 이름 · 값은 30자 이하로 입력해 주세요.");
+            throw invalidOption("옵션 이름, 값은 30자 이하로 입력해 주세요.");
         }
     }
 

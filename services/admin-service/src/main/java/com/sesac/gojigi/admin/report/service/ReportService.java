@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 신고 접수 (구매자 · 판매자) — 대상이 있는지 대상 서비스에 물어 확인하고, 신고 당시 요약을 남긴다.
+ * 신고 접수 (구매자, 판매자) — 대상이 있는지 대상 서비스에 물어 확인하고, 신고 당시 요약을 남긴다.
  * 대상 조회는 트랜잭션 밖 (다른 서비스 호출 동안 DB 커넥션을 잡지 않음)
  */
 @Service
@@ -53,7 +53,7 @@ public class ReportService {
         }
     }
 
-    /** 리뷰가 있는지(없으면 review 의 404 그대로) · 내 리뷰가 아닌지 · 판매자 검토 요청은 내 스토어 리뷰인지 */
+    /** 리뷰가 있는지(없으면 review 의 404 그대로), 내 리뷰가 아닌지, 판매자 검토 요청은 내 스토어 리뷰인지 */
     private String reviewSummary(AuthUser user, ReportCreateRequest request) {
         JsonNode review = reviewReader.get(request.targetId());
         if (review.hasNonNull("userId") && review.get("userId").asLong() == user.userId()) {
@@ -66,7 +66,7 @@ public class ReportService {
         return cut(review.path("content").asString(""));
     }
 
-    /** 회원이 있는지(없으면 user 의 404 그대로) — 요약은 이름 · 닉네임 */
+    /** 회원이 있는지(없으면 user 의 404 그대로) — 요약은 이름, 닉네임 */
     private String userSummary(AuthUser user, Long targetId) {
         JsonNode target = userClientAdapter.detail(user.userId(), targetId);
         String nick = target.path("nick").asString("");

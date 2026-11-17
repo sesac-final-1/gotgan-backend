@@ -74,7 +74,7 @@ class CartRedisRepositoryTest {
     }
 
     @Test
-    @DisplayName("폴백 — Redis 장애 · OOM 거절은 WARN 만, 읽기 장애는 미스와 같다")
+    @DisplayName("폴백 — Redis 장애, OOM 거절은 WARN 만, 읽기 장애는 미스와 같다")
     void fallbacks() {
         RedisSystemException oom = new RedisSystemException("OOM command not allowed when used memory > 'maxmemory'", null);
         assertThatCode(() -> repository.replaceFallback(4L, Map.of(11L, new CachedLine(3, true)), oom))

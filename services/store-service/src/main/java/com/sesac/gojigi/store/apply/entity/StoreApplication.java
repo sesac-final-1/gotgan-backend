@@ -24,7 +24,7 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * 입점 신청서 (storedb store_application). 심사 당시 기록이라 승인 후에도 내용은 고치지 않는다 — 상태만 바뀐다.
- * 진행 중 신청 1건 · 1인 1스토어는 서비스 검증 (docs/api/store.md 2절).
+ * 진행 중 신청 1건, 1인 1스토어는 서비스 검증 (docs/api/store.md 2절).
  */
 @Getter
 @Entity
@@ -104,7 +104,7 @@ public class StoreApplication extends BaseTimeEntity {
     @Column(name = "status_reason")
     private String statusReason;
 
-    /** 보완요청 서류 종류 — SUPPLEMENT 일 때만, V5 전 보완요청은 null (store.md 7절 · 2-3절) */
+    /** 보완요청 서류 종류 — SUPPLEMENT 일 때만, V5 전 보완요청은 null (store.md 7절, 2-3절) */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "requested_docs")
     private List<DocType> requestedDocs;
@@ -122,7 +122,7 @@ public class StoreApplication extends BaseTimeEntity {
     @Column(name = "version", nullable = false)
     private Long version;
 
-    /** 제출 — 심사대기로 시작하고, 필수 약관 동의 시각 · 상태 변경 시각은 제출 시각 (서버 Clock) */
+    /** 제출 — 심사대기로 시작하고, 필수 약관 동의 시각, 상태 변경 시각은 제출 시각 (서버 Clock) */
     @Builder
     private StoreApplication(Long userId, Long categoryId, BizType bizType, String companyName, String ownerName,
             String bizRegNo, String ecommerceRegNo, String managerPhone, String managerEmail, String businessAddress,
@@ -154,7 +154,7 @@ public class StoreApplication extends BaseTimeEntity {
         this.statusChangedAt = submittedAt;
     }
 
-    /** 승인 — 심사대기 · 보완요청에서만. 다른 상태면 409 (다른 관리자가 먼저 처리함, store.md 5절) */
+    /** 승인 — 심사대기, 보완요청에서만. 다른 상태면 409 (다른 관리자가 먼저 처리함, store.md 5절) */
     public void approve(LocalDateTime decidedAt) {
         requireUndecided();
         this.status = ApplicationStatus.APPROVED;
@@ -163,7 +163,7 @@ public class StoreApplication extends BaseTimeEntity {
         this.statusChangedAt = decidedAt;
     }
 
-    /** 반려 — 승인과 같은 조건. 사유는 신청자 화면 · 메일에 그대로 보이고, 30일 재신청 제한은 이 시각부터 (store.md 6절) */
+    /** 반려 — 승인과 같은 조건. 사유는 신청자 화면, 메일에 그대로 보이고, 30일 재신청 제한은 이 시각부터 (store.md 6절) */
     public void reject(String reason, LocalDateTime decidedAt) {
         requireUndecided();
         this.status = ApplicationStatus.REJECTED;
@@ -173,8 +173,8 @@ public class StoreApplication extends BaseTimeEntity {
     }
 
     /**
-     * 보완요청 — 심사대기에서만(보완요청 중이면 재제출을 기다림, 409). 메시지는 신청자 화면 · 메일에 보인다 (store.md 7절).
-     * 기한은 저장하지 않고 상태 변경 시각 + 보완 기한(운영 7일, SupplementDeadline)으로 계산 — 자동 반려도 같은 기준. 요청 서류는 재제출 검사 · 신청자 화면용으로 저장
+     * 보완요청 — 심사대기에서만(보완요청 중이면 재제출을 기다림, 409). 메시지는 신청자 화면, 메일에 보인다 (store.md 7절).
+     * 기한은 저장하지 않고 상태 변경 시각 + 보완 기한(운영 7일, SupplementDeadline)으로 계산 — 자동 반려도 같은 기준. 요청 서류는 재제출 검사, 신청자 화면용으로 저장
      */
     public void requestSupplement(String message, List<DocType> requestedDocs, LocalDateTime requestedAt) {
         if (status != ApplicationStatus.PENDING) {
@@ -188,7 +188,7 @@ public class StoreApplication extends BaseTimeEntity {
 
     /**
      * 재제출 — 보완요청 중이고 기한 전일 때만 심사대기로 (store.md 2-3절). 고칠 수 있는 필드만 바꾸고(값이 다 채워져 온다),
-     * 사유 · 요청 서류는 비운다
+     * 사유, 요청 서류는 비운다
      */
     public void resubmit(ApplicationCorrection correction, LocalDateTime resubmittedAt, Duration due) {
         requireResubmittable(resubmittedAt, due);

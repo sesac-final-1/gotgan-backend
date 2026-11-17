@@ -30,7 +30,7 @@ public class MetricsAccessManager implements ReactiveAuthorizationManager<Author
         this.allowed = allowedCidrs.stream().map(String::trim).map(MetricsAccessManager::subnet).toList();
     }
 
-    /** "10.0.11.0/24" · "::1/128" — 형식이 틀리면 기동 실패 (잘못된 설정으로 지표가 조용히 막히거나 열리지 않게) */
+    /** "10.0.11.0/24", "::1/128" — 형식이 틀리면 기동 실패 (잘못된 설정으로 지표가 조용히 막히거나 열리지 않게) */
     private static IpSubnetFilterRule subnet(String cidr) {
         int slash = cidr.lastIndexOf('/');
         if (slash < 0) {

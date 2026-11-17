@@ -16,7 +16,7 @@ node_modules/
 .env.*
 !.env.example
 
-# IDE · OS
+# IDE, OS
 .idea/
 *.iml
 .vscode/

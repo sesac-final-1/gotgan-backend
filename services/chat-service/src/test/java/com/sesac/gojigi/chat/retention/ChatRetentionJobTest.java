@@ -24,7 +24,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 90일 보관 삭제 (chat.md 8-1절) — 시각 고정 2026-10-27 09:10 KST, 기준 = 2026-07-29 09:10.
- * 묶음 2건 · 최대 3묶음으로 줄여 "하루 몫만 지우고 다음 날 이어서"를 확인. ChatRoomApiTest 와 같은 컨텍스트(컨테이너 1개)를 쓴다
+ * 묶음 2건, 최대 3묶음으로 줄여 "하루 몫만 지우고 다음 날 이어서"를 확인. ChatRoomApiTest 와 같은 컨텍스트(컨테이너 1개)를 쓴다
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
 @AutoConfigureMockMvc
@@ -80,7 +80,7 @@ class ChatRetentionJobTest {
     }
 
     @Test
-    @DisplayName("지울 것이 없으면 아무것도 지우지 않는다 — 최근 방 · 메시지가 없는 새 방은 그대로")
+    @DisplayName("지울 것이 없으면 아무것도 지우지 않는다 — 최근 방, 메시지가 없는 새 방은 그대로")
     void keepsRecentData() {
         message(room(3, RECENT), RECENT);
         jdbc.update("INSERT INTO chat_room (type, buyer_id, store_id) VALUES ('BUYER_SUPPORT', 4, 0)");

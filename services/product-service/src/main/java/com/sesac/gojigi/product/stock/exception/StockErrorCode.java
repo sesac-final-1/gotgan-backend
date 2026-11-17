@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
-/** stock 도메인 오류 코드 (접두어 STOCK — docs/api/error-codes.md · product.md 18절). order ProductClientAdapter 가 코드 이름으로 분기한다 */
+/** stock 도메인 오류 코드 (접두어 STOCK — docs/api/error-codes.md, product.md 18절). order ProductClientAdapter 가 코드 이름으로 분기한다 */
 @Getter
 @RequiredArgsConstructor
 public enum StockErrorCode implements ErrorCode {

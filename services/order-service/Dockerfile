@@ -2,7 +2,7 @@
 #   docker build -f services/order-service/Dockerfile .
 # ===== 1단계: 빌드 (로컬 JDK 없이도, CI 어디서든 같은 결과) =====
 FROM eclipse-temurin:21-jdk AS builder
-# settings.gradle 의 includeBuild('../../libs/common-web') 상대 경로가 컨테이너 안에서도 맞도록 저장소 구조(/app/libs · /app/services/<서비스>)를 유지한다
+# settings.gradle 의 includeBuild('../../libs/common-web') 상대 경로가 컨테이너 안에서도 맞도록 저장소 구조(/app/libs, /app/services/<서비스>)를 유지한다
 WORKDIR /app/services/order-service
 COPY libs/common-web/settings.gradle libs/common-web/build.gradle /app/libs/common-web/
 COPY libs/common-logging/settings.gradle libs/common-logging/build.gradle /app/libs/common-logging/
@@ -27,7 +27,7 @@ COPY --from=builder /app/services/order-service/extracted/snapshot-dependencies/
 # 자주 바뀌는 코드 레이어는 맨 마지막
 COPY --from=builder /app/services/order-service/extracted/application/ ./
 USER spring
-# 컨테이너 기본 시간대는 UTC — DB · JDBC 와 맞춰 Asia/Seoul 로 고정 (컨벤션 3-5)
+# 컨테이너 기본 시간대는 UTC — DB, JDBC 와 맞춰 Asia/Seoul 로 고정 (컨벤션 3-5)
 ENV TZ=Asia/Seoul
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8084

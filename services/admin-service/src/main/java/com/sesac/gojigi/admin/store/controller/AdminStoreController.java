@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 
-/** 관리자 스토어 관리 (STR-13 · 14) — store /internal/stores (docs/api/store.md 1 · 8 · 9절) 응답 · 오류 그대로 */
+/** 관리자 스토어 관리 (STR-13, 14) — store /internal/stores (docs/api/store.md 1, 8, 9절) 응답, 오류 그대로 */
 @Tag(name = "관리자 스토어", description = "store 내부 API 를 그대로 전달 — 인가: ADMIN")
 @RestController
 @RequestMapping("/api/admin/stores")
@@ -29,13 +29,13 @@ public class AdminStoreController {
         return ApiResponse.success("스토어 목록을 조회했습니다.", storeClientAdapter.stores(status));
     }
 
-    @Operation(summary = "스토어 상세", description = "store 1절 응답 (4주차에 관리자 필드 · 상태 이력 추가). 404 STORE_NOT_FOUND")
+    @Operation(summary = "스토어 상세", description = "store 1절 응답 (4주차에 관리자 필드, 상태 이력 추가). 404 STORE_NOT_FOUND")
     @GetMapping("/{storeId}")
     public ApiResponse<JsonNode> detail(@PathVariable Long storeId) {
         return ApiResponse.success("스토어 상세를 조회했습니다.", storeClientAdapter.store(storeId));
     }
 
-    @Operation(summary = "스토어 정지 · 해제", description = "{status: SUSPENDED/ACTIVE, reason(필수)} → 스토어 상세. 같은 상태 200(멱등) · 폐점 409 STORE_INVALID_STATUS_TRANSITION")
+    @Operation(summary = "스토어 정지, 해제", description = "{status: SUSPENDED/ACTIVE, reason(필수)} → 스토어 상세. 같은 상태 200(멱등), 폐점 409 STORE_INVALID_STATUS_TRANSITION")
     @PatchMapping("/{storeId}/status")
     public ApiResponse<JsonNode> changeStatus(@PathVariable Long storeId, @RequestBody JsonNode body) {
         return ApiResponse.success("스토어 상태를 변경했습니다.", storeClientAdapter.changeStoreStatus(storeId, body));

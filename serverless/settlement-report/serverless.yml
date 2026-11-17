@@ -1,7 +1,7 @@
 # settlement-report — SQS(SettlementPaid) → 정산 명세서 CSV → S3 reports/{storeId}/{week}.csv → SES 메일(판매자 정산 화면 링크) + DynamoDB 발송 이력
-# 담당 jihoon-devstu · 우선순위 Should · 가이드라인 11장. 서버리스는 배치 · 로깅만 (사용자 API 없음)
+# 담당 jihoon-devstu, 우선순위 Should, 가이드라인 11장. 서버리스는 배치, 로깅만 (사용자 API 없음)
 # 명세서 내용은 이벤트 payload 에 모두 있음(10/21 방식 B). 다운로드 링크는 settlement 가 화면에서 10분 presigned 로 발급(스펙 STL-10) — Lambda 는 서명하지 않는다
-# 공유 자원 이름 · ARN 은 하드코딩하지 않고 SSM 에서 읽는다 (Terraform app/ssm.tf 가 기록)
+# 공유 자원 이름, ARN 은 하드코딩하지 않고 SSM 에서 읽는다 (Terraform app/ssm.tf 가 기록)
 service: sesac-gojigi-settlement-report
 frameworkVersion: "4"
 
@@ -26,7 +26,7 @@ provider:
   iam:
     role:
       statements:
-        # 발송 이력 — 선점(조건부 Put) · 발송 완료(Update)
+        # 발송 이력 — 선점(조건부 Put), 발송 완료(Update)
         - Effect: Allow
           Action: [dynamodb:PutItem, dynamodb:UpdateItem]
           Resource: arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${ssm:/sesac-gojigi/${sls:stage}/dynamodb/settlement-reports-table}
@@ -34,7 +34,7 @@ provider:
         - Effect: Allow
           Action: [s3:PutObject]
           Resource: arn:aws:s3:::${ssm:/sesac-gojigi/${sls:stage}/s3/reports-bucket}/reports/*
-        # 메일 — SES 샌드박스는 발신 · 수신 주소 모두 인증된 identity 여야 해서 이 계정의 identity 로 한정
+        # 메일 — SES 샌드박스는 발신, 수신 주소 모두 인증된 identity 여야 해서 이 계정의 identity 로 한정
         - Effect: Allow
           Action: [ses:SendEmail]
           Resource: arn:aws:ses:${aws:region}:${aws:accountId}:identity/*

@@ -39,7 +39,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 내 정보 조회 · 수정 · 비밀번호 변경 */
+/** 내 정보 조회, 수정, 비밀번호 변경 */
 @ExtendWith(MockitoExtension.class)
 class UserServiceMyInfoTest {
 
@@ -98,7 +98,7 @@ class UserServiceMyInfoTest {
     }
 
     @Test
-    @DisplayName("탈퇴 · 없는 회원은 USER_NOT_FOUND")
+    @DisplayName("탈퇴, 없는 회원은 USER_NOT_FOUND")
     void getMyInfo_notFound() {
         given(userRepository.findByIdAndDeletedAtIsNull(4L)).willReturn(Optional.empty());
 
@@ -107,7 +107,7 @@ class UserServiceMyInfoTest {
     }
 
     @Test
-    @DisplayName("수정 — 보낸 항목만 바꾸고(이름 공백 제거 · 휴대폰 하이픈 정규화) 나머지는 그대로")
+    @DisplayName("수정 — 보낸 항목만 바꾸고(이름 공백 제거, 휴대폰 하이픈 정규화) 나머지는 그대로")
     void updateMyInfo_partial() {
         User user = member();
         given(userRepository.findByIdAndDeletedAtIsNull(4L)).willReturn(Optional.of(user));

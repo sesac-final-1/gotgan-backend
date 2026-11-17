@@ -81,7 +81,7 @@ public class ActiveUserFilter implements GlobalFilter, Ordered {
         write.subscribe(ok -> { }, e -> log.debug("접속자 기록 실패 - {}", e.getMessage()));
     }
 
-    /** 요청 제한 · 인증 뒤, 라우팅 전 */
+    /** 요청 제한, 인증 뒤, 라우팅 전 */
     @Override
     public int getOrder() {
         return 0;

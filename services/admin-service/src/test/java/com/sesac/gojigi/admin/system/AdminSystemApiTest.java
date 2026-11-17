@@ -42,7 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * 장애 시연 (F-1) — 상태 · 내리기 · 타임라인. 쿠버네티스는 가짜, DB(admindb chaos_event)는 실제.
+ * 장애 시연 (F-1) — 상태, 내리기, 타임라인. 쿠버네티스는 가짜, DB(admindb chaos_event)는 실제.
  * 재시도 제한이 서비스별이라 테스트마다 다른 서비스를 내린다 (같은 컨텍스트가 DB 를 공유)
  */
 @SpringBootTest(properties = { "management.tracing.sampling.probability=0", "app.chaos.enabled=true", "app.loadtest.enabled=true" })
@@ -62,7 +62,7 @@ class AdminSystemApiTest {
 
     private final List<Pod> pods = new ArrayList<>();
 
-    /** 기본 — 모든 서비스 레플리카 2 · 파드 2개 Ready */
+    /** 기본 — 모든 서비스 레플리카 2, 파드 2개 Ready */
     @BeforeEach
     void cluster() {
         pods.clear();
@@ -111,7 +111,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("상태 — 서비스 13개(화면 순서) · 상태 계산 · 내릴 수 있는지 · 기능은 의존 관계로")
+    @DisplayName("상태 — 서비스 13개(화면 순서), 상태 계산, 내릴 수 있는지, 기능은 의존 관계로")
     void status_calculates() throws Exception {
         pods.removeIf(p -> p.app().equals("order-service"));              // order 0/2 → DOWN
         replace("product-service-b", false, false);                       // product 1/2 (내린 적 없음) → DEGRADED
@@ -146,7 +146,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("지표 — 서비스 순서 그대로 요청량 · 오류율, Prometheus 실패면 200 에 null")
+    @DisplayName("지표 — 서비스 순서 그대로 요청량, 오류율, Prometheus 실패면 200 에 null")
     void metrics() throws Exception {
         when(prometheus.byRoute(org.mockito.ArgumentMatchers.contains("5.."))).thenReturn(Optional.of(Map.of("order-service", 0.5)));
         when(prometheus.byRoute(org.mockito.ArgumentMatchers.argThat(q -> q != null && !q.contains("5.."))))
@@ -169,7 +169,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("ADMIN 이 아니면 — 상태 · 지표 · 내리기 · 타임라인 모두 403 FORBIDDEN")
+    @DisplayName("ADMIN 이 아니면 — 상태, 지표, 내리기, 타임라인 모두 403 FORBIDDEN")
     void nonAdmin_forbidden() throws Exception {
         mockMvc.perform(get("/api/admin/system/metrics").header("X-User-Id", 4L).header("X-User-Roles", "SELLER"))
                 .andExpect(status().isForbidden());
@@ -221,7 +221,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("ALL — 지워지는 중이 아닌 파드 전부 삭제, 그 뒤 Ready 0 이면 DOWN · 기능 DOWN")
+    @DisplayName("ALL — 지워지는 중이 아닌 파드 전부 삭제, 그 뒤 Ready 0 이면 DOWN, 기능 DOWN")
     void killAll() throws Exception {
         pods.add(pod("user-service-old", false, true));
 
@@ -241,7 +241,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("시나리오 — 레플리카 2 이상 · 내릴 수 있는 서비스만 1개씩 202, 서비스마다 1행 기록, 바로 다시 409 · 지운 파드 없음")
+    @DisplayName("시나리오 — 레플리카 2 이상, 내릴 수 있는 서비스만 1개씩 202, 서비스마다 1행 기록, 바로 다시 409, 지운 파드 없음")
     void scenario_killOneEach() throws Exception {
         replicatedOnly("payment-service", "review-service", "gateway-service");   // gateway 는 내릴 수 없어 제외
 
@@ -269,7 +269,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("시나리오 — 대상 중 하나라도 정상 아님(Ready < 원하는 수)이면 409 SYSTEM_SCENARIO_NOT_READY, 아무것도 안 지움 · 대상 없으면 409 SYSTEM_NO_READY_POD")
+    @DisplayName("시나리오 — 대상 중 하나라도 정상 아님(Ready < 원하는 수)이면 409 SYSTEM_SCENARIO_NOT_READY, 아무것도 안 지움, 대상 없으면 409 SYSTEM_NO_READY_POD")
     void scenario_notReady_and_noTarget() throws Exception {
         replicatedOnly("order-service");
         replace("order-service-b", false, false);
@@ -281,7 +281,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("허용 목록 — gateway · admin · mysql · 없는 이름은 400 SYSTEM_SERVICE_NOT_KILLABLE")
+    @DisplayName("허용 목록 — gateway, admin, mysql, 없는 이름은 400 SYSTEM_SERVICE_NOT_KILLABLE")
     void notKillable() throws Exception {
         for (String name : List.of("gateway-service", "admin-service", "mysql", "keycloak", "redis", "unknown")) {
             kill(name, "{\"scope\":\"ALL\"}")
@@ -291,7 +291,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("Ready 파드가 없으면 ONE 은 409 SYSTEM_NO_READY_POD · scope 없으면 400")
+    @DisplayName("Ready 파드가 없으면 ONE 은 409 SYSTEM_NO_READY_POD, scope 없으면 400")
     void noReadyPod_and_validation() throws Exception {
         replace("chat-service-a", false, false);
         replace("chat-service-b", false, false);
@@ -301,7 +301,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("쿠버네티스 조회 실패 — 상태 · 내리기 503 SYSTEM_CLUSTER_UNAVAILABLE, 타임라인은 그대로")
+    @DisplayName("쿠버네티스 조회 실패 — 상태, 내리기 503 SYSTEM_CLUSTER_UNAVAILABLE, 타임라인은 그대로")
     void clusterUnavailable() throws Exception {
         when(kubernetes.pods()).thenThrow(new SystemException(SystemErrorCode.SYSTEM_CLUSTER_UNAVAILABLE));
         statusApi().andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("SYSTEM_CLUSTER_UNAVAILABLE"));
@@ -317,7 +317,7 @@ class AdminSystemApiTest {
     }
 
     @Test
-    @DisplayName("부하테스트 — 시작 202 · 상태 · 사용자 수 변경 · 중지 · 계정 준비")
+    @DisplayName("부하테스트 — 시작 202, 상태, 사용자 수 변경, 중지, 계정 준비")
     void loadtest_flow() throws Exception {
         LoadJob running = new LoadJob("loadtest-lt-9", "lt-9", "load", "BROWSE", 50, 300, Instant.now().minusSeconds(20), 1, 0, 0);
         when(kubernetes.loadJobs()).thenReturn(List.of());
@@ -365,7 +365,7 @@ class AdminSystemApiTest {
     // ── 실시간 모니터링 (11/16)
 
     @Test
-    @DisplayName("모니터링 — 현황 · 호출 · 장애 · 트레이스 · 분석 200, 잘못된 traceId 400, ADMIN 아니면 403")
+    @DisplayName("모니터링 — 현황, 호출, 장애, 트레이스, 분석 200, 잘못된 traceId 400, ADMIN 아니면 403")
     void monitor_endpoints() throws Exception {
         when(prometheus.rangeBy(any(), any(), any(), any(), any())).thenReturn(Optional.of(Map.of()));
         when(prometheus.vector(any())).thenReturn(Optional.of(List.of()));

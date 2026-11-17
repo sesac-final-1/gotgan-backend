@@ -37,8 +37,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 장애 분석 리포트 — Prometheus · Loki · 장애 주입 기록은 가짜. 11/17 실제 장애(10:50 ~ 11:30)를 본뜸:
- * 11:07 상품 전부 내리기(5xx 827건) · 11:12 부하테스트 중 2건 · 11:19 요청 제한 초과 + 주문 파드 사라짐 · 11:24 /.env 탐색
+ * 장애 분석 리포트 — Prometheus, Loki, 장애 주입 기록은 가짜. 11/17 실제 장애(10:50 ~ 11:30)를 본뜸:
+ * 11:07 상품 전부 내리기(5xx 827건), 11:12 부하테스트 중 2건, 11:19 요청 제한 초과 + 주문 파드 사라짐, 11:24 /.env 탐색
  */
 class IncidentReportServiceTest {
 
@@ -111,7 +111,7 @@ class IncidentReportServiceTest {
     }
 
     @Test
-    @DisplayName("이슈 묶기 — 이어진 5xx 구간은 하나, 장애 주입 · 부하테스트와 겹치면 의도한 시험, 문장은 시각 · 서비스 · 건수 · 원인")
+    @DisplayName("이슈 묶기 — 이어진 5xx 구간은 하나, 장애 주입, 부하테스트와 겹치면 의도한 시험, 문장은 시각, 서비스, 건수, 원인")
     void errorIssues() {
         Report report = service.report(at("10:50"), at("11:30"));
 
@@ -136,7 +136,7 @@ class IncidentReportServiceTest {
     }
 
     @Test
-    @DisplayName("요청 제한 초과 · 파드 사라짐(장애 주입 기록 없음) · 탐색 요청 → TRAFFIC · ATTACK 이슈, 요약 문장")
+    @DisplayName("요청 제한 초과, 파드 사라짐(장애 주입 기록 없음), 탐색 요청 → TRAFFIC, ATTACK 이슈, 요약 문장")
     void trafficAttackAndSummary() {
         Report report = service.report(at("10:50"), at("11:30"));
 
@@ -149,7 +149,7 @@ class IncidentReportServiceTest {
         Issue attack = report.issues().stream().filter(i -> "ATTACK".equals(i.kind())).findFirst().orElseThrow();
         assertThat(attack.suspicious()).isEqualTo(3);
         assertThat(attack.causes().get(0).code()).isEqualTo("ATTACK");
-        assertThat(attack.causes().get(0).detail()).contains("설정 · 비밀 파일 탐색(/.env 등) 3건");
+        assertThat(attack.causes().get(0).detail()).contains("설정, 비밀 파일 탐색(/.env 등) 3건");
 
         assertThat(report.summary().issues()).isEqualTo(4);
         assertThat(report.summary().intendedIssues()).isEqualTo(2);
@@ -160,7 +160,7 @@ class IncidentReportServiceTest {
     }
 
     @Test
-    @DisplayName("이벤트 — 장애 주입 · 복구 · 파드 시작 · 종료 · 부하테스트, 부하 생성기 파드는 뺀다, 시간순")
+    @DisplayName("이벤트 — 장애 주입, 복구, 파드 시작, 종료, 부하테스트, 부하 생성기 파드는 뺀다, 시간순")
     void events() {
         List<Event> events = service.report(at("10:50"), at("11:30")).events();
 
@@ -198,7 +198,7 @@ class IncidentReportServiceTest {
     }
 
     @Test
-    @DisplayName("기간 — 시작이 끝보다 늦거나 7일 넘게 · 7일 전보다 이르면 400")
+    @DisplayName("기간 — 시작이 끝보다 늦거나 7일 넘게, 7일 전보다 이르면 400")
     void invalidRange() {
         assertThatThrownBy(() -> service.report(at("11:00"), at("10:00"))).isInstanceOf(SystemException.class)
                 .extracting("errorCode").isEqualTo(SystemErrorCode.SYSTEM_REPORT_INVALID_RANGE);
@@ -220,7 +220,7 @@ class IncidentReportServiceTest {
     }
 
     @Test
-    @DisplayName("구간 크기 · 파드 이름 → 서비스")
+    @DisplayName("구간 크기, 파드 이름 → 서비스")
     void helpers() {
         assertThat(IncidentReportService.bucketFor(Duration.ofHours(1))).isEqualTo(Duration.ofMinutes(1));
         assertThat(IncidentReportService.bucketFor(Duration.ofHours(15))).isEqualTo(Duration.ofMinutes(5));

@@ -10,7 +10,7 @@ import java.time.ZoneId;
 
 /**
  * 공개 스토어 홈 — 구매자 스토어 홈 화면 (docs/api/store.md 14-2절, STR-12). 필드는 추가만 한다.
- * 정지 · 폐점이면 안내 화면용으로 storeId · storeName · status 만 채우고 나머지는 null (판매자 정보를 내보내지 않음)
+ * 정지, 폐점이면 안내 화면용으로 storeId, storeName, status 만 채우고 나머지는 null (판매자 정보를 내보내지 않음)
  */
 public record PublicStoreResponse(
         @Schema(description = "스토어 ID", example = "1")
@@ -74,7 +74,7 @@ public record PublicStoreResponse(
                 store.getDispatchNote());
     }
 
-    /** 정지 · 폐점 — 안내 화면에 쓸 이름과 상태만 */
+    /** 정지, 폐점 — 안내 화면에 쓸 이름과 상태만 */
     public static PublicStoreResponse closed(Store store) {
         return new PublicStoreResponse(store.getId(), store.getStoreName(), store.getStatus(), null, null, null, null, null,
                 null, null, null, null, null, null, null, null, null);

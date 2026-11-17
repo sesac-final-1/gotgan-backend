@@ -43,15 +43,15 @@ public class StoreQueryService {
     }
 
     /**
-     * 공개 스토어 홈 (14-2절, STR-12) — 운영 중이면 홈 전체, 정지 · 폐점이면 안내 화면용 이름 · 상태만(200).
-     * 없거나 소프트 삭제면 STORE_NOT_FOUND. 대표자 · 사업자번호 · 카테고리는 원래 신청서
+     * 공개 스토어 홈 (14-2절, STR-12) — 운영 중이면 홈 전체, 정지, 폐점이면 안내 화면용 이름, 상태만(200).
+     * 없거나 소프트 삭제면 STORE_NOT_FOUND. 대표자, 사업자번호, 카테고리는 원래 신청서
      */
     public PublicStoreResponse getPublic(Long storeId) {
         return toPublic(storeRepository.findByIdAndDeletedAtIsNull(storeId)
                 .orElseThrow(() -> new StoreException(StoreErrorCode.STORE_NOT_FOUND)));
     }
 
-    /** 공개 스토어 홈을 주소 slug 로 (14-3) — 응답 · 정지 · 폐점 처리는 getPublic 과 같다 */
+    /** 공개 스토어 홈을 주소 slug 로 (14-3) — 응답, 정지, 폐점 처리는 getPublic 과 같다 */
     public PublicStoreResponse getPublicBySlug(String slug) {
         return toPublic(storeRepository.findBySlugAndDeletedAtIsNull(slug)
                 .orElseThrow(() -> new StoreException(StoreErrorCode.STORE_NOT_FOUND)));
@@ -65,7 +65,7 @@ public class StoreQueryService {
         return PublicStoreResponse.of(store, application, imageUrls.of(store.getImageKey()));
     }
 
-    /** 판매자 내 스토어 (13절, STR-06) — 상태와 상관없이(정지 · 폐점도 설정은 보임), 대표자 · 사업자번호는 원래 신청서 */
+    /** 판매자 내 스토어 (13절, STR-06) — 상태와 상관없이(정지, 폐점도 설정은 보임), 대표자, 사업자번호는 원래 신청서 */
     public SellerStoreResponse getSellerStore(Long storeId) {
         Store store = storeRepository.findByIdAndDeletedAtIsNull(storeId)
                 .orElseThrow(() -> new StoreException(StoreErrorCode.STORE_NOT_FOUND));
@@ -75,7 +75,7 @@ public class StoreQueryService {
 
     /**
      * 내부 상세 — 상태와 상관없이(CLOSED 포함) 응답, 없거나 소프트 삭제면 STORE_NOT_FOUND.
-     * 대표자 · 상호 · 사업자번호는 원래 신청서에서(store 에 없음, ERD 결정 4-4), 상태 이력은 오래된 순 — 조회 3번(store.md 10/26 설계 정리 8)
+     * 대표자, 상호, 사업자번호는 원래 신청서에서(store 에 없음, ERD 결정 4-4), 상태 이력은 오래된 순 — 조회 3번(store.md 10/26 설계 정리 8)
      */
     public InternalStoreResponse getInternal(Long storeId) {
         Store store = storeRepository.findByIdAndDeletedAtIsNull(storeId)

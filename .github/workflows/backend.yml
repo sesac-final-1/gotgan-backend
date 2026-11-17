@@ -1,9 +1,9 @@
-# 서비스 CI — 바뀐 서비스 감지 → 테스트 · 커버리지 → (main) 이미지 빌드 · ECR push(OIDC) → gotgan-config values.yaml 태그 커밋 — 담당 이경석 (가이드라인 12장)
-# PR 머지 조건 = 필수 체크 ci-ok(빌드 · 테스트 + SonarQube Cloud 품질 게이트) + 다른 팀원 승인 1명 (main 브랜치 Rulesets pull_request_ruleset)
+# 서비스 CI — 바뀐 서비스 감지 → 테스트, 커버리지 → (main) 이미지 빌드, ECR push(OIDC) → gotgan-config values.yaml 태그 커밋 — 담당 이경석 (가이드라인 12장)
+# PR 머지 조건 = 필수 체크 ci-ok(빌드, 테스트 + SonarQube Cloud 품질 게이트) + 다른 팀원 승인 1명 (main 브랜치 Rulesets pull_request_ruleset)
 # SonarQube Cloud 는 CI 분석 — 서비스 9개를 저장소 하나 = 프로젝트 하나(sesac-final-1_gotgan-backend)로 스캔 (설정: 루트 sonar-project.properties)
 #   자동 분석은 Gradle 프로젝트가 루트가 아닌 services/ 아래에 있어 지원되지 않음
-# Secrets: AWS_ROLE_ARN · CONFIG_REPO_TOKEN(gotgan-config 쓰기용 fine-grained PAT) · SONAR_TOKEN
-# Variables: AWS_ACCOUNT_ID · AWS_REGION · DEPLOY_ENABLED ('true' 일 때만 ECR push · 태그 커밋, 그 외 = 건너뜀)
+# Secrets: AWS_ROLE_ARN, CONFIG_REPO_TOKEN(gotgan-config 쓰기용 fine-grained PAT), SONAR_TOKEN
+# Variables: AWS_ACCOUNT_ID, AWS_REGION, DEPLOY_ENABLED ('true' 일 때만 ECR push, 태그 커밋, 그 외 = 건너뜀)
 # 이미지 태그 = 커밋 SHA 7자리 (latest 금지, 컨벤션 5-3). 배포 자체는 ArgoCD 가 gotgan-config 를 감시해서 수행한다
 name: backend
 
@@ -11,7 +11,7 @@ on:
   pull_request:            # paths 필터 없음 — 필수 체크(ci-ok)가 모든 PR 에서 결과를 내야 머지가 막히지 않는다. 서비스 선별은 changes job 이 한다
   push:
     branches: [main]
-    paths: ["services/**", "libs/**", "sonar-project.properties"]   # libs/common-web 만 바뀌어도 의존 서비스 재빌드 · 배포
+    paths: ["services/**", "libs/**", "sonar-project.properties"]   # libs/common-web 만 바뀌어도 의존 서비스 재빌드, 배포
 
 concurrency:
   group: backend-${{ github.ref }}
@@ -41,14 +41,14 @@ jobs:
       admin: ${{ steps.filter.outputs.admin }}
       chat: ${{ steps.filter.outputs.chat }}
       sonar-config: ${{ steps.config.outputs.sonar }}   # sonar-project.properties 만 바뀌어도 Sonar 재분석
-      lib: ${{ steps.config.outputs.lib }}              # libs/** 변경(common-web · common-logging) — 모듈 자체 테스트(lib job)
+      lib: ${{ steps.config.outputs.lib }}              # libs/** 변경(common-web, common-logging) — 모듈 자체 테스트(lib job)
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0                     # 마지막 성공 커밋과 diff · 조상 확인에 전체 이력 필요
+          fetch-depth: 0                     # 마지막 성공 커밋과 diff, 조상 확인에 전체 이력 필요
       # push 비교 기준 = main 에서 마지막으로 성공한 run 의 커밋 (없으면 직전 커밋). 직전 커밋과만 비교하면
-      # 연속 머지로 취소된 run 의 변경을 다음 run 이 보지 못해 그 서비스 이미지가 빠진다 (10/27 #125 · #128 · #132)
-      # 마지막 성공 커밋이 이 커밋의 조상이 아니면 이미 더 새 커밋이 배포된 옛 커밋 run(재실행 등) → 빌드 · 태그 교체 안 함 (태그 되돌림 방지)
+      # 연속 머지로 취소된 run 의 변경을 다음 run 이 보지 못해 그 서비스 이미지가 빠진다 (10/27 #125, #128, #132)
+      # 마지막 성공 커밋이 이 커밋의 조상이 아니면 이미 더 새 커밋이 배포된 옛 커밋 run(재실행 등) → 빌드, 태그 교체 안 함 (태그 되돌림 방지)
       - id: base
         if: github.event_name == 'push'
         env:
@@ -62,10 +62,10 @@ jobs:
           if git merge-base --is-ancestor "$sha" HEAD; then
             echo "sha=$sha" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::마지막 성공 커밋($sha)이 이 커밋의 조상이 아님 — 옛 커밋 run 이라 빌드 · 배포를 건너뜀"
+            echo "::warning::마지막 성공 커밋($sha)이 이 커밋의 조상이 아님 — 옛 커밋 run 이라 빌드, 배포를 건너뜀"
             echo "stale=true" >> "$GITHUB_OUTPUT"
           fi
-      # libs/common-web · common-logging 은 composite build 로 서비스 jar 에 들어가므로, 바뀌면 의존 서비스를 모두 테스트 · 이미지 재빌드 (결정 5번 B-1)
+      # libs/common-web, common-logging 은 composite build 로 서비스 jar 에 들어가므로, 바뀌면 의존 서비스를 모두 테스트, 이미지 재빌드 (결정 5번 B-1)
       # common-web 은 9개(gateway 는 WebFlux 라 Servlet 전용 common-web 을 쓰지 않아 제외), common-logging 은 gateway 포함 10개
       - id: filter
         if: steps.base.outputs.stale != 'true'
@@ -112,7 +112,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v4   # Gradle 캐시 (의존성 · 래퍼)
+      - uses: gradle/actions/setup-gradle@v4   # Gradle 캐시 (의존성, 래퍼)
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}   # 캐시는 main 에서만 갱신
 
@@ -134,7 +134,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       # 빌드 컨텍스트 = 저장소 루트 — Dockerfile 이 libs/common-web 을 함께 복사해야 includeBuild('../../libs/common-web') 가 풀린다
-      - name: 이미지 빌드 · push
+      - name: 이미지 빌드, push
         if: github.event_name == 'push' && vars.DEPLOY_ENABLED == 'true'
         working-directory: .
         env:
@@ -147,7 +147,7 @@ jobs:
           docker push "$REGISTRY/$REPOSITORY:$TAG"
 
   # 3) SonarQube Cloud — 저장소 전체를 한 번에 스캔하고 PR 에서는 품질 게이트 결과를 기다린다 (실패 시 이 job 실패 → ci-ok 실패 → 머지 차단)
-  #    Java 분석에 컴파일 결과가 필요해 10개 서비스를 모두 컴파일. 테스트 · JaCoCo 는 바뀐 서비스만 (품질 게이트는 새 코드 기준이라 충분)
+  #    Java 분석에 컴파일 결과가 필요해 10개 서비스를 모두 컴파일. 테스트, JaCoCo 는 바뀐 서비스만 (품질 게이트는 새 코드 기준이라 충분)
   #    build 와 병렬로 돈다 — 바뀐 서비스가 없으면 build 처럼 건너뜀
   sonar:
     needs: changes
@@ -167,7 +167,7 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
-      - name: 컴파일(전체) · 테스트 + JaCoCo(바뀐 서비스 · libs)
+      - name: 컴파일(전체), 테스트 + JaCoCo(바뀐 서비스, libs)
         env:
           CHANGED: ${{ needs.changes.outputs.services }}   # 예: ["order","payment"]
           LIB_CHANGED: ${{ needs.changes.outputs.lib }}
@@ -188,7 +188,7 @@ jobs:
             echo "::endgroup::"
           done
 
-      - name: SonarQube Cloud 스캔 · 품질 게이트
+      - name: SonarQube Cloud 스캔, 품질 게이트
         uses: SonarSource/sonarqube-scan-action@v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -196,7 +196,7 @@ jobs:
           # 품질 게이트는 PR 에서만 기다린다 — main push 는 다음 PR 의 "새 코드" 기준을 갱신하는 분석만 (첫 main 분석은 게이트가 계산되지 않아 실패로 처리됨)
           args: -Dsonar.qualitygate.wait=${{ github.event_name == 'pull_request' }}
 
-  # 3-1) libs/* 자체 테스트(common-web · common-logging) — 서비스 build 와 병렬. 모듈이 깨졌으면 서비스보다 먼저 원인이 보이도록 따로 둔다
+  # 3-1) libs/* 자체 테스트(common-web, common-logging) — 서비스 build 와 병렬. 모듈이 깨졌으면 서비스보다 먼저 원인이 보이도록 따로 둔다
   lib:
     needs: changes
     if: needs.changes.outputs.lib == 'true'
@@ -222,7 +222,7 @@ jobs:
           done
 
   # 4) PR 머지 판정 — main 브랜치 보호의 필수 체크는 이 job 하나만 건다 (matrix job 이름은 서비스마다 달라 필수로 걸 수 없음)
-  #    빌드 · 테스트 · libs 테스트와 Sonar 품질 게이트가 모두 성공했거나, 바뀐 것이 없어 skipped 면 통과
+  #    빌드, 테스트, libs 테스트와 Sonar 품질 게이트가 모두 성공했거나, 바뀐 것이 없어 skipped 면 통과
   ci-ok:
     needs: [changes, build, sonar, lib]
     if: always()
@@ -265,7 +265,7 @@ jobs:
           sed -i -E "/^  ${SERVICE}-service:/,/^  [a-z][a-z-]*:/ s|^(    tag: )\"[^\"]*\"|\1\"${TAG}\"|" "$FILE"
           grep -A2 "^  ${SERVICE}-service:" "$FILE"
 
-      - name: 커밋 · push
+      - name: 커밋, push
         env:
           SERVICE: ${{ matrix.service }}
         run: |

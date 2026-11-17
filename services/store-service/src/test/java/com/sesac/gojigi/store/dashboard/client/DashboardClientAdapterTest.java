@@ -26,7 +26,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 대시보드 통계 어댑터 — RestClientConfig 와 같은 RestClient.builder() 로 실제 HTTP 응답을 파싱한다.
- * 서비스마다 base URL 이 다른지 · product · settlement 는 store 객체만 꺼내는지 확인. 서킷 · 재시도는 Spring AOP 라 폴백은 직접 부른다.
+ * 서비스마다 base URL 이 다른지, product, settlement 는 store 객체만 꺼내는지 확인. 서킷, 재시도는 Spring AOP 라 폴백은 직접 부른다.
  */
 class DashboardClientAdapterTest {
 
@@ -44,7 +44,7 @@ class DashboardClientAdapterTest {
     }
 
     @Test
-    @DisplayName("order 주문 통계 · 일별 통계 — order 주소로 storeId · days 를 보내고 data 를 그대로 돌려준다")
+    @DisplayName("order 주문 통계, 일별 통계 — order 주소로 storeId, days 를 보내고 data 를 그대로 돌려준다")
     void orderStats_andDaily_returnDataAsIs() {
         // given
         server.expect(requestTo("http://order/internal/stats/orders?storeId=1")).andExpect(method(HttpMethod.GET))
@@ -69,7 +69,7 @@ class DashboardClientAdapterTest {
     }
 
     @Test
-    @DisplayName("product · settlement 통계 — 각 서비스 주소로 부르고 응답의 store 객체만 꺼낸다")
+    @DisplayName("product, settlement 통계 — 각 서비스 주소로 부르고 응답의 store 객체만 꺼낸다")
     void productAndSettlementStats_returnStoreObject() {
         // given
         server.expect(requestTo("http://product/internal/stats/products?storeId=1")).andExpect(method(HttpMethod.GET))
@@ -106,7 +106,7 @@ class DashboardClientAdapterTest {
         List<ThrowingCallable> calls = List.of(() -> adapter.orderStats(1L), () -> adapter.orderDailyStats(1L, 30),
                 () -> adapter.productStats(1L), () -> adapter.settlementStats(1L));
 
-        // when · then
+        // when, then
         for (ThrowingCallable call : calls) {
             assertThatThrownBy(call)
                     .isInstanceOf(BusinessException.class)
@@ -138,14 +138,14 @@ class DashboardClientAdapterTest {
     }
 
     @Test
-    @DisplayName("폴백 — 연결 실패 · 서킷 OPEN 은 502, 이미 변환된 업무 예외는 그대로")
+    @DisplayName("폴백 — 연결 실패, 서킷 OPEN 은 502, 이미 변환된 업무 예외는 그대로")
     void fallbacks_mapFailuresTo502AndKeepBusinessErrors() {
         // given
         CallNotPermittedException open = CallNotPermittedException.createCallNotPermittedException(CircuitBreaker.ofDefaults("settlement"));
         BusinessException business = new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR);
         ResourceAccessException timeout = new ResourceAccessException("timeout");
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> adapter.orderStatsFallback(1L, timeout))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
         assertThatThrownBy(() -> adapter.orderDailyStatsFallback(1L, 30, timeout))

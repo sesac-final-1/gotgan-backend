@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * StoreStatusChanged 반영 (담당 박지연, PRD-12) — 스토어 상태 스냅샷 → 그 스토어 상품의 is_store_active (목록 · 검색 · 구매 가능 판단).
+ * StoreStatusChanged 반영 (담당 박지연, PRD-12) — 스토어 상태 스냅샷 → 그 스토어 상품의 is_store_active (목록, 검색, 구매 가능 판단).
  * SQS 표준 큐는 순서를 보장하지 않으므로 스냅샷보다 오래된 이벤트는 무시한다 (docs/events.md 순서 규칙 A안).
  * 상품이 하나도 없어도 스냅샷은 남겨, 그 뒤 등록하는 상품이 이 상태로 시작한다 (SellerProductService.create).
  */

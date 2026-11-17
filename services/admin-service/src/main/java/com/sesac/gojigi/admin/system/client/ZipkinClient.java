@@ -13,7 +13,7 @@ import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Zipkin API(/api/v2) — 관리자 화면 실시간 호출 목록 · 트레이스(11/16). 샘플링 1.0 이라 요청이 전부 남는다(메모리 저장, 재시작하면 비워짐).
+ * Zipkin API(/api/v2) — 관리자 화면 실시간 호출 목록, 트레이스(11/16). 샘플링 1.0 이라 요청이 전부 남는다(메모리 저장, 재시작하면 비워짐).
  * 보조 정보라 실패해도 오류를 던지지 않고 빈 목록
  */
 @Slf4j

@@ -1,8 +1,8 @@
 spring:
   application:
-    name: chat-service                   # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+    name: chat-service                   # 지표, 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
 
-  # chatdb — 방 · 메시지 · 읽음 위치 (docs/api/chat.md 8절)
+  # chatdb — 방, 메시지, 읽음 위치 (docs/api/chat.md 8절)
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/chatdb?connectionTimeZone=Asia/Seoul
     username: ${DB_USERNAME:chat}             # 클러스터에서는 secrets-sync 가 만든 chat-service-secret → 환경 변수
@@ -15,8 +15,8 @@ spring:
     locations: classpath:db/migration
   data:
     redis:
-      host: ${REDIS_HOST:localhost}         # 파드 간 메시지 중계(chat:room:{id}) · 접속 중 표시(chat:presence:{id}) · 탈퇴 차단 목록(blocked:user:{id})
-      timeout: 500ms                        # 늦으면 기다리지 않음 — 중계 · 표시가 빠져도 메시지는 저장된다
+      host: ${REDIS_HOST:localhost}         # 파드 간 메시지 중계(chat:room:{id}), 접속 중 표시(chat:presence:{id}), 탈퇴 차단 목록(blocked:user:{id})
+      timeout: 500ms                        # 늦으면 기다리지 않음 — 중계, 표시가 빠져도 메시지는 저장된다
 
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
@@ -29,20 +29,20 @@ server:
 app:
   admin-uri: ${ADMIN_SERVICE_URI:http://localhost:8088}   # 알림 센터 POST /internal/notifications
   user-uri: ${USER_SERVICE_URI:http://localhost:8081}     # 상대 이름 GET /internal/users/{id}
-  store-uri: ${STORE_SERVICE_URI:http://localhost:8082}   # 스토어 이름 · 상태 GET /internal/stores/{id} (D-1)
+  store-uri: ${STORE_SERVICE_URI:http://localhost:8082}   # 스토어 이름, 상태 GET /internal/stores/{id} (D-1)
   product-uri: ${PRODUCT_SERVICE_URI:http://localhost:8083}   # 상품 카드 제목 GET /api/products/{id}(공개 상세 — 내부 API 따로 없음, product #147)
   settlement-uri: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}   # 정산 카드 제목 GET /internal/settlements/{id}
   jwt:                                      # STOMP CONNECT 토큰 검증 — 게이트웨이와 같은 값 (ConfigMap KEYCLOAK_*)
     issuer: ${KEYCLOAK_ISSUER:${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan}
     jwk-set-uri: ${KEYCLOAK_URI:http://localhost:8180}/realms/gotgan/protocol/openid-connect/certs
   chat:
-    realtime: ${CHAT_REALTIME:redis}        # redis = 파드 간 중계 · local = 이 파드 연결에만(테스트 · 로컬)
-    ws:                                     # 연결 수명 · 자원 (chat.md 6-1절)
+    realtime: ${CHAT_REALTIME:redis}        # redis = 파드 간 중계, local = 이 파드 연결에만(테스트, 로컬)
+    ws:                                     # 연결 수명, 자원 (chat.md 6-1절)
       allowed-origins: https://gotgan-ashy.vercel.app, https://gotgan-*-jihoon-dev.vercel.app, http://localhost:5173
       max-sessions-per-user: 5              # 넘으면 가장 오래된 연결을 닫는다 — 탭을 많이 열거나 정리 안 된 연결이 쌓이지 않게
     retention:                              # 메시지 90일 보관 삭제 (D-3, chat.md 8-1절)
       days: 90
-      batch-size: 1000                      # 한 번에 지우는 행 — 테이블 잠금 · 커넥션 점유를 짧게
+      batch-size: 1000                      # 한 번에 지우는 행 — 테이블 잠금, 커넥션 점유를 짧게
       max-batches: 50                       # 하루 최대 5만 건, 남으면 다음 날
       pause: 200ms                          # 묶음 사이 쉼
   scheduler:                                # 스케줄 시각은 다른 서비스처럼 app.scheduler.* (컨벤션)
@@ -60,7 +60,7 @@ management:
   endpoint:
     health:
       probes:
-        enabled: true                       # /actuator/health/liveness · readiness
+        enabled: true                       # /actuator/health/liveness, readiness
 
 springdoc:
   swagger-ui:

@@ -17,8 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 상품 상세 공개 리뷰 (REV-04, review.md 9절) — 목록 · 요약. 담당 이경석.
- * 블라인드 · 삭제 리뷰는 없는 것으로. review 는 상품을 모르므로 없는 상품은 빈 목록 · 0 으로 답한다.
+ * 상품 상세 공개 리뷰 (REV-04, review.md 9절) — 목록, 요약. 담당 이경석.
+ * 블라인드, 삭제 리뷰는 없는 것으로. review 는 상품을 모르므로 없는 상품은 빈 목록, 0 으로 답한다.
  */
 @Service
 @RequiredArgsConstructor

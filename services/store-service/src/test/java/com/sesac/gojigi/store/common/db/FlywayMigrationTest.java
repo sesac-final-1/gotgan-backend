@@ -20,8 +20,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 /**
  * storedb 마이그레이션 검증 — 실제 MySQL(Testcontainers)에 Flyway V1 ~ V5 적용 (담당 박지연).
- * V2: 스토어 주소(slug) · 표시 색 · 등급 · 택배사 · 출고 안내 · 월 예상 매출 · 운영 채널, slug · 스토어명 UNIQUE.
- * V3: 컬럼 주석만 — 대표 상품 2~10개 · 휴면(DORMANT) 제거 · CLOSED 추가.
+ * V2: 스토어 주소(slug), 표시 색, 등급, 택배사, 출고 안내, 월 예상 매출, 운영 채널, slug, 스토어명 UNIQUE.
+ * V3: 컬럼 주석만 — 대표 상품 2~10개, 휴면(DORMANT) 제거, CLOSED 추가.
  * V4: 이벤트 아웃박스 outbox_event.
  * V5: 보완요청 서류 store_application.requested_docs (status_reason 뒤).
  * 마이그레이션을 추가하면 컬럼 순서 기대값을 함께 고칠 것.
@@ -43,7 +43,7 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("V5 까지 적용되고 V2 · V5 컬럼이 컨벤션 3-9 순서 자리에 들어간다")
+    @DisplayName("V5 까지 적용되고 V2, V5 컬럼이 컨벤션 3-9 순서 자리에 들어간다")
     void migrate_upToV5_addsColumnsInConventionOrder() {
         assertThat(jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1", Integer.class))
@@ -59,7 +59,7 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("V4 아웃박스는 NEW · 시도 0회로 시작하고 같은 eventId 는 두 번 들어가지 않는다")
+    @DisplayName("V4 아웃박스는 NEW, 시도 0회로 시작하고 같은 eventId 는 두 번 들어가지 않는다")
     void migrate_v4_createsOutboxWithDefaultsAndUniqueEventId() {
         // given
         String insert = "INSERT INTO outbox_event (event_id, event_type, aggregate_id, payload, occurred_at) "
@@ -81,7 +81,7 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("V3 는 주석만 바꾸고 타입 · NULL · 기본값은 V1 그대로 둔다")
+    @DisplayName("V3 는 주석만 바꾸고 타입, NULL, 기본값은 V1 그대로 둔다")
     void migrate_v3_rewritesCommentsOnly() {
         // when
         Map<String, Object> products = column("store_application", "representative_products");
@@ -95,11 +95,11 @@ class FlywayMigrationTest {
                 .containsEntry("COLUMN_DEFAULT", "ACTIVE");
         assertThat((String) status.get("COLUMN_COMMENT")).contains("CLOSED").doesNotContain("DORMANT");
         assertThat(actorType).containsEntry("COLUMN_TYPE", "varchar(10)").containsEntry("IS_NULLABLE", "NO")
-                .containsEntry("COLUMN_COMMENT", "SELLER(폐점) / ADMIN(정지 · 해제)");
+                .containsEntry("COLUMN_COMMENT", "SELLER(폐점) / ADMIN(정지, 해제)");
     }
 
     @Test
-    @DisplayName("스토어 생성 시 표시 색 · 등급은 기본값, 택배사 · 출고 안내는 비어 있다 (승인 직후)")
+    @DisplayName("스토어 생성 시 표시 색, 등급은 기본값, 택배사, 출고 안내는 비어 있다 (승인 직후)")
     void insertStore_withoutDisplayColumns_appliesDefaults() {
         insertStore(applicationId, 1L, "오롯이 리넨", "orot-linen");
 

@@ -35,9 +35,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 인증 API — 게이트웨이에서 공개 경로(/api/auth/**). Access Token 은 body, Refresh Token 은 HttpOnly 쿠키 (컨벤션 4-4).
- * 쿠키 읽기 · 만들기(이름 · 경로 · 속성)는 AuthCookies.
+ * 쿠키 읽기, 만들기(이름, 경로, 속성)는 AuthCookies.
  */
-@Tag(name = "인증", description = "회원가입 · 로그인 · 토큰 재발급 · 로그아웃 — 인가: 공개 (Keycloak 대리 호출)")
+@Tag(name = "인증", description = "회원가입, 로그인, 토큰 재발급, 로그아웃 — 인가: 공개 (Keycloak 대리 호출)")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -49,15 +49,15 @@ public class AuthController {
 
     @Operation(summary = "로그인", description = """
             인가: 공개. Access Token 은 body(data.accessToken), Refresh Token 은 Set-Cookie refresh_token
-            (HttpOnly · Secure · SameSite=Strict · Path=/api/auth — 프론트 JS 로 읽을 수 없음).
-            에러: 400 INVALID_INPUT · 401 AUTH_INVALID_CREDENTIALS(비밀번호 불일치 · 없는 계정 · 임시 잠금)
-            · 401 AUTH_ACCOUNT_NOT_LINKED · 403 AUTH_ACCOUNT_DISABLED · 502 EXTERNAL_API_ERROR(인증 서버 장애)""")
+            (HttpOnly, Secure, SameSite=Strict, Path=/api/auth — 프론트 JS 로 읽을 수 없음).
+            에러: 400 INVALID_INPUT, 401 AUTH_INVALID_CREDENTIALS(비밀번호 불일치, 없는 계정, 임시 잠금)
+            - 401 AUTH_ACCOUNT_NOT_LINKED, 403 AUTH_ACCOUNT_DISABLED, 502 EXTERNAL_API_ERROR(인증 서버 장애)""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공 — Set-Cookie 로 Refresh Token"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT — 이메일 형식 · 빈 값"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "AUTH_INVALID_CREDENTIALS · AUTH_ACCOUNT_NOT_LINKED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT — 이메일 형식, 빈 값"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "AUTH_INVALID_CREDENTIALS, AUTH_ACCOUNT_NOT_LINKED"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "AUTH_ACCOUNT_DISABLED — 이용 정지"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR — Keycloak 연결 실패 · 서킷 OPEN")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR — Keycloak 연결 실패, 서킷 OPEN")
     })
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
@@ -81,13 +81,13 @@ public class AuthController {
     @Operation(summary = "회원가입", description = """
             인가: 공개. 가입 후 자동 로그인 — data.login 은 로그인 응답과 같고 Refresh Token 은 Set-Cookie refresh_token.
             data.login 이 null 이면 가입은 됐지만 자동 로그인 실패 → 로그인 화면으로 (쿠키 없음).
-            에러: 400 INVALID_INPUT(형식) · 400 AUTH_PASSWORD_POLICY_VIOLATION · 409 AUTH_EMAIL_DUPLICATE
-            · 502 EXTERNAL_API_ERROR(인증 서버 장애 — 가입 안 됨) · 503 AUTH_SIGNUP_BUSY(동시 가입 상한 초과 — 가입 안 됨, 다시 시도)""")
+            에러: 400 INVALID_INPUT(형식), 400 AUTH_PASSWORD_POLICY_VIOLATION, 409 AUTH_EMAIL_DUPLICATE
+            - 502 EXTERNAL_API_ERROR(인증 서버 장애 — 가입 안 됨), 503 AUTH_SIGNUP_BUSY(동시 가입 상한 초과 — 가입 안 됨, 다시 시도)""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "가입 완료 — 자동 로그인 성공 시 Set-Cookie 로 Refresh Token"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT · AUTH_PASSWORD_POLICY_VIOLATION"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT, AUTH_PASSWORD_POLICY_VIOLATION"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "AUTH_EMAIL_DUPLICATE — 이미 가입된 이메일"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR — Keycloak 연결 실패 · 서킷 OPEN"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR — Keycloak 연결 실패, 서킷 OPEN"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "AUTH_SIGNUP_BUSY — 동시 가입 상한 초과")
     })
     @PostMapping("/signup")
@@ -117,12 +117,12 @@ public class AuthController {
     @Operation(summary = "토큰 재발급", description = """
             인가: 공개(Refresh 쿠키로 처리 — Authorization 헤더 불필요). 응답은 로그인과 같고 Refresh 쿠키도 새 값으로 바뀐다.
             Access Token 이 만료되면(401) 이 API 로 받고, 소셜 로그인 직후 결과 페이지에서도 이 API 로 Access Token 을 받는다.
-            에러: 401 AUTH_SESSION_EXPIRED(쿠키 없음 · 만료 · 로그아웃) · 401 AUTH_ACCOUNT_NOT_LINKED · 403 AUTH_ACCOUNT_DISABLED · 502 EXTERNAL_API_ERROR""")
+            에러: 401 AUTH_SESSION_EXPIRED(쿠키 없음, 만료, 로그아웃), 401 AUTH_ACCOUNT_NOT_LINKED, 403 AUTH_ACCOUNT_DISABLED, 502 EXTERNAL_API_ERROR""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "재발급 — Set-Cookie 로 새 Refresh Token"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "AUTH_SESSION_EXPIRED · AUTH_ACCOUNT_NOT_LINKED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "AUTH_SESSION_EXPIRED, AUTH_ACCOUNT_NOT_LINKED"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "AUTH_ACCOUNT_DISABLED — 이용 정지"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR — Keycloak 연결 실패 · 서킷 OPEN")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR — Keycloak 연결 실패, 서킷 OPEN")
     })
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(HttpServletRequest request) {
@@ -133,8 +133,8 @@ public class AuthController {
     }
 
     @Operation(summary = "소셜 로그인 시작", description = """
-            인가: 공개. 브라우저로 이동(링크 · location.href)해서 쓴다 — fetch 아님. provider: google · kakao · naver.
-            Keycloak 로그인 주소로 302, state · PKCE 는 10분짜리 HttpOnly 쿠키(Path=/api/auth/social, SameSite=Lax).
+            인가: 공개. 브라우저로 이동(링크, location.href)해서 쓴다 — fetch 아님. provider: google, kakao, naver.
+            Keycloak 로그인 주소로 302, state, PKCE 는 10분짜리 HttpOnly 쿠키(Path=/api/auth/social, SameSite=Lax).
             끝나면 결과 페이지(app.auth.social.result-url)로 돌아온다 — 성공이면 POST /api/auth/refresh 로 Access Token 을 받는다.
             에러: 400 AUTH_SOCIAL_PROVIDER_UNSUPPORTED""")
     @GetMapping("/social/{provider}")
@@ -149,7 +149,7 @@ public class AuthController {
     @Operation(summary = "소셜 로그인 콜백", description = """
             Keycloak 이 code 를 붙여 돌려보내는 주소 — 프론트가 직접 부르지 않는다.
             성공: Refresh 쿠키를 내리고 결과 페이지로 302. 실패: 결과 페이지?error={코드} 로 302
-            (AUTH_SOCIAL_LOGIN_FAILED · AUTH_EMAIL_DUPLICATE(탈퇴한 이메일) · AUTH_ACCOUNT_DISABLED · EXTERNAL_API_ERROR)""")
+            (AUTH_SOCIAL_LOGIN_FAILED, AUTH_EMAIL_DUPLICATE(탈퇴한 이메일), AUTH_ACCOUNT_DISABLED, EXTERNAL_API_ERROR)""")
     @GetMapping("/social/callback")
     public ResponseEntity<Void> completeSocialLogin(HttpServletRequest request,
             @RequestParam(required = false) String code,

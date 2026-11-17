@@ -46,7 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.sesac.gojigi.order.cart.dto.request.CartItemUpdateRequest;
 import com.sesac.gojigi.order.cart.repository.CartRedisRepository.CachedLine;
 
-/** 장바구니 담기 · 삭제 · 결제 확정 시 비우기 + 커밋 후 Redis 갱신 — MySQL 8.4 + Flyway (Redis · product 는 목) */
+/** 장바구니 담기, 삭제, 결제 확정 시 비우기 + 커밋 후 Redis 갱신 — MySQL 8.4 + Flyway (Redis, product 는 목) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, CartService.class, OrderTxService.class,
@@ -73,7 +73,7 @@ class CartServiceIntegrationTest {
     @MockitoBean private CartRedisRepository cartRedisRepository;
 
     @Test
-    @DisplayName("담기 — 새 옵션은 product 의 productId 로 저장, 담긴 옵션 · 요청 안 같은 옵션은 수량을 더하고 커밋 뒤 Redis 를 전체로 갱신")
+    @DisplayName("담기 — 새 옵션은 product 의 productId 로 저장, 담긴 옵션, 요청 안 같은 옵션은 수량을 더하고 커밋 뒤 Redis 를 전체로 갱신")
     void add_insertsAndAccumulates() {
         // given
         long buyer = BUYERS.incrementAndGet();
@@ -95,13 +95,13 @@ class CartServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("담기 — 없는 옵션 · 구매 불가가 하나라도 있으면 전부 거절, 저장 · Redis 갱신 없음")
+    @DisplayName("담기 — 없는 옵션, 구매 불가가 하나라도 있으면 전부 거절, 저장, Redis 갱신 없음")
     void add_rejectsNotPurchasable() {
         // given
         long buyer = BUYERS.incrementAndGet();
         givenOptions(option(11L, 101L, true), option(13L, 103L, false));   // 12 는 응답에서 빠짐
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> cartService.add(buyer, null, request(item(11L, 1), item(12L, 1))))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -121,7 +121,7 @@ class CartServiceIntegrationTest {
         givenOptions(option(11L, 101L, true), option(12L, 102L, true));
         cartService.add(buyer, null, request(item(12L, 990)));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> cartService.add(buyer, null, request(item(11L, 1), item(12L, 10))))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(CartErrorCode.CART_QUANTITY_EXCEEDED);
@@ -131,7 +131,7 @@ class CartServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("삭제 — 단건 · 선택한 옵션만 지우고 없는 옵션은 건너뛰며, 다 지우면 Redis 도 빈 장바구니로")
+    @DisplayName("삭제 — 단건, 선택한 옵션만 지우고 없는 옵션은 건너뛰며, 다 지우면 Redis 도 빈 장바구니로")
     void remove_selected() {
         // given
         long buyer = BUYERS.incrementAndGet();
@@ -190,7 +190,7 @@ class CartServiceIntegrationTest {
         long buyer = BUYERS.incrementAndGet();
         givenOptions(option(11L, 101L, true));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> cartService.add(buyer, 1L, request(item(11L, 1))))
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(CartErrorCode.CART_OWN_STORE_PRODUCT);
@@ -217,7 +217,7 @@ class CartServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("수량 · 선택 변경 — 보낸 것만 바꾸고 커밋 뒤 캐시 갱신, 선택 한꺼번에(전체 · 고른 것), 없는 옵션은 404")
+    @DisplayName("수량, 선택 변경 — 보낸 것만 바꾸고 커밋 뒤 캐시 갱신, 선택 한꺼번에(전체, 고른 것), 없는 옵션은 404")
     void updateAndCheck() {
         // given
         long buyer = BUYERS.incrementAndGet();

@@ -46,9 +46,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 재고 예약 (POST /internal/stock/reservations, product.md 1절) · 해제 (POST …/{sagaId}/release, 2절)
- * · 복원 (POST /internal/stock/restorations, 3절) — 실제 MySQL(InnoDB 잠금) · Flyway.
- * 상품은 저장소로 직접 만들고, 재고 · 원장은 JdbcTemplate 으로 읽어 엔티티 캐시와 상관없이 DB 값을 본다.
+ * 재고 예약 (POST /internal/stock/reservations, product.md 1절), 해제 (POST …/{sagaId}/release, 2절)
+ * - 복원 (POST /internal/stock/restorations, 3절) — 실제 MySQL(InnoDB 잠금), Flyway.
+ * 상품은 저장소로 직접 만들고, 재고, 원장은 JdbcTemplate 으로 읽어 엔티티 캐시와 상관없이 DB 값을 본다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게.
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -76,7 +76,7 @@ class InternalStockReservationApiIntegrationTest {
         shirt = categoryRepository.save(Category.child(top.getId(), "셔츠", null, 1));
     }
 
-    /** 끝나고도 지운다 — 같은 DB 를 쓰는 다른 테스트가 카테고리를 지울 때 FK 에 걸리지 않게 (원장 → 이미지 · 옵션 → 상품 → 카테고리) */
+    /** 끝나고도 지운다 — 같은 DB 를 쓰는 다른 테스트가 카테고리를 지울 때 FK 에 걸리지 않게 (원장 → 이미지, 옵션 → 상품 → 카테고리) */
     @AfterEach
     void clean() {
         jdbc.update("DELETE FROM stock_history");
@@ -145,7 +145,7 @@ class InternalStockReservationApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("예약 성공 · 멱등")
+    @DisplayName("예약 성공, 멱등")
     class Reserve {
 
         @Test
@@ -175,7 +175,7 @@ class InternalStockReservationApiIntegrationTest {
             long id = options(ProductStatus.ON_SALE, 10).getFirst();
             reserve(body("saga-1", id, 3)).andExpect(status().isOk());
 
-            // when · then
+            // when, then
             reserve(body("saga-1", id, 3))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.items[0].quantity").value(3));
@@ -194,7 +194,7 @@ class InternalStockReservationApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("거절 — 전체 롤백 (재고 · 원장 그대로)")
+    @DisplayName("거절 — 전체 롤백 (재고, 원장 그대로)")
     class Reject {
 
         @Test
@@ -203,7 +203,7 @@ class InternalStockReservationApiIntegrationTest {
             // given
             List<Long> ids = options(ProductStatus.ON_SALE, 10, 1);
 
-            // when · then
+            // when, then
             reserve(body("saga-1", ids.get(0), 2, ids.get(1), 2))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("STOCK_INSUFFICIENT"));
@@ -219,7 +219,7 @@ class InternalStockReservationApiIntegrationTest {
             long id = options(ProductStatus.ON_SALE, 10).getFirst();
             jdbc.update("INSERT INTO stock_history (product_option_id, type, ref_key, quantity) VALUES (?, 'RELEASE', 'saga-1', 0)", id);
 
-            // when · then
+            // when, then
             reserve(body("saga-1", id, 2))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("STOCK_RESERVATION_RELEASED"));
@@ -228,7 +228,7 @@ class InternalStockReservationApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("판매중지 · 강제 판매중지 · 카테고리 꺼짐 · 옵션 삭제 — 409 PRODUCT_NOT_PURCHASABLE")
+        @DisplayName("판매중지, 강제 판매중지, 카테고리 꺼짐, 옵션 삭제 — 409 PRODUCT_NOT_PURCHASABLE")
         void reserve_notPurchasable_rejected() throws Exception {
             // given
             long ok = options(ProductStatus.ON_SALE, 10).getFirst();
@@ -238,7 +238,7 @@ class InternalStockReservationApiIntegrationTest {
             long blocked = options(ProductStatus.ON_SALE, 10).getFirst();
             jdbc.update("UPDATE product p JOIN product_option o USING (product_id) SET p.status = 'BLOCKED' WHERE o.product_option_id = ?", blocked);
 
-            // when · then — 하나만 섞여도 전체 거절
+            // when, then — 하나만 섞여도 전체 거절
             for (long bad : List.of(stopped, deleted, blocked)) {
                 reserve(body("saga-" + bad, ok, 1, bad, 1))
                         .andExpect(status().isConflict())
@@ -263,7 +263,7 @@ class InternalStockReservationApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("items 비었음 · 수량 0 · 같은 옵션 중복 · sagaId 없음 — 400 INVALID_INPUT")
+        @DisplayName("items 비었음, 수량 0, 같은 옵션 중복, sagaId 없음 — 400 INVALID_INPUT")
         void reserve_invalidInput_badRequest() throws Exception {
             long id = options(ProductStatus.ON_SALE, 10).getFirst();
             for (String json : List.of(
@@ -323,7 +323,7 @@ class InternalStockReservationApiIntegrationTest {
             long id = options(ProductStatus.ON_SALE, 2).getFirst();
             reserve(body("saga-1", id, 2)).andExpect(status().isOk());
 
-            // when · then
+            // when, then
             reserve(body("saga-1", id, 2))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.items[0].quantity").value(2));
@@ -338,7 +338,7 @@ class InternalStockReservationApiIntegrationTest {
             long id = options(ProductStatus.ON_SALE, 0).getFirst();
             jdbc.update("INSERT INTO stock_history (product_option_id, type, ref_key, quantity) VALUES (?, 'RELEASE', 'saga-1', 0)", id);
 
-            // when · then
+            // when, then
             reserve(body("saga-1", id, 1))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("STOCK_RESERVATION_RELEASED"));
@@ -350,7 +350,7 @@ class InternalStockReservationApiIntegrationTest {
             // given
             long id = options(ProductStatus.STOPPED, 0).getFirst();
 
-            // when · then
+            // when, then
             reserve(body("saga-1", id, 1))
                     .andExpect(status().isConflict())
                     .andExpect(jsonPath("$.code").value("PRODUCT_NOT_PURCHASABLE"));
@@ -573,7 +573,7 @@ class InternalStockReservationApiIntegrationTest {
             reserve(body("saga-1", id, 3)).andExpect(status().isOk());
             release("saga-1", items(id, 3)).andExpect(status().isOk());
 
-            // when · then
+            // when, then
             release("saga-1", items(id, 3))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.items[0].quantity").value(3));
@@ -604,7 +604,7 @@ class InternalStockReservationApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("예약 뒤 상품 판매중지 · 옵션 삭제돼도 해제는 재고를 돌려놓는다")
+        @DisplayName("예약 뒤 상품 판매중지, 옵션 삭제돼도 해제는 재고를 돌려놓는다")
         void release_afterStoppedOrDeleted_stillRestores() throws Exception {
             // given
             List<Long> ids = options(ProductStatus.ON_SALE, 10, 10);
@@ -612,7 +612,7 @@ class InternalStockReservationApiIntegrationTest {
             jdbc.update("UPDATE product p JOIN product_option o USING (product_id) SET p.status = 'STOPPED' WHERE o.product_option_id = ?", ids.get(0));
             jdbc.update("UPDATE product_option SET deleted_at = NOW(6) WHERE product_option_id = ?", ids.get(1));
 
-            // when · then
+            // when, then
             release("saga-1", items(ids.get(0), 4, ids.get(1), 4)).andExpect(status().isOk());
             assertThat(stock(ids.get(0))).isEqualTo(10);
             assertThat(stock(ids.get(1))).isEqualTo(10);
@@ -627,7 +627,7 @@ class InternalStockReservationApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("items 비었음 · 수량 0 · 같은 옵션 중복 · sagaId 65자 — 400 INVALID_INPUT")
+        @DisplayName("items 비었음, 수량 0, 같은 옵션 중복, sagaId 65자 — 400 INVALID_INPUT")
         void release_invalidInput_badRequest() throws Exception {
             long id = options(ProductStatus.ON_SALE, 10).getFirst();
             release("saga-1", "[]").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
@@ -666,7 +666,7 @@ class InternalStockReservationApiIntegrationTest {
             long id = options(ProductStatus.ON_SALE, 10).getFirst();
             restore(restoreBody(789, id, 2)).andExpect(status().isOk());
 
-            // when · then
+            // when, then
             restore(restoreBody(789, id, 2)).andExpect(status().isOk());
             assertThat(stock(id)).isEqualTo(12);
             assertThat(historyCount("RESTORE", "claim-789")).isEqualTo(1);
@@ -682,7 +682,7 @@ class InternalStockReservationApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("상품 판매중지 · 강제 판매중지 · 옵션 삭제돼도 복원한다")
+        @DisplayName("상품 판매중지, 강제 판매중지, 옵션 삭제돼도 복원한다")
         void restore_stoppedBlockedOrDeleted_stillRestores() throws Exception {
             // given
             long stopped = options(ProductStatus.STOPPED, 0).getFirst();
@@ -691,7 +691,7 @@ class InternalStockReservationApiIntegrationTest {
             long deleted = options(ProductStatus.ON_SALE, 0).getFirst();
             jdbc.update("UPDATE product_option SET deleted_at = NOW(6) WHERE product_option_id = ?", deleted);
 
-            // when · then
+            // when, then
             restore(restoreBody(1, stopped, 1)).andExpect(status().isOk());
             restore(restoreBody(2, blocked, 1)).andExpect(status().isOk());
             restore(restoreBody(3, deleted, 1)).andExpect(status().isOk());
@@ -710,7 +710,7 @@ class InternalStockReservationApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("수량 0 · claimId 없음 · 옵션 ID 없음 — 400 INVALID_INPUT")
+        @DisplayName("수량 0, claimId 없음, 옵션 ID 없음 — 400 INVALID_INPUT")
         void restore_invalidInput_badRequest() throws Exception {
             long id = options(ProductStatus.ON_SALE, 10).getFirst();
             restore(restoreBody(789, id, 0)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));

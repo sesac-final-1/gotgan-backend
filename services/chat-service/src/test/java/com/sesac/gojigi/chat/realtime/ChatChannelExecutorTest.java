@@ -14,7 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 메시지 채널과 알림 전송은 스레드를 나눠 쓴다. Boot 는 AsyncTaskExecutor 빈이 하나뿐이면 그것을 WebSocket 채널에도 씌워서,
- * 알림용 2스레드에서 메시지 저장 · 전달까지 돌며 왕복이 밀렸다(11/5 k6 S5 스레드 덤프).
+ * 알림용 2스레드에서 메시지 저장, 전달까지 돌며 왕복이 밀렸다(11/5 k6 S5 스레드 덤프).
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
 @Import(TestcontainersConfiguration.class)
@@ -26,7 +26,7 @@ class ChatChannelExecutorTest {
     @Autowired @Qualifier("chatNotifyExecutor") ThreadPoolTaskExecutor notify;
 
     @Test
-    @DisplayName("입력 · 출력 채널은 알림 스레드 풀과 다른 풀이고, 설정한 스레드 수(4)를 쓴다")
+    @DisplayName("입력, 출력 채널은 알림 스레드 풀과 다른 풀이고, 설정한 스레드 수(4)를 쓴다")
     void channelsDoNotShareNotifyExecutor() {
         assertThat(inbound).isNotSameAs(notify);
         assertThat(outbound).isNotSameAs(notify);

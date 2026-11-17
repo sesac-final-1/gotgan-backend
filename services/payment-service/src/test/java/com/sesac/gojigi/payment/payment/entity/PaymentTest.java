@@ -53,7 +53,7 @@ class PaymentTest {
     }
 
     @Test
-    @DisplayName("부분 취소가 누적되어 결제 금액과 같아지면 CANCELLED · 취소 시각 기록")
+    @DisplayName("부분 취소가 누적되어 결제 금액과 같아지면 CANCELLED, 취소 시각 기록")
     void applyCancel_accumulatesUntilCancelled() {
         Payment payment = paid(64_400L);
 
@@ -68,7 +68,7 @@ class PaymentTest {
     }
 
     @Test
-    @DisplayName("남은 금액보다 큰 취소 · 결제 전 취소는 거절한다")
+    @DisplayName("남은 금액보다 큰 취소, 결제 전 취소는 거절한다")
     void applyCancel_rejectsExceededAmountAndUnpaidPayment() {
         Payment payment = paid(10_000L);
         assertThatThrownBy(() -> payment.applyCancel(10_001L, NOW))

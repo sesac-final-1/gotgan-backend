@@ -53,13 +53,13 @@ class InternalStoreControllerTest {
     }
 
     @Test
-    @DisplayName("스토어 상세 조회 — 200, 봉투 data 에 storeId · userId · storeName · status · 배송 정책")
+    @DisplayName("스토어 상세 조회 — 200, 봉투 data 에 storeId, userId, storeName, status, 배송 정책")
     void get_whenStoreExists_returns200() throws Exception {
         // given
         given(storeQueryService.getInternal(1L)).willReturn(
                 basic(1L, 2L, "곳간상회", StoreStatus.ACTIVE, 3000L, 30000L, "우체국택배"));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/stores/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.storeId").value(1))
@@ -72,13 +72,13 @@ class InternalStoreControllerTest {
     }
 
     @Test
-    @DisplayName("무료배송 기준 · 택배사가 없으면 키는 남고 값이 null — 호출자가 null 을 \"무료배송 없음\"으로 읽는다")
+    @DisplayName("무료배송 기준, 택배사가 없으면 키는 남고 값이 null — 호출자가 null 을 \"무료배송 없음\"으로 읽는다")
     void get_whenNoFreeShippingAndCourier_returnsNullFields() throws Exception {
         // given
         given(storeQueryService.getInternal(3L)).willReturn(
                 basic(3L, 6L, "새 스토어", StoreStatus.ACTIVE, 3000L, null, null));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/stores/3"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.shippingFee").value(3000))
@@ -92,7 +92,7 @@ class InternalStoreControllerTest {
         // given
         given(storeQueryService.getInternal(99L)).willThrow(new StoreException(StoreErrorCode.STORE_NOT_FOUND));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/stores/99"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"))
@@ -115,7 +115,7 @@ class InternalStoreControllerTest {
                 15L, "볕드는집", "sunny-house", 205L, "윤하늘", "000-00-00005", StoreGrade.SPROUT, StoreStatus.SUSPENDED,
                 "허위 원산지 표기 신고 확인", OffsetDateTime.parse("2025-12-31T10:00:00+09:00"))));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/stores").param("status", "SUSPENDED"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("스토어 목록을 조회했습니다."))
@@ -133,7 +133,7 @@ class InternalStoreControllerTest {
         // given
         given(storeQueryService.getAdminList(null)).willReturn(List.of());
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/stores"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
@@ -151,13 +151,13 @@ class InternalStoreControllerTest {
     }
 
     @Test
-    @DisplayName("정지 — 200 스토어 상세(1절), 상태 · 사유를 서비스에 넘긴다")
+    @DisplayName("정지 — 200 스토어 상세(1절), 상태, 사유를 서비스에 넘긴다")
     void changeStatus_whenSuspend_returns200Detail() throws Exception {
         // given
         given(storeStatusService.changeByAdmin(1L, StoreStatus.SUSPENDED, "허위 광고 신고 3건 확인"))
                 .willReturn(basic(1L, 2L, "곳간상회", StoreStatus.SUSPENDED, 3000L, null, null));
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/stores/1/status").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SUSPENDED\",\"reason\":\"허위 광고 신고 3건 확인\"}"))
                 .andExpect(status().isOk())
@@ -173,7 +173,7 @@ class InternalStoreControllerTest {
             "{\"status\":\"SUSPENDED\"}",
             "{\"status\":\"SUSPENDED\",\"reason\":\" \"}"
     })
-    @DisplayName("정지 · 해제 형식 오류(상태 없음 · 모르는 값, 사유 없음 · 공백) — 400 INVALID_INPUT 이고 서비스를 부르지 않는다")
+    @DisplayName("정지, 해제 형식 오류(상태 없음, 모르는 값, 사유 없음, 공백) — 400 INVALID_INPUT 이고 서비스를 부르지 않는다")
     void changeStatus_whenInvalidBody_returns400(String body) throws Exception {
         mockMvc.perform(patch("/internal/stores/1/status").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -183,7 +183,7 @@ class InternalStoreControllerTest {
     }
 
     @Test
-    @DisplayName("정지 · 해제 사유 256자 — 400 INVALID_INPUT")
+    @DisplayName("정지, 해제 사유 256자 — 400 INVALID_INPUT")
     void changeStatus_whenReasonTooLong_returns400() throws Exception {
         mockMvc.perform(patch("/internal/stores/1/status").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"SUSPENDED\",\"reason\":\"" + "가".repeat(256) + "\"}"))
@@ -201,7 +201,7 @@ class InternalStoreControllerTest {
                 .willThrow(new StoreException(StoreErrorCode.STORE_NOT_FOUND));
         String body = "{\"status\":\"ACTIVE\",\"reason\":\"사유\"}";
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/stores/2/status").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("STORE_INVALID_STATUS_TRANSITION"));
@@ -211,7 +211,7 @@ class InternalStoreControllerTest {
     }
 
     @Test
-    @DisplayName("스토어 상세 1절 확장 — 기존 7필드 뒤에 관리자용 필드 · 상태 이력(오래된 순)이 붙는다")
+    @DisplayName("스토어 상세 1절 확장 — 기존 7필드 뒤에 관리자용 필드, 상태 이력(오래된 순)이 붙는다")
     void get_withAdminFields_returnsExtendedFields() throws Exception {
         // given
         OffsetDateTime opened = OffsetDateTime.parse("2025-12-31T10:00:00+09:00");
@@ -222,7 +222,7 @@ class InternalStoreControllerTest {
                         new InternalStoreResponse.History(null, StoreStatus.ACTIVE, StoreActorType.ADMIN, null, opened),
                         new InternalStoreResponse.History(StoreStatus.ACTIVE, StoreStatus.SUSPENDED, StoreActorType.ADMIN, "반품 미처리 3건", suspended))));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/stores/15"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUSPENDED"))
@@ -244,7 +244,7 @@ class InternalStoreControllerTest {
                 .andExpect(jsonPath("$.data.statusHistory[1].changedAt").value("2026-09-27T10:00:00+09:00"));
     }
 
-    /** 기존 호출자(user · order · chat)가 읽는 7필드만 채운 응답 — 확장 필드는 이 테스트들의 관심 밖 */
+    /** 기존 호출자(user, order, chat)가 읽는 7필드만 채운 응답 — 확장 필드는 이 테스트들의 관심 밖 */
     private static InternalStoreResponse basic(Long storeId, Long userId, String storeName, StoreStatus status, Long shippingFee,
             Long freeShippingThreshold, String courier) {
         return new InternalStoreResponse(storeId, userId, storeName, status, shippingFee, freeShippingThreshold, courier,

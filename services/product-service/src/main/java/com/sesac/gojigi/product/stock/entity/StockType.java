@@ -6,6 +6,6 @@ public enum StockType {
     RESERVE,
     /** 예약 해제 (ref_key = sagaId) — 예약이 없을 때는 수량 0 표식 */
     RELEASE,
-    /** 취소 · 반품 복원 (ref_key = claim-{claimId}) */
+    /** 취소, 반품 복원 (ref_key = claim-{claimId}) */
     RESTORE
 }

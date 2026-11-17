@@ -17,8 +17,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * productdb 마이그레이션 검증 — 실제 MySQL(Testcontainers)에 Flyway V1 · V2 · V3 적용 (담당 박지연).
- * V2: 카테고리 영문명(선택) · 상품정보 제공고시 소재 · 원산지(필수). V3: 스토어 상태 스냅샷 store_status.
+ * productdb 마이그레이션 검증 — 실제 MySQL(Testcontainers)에 Flyway V1, V2, V3 적용 (담당 박지연).
+ * V2: 카테고리 영문명(선택), 상품정보 제공고시 소재, 원산지(필수). V3: 스토어 상태 스냅샷 store_status.
  * 마이그레이션을 추가하면 컬럼 순서 기대값을 함께 고칠 것.
  */
 @JdbcTest
@@ -51,7 +51,7 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("소재 · 원산지 없이는 상품을 저장할 수 없다 (상품정보 제공고시 필수)")
+    @DisplayName("소재, 원산지 없이는 상품을 저장할 수 없다 (상품정보 제공고시 필수)")
     void insertProduct_withoutMaterialOrOrigin_isRejected() {
         jdbc.update("INSERT INTO category (name) VALUES ('패션의류')");
         long categoryId = jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
@@ -76,7 +76,7 @@ class FlywayMigrationTest {
     }
 
     @Test
-    @DisplayName("V3 store_status — 스토어 ID 가 PK(스토어당 1행), 상태 · 변경 시각은 필수")
+    @DisplayName("V3 store_status — 스토어 ID 가 PK(스토어당 1행), 상태, 변경 시각은 필수")
     void migrate_v3_createsStoreStatus() {
         assertThat(columns("store_status")).containsExactly("store_id", "status", "status_changed_at", "created_at", "updated_at");
         jdbc.update("INSERT INTO store_status (store_id, status, status_changed_at) VALUES (1, 'SUSPENDED', NOW(6))");

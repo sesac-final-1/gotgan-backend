@@ -52,7 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 주문 이벤트 발행 — OrderPaid(결제 확정) · OrderItemCancelled(취소 완료)를 업무 트랜잭션 안에서 아웃박스에, 커밋 후 SNS (MySQL 8.4) */
+/** 주문 이벤트 발행 — OrderPaid(결제 확정), OrderItemCancelled(취소 완료)를 업무 트랜잭션 안에서 아웃박스에, 커밋 후 SNS (MySQL 8.4) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderEventRecorder.class, CancelItemTxService.class,
@@ -86,7 +86,7 @@ class OrderEventOutboxIntegrationTest {
     @Autowired private JsonMapper jsonMapper;
     @MockitoBean private SnsEventPublisher sns;
 
-    /** 결제 완료 주문 — 스토어 1301: 사과 20,000(특) + 배 10,000(옵션 없음) · 포인트 3,000 사용 */
+    /** 결제 완료 주문 — 스토어 1301: 사과 20,000(특) + 배 10,000(옵션 없음), 포인트 3,000 사용 */
     private Order paidOrder(long buyer) {
         OrderCreateRequest request = new OrderCreateRequest(List.of(new OrderCreateRequest.Item(131L, 1)), "김수령",
                 "010-1234-5678", "06236", "서울 강남구 테헤란로 1", null, null, 3_000L);
@@ -115,9 +115,9 @@ class OrderEventOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("결제 확정 — OrderPaid(주문 단위, 주문자 · 사용 포인트 · 상품주문별 적립 포인트 · 금액)를 같은 트랜잭션에, 커밋 후 SNS")
+    @DisplayName("결제 확정 — OrderPaid(주문 단위, 주문자, 사용 포인트, 상품주문별 적립 포인트, 금액)를 같은 트랜잭션에, 커밋 후 SNS")
     void orderPaid() {
-        // given · when
+        // given, when
         long buyer = BUYERS.getAndIncrement();
         Order order = paidOrder(buyer);
 
@@ -144,7 +144,7 @@ class OrderEventOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("취소 완료 — OrderItemCancelled(상품주문 단위, 환불액 · 돌려준 사용 포인트 · 회수한 적립 포인트), Saga 진행 중에는 없다")
+    @DisplayName("취소 완료 — OrderItemCancelled(상품주문 단위, 환불액, 돌려준 사용 포인트, 회수한 적립 포인트), Saga 진행 중에는 없다")
     void orderItemCancelled() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -173,7 +173,7 @@ class OrderEventOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("반품 · 교환 신청 — OrderClaimRequested(상품주문 단위, 스토어 · 유형 · 사유)를 같은 트랜잭션에, 철회는 발행하지 않는다")
+    @DisplayName("반품, 교환 신청 — OrderClaimRequested(상품주문 단위, 스토어, 유형, 사유)를 같은 트랜잭션에, 철회는 발행하지 않는다")
     void orderClaimRequested() {
         // given — 두 상품주문 모두 이틀 전 배송완료
         long buyer = BUYERS.getAndIncrement();

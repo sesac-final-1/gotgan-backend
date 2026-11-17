@@ -9,7 +9,7 @@ import java.time.ZoneId;
 
 /**
  * OrderClaimRequested payload (docs/events.md) — admin 알림 센터(판매자에게 CLAIM_REQUESTED 화면 알림).
- * 구매자의 반품 · 교환 신청만 — 취소는 판매자 확인 없이 바로 끝나 OrderItemCancelled 로 알린다. 철회는 알리지 않는다.
+ * 구매자의 반품, 교환 신청만 — 취소는 판매자 확인 없이 바로 끝나 OrderItemCancelled 로 알린다. 철회는 알리지 않는다.
  * requestedAt 은 Asia/Seoul 오프셋 ISO-8601.
  */
 public record OrderClaimRequestedPayload(Long claimId, ClaimType claimType, Long orderItemId, String itemNo,

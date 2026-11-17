@@ -1,6 +1,6 @@
 spring:
   application:
-    name: review-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+    name: review-service                  # 지표, 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/reviewdb?connectionTimeZone=Asia/Seoul
@@ -11,7 +11,7 @@ spring:
     hibernate:
       ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
   flyway:
-    locations: classpath:db/migration       # 시드(db/seed) 는 local · k8s 프로필에서만 추가
+    locations: classpath:db/migration       # 시드(db/seed) 는 local, k8s 프로필에서만 추가
 
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
@@ -30,14 +30,14 @@ app:
   images:
     base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{s3Key} (ConfigMap, product 와 같음)
     bucket: ${IMAGES_BUCKET:}               # 업로드 presigned PUT 대상 (ConfigMap) — reviews/{userId}/… 만 IRSA PutObject
-  sqs:                                    # 구독 큐 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
+  sqs:                                    # 구독 큐 — URL 이 비면(로컬, 테스트) 폴러를 띄우지 않는다
     order-events-queue-url: ${REVIEW_ORDER_EVENTS_QUEUE_URL:}   # OrderItemConfirmed (리뷰 작성 자격) — ConfigMap 이름과 같게
     wait-seconds: 20                        # 롱폴링 (비어 있어도 20초 기다렸다 돌아옴 — 빈 요청 비용 절감)
     max-messages: 10
 
 resilience4j:
   circuitbreaker:
-    circuit-breaker-aspect-order: 1         # 서킷이 바깥 · 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 502 로 바꿔 재시도가 안 걸린다
+    circuit-breaker-aspect-order: 1         # 서킷이 바깥, 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 502 로 바꿔 재시도가 안 걸린다
     configs:
       default:
         sliding-window-size: 10
@@ -47,12 +47,12 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
       remote:                               # 다른 서비스 호출 (inquiry/client/*ClientAdapter)
         base-config: default
-        record-exceptions:                  # 장애로 세는 것: 연결 실패 · 타임아웃 · 5xx
+        record-exceptions:                  # 장애로 세는 것: 연결 실패, 타임아웃, 5xx
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
         ignore-exceptions:                  # 4xx 변환(BusinessException — 없는 상품 등)은 세지 않음
           - com.sesac.gojigi.common.web.exception.BusinessException
-    instances:                              # 이름 = 대상 서비스 (store · order 와 같은 규칙)
+    instances:                              # 이름 = 대상 서비스 (store, order 와 같은 규칙)
       product: { base-config: remote }      # ProductClientAdapter — 문의 등록 상품 스냅샷
       user: { base-config: remote }         # UserClientAdapter — 문의 작성자 표시 이름
   retry:
@@ -82,7 +82,7 @@ management:
   endpoint:
     health:
       probes:
-        enabled: true                       # /actuator/health/liveness · readiness
+        enabled: true                       # /actuator/health/liveness, readiness
 
 springdoc:
   swagger-ui:

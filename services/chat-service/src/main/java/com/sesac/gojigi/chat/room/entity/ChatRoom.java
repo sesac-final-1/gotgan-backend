@@ -21,7 +21,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ChatRoom extends BaseTimeEntity {
 
-    /** buyer_id · store_id 를 쓰지 않는 방의 값 (UNIQUE 가 NULL 을 무시하지 않게) */
+    /** buyer_id, store_id 를 쓰지 않는 방의 값 (UNIQUE 가 NULL 을 무시하지 않게) */
     public static final long NONE = 0L;
 
     @Id
@@ -60,7 +60,7 @@ public class ChatRoom extends BaseTimeEntity {
         return new ChatRoom(type, buyerId, storeId);
     }
 
-    /** 새 메시지가 저장된 뒤 — 목록 정렬 · 미리보기 */
+    /** 새 메시지가 저장된 뒤 — 목록 정렬, 미리보기 */
     public void touch(ChatMessage message) {
         this.lastMessageId = message.getId();
         this.lastMessageAt = message.getCreatedAt();

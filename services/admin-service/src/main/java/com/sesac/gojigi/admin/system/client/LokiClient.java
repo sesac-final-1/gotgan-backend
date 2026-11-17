@@ -19,7 +19,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Loki API — 관리자 화면 장애 목록의 에러 로그(11/16). 서비스가 Loki4j 로 보낸 JSON 로그(라벨 app · level, 본문 message · traceId).
+ * Loki API — 관리자 화면 장애 목록의 에러 로그(11/16). 서비스가 Loki4j 로 보낸 JSON 로그(라벨 app, level, 본문 message, traceId).
  * 보조 정보라 실패해도 오류를 던지지 않고 빈 목록
  */
 @Slf4j
@@ -37,13 +37,13 @@ public class LokiClient {
         this.restClient = restClientBuilder.clone().baseUrl(baseUrl).requestFactory(factory).build();
     }
 
-    /** 최근 WARN · ERROR 로그(최신순, 최대 limit) — service 가 있으면 그 서비스(app 라벨)만 */
+    /** 최근 WARN, ERROR 로그(최신순, 최대 limit) — service 가 있으면 그 서비스(app 라벨)만 */
     public List<LogLine> errors(Instant start, Instant end, int limit, String service) {
         return lines(service == null ? ERROR_QUERY : ERROR_QUERY.replace("}", ",app=\"" + service + "\"}"), start, end, limit);
     }
 
     /**
-     * LogQL 지표 쿼리(count_over_time 등)를 구간별로 — 장애 리포트의 시간대별 에러 로그 · DB 오류 건수.
+     * LogQL 지표 쿼리(count_over_time 등)를 구간별로 — 장애 리포트의 시간대별 에러 로그, DB 오류 건수.
      * label 값 → (구간 끝 시각 ms → 값). 실패면 빈 Map
      */
     public Map<String, Map<Long, Double>> countBy(String logql, String label, Instant start, Instant end, Duration step) {
@@ -95,7 +95,7 @@ public class LokiClient {
         return lines.size() > limit ? lines.subList(0, limit) : lines;
     }
 
-    /** 로그 한 줄 — JSON 이면 message · traceId 를 꺼내고, 아니면 줄 전체를 메시지로 */
+    /** 로그 한 줄 — JSON 이면 message, traceId 를 꺼내고, 아니면 줄 전체를 메시지로 */
     static LogLine line(String service, String level, long timestampMs, String raw) {
         try {
             JsonNode json = JSON.readTree(raw);

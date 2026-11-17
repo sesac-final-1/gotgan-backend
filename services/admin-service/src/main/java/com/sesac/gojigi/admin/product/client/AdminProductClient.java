@@ -9,7 +9,7 @@ import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PatchExchange;
 import tools.jackson.databind.JsonNode;
 
-/** product-service 관리자 상품 · 상품 통계 내부 API (docs/api/product.md 5 · 6절, backend #110). AdminProductClientAdapter 를 거친다 */
+/** product-service 관리자 상품, 상품 통계 내부 API (docs/api/product.md 5, 6절, backend #110). AdminProductClientAdapter 를 거친다 */
 @HttpExchange("/internal")
 public interface AdminProductClient {
 

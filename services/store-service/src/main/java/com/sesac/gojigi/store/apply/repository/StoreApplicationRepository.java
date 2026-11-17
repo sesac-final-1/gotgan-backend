@@ -31,7 +31,7 @@ public interface StoreApplicationRepository extends JpaRepository<StoreApplicati
     /** 같은 사업자번호의 다른 신청 — 중복 입점 확인 (idx_store_application_biz_reg_no, store.md 4절) */
     List<StoreApplication> findAllByBizRegNoAndIdNotOrderByTermsAgreedAtDescIdDesc(String bizRegNo, Long id);
 
-    /** 진행 중 신청(심사대기 · 보완요청)이 있는지 — idx_store_application_user_id */
+    /** 진행 중 신청(심사대기, 보완요청)이 있는지 — idx_store_application_user_id */
     boolean existsByUserIdAndStatusIn(Long userId, Collection<ApplicationStatus> statuses);
 
     /** 가장 최근 반려 — 30일 재신청 제한 기준 (STR-11) */

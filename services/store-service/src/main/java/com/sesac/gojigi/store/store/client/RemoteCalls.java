@@ -9,7 +9,7 @@ import org.springframework.web.client.HttpClientErrorException;
 /**
  * 다른 서비스 호출 실패를 store 예외로 바꾸는 공통 규칙 (order-service RemoteCalls 와 같은 규칙):
  * - 4xx: 호출 쪽(store) 버그라 warn + 502 — 서킷 실패로 세지 않음(BusinessException)
- * - 연결 실패 · 타임아웃 · 5xx · 서킷 OPEN: 폴백에서 502 — 폐점은 확인할 수 없으면 거절(STR-13), 대시보드는 그 영역만 비움(STR-07)
+ * - 연결 실패, 타임아웃, 5xx, 서킷 OPEN: 폴백에서 502 — 폐점은 확인할 수 없으면 거절(STR-13), 대시보드는 그 영역만 비움(STR-07)
  */
 @Slf4j
 public final class RemoteCalls {
@@ -30,7 +30,7 @@ public final class RemoteCalls {
         if (t instanceof CallNotPermittedException) {
             log.warn("{} {} 차단(서킷 OPEN)", target, action);
         } else {
-            log.error("{} {} 실패", target, action, t);   // 연결 실패 · 타임아웃 · 5xx — 스택트레이스 포함 (컨벤션 2-8)
+            log.error("{} {} 실패", target, action, t);   // 연결 실패, 타임아웃, 5xx — 스택트레이스 포함 (컨벤션 2-8)
         }
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR,
                 target + " " + action + "에 실패했습니다. 잠시 후 다시 시도해 주세요.");

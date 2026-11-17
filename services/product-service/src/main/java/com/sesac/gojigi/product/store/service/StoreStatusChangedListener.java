@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
-/** product-store-events 큐의 StoreStatusChanged → 스토어 상태 스냅샷 · 상품 노출 갱신 (옛 이벤트 무시 — docs/events.md 순서 규칙) */
+/** product-store-events 큐의 StoreStatusChanged → 스토어 상태 스냅샷, 상품 노출 갱신 (옛 이벤트 무시 — docs/events.md 순서 규칙) */
 @Component
 @RequiredArgsConstructor
 public class StoreStatusChangedListener implements SqsEventListener {

@@ -29,7 +29,7 @@ public final class MonitorResponses {
     public record Call(String traceId, long timestampMs, String method, String path, String service, Integer status, double durationMs) {
     }
 
-    /** GET /errors — RESPONSE(게이트웨이 5xx 응답) · LOG(서비스 WARN · ERROR 로그)를 최신순으로 합친 것 */
+    /** GET /errors — RESPONSE(게이트웨이 5xx 응답), LOG(서비스 WARN, ERROR 로그)를 최신순으로 합친 것 */
     public record ErrorItem(String kind, long timestampMs, String service, String level, String title, Integer status, String traceId) {
     }
 

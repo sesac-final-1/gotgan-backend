@@ -8,14 +8,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
- * 관리자 이용정지 · 해제. 사유는 필수지만 빈 값 검사는 엔티티가 USER_STATUS_REASON_REQUIRED 로 (INVALID_INPUT 과 구분).
+ * 관리자 이용정지, 해제. 사유는 필수지만 빈 값 검사는 엔티티가 USER_STATUS_REASON_REQUIRED 로 (INVALID_INPUT 과 구분).
  */
 public record ChangeUserStatusRequest(
         @Schema(description = "SUSPENDED = 이용정지, ACTIVE = 해제", example = "SUSPENDED")
         @NotNull(message = "변경할 상태를 선택해 주세요.")
         UserStatus status,
 
-        @Schema(description = "정지 · 해제 사유 (필수)", example = "허위 리뷰 / 리뷰 어뷰징")
+        @Schema(description = "정지, 해제 사유 (필수)", example = "허위 리뷰 / 리뷰 어뷰징")
         @Size(max = 255, message = "사유는 255자 이하로 입력해 주세요.")
         String reason,
 

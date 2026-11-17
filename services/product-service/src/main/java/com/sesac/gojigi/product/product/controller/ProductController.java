@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 공개 상품 조회 (product.md 9 · 10절) — 구매자 화면 · 다른 서비스(chat 상품 카드 등)가 부름. 게이트웨이 GET /api/products/** 공개 */
+/** 공개 상품 조회 (product.md 9, 10절) — 구매자 화면, 다른 서비스(chat 상품 카드 등)가 부름. 게이트웨이 GET /api/products/** 공개 */
 @Tag(name = "상품", description = "공개 — 로그인 없음")
 @RestController
 @RequestMapping("/api/products")
@@ -31,12 +31,12 @@ public class ProductController {
 
     private final ProductQueryService productQueryService;
 
-    @Operation(summary = "상품 목록 · 검색", description = """
-            공개. 목록 · 검색 · 메인 화면 · 스토어 홈 공용 — 쇼핑몰에 보이는 상품만(판매중 · 카테고리 사용 중 · 스토어 운영 중 · 삭제 안 됨).
-            categoryId: 상위면 그 아래 하위 전부, 하위면 그 하위만 / q: 상품명 · 하위 카테고리 이름 포함(앞뒤 공백 제거, 비면 조건 없음) /
-            minPrice ≤ salePrice < maxPrice / excludeSoldOut / sort NEW · PRICE_ASC · PRICE_DESC(같으면 productId 큰 순) / page 0부터 · size 기본 20 최대 100.
-            메인 화면(PRD-14)은 카테고리마다 ?categoryId={상위}&sort=NEW&size=8. 조건에 맞는 상품이 없거나 없는 · 꺼진 카테고리면 빈 페이지 (product.md 9절).
-            에러: 400 INVALID_INPUT(minPrice > maxPrice · 음수 · 모르는 sort · size 100 초과 · q 50자 초과)""")
+    @Operation(summary = "상품 목록, 검색", description = """
+            공개. 목록, 검색, 메인 화면, 스토어 홈 공용 — 쇼핑몰에 보이는 상품만(판매중, 카테고리 사용 중, 스토어 운영 중, 삭제 안 됨).
+            categoryId: 상위면 그 아래 하위 전부, 하위면 그 하위만 / q: 상품명, 하위 카테고리 이름 포함(앞뒤 공백 제거, 비면 조건 없음) /
+            minPrice ≤ salePrice < maxPrice / excludeSoldOut / sort NEW, PRICE_ASC, PRICE_DESC(같으면 productId 큰 순) / page 0부터, size 기본 20 최대 100.
+            메인 화면(PRD-14)은 카테고리마다 ?categoryId={상위}&sort=NEW&size=8. 조건에 맞는 상품이 없거나 없는, 꺼진 카테고리면 빈 페이지 (product.md 9절).
+            에러: 400 INVALID_INPUT(minPrice > maxPrice, 음수, 모르는 sort, size 100 초과, q 50자 초과)""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 (없으면 빈 페이지)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT")
@@ -47,7 +47,7 @@ public class ProductController {
             @RequestParam(required = false) Long categoryId,
             @Parameter(description = "스토어 홈", example = "1")
             @RequestParam(required = false) Long storeId,
-            @Parameter(description = "상품명 · 하위 카테고리 이름 포함 검색 (앞뒤 공백 제거 후 50자 이하, 비면 조건 없음)", example = "감귤")
+            @Parameter(description = "상품명, 하위 카테고리 이름 포함 검색 (앞뒤 공백 제거 후 50자 이하, 비면 조건 없음)", example = "감귤")
             @RequestParam(required = false) String q,
             @Parameter(description = "판매가 하한 (포함)", example = "10000")
             @RequestParam(required = false) @PositiveOrZero(message = "가격은 0 이상이어야 합니다.") Long minPrice,
@@ -55,7 +55,7 @@ public class ProductController {
             @RequestParam(required = false) @PositiveOrZero(message = "가격은 0 이상이어야 합니다.") Long maxPrice,
             @Parameter(description = "true 면 품절 상품 제외", example = "false")
             @RequestParam(required = false) Boolean excludeSoldOut,
-            @Parameter(description = "NEW(기본) · PRICE_ASC · PRICE_DESC", example = "NEW")
+            @Parameter(description = "NEW(기본), PRICE_ASC, PRICE_DESC", example = "NEW")
             @RequestParam(required = false) ProductSort sort,
             @Parameter(description = "페이지 (0부터, 기본 0)", example = "0")
             @RequestParam(required = false) @PositiveOrZero(message = "페이지는 0 이상이어야 합니다.") Integer page,
@@ -67,8 +67,8 @@ public class ProductController {
     }
 
     @Operation(summary = "상품 상세", description = """
-            공개. 판매중지 · 강제 판매중지 · 카테고리 꺼짐 · 스토어 정지/폐점 상품도 200 으로 보여 주고 purchasable=false(담기 · 구매 버튼 비활성).
-            재고 수는 공개하지 않고 옵션별 · 상품 soldOut 만. 옵션 없는 상품도 값이 null 인 옵션 1개 — 장바구니는 productOptionId 로.
+            공개. 판매중지, 강제 판매중지, 카테고리 꺼짐, 스토어 정지/폐점 상품도 200 으로 보여 주고 purchasable=false(담기, 구매 버튼 비활성).
+            재고 수는 공개하지 않고 옵션별, 상품 soldOut 만. 옵션 없는 상품도 값이 null 인 옵션 1개 — 장바구니는 productOptionId 로.
             images 는 URL 배열(첫 번째가 대표), 삭제된 옵션 조합은 빠짐 (product.md 10절).
             에러: 404 PRODUCT_NOT_FOUND(없거나 삭제된 상품)""")
     @ApiResponses({

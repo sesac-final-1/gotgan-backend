@@ -98,7 +98,7 @@ class ReviewControllerTest {
         // given
         given(reviewService.write(eq(4L), any(ReviewCreateRequest.class))).willReturn(new ReviewCreateResponse(31L));
 
-        // when · then
+        // when, then
         perform(VALID_BODY)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -129,7 +129,7 @@ class ReviewControllerTest {
     }
 
     @Test
-    @DisplayName("한줄 요약 101자 · 본문 2,001자 — 400 INVALID_INPUT")
+    @DisplayName("한줄 요약 101자, 본문 2,001자 — 400 INVALID_INPUT")
     void write_tooLongText_returns400() throws Exception {
         assertInvalidInput(VALID_BODY.replace("핏이 예뻐요", "가".repeat(101)));
         assertInvalidInput(VALID_BODY.replace("평소 M 입는데", "가".repeat(2001)));
@@ -143,12 +143,12 @@ class ReviewControllerTest {
     }
 
     @Test
-    @DisplayName("사이즈 체감 · 한줄 요약은 없어도 된다")
+    @DisplayName("사이즈 체감, 한줄 요약은 없어도 된다")
     void write_withoutOptionalFields_returns201() throws Exception {
         // given
         given(reviewService.write(eq(4L), any(ReviewCreateRequest.class))).willReturn(new ReviewCreateResponse(32L));
 
-        // when · then
+        // when, then
         perform("""
                 { "orderItemId": 12, "rating": 4, "content": "당도 미쳤어요. 하나 까먹고 바로 한 박스 더 주문했어요." }
                 """)
@@ -157,7 +157,7 @@ class ReviewControllerTest {
     }
 
     @Test
-    @DisplayName("서비스가 던진 403 · 409 는 코드 그대로")
+    @DisplayName("서비스가 던진 403, 409 는 코드 그대로")
     void write_serviceError_returnsCode() throws Exception {
         given(reviewService.write(eq(4L), any(ReviewCreateRequest.class)))
                 .willThrow(new ReviewException(ReviewErrorCode.REVIEW_NOT_ELIGIBLE))
@@ -188,7 +188,7 @@ class ReviewControllerTest {
             given(reviewService.edit(eq(4L), eq(31L), any(ReviewUpdateRequest.class)))
                     .willReturn(new ReviewResponse(31L, 4, "길이가 조금 길어요", "키 160인데 기장이 살짝 길어서 수선했어요.", ReviewFit.LARGE, List.of()));
 
-            // when · then
+            // when, then
             performEdit(EDIT_BODY)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -198,7 +198,7 @@ class ReviewControllerTest {
         }
 
         @Test
-        @DisplayName("별점 6 · 본문 20자 미만 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
+        @DisplayName("별점 6, 본문 20자 미만 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
         void edit_invalidField_returns400() throws Exception {
             performEdit(EDIT_BODY.replace("\"rating\": 4", "\"rating\": 6"))
                     .andExpect(status().isBadRequest())
@@ -210,7 +210,7 @@ class ReviewControllerTest {
         }
 
         @Test
-        @DisplayName("서비스가 던진 404 · 409 는 코드 그대로")
+        @DisplayName("서비스가 던진 404, 409 는 코드 그대로")
         void edit_serviceError_returnsCode() throws Exception {
             given(reviewService.edit(eq(4L), eq(31L), any(ReviewUpdateRequest.class)))
                     .willThrow(new ReviewException(ReviewErrorCode.REVIEW_NOT_FOUND))
@@ -265,13 +265,13 @@ class ReviewControllerTest {
     }
 
     @Nested
-    @DisplayName("마이페이지 GET /api/reviews/me · /me/writable")
+    @DisplayName("마이페이지 GET /api/reviews/me, /me/writable")
     class MyReviews {
 
         private static final OffsetDateTime CREATED = OffsetDateTime.parse("2026-10-20T14:00:00+09:00");
 
         @Test
-        @DisplayName("내가 쓴 리뷰 — 200, 기본 page 0 · size 10, 봉투 data 에 PageResponse")
+        @DisplayName("내가 쓴 리뷰 — 200, 기본 page 0, size 10, 봉투 data 에 PageResponse")
         void listMine_defaultPaging_returns200() throws Exception {
             // given
             MyReviewResponse review = new MyReviewResponse(31L, 11L, 101L, "린넨 오버핏 셔츠", "오트밀 / M",
@@ -279,7 +279,7 @@ class ReviewControllerTest {
                     null, null, CREATED, List.of());
             given(myReviewQueryService.listMine(4L, 0, 10)).willReturn(new PageResponse<>(List.of(review), 0, 10, 1, 1, false));
 
-            // when · then
+            // when, then
             mockMvc.perform(get("/api/reviews/me").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -293,7 +293,7 @@ class ReviewControllerTest {
 
         @ParameterizedTest(name = "page={0} size={1}")
         @CsvSource({ "-1, 10", "0, 0", "0, 51", "a, 10" })
-        @DisplayName("page · size 범위 밖 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
+        @DisplayName("page, size 범위 밖 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
         void listMine_invalidPaging_returns400(String page, String size) throws Exception {
             mockMvc.perform(get("/api/reviews/me").param("page", page).param("size", size)
                             .header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
@@ -309,7 +309,7 @@ class ReviewControllerTest {
             given(myReviewQueryService.listWritable(4L)).willReturn(List.of(new WritableReviewResponse(11L, 101L,
                     "린넨 오버핏 셔츠", "오트밀 / M", null, CREATED, CREATED.plusDays(30))));
 
-            // when · then
+            // when, then
             mockMvc.perform(get("/api/reviews/me/writable").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data[0].orderItemId").value(11))
@@ -326,11 +326,11 @@ class ReviewControllerTest {
     }
 
     @Nested
-    @DisplayName("상품 리뷰 (공개) GET /api/reviews · /summary")
+    @DisplayName("상품 리뷰 (공개) GET /api/reviews, /summary")
     class ProductReviews {
 
         @Test
-        @DisplayName("목록 — 로그인 없이 200, 기본 sort LATEST · page 0 · size 10")
+        @DisplayName("목록 — 로그인 없이 200, 기본 sort LATEST, page 0, size 10")
         void list_defaults_returns200() throws Exception {
             ProductReviewResponse review = new ProductReviewResponse(31L, "곳간러버", false, 5, null, "오버핏이에요", "오트밀 / M",
                     ReviewFit.TRUE_TO_SIZE, null, null, OffsetDateTime.parse("2026-10-20T14:00:00+09:00"), List.of());
@@ -346,7 +346,7 @@ class ReviewControllerTest {
         }
 
         @Test
-        @DisplayName("목록 — rating · sort · page · size 를 그대로 넘긴다")
+        @DisplayName("목록 — rating, sort, page, size 를 그대로 넘긴다")
         void list_withParams_passesThrough() throws Exception {
             given(productReviewQueryService.list(101L, 5, false, ProductReviewSort.RATING_LOW, 1, 20, null))
                     .willReturn(new PageResponse<>(List.of(), 1, 20, 0, 0, false));
@@ -359,7 +359,7 @@ class ReviewControllerTest {
 
         @ParameterizedTest
         @ValueSource(strings = { "", "&rating=0", "&rating=6", "&sort=HELPFUL", "&page=-1", "&size=51" })
-        @DisplayName("목록 — productId 없음 · rating 1~5 밖 · 도움순 · page · size 범위 밖은 400 INVALID_INPUT")
+        @DisplayName("목록 — productId 없음, rating 1~5 밖, 도움순, page, size 범위 밖은 400 INVALID_INPUT")
         void list_invalidParam_returns400(String query) throws Exception {
             String url = query.isEmpty() ? "/api/reviews" : "/api/reviews?productId=101" + query;
 
@@ -370,7 +370,7 @@ class ReviewControllerTest {
         }
 
         @Test
-        @DisplayName("요약 — 200, 평균 · 리뷰 수 · 분포 · 사이즈 체감")
+        @DisplayName("요약 — 200, 평균, 리뷰 수, 분포, 사이즈 체감")
         void summarize_returns200() throws Exception {
             given(productReviewQueryService.summarize(101L)).willReturn(new ProductReviewSummaryResponse(4.5, 2,
                     List.of(new RatingCount(5, 1), new RatingCount(4, 1), new RatingCount(3, 0), new RatingCount(2, 0),
@@ -385,7 +385,7 @@ class ReviewControllerTest {
         }
 
         @Test
-        @DisplayName("요약 — productId 없음 · 숫자 아님 400")
+        @DisplayName("요약 — productId 없음, 숫자 아님 400")
         void summarize_invalidProductId_returns400() throws Exception {
             mockMvc.perform(get("/api/reviews/summary")).andExpect(status().isBadRequest());
             mockMvc.perform(get("/api/reviews/summary").param("productId", "abc")).andExpect(status().isBadRequest());
@@ -394,11 +394,11 @@ class ReviewControllerTest {
     }
 
     @Nested
-    @DisplayName("여러 상품 · 스토어 평점 (공개) GET /api/reviews/ratings/products · /stores")
+    @DisplayName("여러 상품, 스토어 평점 (공개) GET /api/reviews/ratings/products, /stores")
     class Ratings {
 
         @Test
-        @DisplayName("상품 — 로그인 없이 200, ids=1,2 · ids=1&ids=2 둘 다 받는다")
+        @DisplayName("상품 — 로그인 없이 200, ids=1,2, ids=1&ids=2 둘 다 받는다")
         void rateProducts_bothIdFormats_returns200() throws Exception {
             given(ratingQueryService.rateProducts(List.of(101L, 102L))).willReturn(
                     List.of(new ProductRatingResponse(101L, 4.5, 2), new ProductRatingResponse(102L, 0, 0)));
@@ -426,7 +426,7 @@ class ReviewControllerTest {
 
         @ParameterizedTest
         @ValueSource(strings = { "/api/reviews/ratings/products", "/api/reviews/ratings/stores" })
-        @DisplayName("ids 없음 · 숫자 아님 · 101개 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
+        @DisplayName("ids 없음, 숫자 아님, 101개 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
         void invalidIds_returns400(String path) throws Exception {
             String ids101 = LongStream.rangeClosed(1, 101).mapToObj(Long::toString).collect(Collectors.joining(","));
 
@@ -442,7 +442,7 @@ class ReviewControllerTest {
     class Presign {
 
         @Test
-        @DisplayName("발급 — 200, 봉투 data 에 키 · 주소 · 만료 시각")
+        @DisplayName("발급 — 200, 봉투 data 에 키, 주소, 만료 시각")
         void presign_returns200() throws Exception {
             given(reviewImagePresignService.presign(eq(4L), any(ReviewImagePresignRequest.class))).willReturn(List.of(
                     new ReviewImagePresignResponse("reviews/4/a.jpg", "https://s3/put", OffsetDateTime.parse("2026-10-28T15:10:00+09:00"))));
@@ -457,7 +457,7 @@ class ReviewControllerTest {
         }
 
         @Test
-        @DisplayName("files 없음 · 크기 없음 400 INVALID_INPUT, 서비스 400 REVIEW_IMAGE_INVALID 는 메시지 그대로, 헤더 없음 401")
+        @DisplayName("files 없음, 크기 없음 400 INVALID_INPUT, 서비스 400 REVIEW_IMAGE_INVALID 는 메시지 그대로, 헤더 없음 401")
         void presign_errors() throws Exception {
             mockMvc.perform(post("/api/reviews/images/presign").header("X-User-Id", "4")
                             .contentType(MediaType.APPLICATION_JSON).content("{ }"))

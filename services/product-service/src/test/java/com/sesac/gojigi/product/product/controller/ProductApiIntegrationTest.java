@@ -31,8 +31,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * 공개 상품 조회 — 목록 · 검색 (GET /api/products, 9절) · 상세 (GET /api/products/{id}, 10절) — 실제 MySQL · Flyway, 헤더 없이(로그인 없음) 부른다.
- * 상품은 저장소로 직접 만들고, 판매중지 · 삭제 · 스토어 비활성은 JdbcTemplate 으로 바꾼다 (InternalProductApiIntegrationTest 와 같음).
+ * 공개 상품 조회 — 목록, 검색 (GET /api/products, 9절), 상세 (GET /api/products/{id}, 10절) — 실제 MySQL, Flyway, 헤더 없이(로그인 없음) 부른다.
+ * 상품은 저장소로 직접 만들고, 판매중지, 삭제, 스토어 비활성은 JdbcTemplate 으로 바꾼다 (InternalProductApiIntegrationTest 와 같음).
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게.
  */
 @SpringBootTest(properties = {"management.tracing.sampling.probability=0", "app.images.base-url=https://img.test/"})
@@ -87,7 +87,7 @@ class ProductApiIntegrationTest {
         return productRepository.save(product);
     }
 
-    /** 목록용 상품 — 이름 · 스토어 · 카테고리 · 정가(할인 없음 → 판매가 = 정가) · 상태 · 옵션 재고를 정해 저장 */
+    /** 목록용 상품 — 이름, 스토어, 카테고리, 정가(할인 없음 → 판매가 = 정가), 상태, 옵션 재고를 정해 저장 */
     private Product listed(String name, long storeId, Category category, long price, ProductStatus status, int... stocks) {
         Product product = Product.builder()
                 .storeId(storeId).categoryId(category.getId()).name(name)
@@ -122,9 +122,9 @@ class ProductApiIntegrationTest {
     class Detail {
 
         @Test
-        @DisplayName("판매 중 — 200, 이미지 URL 배열 · 옵션별 품절 · 삭제된 조합 빠짐 · 판매자용 값(재고 수 · 상태 · 이미지 key) 없음")
+        @DisplayName("판매 중 — 200, 이미지 URL 배열, 옵션별 품절, 삭제된 조합 빠짐, 판매자용 값(재고 수, 상태, 이미지 key) 없음")
         void get_onSale_returnsPublicFields() throws Exception {
-            // given — M 30 · L 0 · S(삭제됨)
+            // given — M 30, L 0, S(삭제됨)
             Product p = product(ProductStatus.ON_SALE,
                     ProductOption.of("오트밀", "M", 0, 30), ProductOption.of("오트밀", "L", 2000, 0), ProductOption.of("오트밀", "S", 0, 5));
             long deletedOption = p.getOptions().get(2).getId();
@@ -173,7 +173,7 @@ class ProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("모든 옵션 재고 0 — 품절이지만 구매 가능 판단은 따로 (purchasable true · soldOut true)")
+        @DisplayName("모든 옵션 재고 0 — 품절이지만 구매 가능 판단은 따로 (purchasable true, soldOut true)")
         void get_allSoldOut_soldOutButPurchasable() throws Exception {
             Product p = product(ProductStatus.ON_SALE, ProductOption.of("오트밀", "M", 0, 0));
 
@@ -183,7 +183,7 @@ class ProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("판매중지 · 강제 판매중지 · 카테고리 꺼짐 · 스토어 비활성 — 200 이지만 purchasable false")
+        @DisplayName("판매중지, 강제 판매중지, 카테고리 꺼짐, 스토어 비활성 — 200 이지만 purchasable false")
         void get_notPurchasable_stillShown() throws Exception {
             // given
             long stopped = product(ProductStatus.STOPPED, ProductOption.of("오트밀", "M", 0, 1)).getId();
@@ -192,7 +192,7 @@ class ProductApiIntegrationTest {
             long storeOff = product(ProductStatus.ON_SALE, ProductOption.of("오트밀", "M", 0, 1)).getId();
             jdbc.update("UPDATE product SET is_store_active = FALSE WHERE product_id = ?", storeOff);
 
-            // when · then
+            // when, then
             for (long id : new long[] {stopped, blocked, storeOff}) {
                 detail(id).andExpect(status().isOk()).andExpect(jsonPath("$.data.purchasable").value(false));
             }
@@ -203,7 +203,7 @@ class ProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("삭제된 상품 · 없는 상품 — 404 PRODUCT_NOT_FOUND")
+        @DisplayName("삭제된 상품, 없는 상품 — 404 PRODUCT_NOT_FOUND")
         void get_deletedOrMissing_notFound() throws Exception {
             long deleted = product(ProductStatus.ON_SALE, ProductOption.of("오트밀", "M", 0, 1)).getId();
             jdbc.update("UPDATE product SET deleted_at = NOW(6) WHERE product_id = ?", deleted);
@@ -214,14 +214,14 @@ class ProductApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("상품 목록 · 검색")
+    @DisplayName("상품 목록, 검색")
     class Search {
 
         private Category foodTop;
         private Category fruit;
-        private Product shirtA;   // 스토어 1 · 셔츠 · 30,000 · 재고 있음
-        private Product shirtB;   // 스토어 2 · 셔츠 · 10,000 · 품절
-        private Product mandarin; // 스토어 1 · 과일 · 20,000 · 재고 있음 (옵션 2개 중 하나만 재고)
+        private Product shirtA;   // 스토어 1, 셔츠, 30,000, 재고 있음
+        private Product shirtB;   // 스토어 2, 셔츠, 10,000, 품절
+        private Product mandarin; // 스토어 1, 과일, 20,000, 재고 있음 (옵션 2개 중 하나만 재고)
 
         @BeforeEach
         void products() {
@@ -235,7 +235,7 @@ class ProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("기본 — 쇼핑몰에 보이는 상품만, 신상품 순 · 카드 필드(대표 이미지 · 품절 · 상위 카테고리) · 페이지 정보")
+        @DisplayName("기본 — 쇼핑몰에 보이는 상품만, 신상품 순, 카드 필드(대표 이미지, 품절, 상위 카테고리), 페이지 정보")
         void search_default_onlyDisplayableNewestFirst() throws Exception {
             // given — 보이면 안 되는 상품들
             listed("판매중지", 1L, shirt, 1_000, ProductStatus.STOPPED, 1);
@@ -288,7 +288,7 @@ class ProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("검색어 — 상품명 · 하위 카테고리 이름 포함, 앞뒤 공백 제거, 비면 조건 없음, % · _ 는 글자 그대로")
+        @DisplayName("검색어 — 상품명, 하위 카테고리 이름 포함, 앞뒤 공백 제거, 비면 조건 없음, %, _ 는 글자 그대로")
         void search_keyword_matchesNameOrCategory() throws Exception {
             listed("100% 순면 티", 1L, shirt, 5_000, ProductStatus.ON_SALE, 1);
 
@@ -316,7 +316,7 @@ class ProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("정렬 · 페이지 — 가격 오름 · 내림, 같은 가격은 productId 큰 순, 페이지를 넘겨도 순서 유지")
+        @DisplayName("정렬, 페이지 — 가격 오름, 내림, 같은 가격은 productId 큰 순, 페이지를 넘겨도 순서 유지")
         void search_sortAndPaging_stableOrder() throws Exception {
             Product sameA = listed("같은 가격 A", 1L, shirt, 10_000, ProductStatus.ON_SALE, 1);
             Product sameB = listed("같은 가격 B", 1L, shirt, 10_000, ProductStatus.ON_SALE, 1);
@@ -339,7 +339,7 @@ class ProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("min > max · 음수 · 모르는 정렬 · 숫자 아닌 ID · size 101 · size 0 · page 음수 · 검색어 51자 — 400 INVALID_INPUT (자바 내부 문구는 안 나감)")
+        @DisplayName("min > max, 음수, 모르는 정렬, 숫자 아닌 ID, size 101, size 0, page 음수, 검색어 51자 — 400 INVALID_INPUT (자바 내부 문구는 안 나감)")
         void search_invalidParams_badRequest() throws Exception {
             for (String query : List.of("minPrice=20000&maxPrice=10000", "minPrice=-1", "sort=POPULAR", "categoryId=abc", "size=101", "size=0",
                     "page=-1", "q=" + "a".repeat(51))) {

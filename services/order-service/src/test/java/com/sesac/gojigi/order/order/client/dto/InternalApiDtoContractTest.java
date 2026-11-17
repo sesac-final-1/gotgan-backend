@@ -12,7 +12,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 다른 서비스 내부 API DTO — 문서(docs/api/payment.md · product.md, user InternalPointController)의 JSON 과
+ * 다른 서비스 내부 API DTO — 문서(docs/api/payment.md, product.md, user InternalPointController)의 JSON 과
  * 필드 이름이 맞는지. 요청은 직렬화한 키를, 응답은 문서 예시 JSON 을 읽은 값을 본다.
  */
 class InternalApiDtoContractTest {
@@ -24,7 +24,7 @@ class InternalApiDtoContractTest {
     class Payment {
 
         @Test
-        @DisplayName("결제 준비 · 검증 요청은 문서의 필드 이름으로 나간다")
+        @DisplayName("결제 준비, 검증 요청은 문서의 필드 이름으로 나간다")
         void prepareAndVerify_serialize() {
             // when
             JsonNode prepare = json.valueToTree(new PaymentPrepareRequest(123L, "20261021-000123", 64_400L, "saga-1"));
@@ -36,7 +36,7 @@ class InternalApiDtoContractTest {
         }
 
         @Test
-        @DisplayName("전액 취소는 상품주문 · 금액이 비고, 부분 취소는 둘 다 채운다")
+        @DisplayName("전액 취소는 상품주문, 금액이 비고, 부분 취소는 둘 다 채운다")
         void cancelRequest_fullAndPartial() {
             // when
             PaymentCancelRequest full = PaymentCancelRequest.full("saga-1", "결제 대기 만료");
@@ -77,7 +77,7 @@ class InternalApiDtoContractTest {
     class Point {
 
         @Test
-        @DisplayName("사용 요청을 보내고, 사용 · 사용 취소 결과를 읽는다 (되돌릴 게 없으면 balanceAfter null)")
+        @DisplayName("사용 요청을 보내고, 사용, 사용 취소 결과를 읽는다 (되돌릴 게 없으면 balanceAfter null)")
         void useAndRestore() {
             // when
             JsonNode request = json.valueToTree(new PointUseRequest("saga-1", 4L, "20261022-000123", 1_500L));
@@ -96,13 +96,13 @@ class InternalApiDtoContractTest {
     }
 
     @Nested
-    @DisplayName("product 재고 · 옵션")
+    @DisplayName("product 재고, 옵션")
     class Product {
 
         private final List<StockItem> items = List.of(new StockItem(11L, 2), new StockItem(25L, 1));
 
         @Test
-        @DisplayName("재고 예약 · 해제 · 복원 요청을 문서 모양으로 보낸다")
+        @DisplayName("재고 예약, 해제, 복원 요청을 문서 모양으로 보낸다")
         void stockRequests_serialize() {
             // when
             JsonNode reserve = json.valueToTree(new StockReserveRequest("saga-1", items));
@@ -117,7 +117,7 @@ class InternalApiDtoContractTest {
         }
 
         @Test
-        @DisplayName("예약 응답과 가격 · 구매 가능 조회 응답을 읽는다")
+        @DisplayName("예약 응답과 가격, 구매 가능 조회 응답을 읽는다")
         void stockAndOptionResponses_deserialize() {
             // when
             StockReservationResponse reserved = json.readValue("""

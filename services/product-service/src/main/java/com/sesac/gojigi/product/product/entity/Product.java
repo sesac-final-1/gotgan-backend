@@ -26,10 +26,10 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.DynamicUpdate;
 
 /**
- * 상품 (productdb product). 옵션 조합 · 이미지는 상품이 함께 저장한다 (등록 · 수정이 통째로 오는 13절 계약).
- * 카테고리는 categoryId 로만 들고, 하위 · 사용 중 검증은 서비스가 CategoryRepository 로 한다 (CAT-03).
- * 삭제는 deleted_at 소프트 삭제 — 지난 주문 · 재고 이력이 참조하므로 전역 필터(@SQLRestriction)는 걸지 않고 조회 쿼리에서 거른다.
- * @DynamicUpdate — 바뀐 컬럼만 UPDATE. 판매자 수정이 그 사이 관리자가 바꾼 status · 이벤트가 바꾼 is_store_active 를 덮어쓰지 않게 (13절 "수정은 상태를 바꾸지 않음").
+ * 상품 (productdb product). 옵션 조합, 이미지는 상품이 함께 저장한다 (등록, 수정이 통째로 오는 13절 계약).
+ * 카테고리는 categoryId 로만 들고, 하위, 사용 중 검증은 서비스가 CategoryRepository 로 한다 (CAT-03).
+ * 삭제는 deleted_at 소프트 삭제 — 지난 주문, 재고 이력이 참조하므로 전역 필터(@SQLRestriction)는 걸지 않고 조회 쿼리에서 거른다.
+ * @DynamicUpdate — 바뀐 컬럼만 UPDATE. 판매자 수정이 그 사이 관리자가 바꾼 status, 이벤트가 바꾼 is_store_active 를 덮어쓰지 않게 (13절 "수정은 상태를 바꾸지 않음").
  */
 @Getter
 @Entity
@@ -59,7 +59,7 @@ public class Product extends BaseTimeEntity {
     @Column(name = "discount_rate", nullable = false, precision = 5, scale = 2)
     private BigDecimal discountRate;
 
-    /** price · discountRate 로 서버가 계산 (10원 단위 반올림) — 밖에서 직접 넣지 않는다 */
+    /** price, discountRate 로 서버가 계산 (10원 단위 반올림) — 밖에서 직접 넣지 않는다 */
     @Column(name = "sale_price", nullable = false)
     private long salePrice;
 
@@ -88,7 +88,7 @@ public class Product extends BaseTimeEntity {
     @Column(name = "status_reason")
     private String statusReason;
 
-    /** StoreStatusChanged 로 갱신 — false 면 목록 · 검색에서 제외 */
+    /** StoreStatusChanged 로 갱신 — false 면 목록, 검색에서 제외 */
     @Column(name = "is_store_active", nullable = false)
     private boolean storeActive;
 
@@ -108,7 +108,7 @@ public class Product extends BaseTimeEntity {
     @OrderBy("sortOrder ASC")
     private List<ProductImage> images = new ArrayList<>();
 
-    /** 등록 — 판매 상태는 ON_SALE · STOPPED 중 요청 값, 스토어는 운영중으로 시작(정지 · 폐점 스토어는 startWithStoreStatus) */
+    /** 등록 — 판매 상태는 ON_SALE, STOPPED 중 요청 값, 스토어는 운영중으로 시작(정지, 폐점 스토어는 startWithStoreStatus) */
     @Builder
     private Product(Long storeId, Long categoryId, String name, long price, int discountRate, String description,
             String material, String origin, String option1Name, String option2Name, ProductStatus status) {
@@ -125,7 +125,7 @@ public class Product extends BaseTimeEntity {
         changePrice(price, discountRate);
     }
 
-    /** 등록 직전 — 스토어가 이미 정지 · 폐점이면 그 상태로 시작 (store_status 스냅샷, 행이 없으면 호출하지 않음) */
+    /** 등록 직전 — 스토어가 이미 정지, 폐점이면 그 상태로 시작 (store_status 스냅샷, 행이 없으면 호출하지 않음) */
     public void startWithStoreStatus(boolean storeActive, LocalDateTime storeStatusChangedAt) {
         this.storeActive = storeActive;
         this.storeStatusChangedAt = storeStatusChangedAt;
@@ -141,7 +141,7 @@ public class Product extends BaseTimeEntity {
         image.assignProduct(this);
     }
 
-    /** 수정 (13절 PUT) — 판매 상태 · 재고는 건드리지 않는다. 판매가는 다시 계산 */
+    /** 수정 (13절 PUT) — 판매 상태, 재고는 건드리지 않는다. 판매가는 다시 계산 */
     public void update(Long categoryId, String name, long price, int discountRate, String description,
             String material, String origin, String option1Name, String option2Name) {
         this.categoryId = categoryId;
@@ -168,7 +168,7 @@ public class Product extends BaseTimeEntity {
         this.statusReason = reason;
     }
 
-    /** 판매자 판매중지 · 재개 (15절) — ON_SALE · STOPPED 사이만. BLOCKED 확인은 서비스가 잠금을 잡은 뒤에 한다 */
+    /** 판매자 판매중지, 재개 (15절) — ON_SALE, STOPPED 사이만. BLOCKED 확인은 서비스가 잠금을 잡은 뒤에 한다 */
     public void changeSaleStatus(ProductStatus status) {
         if (status == ProductStatus.BLOCKED || this.status == ProductStatus.BLOCKED) {
             throw new IllegalStateException("판매자는 BLOCKED 상태를 바꾸거나 만들 수 없다");
@@ -185,7 +185,7 @@ public class Product extends BaseTimeEntity {
         this.statusReason = null;
     }
 
-    /** 소프트 삭제 (16절) — 옵션 · 재고 이력은 그대로 둔다. 시각은 서비스가 Clock 으로 넘긴다 */
+    /** 소프트 삭제 (16절) — 옵션, 재고 이력은 그대로 둔다. 시각은 서비스가 Clock 으로 넘긴다 */
     public void delete(LocalDateTime now) {
         this.deletedAt = now;
     }

@@ -18,7 +18,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
 
     /**
      * 관리자 스토어 목록 — 소프트 삭제 제외, 개설 최신순(같으면 ID 큰 순). status 가 null 이면 전체 (store.md 8절).
-     * 대표자 · 사업자번호는 원래 신청서에서 — 연관 매핑이 없어 ID 로 조인
+     * 대표자, 사업자번호는 원래 신청서에서 — 연관 매핑이 없어 ID 로 조인
      */
     @Query("""
             select new com.sesac.gojigi.store.store.repository.StoreWithApplicant(s, a.ownerName, a.bizRegNo)
@@ -41,7 +41,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     List<StoreWithCategory> findAllActiveForPublic();
 
     /**
-     * 상태 변경용 — 행을 잠가(SELECT … FOR UPDATE) 정지 · 해제 · 폐점이 동시에 들어와도 차례로 처리한다.
+     * 상태 변경용 — 행을 잠가(SELECT … FOR UPDATE) 정지, 해제, 폐점이 동시에 들어와도 차례로 처리한다.
      * store 테이블에 @Version 컬럼이 없어 비관적 잠금으로 DB 최종 상태와 이벤트 occurredAt 순서를 맞춘다
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -57,7 +57,7 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     /** 같은 사업자번호의 다른 신청으로 만든 스토어 — 폐점 포함, 소프트 삭제 제외 (store.md 4절 sameBizRegNo) */
     List<Store> findAllByStoreApplicationIdInAndDeletedAtIsNullOrderByIdAsc(Collection<Long> storeApplicationIds);
 
-    // 입점 신청 검사 — uk_store_user_id · uk_store_slug · uk_store_store_name 이 모든 행(폐점 · 소프트 삭제 포함)에 걸리므로 조건 없이 본다
+    // 입점 신청 검사 — uk_store_user_id, uk_store_slug, uk_store_store_name 이 모든 행(폐점, 소프트 삭제 포함)에 걸리므로 조건 없이 본다
 
     boolean existsByUserId(Long userId);
 

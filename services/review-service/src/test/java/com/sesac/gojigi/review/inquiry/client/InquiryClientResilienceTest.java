@@ -36,8 +36,8 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * 서킷 · 재시도가 실제 AOP 로 걸리는지 — application.yml 의 resilience4j 설정(서킷 바깥 · 재시도 안쪽)을 그대로 읽는다.
- * 재시도는 장애(연결 실패 · 타임아웃 · 5xx)만 1회, 4xx 변환(BusinessException)은 재시도도 서킷 실패도 아니다.
+ * 서킷, 재시도가 실제 AOP 로 걸리는지 — application.yml 의 resilience4j 설정(서킷 바깥, 재시도 안쪽)을 그대로 읽는다.
+ * 재시도는 장애(연결 실패, 타임아웃, 5xx)만 1회, 4xx 변환(BusinessException)은 재시도도 서킷 실패도 아니다.
  */
 @SpringBootTest(classes = InquiryClientResilienceTest.Context.class)
 class InquiryClientResilienceTest {
@@ -86,7 +86,7 @@ class InquiryClientResilienceTest {
     }
 
     @Test
-    @DisplayName("타임아웃 · 5xx 가 계속 — 재시도 1회 뒤 502, 화면 문구는 상품 조회 실패")
+    @DisplayName("타임아웃, 5xx 가 계속 — 재시도 1회 뒤 502, 화면 문구는 상품 조회 실패")
     void failureTwice_returns502AfterRetry() {
         given(productClient.getProduct(101L)).willThrow(new ResourceAccessException("timeout"));
         given(userClient.getUser(4L)).willThrow(serverError());

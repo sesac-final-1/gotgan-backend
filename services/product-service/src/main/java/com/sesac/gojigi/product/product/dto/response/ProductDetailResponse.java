@@ -11,7 +11,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 /**
- * 공개 상품 상세 (product.md 10절) — 구매자 화면. 판매자 상세(12절)에서 판매자만 보는 값(status · 사유 · 미노출 이유 · 재고 수 · 이미지 key)을 뺀 모양.
+ * 공개 상품 상세 (product.md 10절) — 구매자 화면. 판매자 상세(12절)에서 판매자만 보는 값(status, 사유, 미노출 이유, 재고 수, 이미지 key)을 뺀 모양.
  * 재고 수는 공개하지 않고 soldOut 만 준다. 옵션 없는 상품도 값이 null 인 옵션 1개 — 장바구니는 언제나 productOptionId 로 담는다.
  */
 public record ProductDetailResponse(
@@ -30,7 +30,7 @@ public record ProductDetailResponse(
     public record OptionItem(Long productOptionId, String option1Value, String option2Value, long extraPrice, boolean soldOut) {
     }
 
-    /** category = 하위, top = 그 상위. 판매중지 · 강제 판매중지 · 카테고리 꺼짐 · 스토어 비활성이면 purchasable=false (보여 주긴 함) */
+    /** category = 하위, top = 그 상위. 판매중지, 강제 판매중지, 카테고리 꺼짐, 스토어 비활성이면 purchasable=false (보여 주긴 함) */
     public static ProductDetailResponse of(Product p, Category category, Category top, ImageUrls imageUrls) {
         List<ProductOption> liveOptions = p.getOptions().stream().filter(o -> o.getDeletedAt() == null).toList();
         boolean purchasable = HiddenReason.of(p, category.isActive() && top.isActive()) == null;

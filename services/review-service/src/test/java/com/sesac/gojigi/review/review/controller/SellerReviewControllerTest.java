@@ -61,7 +61,7 @@ class SellerReviewControllerTest {
     }
 
     @Test
-    @DisplayName("목록 — 기본 tab ALL · page 0 · size 10, X-Store-Id 의 스토어로")
+    @DisplayName("목록 — 기본 tab ALL, page 0, size 10, X-Store-Id 의 스토어로")
     void list_defaults_returns200() throws Exception {
         // given
         SellerReviewResponse review = new SellerReviewResponse(31L, 101L, "린넨 셔츠", "오트밀 / M", "곳간러버", 2, null,
@@ -69,7 +69,7 @@ class SellerReviewControllerTest {
         given(sellerReviewService.list(1L, SellerReviewTab.ALL, null, 0, 10))
                 .willReturn(new PageResponse<>(List.of(review), 0, 10, 1, 1, false));
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(get("/api/seller/reviews")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].reviewId").value(31))
@@ -78,7 +78,7 @@ class SellerReviewControllerTest {
     }
 
     @Test
-    @DisplayName("목록 — tab · productId · page · size 를 그대로 넘긴다")
+    @DisplayName("목록 — tab, productId, page, size 를 그대로 넘긴다")
     void list_withParams_passesThrough() throws Exception {
         given(sellerReviewService.list(1L, SellerReviewTab.NO_REPLY, 101L, 2, 20))
                 .willReturn(new PageResponse<>(List.of(), 2, 20, 0, 0, false));
@@ -91,7 +91,7 @@ class SellerReviewControllerTest {
 
     @ParameterizedTest(name = "{0}={1}")
     @CsvSource({ "tab, VIDEO", "page, -1", "size, 51", "productId, abc" })
-    @DisplayName("목록 — 모르는 tab · 범위 밖 page · size · 숫자 아닌 productId 는 400 INVALID_INPUT")
+    @DisplayName("목록 — 모르는 tab, 범위 밖 page, size, 숫자 아닌 productId 는 400 INVALID_INPUT")
     void list_invalidParam_returns400(String name, String value) throws Exception {
         mockMvc.perform(seller(get("/api/seller/reviews")).param(name, value))
                 .andExpect(status().isBadRequest())
@@ -100,7 +100,7 @@ class SellerReviewControllerTest {
     }
 
     @Test
-    @DisplayName("요약 — 200, 봉투 data 에 평균 · 분포 · 탭 숫자")
+    @DisplayName("요약 — 200, 봉투 data 에 평균, 분포, 탭 숫자")
     void summarize_returns200() throws Exception {
         given(sellerReviewService.summarize(1L)).willReturn(new SellerReviewSummaryResponse(4.5, 2,
                 List.of(new RatingCount(5, 1), new RatingCount(4, 1), new RatingCount(3, 0), new RatingCount(2, 0),
@@ -114,7 +114,7 @@ class SellerReviewControllerTest {
     }
 
     @Test
-    @DisplayName("답글 — 200, 서비스 404 · 409 는 코드 그대로, 빈 답글 · 1,001자는 400")
+    @DisplayName("답글 — 200, 서비스 404, 409 는 코드 그대로, 빈 답글, 1,001자는 400")
     void reply_cases() throws Exception {
         given(sellerReviewService.reply(eq(1L), eq(31L), any(ReviewReplyRequest.class)))
                 .willReturn(new ReviewReplyResponse(31L, "감사합니다", CREATED))

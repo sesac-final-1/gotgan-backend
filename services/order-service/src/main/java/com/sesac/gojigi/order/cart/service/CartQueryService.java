@@ -21,8 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 장바구니 조회 (ORD-02) — 읽기는 Redis cart:{userId} → 미스 · 장애면 MySQL 원본(읽은 뒤 캐시를 다시 채움, read-through).
- * 장바구니에는 "무엇을 몇 개 · 선택했는지"만 있고 가격 · 품절 · 상품명은 조회 때 product 에서 다시, 스토어명 · 배송비 정책은 store 에서 (09장).
+ * 장바구니 조회 (ORD-02) — 읽기는 Redis cart:{userId} → 미스, 장애면 MySQL 원본(읽은 뒤 캐시를 다시 채움, read-through).
+ * 장바구니에는 "무엇을 몇 개, 선택했는지"만 있고 가격, 품절, 상품명은 조회 때 product 에서 다시, 스토어명, 배송비 정책은 store 에서 (09장).
  * 원격 호출이 있어 트랜잭션을 걸지 않는다 (MySQL 읽기는 저장소 메서드 하나).
  */
 @Slf4j
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CartQueryService {
 
-    /** 없는 스토어 — 배송비 · 무료배송 기준 없이 보여 준다 */
+    /** 없는 스토어 — 배송비, 무료배송 기준 없이 보여 준다 */
     private static final ShippingPolicy NO_STORE = new ShippingPolicy(0L, null);
 
     private final CartItemRepository cartItemRepository;
@@ -68,7 +68,7 @@ public class CartQueryService {
                 productAmt + shippingFee);
     }
 
-    /** 스토어 묶음 — 선택된 구매 가능 줄만 금액 · 배송비에 넣는다 */
+    /** 스토어 묶음 — 선택된 구매 가능 줄만 금액, 배송비에 넣는다 */
     private CartResponse.StoreGroup group(Long storeId, List<CartResponse.Line> items) {
         long productAmt = items.stream().filter(l -> l.checked() && l.purchasable())
                 .mapToLong(CartResponse.Line::lineAmt).sum();
@@ -81,14 +81,14 @@ public class CartQueryService {
     }
 
     /**
-     * 스토어 — 없는(삭제된) 스토어면 null: 그 상품은 product 가 구매 불가로 주므로 이름 · 배송비 없이 보여 준다.
+     * 스토어 — 없는(삭제된) 스토어면 null: 그 상품은 product 가 구매 불가로 주므로 이름, 배송비 없이 보여 준다.
      * store 장애는 배송비를 알 수 없어 그대로 502 (틀린 배송비를 보여 주지 않는다)
      */
     private StoreResponse findStore(Long storeId) {
         try {
             return storeClient.getStore(storeId);
         } catch (OrderException e) {
-            log.warn("장바구니 스토어 없음 — 이름 · 배송비 없이 응답 - storeId={}", storeId);
+            log.warn("장바구니 스토어 없음 — 이름, 배송비 없이 응답 - storeId={}", storeId);
             return null;
         }
     }

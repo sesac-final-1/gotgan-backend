@@ -12,9 +12,9 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 
 /**
- * 알림 센터 구독 큐 3개(admin-store · admin-order · admin-settlement-events) 롱폴링 → NotificationService.
+ * 알림 센터 구독 큐 3개(admin-store, admin-order, admin-settlement-events) 롱폴링 → NotificationService.
  * settlement SqsEventPoller 와 같은 방식(AWS SDK v2, 큐마다 가상 스레드 1개, URL 이 비면 띄우지 않음).
- * 처리 성공 · 알림을 만들지 않는 이벤트 = 삭제, 실패 = 남겨 재전달(3회 실패 시 DLQ · 알람). 같은 이벤트 재전달은 알림함 조건부 쓰기로 한 번만
+ * 처리 성공, 알림을 만들지 않는 이벤트 = 삭제, 실패 = 남겨 재전달(3회 실패 시 DLQ, 알람). 같은 이벤트 재전달은 알림함 조건부 쓰기로 한 번만
  */
 @Slf4j
 @Component
@@ -75,7 +75,7 @@ public class NotificationEventPoller implements SmartLifecycle {
                 } else if (consecutiveFailures % FAILURE_SUMMARY_EVERY == 0) {
                     log.error("알림 이벤트 수신 연속 실패 {}회 - queue={}", consecutiveFailures, queueUrl, e);   // 사람이 봐야 하는 error 는 스택까지 (컨벤션 2-8)
                 }
-                sleepQuietly();   // 자격 증명 · 네트워크 오류가 계속될 때 로그 폭주 방지
+                sleepQuietly();   // 자격 증명, 네트워크 오류가 계속될 때 로그 폭주 방지
             }
         }
     }

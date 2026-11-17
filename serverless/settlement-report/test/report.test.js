@@ -47,7 +47,7 @@ test('정상 — 선점 → CSV 업로드 → 메일 → 발송 완료 순서, �
   assert.equal(done.input.ExpressionAttributeValues[':sent'], 'SENT');
 });
 
-test('이미 발송한 정산(조건 실패)은 건너뛴다 — 재전달 · 아웃박스 재발행에도 메일 1번', async () => {
+test('이미 발송한 정산(조건 실패)은 건너뛴다 — 재전달, 아웃박스 재발행에도 메일 1번', async () => {
   const err = Object.assign(new Error('conditional'), { name: 'ConditionalCheckFailedException' });
   const { calls, deps } = fake({ PutCommand: err });
   const result = await createHandler(deps)({ Records: [record(envelope())] });
@@ -82,7 +82,7 @@ test('받는 주소가 없으면 메일을 보내지 않고 실패 — 재전달
   assert.ok(!calls.some((c) => c.type === 'SendEmailCommand'));
 });
 
-test('여러 레코드 중 실패한 것만 돌려준다 — 깨진 JSON · S3 실패', async () => {
+test('여러 레코드 중 실패한 것만 돌려준다 — 깨진 JSON, S3 실패', async () => {
   const { deps } = fake();
   const okThenS3Fail = fake({ PutObjectCommand: new Error('S3 503') });
   const ok = await createHandler(deps)({ Records: [record(envelope(), 'm-ok'), { messageId: 'm-broken', body: '{not json' }] });
@@ -105,7 +105,7 @@ test('빈 이벤트도 처리한다', async () => {
   assert.deepEqual(await createHandler(deps)({ Records: [] }), { batchItemFailures: [] });
 });
 
-test('CSV — BOM · 머리 정보 · 항목 · 합계, 쉼표 · 따옴표 있는 상품명은 따옴표로 감쌈', () => {
+test('CSV — BOM, 머리 정보, 항목, 합계, 쉼표, 따옴표 있는 상품명은 따옴표로 감쌈', () => {
   const csv = buildCsv(payload);
 
   assert.ok(csv.startsWith('﻿'));
@@ -119,14 +119,14 @@ test('CSV — BOM · 머리 정보 · 항목 · 합계, 쉼표 · 따옴표 있�
   assert.equal(csvCell('줄\n바꿈'), '"줄\n바꿈"');
 });
 
-test('엑셀용 일시 — KST ISO(나노초 포함)를 날짜 · 시:분으로, 형식이 다르면 그대로', () => {
+test('엑셀용 일시 — KST ISO(나노초 포함)를 날짜, 시:분으로, 형식이 다르면 그대로', () => {
   assert.equal(displayDateTime('2026-10-21T12:03:26.739816283+09:00'), '2026-10-21 12:03');
   assert.equal(displayDateTime('2026-10-13T10:00:00+09:00'), '2026-10-13 10:00');
   assert.equal(displayDateTime('2026-10-13'), '2026-10-13');
   assert.equal(displayDateTime(null), '');
 });
 
-test('메일 — 제목에 주차 · 지급액, 본문에 판매자 정산 화면 링크(다운로드는 화면에서 10분 링크)', () => {
+test('메일 — 제목에 주차, 지급액, 본문에 판매자 정산 화면 링크(다운로드는 화면에서 10분 링크)', () => {
   const { subject, text } = buildEmail(payload, ENV.FRONT_URL);
 
   assert.equal(subject, '[곳간] 2026-W44 정산금 51,212원 지급 완료');
@@ -135,7 +135,7 @@ test('메일 — 제목에 주차 · 지급액, 본문에 판매자 정산 화�
   assert.equal(reportKey(payload), 'reports/3/2026-W44.csv');
 });
 
-test('메일 HTML — 주문 알림과 같은 틀(로고 · 배지 · 제목 · 금액 표 · 지급액 강조 · 정산 화면 버튼), 스토어명 이스케이프', () => {
+test('메일 HTML — 주문 알림과 같은 틀(로고, 배지, 제목, 금액 표, 지급액 강조, 정산 화면 버튼), 스토어명 이스케이프', () => {
   const { html } = buildEmail({ ...payload, storeName: '곳간 & <상회>' }, ENV.FRONT_URL);
 
   assert.ok(html.startsWith('<!doctype html>'));

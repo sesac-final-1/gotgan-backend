@@ -47,7 +47,7 @@ public class PortOneWebhookVerifier {
 
     public void verify(String webhookId, String webhookTimestamp, String webhookSignature, String body) {
         if (key.length == 0 || isBlank(webhookId) || isBlank(webhookTimestamp) || isBlank(webhookSignature) || body == null) {
-            throw invalid("필수 헤더 · 시크릿 없음");
+            throw invalid("필수 헤더, 시크릿 없음");
         }
         long timestamp;
         try {

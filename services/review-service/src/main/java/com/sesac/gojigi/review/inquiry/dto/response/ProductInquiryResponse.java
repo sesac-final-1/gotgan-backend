@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
-/** 상품 상세 Q&A 한 건 (review.md 16절) — 프론트 ShopProductQna. 비밀글은 작성자 · 그 스토어 판매자가 아니면 내용 · 답변을 비운다 */
+/** 상품 상세 Q&A 한 건 (review.md 16절) — 프론트 ShopProductQna. 비밀글은 작성자, 그 스토어 판매자가 아니면 내용, 답변을 비운다 */
 public record ProductInquiryResponse(
         @Schema(description = "상품 문의 ID", example = "12")
         Long inquiryId,
@@ -14,7 +14,7 @@ public record ProductInquiryResponse(
         String writerDisplayName,
         @Schema(description = "비밀글", example = "false")
         boolean secret,
-        @Schema(description = "내가 쓴 문의 — 수정 · 삭제 버튼용 (비로그인은 false)", example = "false")
+        @Schema(description = "내가 쓴 문의 — 수정, 삭제 버튼용 (비로그인은 false)", example = "false")
         boolean mine,
         @Schema(description = "문의 내용 — 볼 수 없는 비밀글이면 null", example = "M이랑 L 중 어떤 걸 추천하시나요?")
         String content,
@@ -29,7 +29,7 @@ public record ProductInquiryResponse(
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    /** viewerUserId · viewerStoreId — 비로그인은 null */
+    /** viewerUserId, viewerStoreId — 비로그인은 null */
     public static ProductInquiryResponse of(ProductInquiry inquiry, Long viewerUserId, Long viewerStoreId) {
         boolean readable = inquiry.isReadableBy(viewerUserId, viewerStoreId);
         return new ProductInquiryResponse(inquiry.getId(), inquiry.getWriterDisplayName(), inquiry.isSecret(),

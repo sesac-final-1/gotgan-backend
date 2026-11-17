@@ -20,7 +20,7 @@ class StoreApplicationTest {
 
     @ParameterizedTest
     @EnumSource(value = ApplicationStatus.class, names = {"PENDING", "SUPPLEMENT"})
-    @DisplayName("심사대기 · 보완요청 신청은 승인되고, 상태 변경 시각은 승인 시각 · 사유는 비워진다")
+    @DisplayName("심사대기, 보완요청 신청은 승인되고, 상태 변경 시각은 승인 시각, 사유는 비워진다")
     void approve_whenPendingOrSupplement_becomesApproved(ApplicationStatus from) {
         // given
         StoreApplication application = application(from, "사업자등록증을 다시 올려 주세요.");
@@ -36,12 +36,12 @@ class StoreApplicationTest {
 
     @ParameterizedTest
     @EnumSource(value = ApplicationStatus.class, names = {"APPROVED", "REJECTED"})
-    @DisplayName("이미 승인 · 반려된 신청은 승인할 수 없어 409 APPLY_INVALID_STATUS 이고 상태는 그대로다")
+    @DisplayName("이미 승인, 반려된 신청은 승인할 수 없어 409 APPLY_INVALID_STATUS 이고 상태는 그대로다")
     void approve_whenAlreadyDecided_throwsInvalidStatus(ApplicationStatus from) {
         // given
         StoreApplication application = application(from, null);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> application.approve(DECIDED_AT))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())

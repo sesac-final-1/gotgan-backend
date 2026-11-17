@@ -9,7 +9,7 @@ import java.util.List;
 
 /** 재고 수정 (product.md 14절) — 화면에서 본 재고(seenStock)를 같이 보낸다. 같은 옵션 중복은 서비스가 INVALID_INPUT 으로 검사 */
 public record ProductStockUpdateRequest(
-        @Schema(description = "바꿀 옵션 조합 · 재고")
+        @Schema(description = "바꿀 옵션 조합, 재고")
         @NotEmpty(message = "바꿀 재고가 없습니다.")
         List<@Valid @NotNull Item> items) {
 

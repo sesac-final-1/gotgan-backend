@@ -54,7 +54,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 결제완료 단계 취소 접수 · 완료 — 환불 금액(현금 · 포인트 · 배송비) · 상태 · 이력 · 접수 거절 (MySQL 8.4 + Flyway) */
+/** 결제완료 단계 취소 접수, 완료 — 환불 금액(현금, 포인트, 배송비), 상태, 이력, 접수 거절 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, CancelItemTxService.class, OrderSagaTxService.class, SimpleMeterRegistry.class,
@@ -90,8 +90,8 @@ class CancelItemTxServiceIntegrationTest {
     }
 
     /**
-     * 결제 완료 주문 — 스토어 901: A 10,000 · B 5,000 (배송비 3,000), 스토어 902: C 20,000 (배송비 3,000).
-     * 상품 35,000 + 배송비 6,000 - usePoint. 상품주문은 A · B · C 순서
+     * 결제 완료 주문 — 스토어 901: A 10,000, B 5,000 (배송비 3,000), 스토어 902: C 20,000 (배송비 3,000).
+     * 상품 35,000 + 배송비 6,000 - usePoint. 상품주문은 A, B, C 순서
      */
     private Order paidOrder(long buyerId, long usePoint) {
         OrderCreateRequest request = new OrderCreateRequest(List.of(new OrderCreateRequest.Item(91L, 1)), "김구매",
@@ -119,7 +119,7 @@ class CancelItemTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("현금 결제 — 상품 금액만 환불하다가, 스토어 마지막 상품주문이면 배송비까지 · 합계는 결제 금액과 같다")
+    @DisplayName("현금 결제 — 상품 금액만 환불하다가, 스토어 마지막 상품주문이면 배송비까지, 합계는 결제 금액과 같다")
     void open_refundsItemThenShippingOnLastOfStore() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -163,7 +163,7 @@ class CancelItemTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("접수 — 클레임 자동 승인 · 상품주문 CANCEL_REQUESTED · 이력 · 취소 Saga(PAYMENT_CANCEL_REQUESTED), 다시 읽어도 같은 값")
+    @DisplayName("접수 — 클레임 자동 승인, 상품주문 CANCEL_REQUESTED, 이력, 취소 Saga(PAYMENT_CANCEL_REQUESTED), 다시 읽어도 같은 값")
     void open_recordsClaimItemHistorySaga() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -186,7 +186,7 @@ class CancelItemTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("완료 — 상품주문 CANCELLED · 클레임 COMPLETED · Saga 완료, 모든 상품주문이 취소되면 주문 CANCELLED")
+    @DisplayName("완료 — 상품주문 CANCELLED, 클레임 COMPLETED, Saga 완료, 모든 상품주문이 취소되면 주문 CANCELLED")
     void finish_cancelsItemAndOrderWhenAll() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -217,7 +217,7 @@ class CancelItemTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("복구 대상 — 재시도 시각이 지났거나 시각 없이 멈춘 취소 Saga 만 (방금 접수한 것 · 완료된 것은 제외)")
+    @DisplayName("복구 대상 — 재시도 시각이 지났거나 시각 없이 멈춘 취소 Saga 만 (방금 접수한 것, 완료된 것은 제외)")
     void findCancelRetryable() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -247,7 +247,7 @@ class CancelItemTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("접수 거절 — 다른 회원 404 · 이 주문에 없는 상품주문 404 · 진행 중 409 · 결제완료가 아님 409")
+    @DisplayName("접수 거절 — 다른 회원 404, 이 주문에 없는 상품주문 404, 진행 중 409, 결제완료가 아님 409")
     void open_rejects() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -261,7 +261,7 @@ class CancelItemTxServiceIntegrationTest {
                 Map.of(901L, "곳간상회")).order();
         cancel(buyer, order, item);
 
-        // when · then
+        // when, then
         assertCode(() -> cancel(buyer + 100, order, item), OrderErrorCode.ORDER_NOT_FOUND);
         assertCode(() -> cancel(buyer, order, items(other).get(0)), ClaimErrorCode.CLAIM_ITEM_NOT_FOUND);
         assertCode(() -> cancel(buyer, order, item), ClaimErrorCode.CLAIM_IN_PROGRESS);

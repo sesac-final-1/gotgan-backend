@@ -20,8 +20,8 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /**
- * in-cluster 쿠버네티스 API 클라이언트 — 파드에 마운트된 ServiceAccount 의 ca.crt(서버 인증서 확인) · token(Bearer).
- * 클러스터 밖(로컬 · 테스트)에는 파일이 없어 호출이 실패하고 503 으로 응답한다 — 기동은 막지 않는다
+ * in-cluster 쿠버네티스 API 클라이언트 — 파드에 마운트된 ServiceAccount 의 ca.crt(서버 인증서 확인), token(Bearer).
+ * 클러스터 밖(로컬, 테스트)에는 파일이 없어 호출이 실패하고 503 으로 응답한다 — 기동은 막지 않는다
  */
 @Configuration
 public class KubernetesClientConfig {

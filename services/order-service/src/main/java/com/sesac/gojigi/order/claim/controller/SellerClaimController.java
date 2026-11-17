@@ -28,22 +28,22 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 판매자 클레임 처리 (CLM-05) — 게이트웨이가 SELLER 역할을 확인하고 X-Store-Id 로 본인 스토어를 알려 준다 */
-@Tag(name = "판매자 클레임", description = "취소 · 반품 · 교환 처리 — 인가: 판매자 (X-Store-Id 본인 스토어만)")
+@Tag(name = "판매자 클레임", description = "취소, 반품, 교환 처리 — 인가: 판매자 (X-Store-Id 본인 스토어만)")
 @RestController
 @RequestMapping("/api/seller/claims")
 @RequiredArgsConstructor
 public class SellerClaimController {
 
     private static final String ERRORS = """
-            에러: 404 CLAIM_NOT_FOUND(없음 · 남의 스토어) · 409 CLAIM_INVALID_STATUS(지금 상태 · 유형에서 할 수 없음) · 403 FORBIDDEN(스토어 없음)""";
+            에러: 404 CLAIM_NOT_FOUND(없음, 남의 스토어), 409 CLAIM_INVALID_STATUS(지금 상태, 유형에서 할 수 없음), 403 FORBIDDEN(스토어 없음)""";
 
     private final ClaimQueryService claimQueryService;
     private final SellerClaimTxService sellerClaimTx;
     private final CancelOrderItemSaga cancelOrderItemSaga;
 
     @Operation(summary = "판매자 클레임 목록", description = """
-            stage: OPEN(처리대기 — REQUESTED · APPROVED · COLLECTED · RESHIPPED) · DONE(처리완료 — COMPLETED · REJECTED · WITHDRAWN), type: 유형(없으면 전체).
-            최신 요청 먼저, page 0부터 · size 기본 20 · 최대 100. stageCounts 는 고른 유형 기준, typeCounts 는 고른 단계 기준.""")
+            stage: OPEN(처리대기 — REQUESTED, APPROVED, COLLECTED, RESHIPPED), DONE(처리완료 — COMPLETED, REJECTED, WITHDRAWN), type: 유형(없으면 전체).
+            최신 요청 먼저, page 0부터, size 기본 20, 최대 100. stageCounts 는 고른 유형 기준, typeCounts 는 고른 단계 기준.""")
     @GetMapping
     public ApiResponse<SellerClaimListResponse> list(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                                      @RequestParam(defaultValue = "OPEN") ClaimStage stage,
@@ -61,7 +61,7 @@ public class SellerClaimController {
         return ApiResponse.success("클레임을 조회했습니다.", claimQueryService.getSeller(user.storeId(), claimId));
     }
 
-    @Operation(summary = "승인 (반품 · 교환 → 수거 요청)", description = "REQUESTED → APPROVED. 회수 후 수거 완료를 눌러 주세요.\n" + ERRORS)
+    @Operation(summary = "승인 (반품, 교환 → 수거 요청)", description = "REQUESTED → APPROVED. 회수 후 수거 완료를 눌러 주세요.\n" + ERRORS)
     @PatchMapping("/{claimId}/approve")
     public ApiResponse<ClaimDetailResponse> approve(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                                     @PathVariable Long claimId) {
@@ -78,7 +78,7 @@ public class SellerClaimController {
     }
 
     @Operation(summary = "수거 완료", description = """
-            APPROVED → COLLECTED. 반품은 이어서 환불(결제 부분 취소 → 재고 복원 → 포인트 환원 · 회수) — 끝나면 COMPLETED(상품주문 RETURNED),
+            APPROVED → COLLECTED. 반품은 이어서 환불(결제 부분 취소 → 재고 복원 → 포인트 환원, 회수) — 끝나면 COMPLETED(상품주문 RETURNED),
             결제 취소가 막히면 COLLECTED 로 남고 자동으로 마저 진행. 교환은 이어서 재배송 송장.
             """ + ERRORS)
     @PatchMapping("/{claimId}/collect")
@@ -93,8 +93,8 @@ public class SellerClaimController {
     }
 
     @Operation(summary = "교환 재배송 송장", description = """
-            COLLECTED → RESHIPPED. 송장번호를 비우면 mock 번호. 재배송의 배송완료는 주문 관리의 배송완료 버튼 · 자동 배송완료가 처리하고
-            그때 교환완료(COMPLETED · 상품주문 다시 배송완료).
+            COLLECTED → RESHIPPED. 송장번호를 비우면 mock 번호. 재배송의 배송완료는 주문 관리의 배송완료 버튼, 자동 배송완료가 처리하고
+            그때 교환완료(COMPLETED, 상품주문 다시 배송완료).
             """ + ERRORS)
     @PatchMapping("/{claimId}/reship")
     public ApiResponse<ClaimDetailResponse> reship(@Parameter(hidden = true) @CurrentUser AuthUser user,

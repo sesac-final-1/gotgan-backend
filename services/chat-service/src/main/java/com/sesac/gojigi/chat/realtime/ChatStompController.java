@@ -18,7 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * SEND /pub/rooms/{roomId} {content} — 저장 후 커밋되면 구독자에게(ChatRealtimeListener). 업무 오류는 보낸 연결의 /user/queue/errors 로, 연결은 유지.
- * SEND /pub/rooms/{roomId}/typing — 입력 중 신호, 저장 · 알림 없이 같은 방 구독자에게만 (읽기 전용 열람은 무시)
+ * SEND /pub/rooms/{roomId}/typing — 입력 중 신호, 저장, 알림 없이 같은 방 구독자에게만 (읽기 전용 열람은 무시)
  */
 @Controller
 @RequiredArgsConstructor

@@ -12,8 +12,8 @@ import java.time.ZoneId;
 import java.util.List;
 
 /**
- * 판매자 상품 상세 (product.md 12절) — 등록 · 수정 응답과 수정 화면 조회가 같이 쓴다.
- * 공개 상세(10절)에 판매자만 보는 값(status · statusReason · hiddenReason · 옵션 stock · 이미지 key)을 더한 모양.
+ * 판매자 상품 상세 (product.md 12절) — 등록, 수정 응답과 수정 화면 조회가 같이 쓴다.
+ * 공개 상세(10절)에 판매자만 보는 값(status, statusReason, hiddenReason, 옵션 stock, 이미지 key)을 더한 모양.
  */
 public record SellerProductDetailResponse(
         Long productId, Long storeId,

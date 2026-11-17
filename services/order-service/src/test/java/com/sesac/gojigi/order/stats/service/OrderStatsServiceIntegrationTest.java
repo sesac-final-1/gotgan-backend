@@ -44,7 +44,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 스토어 · 전체 주문 통계 — 상태별 건수 · 진행 중 상품주문 · 오늘 매출 · 거래액 (MySQL 8.4 + Flyway) */
+/** 스토어, 전체 주문 통계 — 상태별 건수, 진행 중 상품주문, 오늘 매출, 거래액 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderStatsService.class,
@@ -112,7 +112,7 @@ class OrderStatsServiceIntegrationTest {
         return orderItemRepository.findByOrderIdOrderByIdAsc(order.getId()).get(0);
     }
 
-    /** 발주확인 · 송장 · 취소 전이 메서드가 아직 없어 상태는 SQL 로 바꾼다 */
+    /** 발주확인, 송장, 취소 전이 메서드가 아직 없어 상태는 SQL 로 바꾼다 */
     private void setStatus(OrderItem item, OrderItemStatus status) {
         jdbc.update("update order_item set status = ? where order_item_id = ?", status.name(), item.getId());
     }
@@ -132,7 +132,7 @@ class OrderStatsServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("스토어 통계 — 진행 중은 결제 완료 ~ 배송 완료 + 클레임 진행 중(환불 미완료 취소 포함), 끝난 주문 · 결제 전은 빠진다")
+    @DisplayName("스토어 통계 — 진행 중은 결제 완료 ~ 배송 완료 + 클레임 진행 중(환불 미완료 취소 포함), 끝난 주문, 결제 전은 빠진다")
     void getStoreStats() {
         // given — 진행 중 6건
         order(true);                                               // PAYMENT_DONE
@@ -142,7 +142,7 @@ class OrderStatsServiceIntegrationTest {
         paidWith(OrderItemStatus.DELIVERED);
         Order refunding = paidWith(OrderItemStatus.CANCELLED);    // 취소 완료지만 환불 진행 중(클레임 APPROVED)
         claim(refunding, ClaimStatus.APPROVED);
-        Order yesterday = order(true);                             // PAYMENT_DONE · 어제 결제라 매출에서만 빠짐
+        Order yesterday = order(true);                             // PAYMENT_DONE, 어제 결제라 매출에서만 빠짐
         jdbc.update("update orders set paid_at = ? where order_id = ?", LocalDateTime.of(2026, 10, 21, 23, 59),
                 yesterday.getId());
         // 끝났거나 결제 전 — 진행 중 아님
@@ -161,7 +161,7 @@ class OrderStatsServiceIntegrationTest {
         assertThat(result.toShipCount()).isEqualTo(1L);
         assertThat(result.claimCount()).isEqualTo(2L);
         assertThat(result.inProgressCount()).isEqualTo(6L);
-        // 오늘 결제 · 취소 · 반품 완료 아님: PAYMENT_DONE · PREPARING · SHIPPING · DELIVERED · CONFIRMED
+        // 오늘 결제, 취소, 반품 완료 아님: PAYMENT_DONE, PREPARING, SHIPPING, DELIVERED, CONFIRMED
         assertThat(result.todaySalesAmt()).isEqualTo(5 * 20_000L);
     }
 
@@ -179,13 +179,13 @@ class OrderStatsServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("일별 통계 — 최근 days 일을 결제일(KST)별로, 거래 없는 날은 0 · 취소 상품주문 제외 · 범위 밖 · 결제 전은 빠진다")
+    @DisplayName("일별 통계 — 최근 days 일을 결제일(KST)별로, 거래 없는 날은 0, 취소 상품주문 제외, 범위 밖, 결제 전은 빠진다")
     void getDailyStats() {
         // given — 오늘 2026-10-22, days=3 → 10-20 ~ 10-22
         List<DailyOrderStatsResponse> before = stats.getDailyStats(null, 3);
-        order(DAILY_STORE, true);                                         // 오늘 · 스토어 20,000 + 다른 스토어 5,000
+        order(DAILY_STORE, true);                                         // 오늘, 스토어 20,000 + 다른 스토어 5,000
         paidAt(order(DAILY_STORE, true), LocalDateTime.of(2026, 10, 21, 23, 59));   // 어제 끝
-        Order cancelled = order(DAILY_STORE, true);                       // 오늘 · 스토어 상품주문 취소 → 다른 스토어 5,000 만
+        Order cancelled = order(DAILY_STORE, true);                       // 오늘, 스토어 상품주문 취소 → 다른 스토어 5,000 만
         setStatus(storeItem(cancelled), OrderItemStatus.CANCELLED);
         paidAt(order(DAILY_STORE, true), LocalDateTime.of(2026, 10, 19, 23, 59));   // 범위 밖
         order(DAILY_STORE, false);                                        // 결제 전
@@ -210,12 +210,12 @@ class OrderStatsServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("전체 통계 — 결제된 주문만 주문 수 · 거래액에 더해진다 (결제 전 · 실패 · 취소된 상품주문 제외)")
+    @DisplayName("전체 통계 — 결제된 주문만 주문 수, 거래액에 더해진다 (결제 전, 실패, 취소된 상품주문 제외)")
     void getPlatformStats() {
         // given
         PlatformOrderStatsResponse before = stats.getPlatformStats();
-        order(PLATFORM_STORE, true);                   // +1건 · +25,000
-        Order cancelledItem = order(PLATFORM_STORE, true);   // +1건 · 첫 상품주문 취소라 +5,000
+        order(PLATFORM_STORE, true);                   // +1건, +25,000
+        Order cancelledItem = order(PLATFORM_STORE, true);   // +1건, 첫 상품주문 취소라 +5,000
         setStatus(storeItem(cancelledItem), OrderItemStatus.CANCELLED);
         order(PLATFORM_STORE, false);                  // 결제 전 — 안 셈
         orderTx.markFailed(order(PLATFORM_STORE, false).getId());   // 실패 — 안 셈
@@ -229,7 +229,7 @@ class OrderStatsServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("구매자 통계 — 스토어 통계와 같은 진행 중 기준을 buyer_id 로, 진행 중 클레임 수 따로 · 다른 구매자 · 끝난 주문 · 결제 전은 빠진다")
+    @DisplayName("구매자 통계 — 스토어 통계와 같은 진행 중 기준을 buyer_id 로, 진행 중 클레임 수 따로, 다른 구매자, 끝난 주문, 결제 전은 빠진다")
     void getBuyerStats() {
         // given — 구매자 731
         long buyer = 731L;
@@ -238,7 +238,7 @@ class OrderStatsServiceIntegrationTest {
         setStatus(storeItem(refunding), OrderItemStatus.CANCELLED);
         claim(refunding, ClaimStatus.APPROVED);
         setStatus(orderItemRepository.findByOrderIdOrderByIdAsc(refunding.getId()).get(1), OrderItemStatus.CONFIRMED);
-        Order done = order(BUYER_STORE, true, buyer);                             // 끝난 주문 — 구매확정 · 반품 완료(클레임 완료)
+        Order done = order(BUYER_STORE, true, buyer);                             // 끝난 주문 — 구매확정, 반품 완료(클레임 완료)
         setStatus(storeItem(done), OrderItemStatus.CONFIRMED);
         setStatus(orderItemRepository.findByOrderIdOrderByIdAsc(done.getId()).get(1), OrderItemStatus.RETURNED);
         claim(done, ClaimStatus.COMPLETED);

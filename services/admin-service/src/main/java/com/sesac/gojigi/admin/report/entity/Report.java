@@ -13,7 +13,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 회원 · 리뷰 신고 — 신고자 · 대상당 1건(uk_report_target_reporter). OPEN 만 처리 대상 */
+/** 회원, 리뷰 신고 — 신고자, 대상당 1건(uk_report_target_reporter). OPEN 만 처리 대상 */
 @Getter
 @Entity
 @Table(name = "report")

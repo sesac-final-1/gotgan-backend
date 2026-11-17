@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 입점 서류 업로드 주소 발급 (STR-02, docs/api/store.md 2-1절). 담당 박지연.
- * 개수 · 형식 · 크기만 1차로 막고, 서류 구성(3종 각 1 + 사진 3~10)은 신청 때 검사한다 — 폼 단계마다 나눠 불러도 되게.
+ * 개수, 형식, 크기만 1차로 막고, 서류 구성(3종 각 1 + 사진 3~10)은 신청 때 검사한다 — 폼 단계마다 나눠 불러도 되게.
  * 키는 applications/{userId}/{UUID}.{확장자} — 신청은 내 경로 키만 받는다.
  */
 @Service

@@ -13,9 +13,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 
 /**
- * payment-service 호출 — 서킷 브레이커 "payment", 재시도 없음(모두 POST — Saga 가 sagaId · orderNo 로 다시 부른다).
+ * payment-service 호출 — 서킷 브레이커 "payment", 재시도 없음(모두 POST — Saga 가 sagaId, orderNo 로 다시 부른다).
  * 취소의 409 PAYMENT_CANCEL_PENDING 은 "결과 모름" — 여기서는 EXTERNAL_API_ERROR 로 올리고, Saga 가 보상 미완료로 남겨 재시도한다
- * (docs/api/payment.md 3 · 8절). 실패 변환 규칙은 RemoteCalls.
+ * (docs/api/payment.md 3, 8절). 실패 변환 규칙은 RemoteCalls.
  */
 @Component
 @RequiredArgsConstructor
@@ -37,9 +37,9 @@ public class PaymentClientAdapter {
     }
 
     /**
-     * 결제 검증 (Saga PAYMENT_VERIFIED) — payment 가 포트원에 직접 조회해 상태 · 금액(= order 의 payAmt)을 비교 (payment.md 2절).
-     * 미결제(결제창 진행 중 · 닫음)는 ORDER_PAYMENT_NOT_COMPLETED — 결제 대기 유지.
-     * 금액 불일치(payment 가 이미 자동 환불) · 끝난 결제 · 결제 없음은 ORDER_PAYMENT_FAILED — 보상 대상.
+     * 결제 검증 (Saga PAYMENT_VERIFIED) — payment 가 포트원에 직접 조회해 상태, 금액(= order 의 payAmt)을 비교 (payment.md 2절).
+     * 미결제(결제창 진행 중, 닫음)는 ORDER_PAYMENT_NOT_COMPLETED — 결제 대기 유지.
+     * 금액 불일치(payment 가 이미 자동 환불), 끝난 결제, 결제 없음은 ORDER_PAYMENT_FAILED — 보상 대상.
      */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "verifyFallback")
     public PaymentResponse verify(PaymentVerifyRequest request) {

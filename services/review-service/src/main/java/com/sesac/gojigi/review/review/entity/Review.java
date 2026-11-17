@@ -20,9 +20,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 상품 리뷰 — 작성 자격(상품주문)당 1개, 판매자 답글 1개 (REV-02 · 05 · 06). review → review_eligibility 단방향, 소프트 삭제.
- * 블라인드는 관리자 조치(admin-service 가 내부 API 로 요청) — 상태의 주인은 review, 신고 · 조치 이력은 admindb (B안).
- * 본문 · 답글은 서비스 계층에서 sanitizer 로 정화한 값이 들어온다.
+ * 상품 리뷰 — 작성 자격(상품주문)당 1개, 판매자 답글 1개 (REV-02, 05, 06). review → review_eligibility 단방향, 소프트 삭제.
+ * 블라인드는 관리자 조치(admin-service 가 내부 API 로 요청) — 상태의 주인은 review, 신고, 조치 이력은 admindb (B안).
+ * 본문, 답글은 서비스 계층에서 sanitizer 로 정화한 값이 들어온다.
  */
 @Getter
 @Entity
@@ -98,7 +98,7 @@ public class Review extends BaseTimeEntity {
         this.fit = fit;
     }
 
-    /** 작성 — 상품주문 · 작성자 · 상품 · 스토어 · 표시 이름은 작성 자격에서 복사 (자격 · 기한 검사는 서비스 계층) */
+    /** 작성 — 상품주문, 작성자, 상품, 스토어, 표시 이름은 작성 자격에서 복사 (자격, 기한 검사는 서비스 계층) */
     public static Review write(ReviewEligibility eligibility, int rating, String title, String content, ReviewFit fit) {
         return new Review(eligibility, rating, title, content, fit);
     }
@@ -111,7 +111,7 @@ public class Review extends BaseTimeEntity {
         this.fit = fit;
     }
 
-    /** 판매자 답글 작성 · 수정 — 1개라 덮어쓴다 (블라인드된 리뷰는 답글 불가, 서비스 계층에서 검사) */
+    /** 판매자 답글 작성, 수정 — 1개라 덮어쓴다 (블라인드된 리뷰는 답글 불가, 서비스 계층에서 검사) */
     public void reply(String replyContent, LocalDateTime repliedAt) {
         this.replyContent = replyContent;
         this.repliedAt = repliedAt;
@@ -127,14 +127,14 @@ public class Review extends BaseTimeEntity {
         this.blindedAt = blindedAt;
     }
 
-    /** 블라인드 해제 — 사유 · 시각도 비운다 */
+    /** 블라인드 해제 — 사유, 시각도 비운다 */
     public void unblind() {
         this.blinded = false;
         this.blindReason = null;
         this.blindedAt = null;
     }
 
-    /** 물리 DELETE 금지 — 평균 · 분포 집계에서 빠진다 */
+    /** 물리 DELETE 금지 — 평균, 분포 집계에서 빠진다 */
     public void softDelete(LocalDateTime deletedAt) {
         this.deletedAt = deletedAt;
     }
@@ -147,7 +147,7 @@ public class Review extends BaseTimeEntity {
         return replyContent != null;
     }
 
-    /** 소유권 검사 — 다른 회원의 리뷰 수정 · 삭제 차단 */
+    /** 소유권 검사 — 다른 회원의 리뷰 수정, 삭제 차단 */
     public boolean isOwnedBy(Long userId) {
         return Objects.equals(this.userId, userId);
     }

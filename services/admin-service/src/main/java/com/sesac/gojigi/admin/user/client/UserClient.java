@@ -11,7 +11,7 @@ import org.springframework.web.service.annotation.PatchExchange;
 import tools.jackson.databind.JsonNode;
 
 /**
- * user-service 관리자 회원 내부 API (#78 · #79 · #80) — 응답은 관리자 화면에 그대로 전달하므로 JsonNode 로 받는다.
+ * user-service 관리자 회원 내부 API (#78, #79, #80) — 응답은 관리자 화면에 그대로 전달하므로 JsonNode 로 받는다.
  * 관리자 X-User-Id 를 모든 호출에 실어 user 로그에 처리자가 남게 한다 (10/23 답변 2-1). 직접 쓰지 않고 UserClientAdapter 를 거친다
  */
 @HttpExchange("/internal/users")

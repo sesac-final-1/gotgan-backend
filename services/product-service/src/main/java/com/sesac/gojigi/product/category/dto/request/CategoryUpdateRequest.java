@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-/** 카테고리 수정 — 이름 · 영문명 · 정렬만. 부모 변경(상위 · 하위 이동)은 없음 */
+/** 카테고리 수정 — 이름, 영문명, 정렬만. 부모 변경(상위, 하위 이동)은 없음 */
 public record CategoryUpdateRequest(
         @Schema(description = "카테고리 이름", example = "셔츠")
         @NotBlank(message = "카테고리 이름을 입력해 주세요.") @Size(max = 50, message = "카테고리 이름은 50자 이하로 입력해 주세요.")

@@ -28,8 +28,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * SQS 로 받은 봉투 JSON 을 리스너에 그대로 넣어 DB 반영까지 확인 — 실제 MySQL(Testcontainers) · Flyway V1~V5.
- * 테스트마다 다른 storeId · orderItemId 를 써서 서로 영향이 없게 한다. (폴러 자체는 SqsEventPollerTest)
+ * SQS 로 받은 봉투 JSON 을 리스너에 그대로 넣어 DB 반영까지 확인 — 실제 MySQL(Testcontainers), Flyway V1~V5.
+ * 테스트마다 다른 storeId, orderItemId 를 써서 서로 영향이 없게 한다. (폴러 자체는 SqsEventPollerTest)
  */
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
@@ -74,7 +74,7 @@ class SettlementEventListenerIntegrationTest {
     class StoreApproved {
 
         @Test
-        @DisplayName("스냅샷 생성 — 스토어명 · 판매자 이메일 · 정산 계좌, 상태 ACTIVE")
+        @DisplayName("스냅샷 생성 — 스토어명, 판매자 이메일, 정산 계좌, 상태 ACTIVE")
         void storeApproved_createsSnapshot() {
             long storeId = SEQ.incrementAndGet();
             storeApprovedListener.onMessage(storeApproved(id(), storeId));
@@ -89,7 +89,7 @@ class SettlementEventListenerIntegrationTest {
         }
 
         @Test
-        @DisplayName("같은 eventId 재전달 · 같은 스토어 다른 eventId 모두 스냅샷 1건")
+        @DisplayName("같은 eventId 재전달, 같은 스토어 다른 eventId 모두 스냅샷 1건")
         void storeApproved_idempotent() {
             long storeId = SEQ.incrementAndGet();
             String eventId = id();
@@ -133,7 +133,7 @@ class SettlementEventListenerIntegrationTest {
         }
 
         @Test
-        @DisplayName("구매확정일에 유효한 수수료율 스냅샷 · 수수료 원 단위 내림 · 상품명 · 구매확정 시각(KST)")
+        @DisplayName("구매확정일에 유효한 수수료율 스냅샷, 수수료 원 단위 내림, 상품명, 구매확정 시각(KST)")
         void itemConfirmed_loadsWithEffectiveCommission() {
             long orderItemId = SEQ.incrementAndGet();
             orderItemConfirmedListener.onMessage(itemConfirmed(id(), orderItemId, category, 12_345L, "2026-10-21T00:12:33Z"));
@@ -159,7 +159,7 @@ class SettlementEventListenerIntegrationTest {
         }
 
         @Test
-        @DisplayName("같은 eventId 재전달 · 같은 상품주문 다른 eventId 모두 1건만 적재")
+        @DisplayName("같은 eventId 재전달, 같은 상품주문 다른 eventId 모두 1건만 적재")
         void itemConfirmed_idempotent() {
             long orderItemId = SEQ.incrementAndGet();
             String eventId = id();
@@ -171,7 +171,7 @@ class SettlementEventListenerIntegrationTest {
         }
 
         @Test
-        @DisplayName("수수료율이 없으면 예외(재전달 → DLQ) — 적재 · 처리 기록 모두 남기지 않음")
+        @DisplayName("수수료율이 없으면 예외(재전달 → DLQ) — 적재, 처리 기록 모두 남기지 않음")
         void itemConfirmed_noCommission_retriesWithoutRecord() {
             long orderItemId = SEQ.incrementAndGet();
             String eventId = id();

@@ -9,7 +9,7 @@ import java.math.RoundingMode;
  */
 public final class FeeCalculator {
 
-    /** 결제수수료율 2.2% — 포트원 · PG 수수료를 판매자가 부담 (스펙 05장) */
+    /** 결제수수료율 2.2% — 포트원, PG 수수료를 판매자가 부담 (스펙 05장) */
     public static final BigDecimal PAYMENT_FEE_RATE = new BigDecimal("2.2");
 
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);

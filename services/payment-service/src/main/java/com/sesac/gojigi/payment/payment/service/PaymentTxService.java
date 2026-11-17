@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * payment DB 쓰기를 짧은 트랜잭션으로 모은 곳 — 포트원 호출은 이 클래스 밖(PaymentService · PaymentCancelExecutor)에서 한다
+ * payment DB 쓰기를 짧은 트랜잭션으로 모은 곳 — 포트원 호출은 이 클래스 밖(PaymentService, PaymentCancelExecutor)에서 한다
  * (가이드라인 07장: 원격 호출은 트랜잭션 밖). 응답 DTO 는 트랜잭션 안에서 만든다 (PaymentCancel.payment 지연 로딩).
  *
  * 취소는 "선기록 → 포트원 → 확정" 3단계 (V2):
@@ -44,7 +44,7 @@ public class PaymentTxService {
     public record Prepared(PaymentResponse payment, boolean created) {
     }
 
-    /** 포트원 호출 · 대조에 필요한 취소 1건의 값 — 트랜잭션 밖으로 엔티티를 넘기지 않으려고 꺼내 둔다 */
+    /** 포트원 호출, 대조에 필요한 취소 1건의 값 — 트랜잭션 밖으로 엔티티를 넘기지 않으려고 꺼내 둔다 */
     public record CancelRef(Long cancelId, Long paymentId, String portonePaymentId, String orderNo, String sagaId,
             CancelStatus status, long amount, long cancellableBefore, String reason, String portoneCancellationId,
             int attemptCount, LocalDateTime createdAt) {
@@ -61,7 +61,7 @@ public class PaymentTxService {
     public record Begun(CancelRef cancel, boolean created) {
     }
 
-    /** 같은 orderNo · 같은 금액이면 기존 행, 금액이 다르면 PAYMENT_ORDER_CONFLICT */
+    /** 같은 orderNo, 같은 금액이면 기존 행, 금액이 다르면 PAYMENT_ORDER_CONFLICT */
     @Transactional
     public Prepared prepare(PreparePaymentRequest request) {
         Optional<Payment> existing = paymentRepository.findByOrderNo(request.orderNo());
@@ -91,7 +91,7 @@ public class PaymentTxService {
         return paymentRepository.findByPortonePaymentId(portonePaymentId);
     }
 
-    /** 포트원 PAID + 금액 일치 확인 후 — 이미 PAID 면 그대로 (확인 요청 · 웹훅 중복) */
+    /** 포트원 PAID + 금액 일치 확인 후 — 이미 PAID 면 그대로 (확인 요청, 웹훅 중복) */
     @Transactional
     public PaymentResponse markPaid(Long paymentId, PortOnePayment portOne) {
         Payment payment = load(paymentId);
@@ -138,9 +138,9 @@ public class PaymentTxService {
     }
 
     /**
-     * 성립하면 안 되는 결제의 환불 시작 — 금액 불일치 · READY 보상 중 발견 · 결제 실패 처리 후 늦게 들어온 결제.
+     * 성립하면 안 되는 결제의 환불 시작 — 금액 불일치, READY 보상 중 발견, 결제 실패 처리 후 늦게 들어온 결제.
      * READY 면 같은 트랜잭션에서 FAILED 로 확정한다(이 결제는 주문에 쓰지 않는다는 결정이 먼저 남도록). 금액은 포트원 잔액 그대로.
-     * 이미 진행 중인 환불이 있으면 새로 만들지 않고 그것을 돌려준다(웹훅 재전송 · 확인 요청 중복에도 환불 1번).
+     * 이미 진행 중인 환불이 있으면 새로 만들지 않고 그것을 돌려준다(웹훅 재전송, 확인 요청 중복에도 환불 1번).
      */
     @Transactional
     public Begun beginRefund(Long paymentId, String sagaId, long portoneCancellable, String reason) {
@@ -200,7 +200,7 @@ public class PaymentTxService {
         }
     }
 
-    /** 결과 미확정 — PENDING 유지, 사유 · 시도 횟수만 갱신 (updated_at 이 바뀌어 복구 스케줄러 대기 시간이 다시 시작됨) */
+    /** 결과 미확정 — PENDING 유지, 사유, 시도 횟수만 갱신 (updated_at 이 바뀌어 복구 스케줄러 대기 시간이 다시 시작됨) */
     @Transactional
     public void keepPending(Long cancelId, String error) {
         PaymentCancel cancel = loadCancel(cancelId);

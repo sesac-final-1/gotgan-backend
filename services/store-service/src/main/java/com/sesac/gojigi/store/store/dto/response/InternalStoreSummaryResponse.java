@@ -34,7 +34,7 @@ public record InternalStoreSummaryResponse(
         @Schema(description = "스토어 상태", example = "ACTIVE")
         StoreStatus status,
 
-        @Schema(description = "정지 · 폐점 사유 (없으면 null)", example = "null")
+        @Schema(description = "정지, 폐점 사유 (없으면 null)", example = "null")
         String statusReason,
 
         @Schema(description = "개설 시각(승인 시각)", example = "2026-10-15T09:00:00+09:00")

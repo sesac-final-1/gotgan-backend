@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 구매확정 반영 — 실제 MySQL. 누적 구매확정 금액 + 포인트 적립이 한 번에, eventId · 상품주문 멱등, 탈퇴 회원, 같은 이벤트 동시 수신.
+ * 구매확정 반영 — 실제 MySQL. 누적 구매확정 금액 + 포인트 적립이 한 번에, eventId, 상품주문 멱등, 탈퇴 회원, 같은 이벤트 동시 수신.
  * 서비스가 TransactionTemplate 으로 직접 커밋해서 테스트 트랜잭션으로 감싸지 않는다 (끝나고 직접 정리).
  */
 @DataJpaTest
@@ -131,7 +131,7 @@ class PurchaseConfirmedServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("탈퇴 회원 · 없는 회원 — 누적 · 적립 없이 처리됨으로 남김")
+    @DisplayName("탈퇴 회원, 없는 회원 — 누적, 적립 없이 처리됨으로 남김")
     void apply_withdrawnOrUnknown_marksProcessed() {
         Long userId = member();
         transactionTemplate.executeWithoutResult(status -> reload(userId).softDelete(LocalDateTime.now()));
@@ -149,7 +149,7 @@ class PurchaseConfirmedServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("같은 이벤트를 동시에 5번 받아도 누적 · 적립은 한 번 (회원 행 잠금 · processed_event)")
+    @DisplayName("같은 이벤트를 동시에 5번 받아도 누적, 적립은 한 번 (회원 행 잠금, processed_event)")
     void apply_concurrentSameEvent_once() throws Exception {
         Long userId = member();
         EventEnvelope<OrderItemConfirmedPayload> event = confirmed(userId, 51L, 10_000L, 500L);

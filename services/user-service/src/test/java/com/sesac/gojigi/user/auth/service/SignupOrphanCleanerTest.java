@@ -40,7 +40,7 @@ class SignupOrphanCleanerTest {
     }
 
     @Test
-    @DisplayName("그 사이 다시 가입한 계정(user_id 다름) · 없는 계정은 지우지 않는다")
+    @DisplayName("그 사이 다시 가입한 계정(user_id 다름), 없는 계정은 지우지 않는다")
     void schedule_keepsOtherAccounts() {
         given(adapter.findAccount(EMAIL)).willReturn(Optional.of(new KeycloakAccount("kc-9", 9L))).willReturn(Optional.empty());
         SignupOrphanCleaner cleaner = cleaner(Duration.ZERO, 10);

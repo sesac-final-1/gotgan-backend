@@ -1,6 +1,6 @@
 package com.sesac.gojigi.payment.payment.entity;
 
-/** 결제 상태 (스펙 "결제 상태") — FAILED · CANCELLED 는 끝 상태 */
+/** 결제 상태 (스펙 "결제 상태") — FAILED, CANCELLED 는 끝 상태 */
 public enum PaymentStatus {
     READY,
     PAID,

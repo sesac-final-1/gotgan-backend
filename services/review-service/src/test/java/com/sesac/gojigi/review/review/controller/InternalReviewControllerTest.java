@@ -34,7 +34,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class InternalReviewControllerTest {
 
     private static final InternalReviewResponse BLINDED = new InternalReviewResponse(31L, 101L, 1L, 4L, 1, "본문",
-            List.of(), true, "욕설 · 비방", OffsetDateTime.parse("2026-10-20T14:00:00+09:00"));
+            List.of(), true, "욕설, 비방", OffsetDateTime.parse("2026-10-20T14:00:00+09:00"));
 
     @Mock
     private InternalReviewService internalReviewService;
@@ -60,7 +60,7 @@ class InternalReviewControllerTest {
                 .andExpect(jsonPath("$.data.userId").value(4))
                 .andExpect(jsonPath("$.data.imageUrls").isArray())
                 .andExpect(jsonPath("$.data.blinded").value(true))
-                .andExpect(jsonPath("$.data.blindReason").value("욕설 · 비방"))
+                .andExpect(jsonPath("$.data.blindReason").value("욕설, 비방"))
                 .andExpect(jsonPath("$.data.createdAt").value("2026-10-20T14:00:00+09:00"));
     }
 
@@ -80,10 +80,10 @@ class InternalReviewControllerTest {
     @Test
     @DisplayName("블라인드 — 200, 응답은 조회와 같은 모양")
     void changeBlind_returns200() throws Exception {
-        given(internalReviewService.changeBlind(eq(31L), eq(new ReviewBlindRequest(true, "욕설 · 비방")))).willReturn(BLINDED);
+        given(internalReviewService.changeBlind(eq(31L), eq(new ReviewBlindRequest(true, "욕설, 비방")))).willReturn(BLINDED);
 
         mockMvc.perform(patch("/internal/reviews/31/blind").contentType(MediaType.APPLICATION_JSON)
-                        .content("{ \"blinded\": true, \"reason\": \"욕설 · 비방\" }"))
+                        .content("{ \"blinded\": true, \"reason\": \"욕설, 비방\" }"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("리뷰를 블라인드했습니다."))
                 .andExpect(jsonPath("$.data.blinded").value(true));
@@ -105,7 +105,7 @@ class InternalReviewControllerTest {
 
     @ParameterizedTest
     @ValueSource(strings = { "{ \"reason\": \"욕설\" }", "{ \"blinded\": \"maybe\" }", "{ \"blinded\": true, \"reason\": \"%s\" }" })
-    @DisplayName("blinded 없음 · 형식 오류 · 사유 256자 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
+    @DisplayName("blinded 없음, 형식 오류, 사유 256자 — 400 INVALID_INPUT, 서비스를 부르지 않는다")
     void changeBlind_invalidBody_returns400(String body) throws Exception {
         mockMvc.perform(patch("/internal/reviews/31/blind").contentType(MediaType.APPLICATION_JSON)
                         .content(body.formatted("가".repeat(256))))
@@ -115,10 +115,10 @@ class InternalReviewControllerTest {
     }
 
     @Test
-    @DisplayName("회원별 리뷰 — 200, 기본 page 0 · size 10, 블라인드 포함")
+    @DisplayName("회원별 리뷰 — 200, 기본 page 0, size 10, 블라인드 포함")
     void listByUser_returns200() throws Exception {
         given(internalReviewService.listByUser(4L, 0, 10)).willReturn(new PageResponse<>(List.of(
-                new InternalUserReviewResponse(31L, 101L, "린넨 셔츠", 1L, 1, "본문", true, "욕설 · 비방", BLINDED.createdAt())),
+                new InternalUserReviewResponse(31L, 101L, "린넨 셔츠", 1L, 1, "본문", true, "욕설, 비방", BLINDED.createdAt())),
                 0, 10, 1, 1, false));
 
         mockMvc.perform(get("/internal/reviews").param("userId", "4"))
@@ -131,7 +131,7 @@ class InternalReviewControllerTest {
 
     @ParameterizedTest
     @ValueSource(strings = { "", "?userId=abc", "?userId=4&page=-1", "?userId=4&size=51" })
-    @DisplayName("회원별 리뷰 — userId 없음 · 숫자 아님 · page · size 범위 밖은 400 INVALID_INPUT")
+    @DisplayName("회원별 리뷰 — userId 없음, 숫자 아님, page, size 범위 밖은 400 INVALID_INPUT")
     void listByUser_invalidParam_returns400(String query) throws Exception {
         mockMvc.perform(get("/internal/reviews" + query))
                 .andExpect(status().isBadRequest())

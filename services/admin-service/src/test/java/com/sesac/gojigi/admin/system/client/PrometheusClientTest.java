@@ -18,7 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
-/** Prometheus 즉시 쿼리 — 가짜 서버(JDK HttpServer)로 쿼리 인코딩 · vector 해석 · 실패면 빈 Optional */
+/** Prometheus 즉시 쿼리 — 가짜 서버(JDK HttpServer)로 쿼리 인코딩, vector 해석, 실패면 빈 Optional */
 class PrometheusClientTest {
 
     private HttpServer server;
@@ -63,7 +63,7 @@ class PrometheusClientTest {
     }
 
     @Test
-    @DisplayName("정상 — 쿼리를 그대로 보내고(중괄호 · 따옴표 인코딩) routeId → 값, routeId 없거나 NaN 인 시리즈는 뺀다")
+    @DisplayName("정상 — 쿼리를 그대로 보내고(중괄호, 따옴표 인코딩) routeId → 값, routeId 없거나 NaN 인 시리즈는 뺀다")
     void byRoute_parses() {
         body = """
                 {"status":"success","data":{"resultType":"vector","result":[
@@ -80,7 +80,7 @@ class PrometheusClientTest {
     }
 
     @Test
-    @DisplayName("오류 응답(status error) · 4xx · 연결 실패 — 빈 Optional")
+    @DisplayName("오류 응답(status error), 4xx, 연결 실패 — 빈 Optional")
     void byRoute_failures() {
         body = "{\"status\":\"error\",\"errorType\":\"bad_data\"}";
         assertThat(client().byRoute("up")).isEmpty();
@@ -94,7 +94,7 @@ class PrometheusClientTest {
     }
 
     @Test
-    @DisplayName("범위 쿼리 — start · end · step 을 초로 보내고 첫 시리즈의 [시각 ms, 값], NaN 은 뺀다")
+    @DisplayName("범위 쿼리 — start, end, step 을 초로 보내고 첫 시리즈의 [시각 ms, 값], NaN 은 뺀다")
     void range_parses() {
         body = """
                 {"status":"success","data":{"resultType":"matrix","result":[
@@ -109,7 +109,7 @@ class PrometheusClientTest {
     }
 
     @Test
-    @DisplayName("범위 쿼리 — 결과 없음은 빈 목록, 오류 응답 · 연결 실패는 빈 Optional")
+    @DisplayName("범위 쿼리 — 결과 없음은 빈 목록, 오류 응답, 연결 실패는 빈 Optional")
     void range_emptyAndFailures() {
         Instant now = Instant.ofEpochSecond(1794805000);
         body = "{\"status\":\"success\",\"data\":{\"resultType\":\"matrix\",\"result\":[]}}";
@@ -156,7 +156,7 @@ class PrometheusClientTest {
     }
 
     @Test
-    @DisplayName("장애 리포트 — 지난 시각 기준 벡터(time 전달), 시리즈마다 라벨 전체 · 점 목록(matrix), 실패면 빈 Optional")
+    @DisplayName("장애 리포트 — 지난 시각 기준 벡터(time 전달), 시리즈마다 라벨 전체, 점 목록(matrix), 실패면 빈 Optional")
     void vectorAt_and_matrix() {
         body = """
                 {"status":"success","data":{"resultType":"vector","result":[{"metric":{"pod":"product-service-a"},"value":[1,"1794881208"]}]}}""";

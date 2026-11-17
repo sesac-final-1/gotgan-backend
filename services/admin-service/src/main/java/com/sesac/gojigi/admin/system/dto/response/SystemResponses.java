@@ -39,7 +39,7 @@ public final class SystemResponses {
     }
 
     /**
-     * gateway 라우트 지표 기준(1분 rate). errorRate = 5xx ÷ 전체(0 ~ 1), 요청 0 · 조회 실패면 null.
+     * gateway 라우트 지표 기준(1분 rate). errorRate = 5xx ÷ 전체(0 ~ 1), 요청 0, 조회 실패면 null.
      * errorsPerMinute = 최근 1분 5xx 건수(화면 표시용, 11/17 퍼센트 → 건수), 조회 실패면 null
      */
     public record ServiceMetric(String name, Double requestsPerSecond, Double errorRate, Long errorsPerMinute) {

@@ -17,15 +17,15 @@ import org.springframework.web.service.annotation.PostExchange;
 @HttpExchange("/internal/payments")
 public interface PaymentClient {
 
-    /** 결제 준비 — READY 생성 · portonePaymentId 발급, orderNo 멱등 */
+    /** 결제 준비 — READY 생성, portonePaymentId 발급, orderNo 멱등 */
     @PostExchange
     ApiResponse<PaymentResponse> prepare(@RequestBody PaymentPrepareRequest request);
 
-    /** 결제 검증 — 포트원 조회로 상태 · 금액 확인, orderNo 멱등(이미 PAID 면 그대로 200) */
+    /** 결제 검증 — 포트원 조회로 상태, 금액 확인, orderNo 멱등(이미 PAID 면 그대로 200) */
     @PostExchange("/verify")
     ApiResponse<PaymentResponse> verify(@RequestBody PaymentVerifyRequest request);
 
-    /** 결제 취소 — 전액(주문 Saga 보상) · 부분, sagaId 멱등 */
+    /** 결제 취소 — 전액(주문 Saga 보상), 부분, sagaId 멱등 */
     @PostExchange("/{orderNo}/cancel")
     ApiResponse<PaymentCancelResponse> cancel(@PathVariable String orderNo, @RequestBody PaymentCancelRequest request);
 

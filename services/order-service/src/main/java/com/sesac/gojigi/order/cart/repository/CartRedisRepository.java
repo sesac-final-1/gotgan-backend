@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 
 /**
  * 장바구니 캐시 Redis Hash {@code cart:{userId}} (field = 옵션 ID, value = "수량:선택(1|0)") — 원본은 MySQL cart_item (가이드라인 09장).
- * 쓰기 실패(연결 장애 · maxmemory noeviction 의 OOM 거절)는 WARN 만, 읽기 실패는 미스와 같다 — 장바구니는 MySQL 로 정상 동작한다 (서킷 redisCart).
+ * 쓰기 실패(연결 장애, maxmemory noeviction 의 OOM 거절)는 WARN 만, 읽기 실패는 미스와 같다 — 장바구니는 MySQL 로 정상 동작한다 (서킷 redisCart).
  */
 @Slf4j
 @Repository
@@ -23,7 +23,7 @@ public class CartRedisRepository {
 
     private final StringRedisTemplate redis;
 
-    /** 캐시 1줄 — 수량 · 선택 여부 */
+    /** 캐시 1줄 — 수량, 선택 여부 */
     public record CachedLine(int quantity, boolean checked) {
 
         String encode() {
@@ -38,7 +38,7 @@ public class CartRedisRepository {
         }
     }
 
-    /** 캐시 읽기 — 키가 없으면(미스) · Redis 장애면 empty → MySQL 원본. 옵션 ID 순 */
+    /** 캐시 읽기 — 키가 없으면(미스), Redis 장애면 empty → MySQL 원본. 옵션 ID 순 */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "findFallback")
     public Optional<Map<Long, CachedLine>> find(Long userId) {
         Map<Object, Object> entries = redis.opsForHash().entries(key(userId));

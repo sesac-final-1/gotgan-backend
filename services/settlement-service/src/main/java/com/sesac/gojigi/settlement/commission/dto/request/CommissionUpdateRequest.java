@@ -9,7 +9,7 @@ import java.time.LocalDate;
 
 /**
  * 수수료율 1건 변경(예약) — rate 는 % (11.5 = 11.5%), effectiveFrom 을 비우면 다음 주 월요일.
- * 같은 카테고리 · 같은 적용 시작일이 이미 있으면 율만 바꾼다(예약 수정). 지난 날짜는 거절(이미 적재된 정산이 바뀌지 않게).
+ * 같은 카테고리, 같은 적용 시작일이 이미 있으면 율만 바꾼다(예약 수정). 지난 날짜는 거절(이미 적재된 정산이 바뀌지 않게).
  */
 public record CommissionUpdateRequest(
         @NotNull Long categoryId,

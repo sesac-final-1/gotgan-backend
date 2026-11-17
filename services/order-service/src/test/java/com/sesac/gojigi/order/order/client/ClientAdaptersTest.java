@@ -44,7 +44,7 @@ import org.springframework.web.client.ResourceAccessException;
 
 /**
  * 다른 서비스 호출 어댑터 — 4xx 응답 봉투의 code 를 주문 예외로 바꾸는지, 폴백이 장애를 502 로 바꾸는지.
- * 서킷 · 재시도 애노테이션은 스프링 AOP 라 여기서는 메서드 본문과 폴백을 직접 부른다.
+ * 서킷, 재시도 애노테이션은 스프링 AOP 라 여기서는 메서드 본문과 폴백을 직접 부른다.
  */
 @ExtendWith(MockitoExtension.class)
 class ClientAdaptersTest {
@@ -86,7 +86,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("포인트 사용 — 잔액 부족 409 · 없는 회원 404 · 그 밖 거절을 각각 변환")
+        @DisplayName("포인트 사용 — 잔액 부족 409, 없는 회원 404, 그 밖 거절을 각각 변환")
         void usePoints() {
             PointUseRequest request = new PointUseRequest(SAGA_ID, 4L, "20261022-000123", 1_000L);
             given(client.usePoints(request)).willThrow(rejected(HttpStatus.CONFLICT, "POINT_INSUFFICIENT"))
@@ -101,7 +101,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("포인트 사용 취소 — 성공 · 거절은 502")
+        @DisplayName("포인트 사용 취소 — 성공, 거절은 502")
         void restorePoints() {
             given(client.restorePoints(SAGA_ID)).willReturn(ApiResponse.success("ok", new PointRestoreResponse(SAGA_ID, 0L, null)))
                     .willThrow(rejected(HttpStatus.BAD_REQUEST, "INVALID_INPUT"));
@@ -111,7 +111,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("폴백 — 연결 실패 · 서킷 OPEN 은 502, 이미 변환된 예외는 그대로")
+        @DisplayName("폴백 — 연결 실패, 서킷 OPEN 은 502, 이미 변환된 예외는 그대로")
         void fallbacks() {
             UserClientAdapter adapter = adapter();
             assertCode(() -> adapter.getUserFallback(4L, new ResourceAccessException("timeout")),
@@ -137,7 +137,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("재고 예약 — 재고 부족 · 구매 불가 · 없는 옵션 · 그 밖 거절을 각각 변환")
+        @DisplayName("재고 예약 — 재고 부족, 구매 불가, 없는 옵션, 그 밖 거절을 각각 변환")
         void reserve() {
             given(client.reserve(reserve)).willThrow(rejected(HttpStatus.CONFLICT, "STOCK_INSUFFICIENT"))
                     .willThrow(rejected(HttpStatus.CONFLICT, "PRODUCT_NOT_PURCHASABLE"))
@@ -153,7 +153,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("옵션 조회 · 재고 해제 — 성공 · 거절은 502, 폴백은 502")
+        @DisplayName("옵션 조회, 재고 해제 — 성공, 거절은 502, 폴백은 502")
         void getOptionsAndRelease() {
             StockReleaseRequest release = new StockReleaseRequest(reserve.items());
             given(client.getOptions(List.of(11L))).willReturn(ApiResponse.success("ok", List.of()))
@@ -175,7 +175,7 @@ class ClientAdaptersTest {
     }
 
     @Nested
-    @DisplayName("payment · store")
+    @DisplayName("payment, store")
     class PaymentAndStore {
 
         @Mock private PaymentClient paymentClient;
@@ -184,7 +184,7 @@ class ClientAdaptersTest {
         @Mock private UserClient userClient;
 
         @Test
-        @DisplayName("결제 준비 · 취소 — 성공 · 거절(PAYMENT_CANCEL_PENDING 포함)은 502, 폴백은 502")
+        @DisplayName("결제 준비, 취소 — 성공, 거절(PAYMENT_CANCEL_PENDING 포함)은 502, 폴백은 502")
         void payment() {
             PaymentClientAdapter adapter = new PaymentClientAdapter(paymentClient);
             PaymentPrepareRequest prepare = new PaymentPrepareRequest(1L, "20261022-000123", 62_000L, SAGA_ID);
@@ -206,7 +206,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("재고 복원 · 포인트 환원 회수 (취소 Saga) — 성공, 거절 · 폴백은 502")
+        @DisplayName("재고 복원, 포인트 환원 회수 (취소 Saga) — 성공, 거절, 폴백은 502")
         void restoreAndReverse() {
             ProductClientAdapter productAdapter = new ProductClientAdapter(productClient);
             UserClientAdapter userAdapter = new UserClientAdapter(userClient);
@@ -229,7 +229,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("결제 검증 — 미결제는 결제 대기, 금액 불일치 · 끝난 결제 · 결제 없음은 결제 실패, 그 밖 거절 · 장애는 502")
+        @DisplayName("결제 검증 — 미결제는 결제 대기, 금액 불일치, 끝난 결제, 결제 없음은 결제 실패, 그 밖 거절, 장애는 502")
         void payment_verify() {
             PaymentClientAdapter adapter = new PaymentClientAdapter(paymentClient);
             PaymentVerifyRequest verify = new PaymentVerifyRequest(SAGA_ID, "20261022-000123", 62_000L);
@@ -252,7 +252,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("결제 조회 — 성공은 data, 결제 없음(404) · 그 밖 거절 · 장애는 예외 없이 null")
+        @DisplayName("결제 조회 — 성공은 data, 결제 없음(404), 그 밖 거절, 장애는 예외 없이 null")
         void payment_find() {
             PaymentClientAdapter adapter = new PaymentClientAdapter(paymentClient);
             given(paymentClient.find("20261022-000123")).willReturn(ApiResponse.success("ok",
@@ -270,7 +270,7 @@ class ClientAdaptersTest {
         }
 
         @Test
-        @DisplayName("스토어 조회 — 성공 · 없는 스토어는 구매 불가 · 그 밖 거절과 폴백은 502")
+        @DisplayName("스토어 조회 — 성공, 없는 스토어는 구매 불가, 그 밖 거절과 폴백은 502")
         void store() {
             StoreClientAdapter adapter = new StoreClientAdapter(storeClient);
             given(storeClient.getStore(anyLong())).willReturn(ApiResponse.success("ok",

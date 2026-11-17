@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
 class SystemCatalogTest {
 
     @Test
-    @DisplayName("서비스 상태 — Ready 0 = DOWN, 원하는 수 이상 = UP, 그 사이는 내린 뒤면 RECOVERING · 아니면 DEGRADED")
+    @DisplayName("서비스 상태 — Ready 0 = DOWN, 원하는 수 이상 = UP, 그 사이는 내린 뒤면 RECOVERING, 아니면 DEGRADED")
     void serviceState_rules() {
         assertThat(SystemCatalog.serviceState(2, 0, true)).isEqualTo(ServiceState.DOWN);
         assertThat(SystemCatalog.serviceState(2, 0, false)).isEqualTo(ServiceState.DOWN);
@@ -36,7 +36,7 @@ class SystemCatalogTest {
     }
 
     @Test
-    @DisplayName("기능 상태 — 전부 UP 이면 8개 기능 모두 UP · causes 비어 있음")
+    @DisplayName("기능 상태 — 전부 UP 이면 8개 기능 모두 UP, causes 비어 있음")
     void features_allUp() {
         List<FeatureStatus> features = SystemCatalog.featureStatuses(allUp());
         assertThat(features).hasSize(8).allSatisfy(f -> {
@@ -46,7 +46,7 @@ class SystemCatalogTest {
     }
 
     @Test
-    @DisplayName("기능 상태 — order DOWN 이면 장바구니 · 주문 · 결제 DOWN, 둘러보기 · 리뷰 · 채팅은 UP")
+    @DisplayName("기능 상태 — order DOWN 이면 장바구니, 주문, 결제 DOWN, 둘러보기, 리뷰, 채팅은 UP")
     void features_orderDown() {
         Map<String, ServiceState> states = allUp();
         states.put("order-service", ServiceState.DOWN);
@@ -60,7 +60,7 @@ class SystemCatalogTest {
     }
 
     @Test
-    @DisplayName("기능 상태 — DOWN 이 하나라도 있으면 DOWN, DEGRADED · RECOVERING 만 있으면 DEGRADED · causes 에 모두")
+    @DisplayName("기능 상태 — DOWN 이 하나라도 있으면 DOWN, DEGRADED, RECOVERING 만 있으면 DEGRADED, causes 에 모두")
     void features_mixed() {
         Map<String, ServiceState> states = allUp();
         states.put("product-service", ServiceState.RECOVERING);
@@ -83,7 +83,7 @@ class SystemCatalogTest {
     }
 
     @Test
-    @DisplayName("라우트 묶기 — user 3개 · admin 3개 · chat 2개를 서비스 하나로, keycloak · 모르는 라우트는 뺀다")
+    @DisplayName("라우트 묶기 — user 3개, admin 3개, chat 2개를 서비스 하나로, keycloak, 모르는 라우트는 뺀다")
     void routeServices_grouping() {
         assertThat(SystemCatalog.ROUTE_SERVICES).hasSize(14).doesNotContainKey("keycloak");
         assertThat(SystemCatalog.ROUTE_SERVICES.entrySet().stream().filter(e -> e.getValue().equals("user-service")).map(Map.Entry::getKey))
@@ -103,7 +103,7 @@ class SystemCatalogTest {
     }
 
     @Test
-    @DisplayName("지표 반올림 — 요청량 소수 2자리 · 오류율 4자리, 실패 목록은 13개 전부 null")
+    @DisplayName("지표 반올림 — 요청량 소수 2자리, 오류율 4자리, 실패 목록은 13개 전부 null")
     void serviceMetrics_roundAndUnknown() {
         var order = SystemCatalog.serviceMetrics(Map.of("order-service", 0.0666666), Map.of("order-service", 0.0222222)).getFirst();
         assertThat(order.requestsPerSecond()).isEqualTo(0.07);
@@ -112,7 +112,7 @@ class SystemCatalogTest {
     }
 
     @Test
-    @DisplayName("내릴 수 없는 서비스 — gateway · admin · keycloak · mysql · redis")
+    @DisplayName("내릴 수 없는 서비스 — gateway, admin, keycloak, mysql, redis")
     void services_notKillable() {
         assertThat(SystemCatalog.SERVICES.stream().filter(t -> !t.killable()).map(SystemCatalog.Target::name))
                 .containsExactly("gateway-service", "admin-service", "keycloak", "mysql", "redis");

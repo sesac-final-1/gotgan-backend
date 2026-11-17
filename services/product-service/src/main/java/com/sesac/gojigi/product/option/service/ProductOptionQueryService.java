@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 가격 · 구매 가능 조회 (PRD-10, product.md 4절) — order 가 장바구니 · 주문서 · 주문 Saga 1단계(상품주문 스냅샷)에서 부른다.
+ * 가격, 구매 가능 조회 (PRD-10, product.md 4절) — order 가 장바구니, 주문서, 주문 Saga 1단계(상품주문 스냅샷)에서 부른다.
  * DB 조회만 하므로 order 가 재시도해도 안전하다. 없는 ID 는 응답에서 빠지고 order 가 구매 불가로 처리한다.
  */
 @Service
@@ -37,7 +37,7 @@ public class ProductOptionQueryService {
     private final CategoryRepository categoryRepository;
     private final ImageUrls imageUrls;
 
-    /** 요청 순서대로(중복 ID 는 한 번), 없는 ID 는 뺀다. 쿼리는 ID 개수와 상관없이 3번 (옵션+상품 · 대표 이미지 · 카테고리) */
+    /** 요청 순서대로(중복 ID 는 한 번), 없는 ID 는 뺀다. 쿼리는 ID 개수와 상관없이 3번 (옵션+상품, 대표 이미지, 카테고리) */
     public List<ProductOptionResponse> findOptions(List<Long> ids) {
         if (ids == null || ids.isEmpty() || ids.size() > MAX_IDS || ids.stream().anyMatch(Objects::isNull)) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT, "옵션 ID 는 1~100개를 보내 주세요.");
@@ -70,7 +70,7 @@ public class ProductOptionQueryService {
                 o.isPurchasable(categoryActive), imageUrls.of(imageKey));
     }
 
-    /** "오트밀 / M" · "오트밀" — 옵션 없는 상품(값 둘 다 null)은 null */
+    /** "오트밀 / M", "오트밀" — 옵션 없는 상품(값 둘 다 null)은 null */
     private static String optionName(ProductOption o) {
         String name = Stream.of(o.getOption1Value(), o.getOption2Value()).filter(Objects::nonNull).collect(Collectors.joining(" / "));
         return name.isEmpty() ? null : name;

@@ -12,7 +12,7 @@ import org.springframework.web.client.RestClient;
 class InquiryClientConfigTest {
 
     @Test
-    @DisplayName("공통 빌더(타임아웃)로 product · user 클라이언트 프록시를 만든다")
+    @DisplayName("공통 빌더(타임아웃)로 product, user 클라이언트 프록시를 만든다")
     void clients_createdFromSharedBuilder() {
         RestClient.Builder builder = new RestClientConfig().restClientBuilder(Duration.ofSeconds(2), Duration.ofSeconds(3),
                 ObservationRegistry.NOOP);

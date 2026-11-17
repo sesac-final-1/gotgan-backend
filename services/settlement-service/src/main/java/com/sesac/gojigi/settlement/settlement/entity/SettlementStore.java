@@ -13,9 +13,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 정산용 스토어 스냅샷 — StoreApproved 로 생성(스토어명 · 판매자 이메일 · 정산 계좌), StoreStatusChanged 로 상태 갱신.
+ * 정산용 스토어 스냅샷 — StoreApproved 로 생성(스토어명, 판매자 이메일, 정산 계좌), StoreStatusChanged 로 상태 갱신.
  * store_status 가 ACTIVE 가 아니면 지급 보류. 상태 갱신은 SettlementStoreRepository#applyStatusIfNewer 로만 한다 (옛 이벤트 무시).
- * store 를 동기 호출하지 않으려고(장애 격리) 지급 · 명세서에 필요한 값을 여기 들고 있는다.
+ * store 를 동기 호출하지 않으려고(장애 격리) 지급, 명세서에 필요한 값을 여기 들고 있는다.
  */
 @Getter
 @Entity

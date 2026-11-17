@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 결제완료 단계 취소 Saga(CLM-01)의 로컬 트랜잭션 — 원격 호출은 CancelOrderItemSaga 가 트랜잭션 밖에서 한다.
- * 클레임 · 상품주문 상태 · 이력 · saga_instance 를 한 트랜잭션으로 만들어야 Saga 가 "클레임만 있고 진행 기록이 없는" 상태로 남지 않는다
+ * 클레임, 상품주문 상태, 이력, saga_instance 를 한 트랜잭션으로 만들어야 Saga 가 "클레임만 있고 진행 기록이 없는" 상태로 남지 않는다
  * — 그래서 claim 이 아니라 saga 패키지에 둔다 (claim → saga 참조를 만들지 않게).
  */
 @Service
@@ -45,7 +45,7 @@ public class CancelItemTxService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    /** 취소 · 반품 완료 — 같은 트랜잭션에서 OrderItemCancelled / Returned 를 남긴다 (ClaimEventRecorder) */
+    /** 취소, 반품 완료 — 같은 트랜잭션에서 OrderItemCancelled / Returned 를 남긴다 (ClaimEventRecorder) */
     public record ClaimFinished(Long claimId) {
     }
 
@@ -56,9 +56,9 @@ public class CancelItemTxService {
     }
 
     /**
-     * 취소 접수 — 클레임(자동 승인) · 상품주문 CANCEL_REQUESTED · 이력 · 취소 Saga 를 한 트랜잭션으로.
+     * 취소 접수 — 클레임(자동 승인), 상품주문 CANCEL_REQUESTED, 이력, 취소 Saga 를 한 트랜잭션으로.
      * 환불은 ClaimRefundPolicy.cancel — 스토어 마지막 상품주문이면 배송비까지, 남은 결제 금액을 넘는 몫은 포인트로.
-     * ClaimTxService.lock 이 주문 행을 잠가 같은 주문의 취소가 동시에 와도 남은 금액 · 스토어 마지막 여부를 차례로 계산한다.
+     * ClaimTxService.lock 이 주문 행을 잠가 같은 주문의 취소가 동시에 와도 남은 금액, 스토어 마지막 여부를 차례로 계산한다.
      */
     @Transactional
     public CancelContext open(Long buyerId, String orderNo, Long orderItemId, ClaimReasonCode reasonCode,
@@ -84,7 +84,7 @@ public class CancelItemTxService {
     }
 
     /**
-     * 반품 수거 완료 (CLM-03 · 판매자) — 클레임 COLLECTED · 반품 환불 Saga 를 한 트랜잭션으로. 환불액 · 돌려줄 포인트는 신청 때 정한 값.
+     * 반품 수거 완료 (CLM-03, 판매자) — 클레임 COLLECTED, 반품 환불 Saga 를 한 트랜잭션으로. 환불액, 돌려줄 포인트는 신청 때 정한 값.
      * 내 스토어 상품주문의 반품만, 승인(수거 요청) 상태에서만.
      */
     @Transactional
@@ -101,7 +101,7 @@ public class CancelItemTxService {
         return context(saga, claim, claim.getOrderItem(), claim.getOrderItem().getOrder());
     }
 
-    /** 재시도 · 복구 때 — 저장해 둔 클레임 값으로 다시 만든다 */
+    /** 재시도, 복구 때 — 저장해 둔 클레임 값으로 다시 만든다 */
     @Transactional(readOnly = true)
     public CancelContext load(Long sagaInstanceId) {
         SagaInstance saga = sagaInstanceRepository.findById(sagaInstanceId)
@@ -111,8 +111,8 @@ public class CancelItemTxService {
     }
 
     /**
-     * 취소 · 반품 완료 — 상품주문 CANCELLED / RETURNED · 이력 · 클레임 COMPLETED · (모든 상품주문이 취소되면) 주문 CANCELLED · Saga 완료.
-     * OrderItemCancelled · OrderItemReturned 도 같은 트랜잭션에 남는다 (refundAmt · restoredPoint · revokedPoint — ClaimEventRecorder)
+     * 취소, 반품 완료 — 상품주문 CANCELLED / RETURNED, 이력, 클레임 COMPLETED, (모든 상품주문이 취소되면) 주문 CANCELLED, Saga 완료.
+     * OrderItemCancelled, OrderItemReturned 도 같은 트랜잭션에 남는다 (refundAmt, restoredPoint, revokedPoint — ClaimEventRecorder)
      */
     @Transactional
     public void finish(Long sagaInstanceId) {
@@ -129,7 +129,7 @@ public class CancelItemTxService {
             item.cancelled();
         }
         historyRepository.save(OrderItemHistory.of(item, ActorType.SYSTEM, null, from, item.getStatus(),
-                (ret ? "반품 완료" : "취소 완료") + " — 환불 " + claim.getRefundAmt() + "원 · 포인트 " + claim.getRestorePoint()));
+                (ret ? "반품 완료" : "취소 완료") + " — 환불 " + claim.getRefundAmt() + "원, 포인트 " + claim.getRestorePoint()));
         claim.complete(now);
         Order order = saga.getOrder();
         boolean allCancelled = orderItemRepository.findByOrderIdOrderByIdAsc(order.getId()).stream()

@@ -19,10 +19,10 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 /**
- * 스토어 · 배송 정책 (storedb store). 입점 승인으로 생성, 1인 1스토어(uk_store_user_id).
- * 내부 상세 · 판매자 설정 · 입점 승인에 쓰는 컬럼을 매핑한다 — 소개 · 이미지 · 색 · 연락처 · 배송 정책 · 출고 안내 · 등급.
- * color · grade 는 승인 때 DDL 기본값이 들어간다(INSERT 에 넣지 않음) — grade 는 읽기만, color 는 판매자 설정에서 바꿈.
- * 폐점은 status = CLOSED 로 표현하고 deleted_at 은 채우지 않는다 (폐점 스토어도 주문 · 정산 내역에서 조회돼야 함).
+ * 스토어, 배송 정책 (storedb store). 입점 승인으로 생성, 1인 1스토어(uk_store_user_id).
+ * 내부 상세, 판매자 설정, 입점 승인에 쓰는 컬럼을 매핑한다 — 소개, 이미지, 색, 연락처, 배송 정책, 출고 안내, 등급.
+ * color, grade 는 승인 때 DDL 기본값이 들어간다(INSERT 에 넣지 않음) — grade 는 읽기만, color 는 판매자 설정에서 바꿈.
+ * 폐점은 status = CLOSED 로 표현하고 deleted_at 은 채우지 않는다 (폐점 스토어도 주문, 정산 내역에서 조회돼야 함).
  */
 @Getter
 @Entity
@@ -74,7 +74,7 @@ public class Store extends BaseTimeEntity {
     @Column(name = "status_reason")
     private String statusReason;
 
-    /** 판매자 등급 — 승인 때 DDL 기본값 SPROUT, 승급 기준 미정이라 읽기만 (관리자 스토어 목록 · 상세) */
+    /** 판매자 등급 — 승인 때 DDL 기본값 SPROUT, 승급 기준 미정이라 읽기만 (관리자 스토어 목록, 상세) */
     @Generated(event = EventType.INSERT)
     @Enumerated(EnumType.STRING)
     @Column(name = "grade", insertable = false, updatable = false, length = 20)
@@ -99,7 +99,7 @@ public class Store extends BaseTimeEntity {
     @Column(name = "deleted_at", columnDefinition = "DATETIME(6)")
     private LocalDateTime deletedAt;
 
-    /** 입점 승인으로 생성 — 스토어명 · 주소 · 소개는 신청서 그대로(소개는 신청 때 정화됨), 고객 문의 연락처 = 담당자 휴대폰 */
+    /** 입점 승인으로 생성 — 스토어명, 주소, 소개는 신청서 그대로(소개는 신청 때 정화됨), 고객 문의 연락처 = 담당자 휴대폰 */
     public static Store open(Long storeApplicationId, Long userId, String storeName, String slug,
             String intro, String csPhone) {
         Store store = new Store();
@@ -115,8 +115,8 @@ public class Store extends BaseTimeEntity {
     }
 
     /**
-     * 판매자 스토어 설정 수정 (STR-06, store.md 13절) — 값 검사 · 정화는 호출하는 쪽, 폐점 스토어는 409.
-     * 스토어명 · 주소 · 상태 · 등급은 바꾸지 않는다. 비어 있는 택배사 · 출고 안내는 null 로
+     * 판매자 스토어 설정 수정 (STR-06, store.md 13절) — 값 검사, 정화는 호출하는 쪽, 폐점 스토어는 409.
+     * 스토어명, 주소, 상태, 등급은 바꾸지 않는다. 비어 있는 택배사, 출고 안내는 null 로
      */
     public void updateSettings(String intro, String imageKey, String color, String csPhone, long shippingFee,
             Long freeShippingThreshold, String courier, String dispatchNote) {
@@ -151,8 +151,8 @@ public class Store extends BaseTimeEntity {
     }
 
     /**
-     * 관리자 정지 · 해제 (store.md 9절). 폐점 스토어는 409, 이미 그 상태면 아무것도 바꾸지 않고 false(멱등 — 이력 · 이벤트 없음).
-     * 대상이 ACTIVE · SUSPENDED 인지는 호출하는 쪽이 검사한다(CLOSED 요청은 400)
+     * 관리자 정지, 해제 (store.md 9절). 폐점 스토어는 409, 이미 그 상태면 아무것도 바꾸지 않고 false(멱등 — 이력, 이벤트 없음).
+     * 대상이 ACTIVE, SUSPENDED 인지는 호출하는 쪽이 검사한다(CLOSED 요청은 400)
      */
     public boolean changeStatusByAdmin(StoreStatus target, String reason) {
         if (status == StoreStatus.CLOSED) {

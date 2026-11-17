@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** order-service(Saga) 전용 — 게이트웨이 라우트 없음, 클러스터 내부에서만 호출 (docs/api/payment.md) */
-@Tag(name = "결제 (내부)", description = "order-service 주문 · 취소 Saga 가 호출 — 인가: 내부")
+@Tag(name = "결제 (내부)", description = "order-service 주문, 취소 Saga 가 호출 — 인가: 내부")
 @RestController
 @RequestMapping("/internal/payments")
 @RequiredArgsConstructor
@@ -31,7 +31,7 @@ public class InternalPaymentController {
 
     private final PaymentService paymentService;
 
-    @Operation(summary = "결제 준비", description = "READY 생성 · portonePaymentId 발급. orderNo 멱등(같은 금액 재요청 200, 다른 금액 409 PAYMENT_ORDER_CONFLICT)")
+    @Operation(summary = "결제 준비", description = "READY 생성, portonePaymentId 발급. orderNo 멱등(같은 금액 재요청 200, 다른 금액 409 PAYMENT_ORDER_CONFLICT)")
     @PostMapping
     public ResponseEntity<ApiResponse<PaymentResponse>> prepare(@Valid @RequestBody PreparePaymentRequest request) {
         PaymentTxService.Prepared prepared = paymentService.prepare(request);
@@ -39,7 +39,7 @@ public class InternalPaymentController {
                 .body(ApiResponse.success("결제를 준비했습니다.", prepared.payment()));
     }
 
-    @Operation(summary = "결제 검증", description = "포트원 조회 → PAID + 금액 일치면 PAID. 불일치 409 PAYMENT_AMOUNT_MISMATCH(자동 취소 후) · 미결제 409 PAYMENT_NOT_COMPLETED")
+    @Operation(summary = "결제 검증", description = "포트원 조회 → PAID + 금액 일치면 PAID. 불일치 409 PAYMENT_AMOUNT_MISMATCH(자동 취소 후), 미결제 409 PAYMENT_NOT_COMPLETED")
     @PostMapping("/verify")
     public ApiResponse<PaymentResponse> verify(@Valid @RequestBody VerifyPaymentRequest request) {
         return ApiResponse.success("결제를 확인했습니다.", paymentService.verify(request));

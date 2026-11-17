@@ -20,9 +20,9 @@ import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
 /**
- * 코드리뷰 A-경-7 · A-경-6c · B-경-9 — 클레임 라우트 · 업무 서비스 타임아웃과 오류 봉투 · Keycloak 계정 콘솔 차단.
- * user · order · admin 라우트는 1초 뒤에 응답하는 느린 서버로, store · keycloak 은 아무도 듣지 않는 주소(기본값)로 보낸다.
- * 전체 응답 타임아웃은 테스트에서 300ms 로 줄인다 — order(15초) · SSE 스트림(끔)은 라우트 metadata 로 덮어 1초 응답도 받는다.
+ * 코드리뷰 A-경-7, A-경-6c, B-경-9 — 클레임 라우트, 업무 서비스 타임아웃과 오류 봉투, Keycloak 계정 콘솔 차단.
+ * user, order, admin 라우트는 1초 뒤에 응답하는 느린 서버로, store, keycloak 은 아무도 듣지 않는 주소(기본값)로 보낸다.
+ * 전체 응답 타임아웃은 테스트에서 300ms 로 줄인다 — order(15초), SSE 스트림(끔)은 라우트 metadata 로 덮어 1초 응답도 받는다.
  */
 @SpringBootTest(properties = {"spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:1/realms/gotgan",
         "management.tracing.sampling.probability=0",
@@ -110,7 +110,7 @@ class GatewayHardeningTest {
     }
 
     @Test
-    @DisplayName("B-경-9 — Keycloak 계정 콘솔 · 동적 클라이언트 등록은 막힌다 (비로그인 401 · 로그인 403)")
+    @DisplayName("B-경-9 — Keycloak 계정 콘솔, 동적 클라이언트 등록은 막힌다 (비로그인 401, 로그인 403)")
     void keycloakAccountConsole_blocked() {
         client.get().uri("/realms/gotgan/account").exchange().expectStatus().isUnauthorized();
         client.get().uri("/realms/gotgan/account/").exchange().expectStatus().isUnauthorized();

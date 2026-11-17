@@ -5,15 +5,15 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
-/** cart 도메인 에러 코드 (컨벤션 2-5 · docs/api/error-codes.md) */
+/** cart 도메인 에러 코드 (컨벤션 2-5, docs/api/error-codes.md) */
 @Getter
 @RequiredArgsConstructor
 public enum CartErrorCode implements ErrorCode {
-    /** 없는 옵션 · 판매중지 · 차단 · 삭제된 상품 */
+    /** 없는 옵션, 판매중지, 차단, 삭제된 상품 */
     CART_PRODUCT_NOT_PURCHASABLE(HttpStatus.CONFLICT, "장바구니에 담을 수 없는 상품입니다."),
     /** 판매자가 자기 스토어 상품을 담음 — 주문에서도 막지만 담을 때 먼저 알린다 */
     CART_OWN_STORE_PRODUCT(HttpStatus.CONFLICT, "내 스토어 상품은 장바구니에 담을 수 없어요."),
-    /** 장바구니에 없는 옵션 (수량 · 선택 변경) */
+    /** 장바구니에 없는 옵션 (수량, 선택 변경) */
     CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "장바구니에 없는 상품입니다."),
     /** 담긴 수량 + 새로 담는 수량이 옵션당 최대(999)를 넘음 */
     CART_QUANTITY_EXCEEDED(HttpStatus.CONFLICT, "한 옵션은 999개까지 담을 수 있어요.");

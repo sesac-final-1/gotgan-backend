@@ -20,8 +20,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * 멈춘 Saga 복구 (ORD-07) — 결제 준비 전 단계에서 stalled-after(5분) 넘게 멈춘 Saga(파드가 [요청 1] 도중 종료)와
- * 보상 호출이 실패해 재시도 시각(1 · 1 · 2분 후 5분, 최대 8회)이 된 Saga 를 다시 보상한다. 결제 대기는 PaymentExpiryScheduler 몫.
- * 취소 Saga(CLM-01)도 같은 기준으로 멈춘 단계부터 다시 진행한다 (결제 취소 409 PAYMENT_CANCEL_PENDING · 장애).
+ * 보상 호출이 실패해 재시도 시각(1, 1, 2분 후 5분, 최대 8회)이 된 Saga 를 다시 보상한다. 결제 대기는 PaymentExpiryScheduler 몫.
+ * 취소 Saga(CLM-01)도 같은 기준으로 멈춘 단계부터 다시 진행한다 (결제 취소 409 PAYMENT_CANCEL_PENDING, 장애).
  */
 @Slf4j
 @Component

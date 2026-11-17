@@ -26,7 +26,7 @@ public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
 
     Optional<ChatRoom> findByTypeAndBuyerIdAndStoreId(ChatRoomType type, Long buyerId, Long storeId);
 
-    /** 구매자 쪽 방 — 스토어 톡 · 고객 상담 */
+    /** 구매자 쪽 방 — 스토어 톡, 고객 상담 */
     List<ChatRoom> findByBuyerIdAndTypeIn(Long buyerId, Collection<ChatRoomType> types);
 
     /** 판매자 쪽 방 — 스토어 단위 */

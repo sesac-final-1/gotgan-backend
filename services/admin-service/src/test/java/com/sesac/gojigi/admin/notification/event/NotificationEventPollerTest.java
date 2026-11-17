@@ -15,7 +15,7 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
 
-/** 알림 이벤트 폴러 — 큐 URL 이 비면 띄우지 않음, 처리 성공이면 삭제 · 실패면 남겨 재전달 */
+/** 알림 이벤트 폴러 — 큐 URL 이 비면 띄우지 않음, 처리 성공이면 삭제, 실패면 남겨 재전달 */
 class NotificationEventPollerTest {
 
     private final SqsClient sqs = mock(SqsClient.class);
@@ -23,7 +23,7 @@ class NotificationEventPollerTest {
     private final Message message = Message.builder().messageId("m-1").receiptHandle("rh-1").body("{\"eventType\":\"OrderPaid\"}").build();
 
     @Test
-    @DisplayName("큐 URL 이 모두 비면(로컬 · 테스트) 시작해도 받지 않는다")
+    @DisplayName("큐 URL 이 모두 비면(로컬, 테스트) 시작해도 받지 않는다")
     void blankQueues_noWorkers() {
         NotificationEventPoller poller = new NotificationEventPoller(sqs, service, "", "", "");
 

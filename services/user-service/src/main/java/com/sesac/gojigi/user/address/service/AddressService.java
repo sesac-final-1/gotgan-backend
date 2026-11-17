@@ -114,13 +114,13 @@ public class AddressService {
         log.info("배송지 삭제 userId={} addressId={}", userId, addressId);
     }
 
-    /** 회원 행 잠금 — 같은 회원의 등록 · 수정이 겹쳐 기본이 2개 되지 않게 (없는 회원 · 탈퇴면 USER_NOT_FOUND) */
+    /** 회원 행 잠금 — 같은 회원의 등록, 수정이 겹쳐 기본이 2개 되지 않게 (없는 회원, 탈퇴면 USER_NOT_FOUND) */
     private User lockMember(Long userId) {
         return userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));
     }
 
-    /** 내 배송지 — 없는 · 삭제된 · 다른 회원의 배송지는 모두 ADDRESS_NOT_FOUND */
+    /** 내 배송지 — 없는, 삭제된, 다른 회원의 배송지는 모두 ADDRESS_NOT_FOUND */
     private Address findOwned(Long userId, Long addressId) {
         return addressRepository.findActiveByIdAndUserId(addressId, userId)
                 .orElseThrow(() -> new AddressException(AddressErrorCode.ADDRESS_NOT_FOUND));

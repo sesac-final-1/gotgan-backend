@@ -28,7 +28,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 /**
- * 어댑터 — 실제 HTTP 응답 파싱 · 4xx 변환. 서킷 · 재시도는 Spring AOP 라 여기서는 폴백을 직접 부른다 (AOP 는 InquiryClientResilienceTest).
+ * 어댑터 — 실제 HTTP 응답 파싱, 4xx 변환. 서킷, 재시도는 Spring AOP 라 여기서는 폴백을 직접 부른다 (AOP 는 InquiryClientResilienceTest).
  */
 class InquiryClientAdaptersTest {
 
@@ -50,7 +50,7 @@ class InquiryClientAdaptersTest {
     }
 
     @Test
-    @DisplayName("상품 · 회원 — 각 주소로 GET, 봉투 data 의 필요한 값만 읽는다 (모르는 필드 무시)")
+    @DisplayName("상품, 회원 — 각 주소로 GET, 봉투 data 의 필요한 값만 읽는다 (모르는 필드 무시)")
     void get_parsesEnvelope() {
         // given
         server.expect(requestTo("http://product/api/products/101")).andExpect(method(HttpMethod.GET))
@@ -91,7 +91,7 @@ class InquiryClientAdaptersTest {
     }
 
     @Test
-    @DisplayName("폴백 — 이미 바꾼 예외는 그대로, 서킷 OPEN · 장애는 화면 문구로 502")
+    @DisplayName("폴백 — 이미 바꾼 예외는 그대로, 서킷 OPEN, 장애는 화면 문구로 502")
     void fallback_keepsBusinessOtherwise502() {
         InquiryException notFound = new InquiryException(InquiryErrorCode.INQUIRY_PRODUCT_NOT_FOUND);
         CallNotPermittedException open = CallNotPermittedException.createCallNotPermittedException(CircuitBreaker.ofDefaults("product"));

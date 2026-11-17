@@ -24,7 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
-/** 판매자 일괄 처리 — 상품주문마다 따로, 일부 실패는 failed 로 · 중복 ID 는 한 번만 · 스토어 없으면 403 */
+/** 판매자 일괄 처리 — 상품주문마다 따로, 일부 실패는 failed 로, 중복 ID 는 한 번만, 스토어 없으면 403 */
 @ExtendWith(MockitoExtension.class)
 class SellerDeliveryServiceTest {
 
@@ -36,7 +36,7 @@ class SellerDeliveryServiceTest {
     private static final OrderItemResponse DONE = OrderItemResponse.from(OrderFixtures.item(OrderFixtures.order()));
 
     @Test
-    @DisplayName("발주확인 — 성공 · 내 스토어 아님 · 상태 위반을 나눠 돌려주고, 같은 ID 는 한 번만")
+    @DisplayName("발주확인 — 성공, 내 스토어 아님, 상태 위반을 나눠 돌려주고, 같은 ID 는 한 번만")
     void prepare_partial() {
         // given
         given(deliveryTx.prepare(1L, 70L, 1L)).willReturn(DONE);
@@ -55,7 +55,7 @@ class SellerDeliveryServiceTest {
     }
 
     @Test
-    @DisplayName("송장 등록 — 같은 상품주문이 두 번이면 처음 것만, 택배사 · 송장번호를 그대로 넘김")
+    @DisplayName("송장 등록 — 같은 상품주문이 두 번이면 처음 것만, 택배사, 송장번호를 그대로 넘김")
     void ship_dedupesFirstWins() {
         given(deliveryTx.ship(1L, 70L, 5L, "CJ대한통운", null)).willReturn(DONE);
 

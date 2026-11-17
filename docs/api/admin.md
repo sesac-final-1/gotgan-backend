@@ -1,34 +1,34 @@
-# admin-service API — 신고 · 조치 (10/26 B안) · 알림 센터 (10/27) · 장애 시연 (11/7)
+# admin-service API — 신고, 조치 (10/26 B안), 알림 센터 (10/27), 장애 시연 (11/7)
 
-- 담당: 구지훈. 다른 관리자 API(회원 · 정산 · 수수료 · 카테고리 · 대시보드 · 입점 · 스토어)는 하위 서비스 계약(user · settlement · product · store.md)을 그대로 전달하므로 여기에는 **admin 이 직접 갖는 신고 · 알림 센터 · 장애 시연만** 적는다
-- 근거: ADR-0001 "변경 (10/26)" — 회원 신고 범위 복귀 · admin DB 예외(신고 · 조치 이력만), 노션 확인 요청 「신고 · 리뷰 블라인드 (B안)」
-- 저장: admindb `report`(신고자 · 대상당 1건) · `moderation_action`(처리 1번 = 1행). 리뷰 블라인드 상태는 review, 회원 정지 상태는 user 가 주인
+- 담당: 구지훈. 다른 관리자 API(회원, 정산, 수수료, 카테고리, 대시보드, 입점, 스토어)는 하위 서비스 계약(user, settlement, product, store.md)을 그대로 전달하므로 여기에는 **admin 이 직접 갖는 신고, 알림 센터, 장애 시연만** 적는다
+- 근거: ADR-0001 "변경 (10/26)" — 회원 신고 범위 복귀, admin DB 예외(신고, 조치 이력만), 노션 확인 요청 「신고, 리뷰 블라인드 (B안)」
+- 저장: admindb `report`(신고자, 대상당 1건), `moderation_action`(처리 1번 = 1행). 리뷰 블라인드 상태는 review, 회원 정지 상태는 user 가 주인
 
 ## 공통
 
 | 항목 | 규칙 |
 |---|---|
-| 대상 `targetType` | `REVIEW` · `USER` |
-| 신고 상태 | `OPEN`(처리 대기) → 관리자 조치 한 번에 대상의 열린 신고가 모두 `RESOLVED`(블라인드 · 정지) 또는 `DISMISSED`(해제 · 기각) |
-| 대상 서비스 | 리뷰 조회 · 블라인드 = review `GET` · `PATCH /internal/reviews/{id}(/blind)` (서킷 `review`) — 회원 상세 "작성 리뷰" `GET /api/admin/users/{id}/reviews` 도 같은 서킷으로 review `GET /internal/reviews?userId=`(review.md 8-3) 를 그대로 전달, 회원 조회 · 정지 = user `GET` · `PATCH /internal/users/{id}(/status)` (서킷 `user`). 오류는 HTTP 상태 · code 그대로, 장애는 502 `EXTERNAL_API_ERROR` |
-| 자동 처리 | 없음 — 신고가 쌓여도 자동 임시 블라인드 · 처리 메일 없음(관리자 수동 처리만) |
+| 대상 `targetType` | `REVIEW`, `USER` |
+| 신고 상태 | `OPEN`(처리 대기) → 관리자 조치 한 번에 대상의 열린 신고가 모두 `RESOLVED`(블라인드, 정지) 또는 `DISMISSED`(해제, 기각) |
+| 대상 서비스 | 리뷰 조회, 블라인드 = review `GET`, `PATCH /internal/reviews/{id}(/blind)` (서킷 `review`) — 회원 상세 "작성 리뷰" `GET /api/admin/users/{id}/reviews` 도 같은 서킷으로 review `GET /internal/reviews?userId=`(review.md 8-3) 를 그대로 전달, 회원 조회, 정지 = user `GET`, `PATCH /internal/users/{id}(/status)` (서킷 `user`). 오류는 HTTP 상태, code 그대로, 장애는 502 `EXTERNAL_API_ERROR` |
+| 자동 처리 | 없음 — 신고가 쌓여도 자동 임시 블라인드, 처리 메일 없음(관리자 수동 처리만) |
 
 ### 신고 사유 `reasonCode`
 
 | 코드 | 리뷰 | 회원 | 뜻 |
 |---|---|---|---|
-| `SPAM` | ✅ | ✅ | 광고 · 도배 |
-| `ABUSE` | ✅ | ✅ | 욕설 · 비방 |
-| `FALSE_INFO` | ✅ | | 허위 · 구매와 무관한 리뷰 |
+| `SPAM` | ✅ | ✅ | 광고, 도배 |
+| `ABUSE` | ✅ | ✅ | 욕설, 비방 |
+| `FALSE_INFO` | ✅ | | 허위, 구매와 무관한 리뷰 |
 | `PRIVACY` | ✅ | | 개인정보 노출 |
-| `OBSCENE` | ✅ | | 음란 · 부적절한 사진 |
-| `FRAUD` | | ✅ | 거래 사기 · 결제 도용 의심 |
-| `SELLER_REQUEST` | ✅ | | 판매자 "관리자 검토 요청" — SELLER · 내 스토어 리뷰만 |
+| `OBSCENE` | ✅ | | 음란, 부적절한 사진 |
+| `FRAUD` | | ✅ | 거래 사기, 결제 도용 의심 |
+| `SELLER_REQUEST` | ✅ | | 판매자 "관리자 검토 요청" — SELLER, 내 스토어 리뷰만 |
 | `ETC` | ✅ | ✅ | 기타 |
 
-## 1. 신고 접수 — `POST /api/reports` (BUYER · SELLER)
+## 1. 신고 접수 — `POST /api/reports` (BUYER, SELLER)
 
-게이트웨이 `/api/reports/**` → admin-service, 역할 `BUYER` · `SELLER`.
+게이트웨이 `/api/reports/**` → admin-service, 역할 `BUYER`, `SELLER`.
 
 ```json
 // 요청
@@ -39,12 +39,12 @@
 
 | 경우 | 응답 |
 |---|---|
-| 정상 — 대상 서비스에 있는 대상, 신고 당시 요약(리뷰 본문 앞 200자 · 회원 이름 (닉네임)) 저장 | **201** |
+| 정상 — 대상 서비스에 있는 대상, 신고 당시 요약(리뷰 본문 앞 200자, 회원 이름 (닉네임)) 저장 | **201** |
 | 같은 사람이 같은 대상을 다시 신고 | 409 `REPORT_DUPLICATED` |
-| 본인(회원) · 내가 쓴 리뷰 | 400 `REPORT_SELF` |
-| 대상에 없는 사유 · 구매자가 `SELLER_REQUEST` | 400 `REPORT_REASON_NOT_ALLOWED` |
+| 본인(회원), 내가 쓴 리뷰 | 400 `REPORT_SELF` |
+| 대상에 없는 사유, 구매자가 `SELLER_REQUEST` | 400 `REPORT_REASON_NOT_ALLOWED` |
 | 판매자 검토 요청인데 다른 스토어 리뷰 (`X-Store-Id` ≠ 리뷰 `storeId`) | 403 `REPORT_NOT_OWN_STORE` |
-| 없는 리뷰 · 회원 | review `REVIEW_NOT_FOUND` · user `USER_NOT_FOUND` 404 그대로 |
+| 없는 리뷰, 회원 | review `REVIEW_NOT_FOUND`, user `USER_NOT_FOUND` 404 그대로 |
 | 형식 오류 (`detail` 500자 초과 등) | 400 `INVALID_INPUT` |
 
 - `reporterRole` 은 토큰 역할로 정한다 — `SELLER` 역할이 있으면 SELLER, 아니면 BUYER
@@ -72,7 +72,7 @@
                  "adminId": 1, "reportCount": 1, "createdAt": "…" } ] }
 ```
 
-- `target` 은 대상 서비스의 **현재 값**(리뷰: review 조회, 회원: user 상세). 불러오지 못하면 `null` + `targetError`(메시지) — 신고 · 조치 기록은 그대로 보여 준다
+- `target` 은 대상 서비스의 **현재 값**(리뷰: review 조회, 회원: user 상세). 불러오지 못하면 `null` + `targetError`(메시지) — 신고, 조치 기록은 그대로 보여 준다
 - 신고가 없어도 200(빈 배열) — 회원 상세 화면의 제재 이력으로도 쓴다
 
 ## 4. 신고 처리 — `POST /api/admin/reports/{targetType}/{targetId}/resolve` (ADMIN)
@@ -95,8 +95,8 @@
 | 경우 | 응답 |
 |---|---|
 | 정상 — **대상 서비스 성공 뒤** 조치 1행 + 열린 신고 일괄 닫기 (한 트랜잭션) | **200** |
-| 대상에 맞지 않는 조치 · `SUSPEND` 가 아닌데 `days` | 400 `REPORT_ACTION_NOT_ALLOWED` |
-| `reason` 없음 · 255자 초과 · `days` 범위 밖 | 400 `INVALID_INPUT` |
+| 대상에 맞지 않는 조치, `SUSPEND` 가 아닌데 `days` | 400 `REPORT_ACTION_NOT_ALLOWED` |
+| `reason` 없음, 255자 초과, `days` 범위 밖 | 400 `INVALID_INPUT` |
 | 대상 서비스 4xx (이미 정지 등) | 그 code 그대로 — 아무것도 기록하지 않음 |
 | 대상 서비스 장애 | 502 `EXTERNAL_API_ERROR` — 아무것도 기록하지 않음, 신고는 OPEN 그대로(다시 처리) |
 
@@ -109,21 +109,21 @@
 
 | 받는 쪽 (알림함 PK) | 누가 보나 |
 |---|---|
-| `USER#{userId}` | 그 회원 (구매자 · 판매자 · 관리자 모두) |
+| `USER#{userId}` | 그 회원 (구매자, 판매자, 관리자 모두) |
 | `STORE#{storeId}` | 그 스토어 판매자 (`X-Store-Id`) — 이벤트에 `storeId` 만 있는 경우(정산 지급) |
 | `ADMIN` | 관리자 전원 (시스템 알림 등) |
 
 **이벤트 → 알림** (구독 큐 `sesac-gojigi-admin-{store|order|settlement}-events`)
 
-| 이벤트 | 받는 쪽 | type · 제목 | 링크 |
+| 이벤트 | 받는 쪽 | type, 제목 | 링크 |
 |---|---|---|---|
-| `OrderPaid` | 구매자 | `ORDER_PAID` 결제가 완료됐어요 — "상품 외 n건 · 금액" | `/mypage/orders/{orderNo}` |
-| `OrderPaid` (11/3, O-13) | 주문에 든 스토어마다 판매자(`STORE#`) | `ORDER_NEW` 새 주문이 들어왔어요 — "그 스토어 상품 외 n건 · 그 스토어 상품 금액 합" (`items[].storeId` 없는 옛 이벤트면 생략) | `/seller/orders` |
-| `OrderClaimRequested` (11/5, Q-구-15) | 그 스토어 판매자(`STORE#`) | `CLAIM_REQUESTED` 반품 요청이 들어왔어요 · 교환 요청이 들어왔어요(유형별) — "상품명 · 옵션" | `/seller/claims` |
-| `OrderItemShipped` | 구매자 | `ORDER_SHIPPED` 배송이 시작됐어요 — "상품 · 택배사 송장" | 〃 |
-| `OrderItemCancelled` · `OrderItemReturned` | 구매자 | `ORDER_CANCELLED` 취소가 완료됐어요 · `ORDER_RETURNED` 반품이 완료됐어요 — "상품 · 환불 금액" | 〃 |
-| `SettlementPaid` | 스토어 | `SETTLEMENT_PAID` 정산금이 지급됐어요 — "주차 · 지급액" | `/seller/settlements` |
-| `StoreApproved` · `StoreApplicationRejected` · `StoreApplicationSupplementRequested` | 신청 회원 | `STORE_APPROVED` · `STORE_REJECTED` · `STORE_SUPPLEMENT` | `/seller` · `/seller/apply` |
+| `OrderPaid` | 구매자 | `ORDER_PAID` 결제가 완료됐어요 — "상품 외 n건, 금액" | `/mypage/orders/{orderNo}` |
+| `OrderPaid` (11/3, O-13) | 주문에 든 스토어마다 판매자(`STORE#`) | `ORDER_NEW` 새 주문이 들어왔어요 — "그 스토어 상품 외 n건, 그 스토어 상품 금액 합" (`items[].storeId` 없는 옛 이벤트면 생략) | `/seller/orders` |
+| `OrderClaimRequested` (11/5, Q-구-15) | 그 스토어 판매자(`STORE#`) | `CLAIM_REQUESTED` 반품 요청이 들어왔어요, 교환 요청이 들어왔어요(유형별) — "상품명, 옵션" | `/seller/claims` |
+| `OrderItemShipped` | 구매자 | `ORDER_SHIPPED` 배송이 시작됐어요 — "상품, 택배사 송장" | 〃 |
+| `OrderItemCancelled`, `OrderItemReturned` | 구매자 | `ORDER_CANCELLED` 취소가 완료됐어요, `ORDER_RETURNED` 반품이 완료됐어요 — "상품, 환불 금액" | 〃 |
+| `SettlementPaid` | 스토어 | `SETTLEMENT_PAID` 정산금이 지급됐어요 — "주차, 지급액" | `/seller/settlements` |
+| `StoreApproved`, `StoreApplicationRejected`, `StoreApplicationSupplementRequested` | 신청 회원 | `STORE_APPROVED`, `STORE_REJECTED`, `STORE_SUPPLEMENT` | `/seller`, `/seller/apply` |
 
 같은 이벤트 재전달은 알림함 키(`{발생 시각 ms}#{eventId}`)가 같아 한 번만 쌓입니다.
 
@@ -131,16 +131,16 @@
 
 | 호출 서비스 | 받는 쪽 | type | 링크 |
 |---|---|---|---|
-| chat-service — 상대가 그 방을 보고 있지 않을 때 새 채팅 메시지 (`chat.md` 7절, `sourceId = chat-msg-{messageId}`) | 구매자 · 스토어 · 관리자 전원 | `CHAT_MESSAGE` | `/mypage/chats/{roomId}` · `/seller/chats/{roomId}` · `/admin/chats/{roomId}` |
+| chat-service — 상대가 그 방을 보고 있지 않을 때 새 채팅 메시지 (`chat.md` 7절, `sourceId = chat-msg-{messageId}`) | 구매자, 스토어, 관리자 전원 | `CHAT_MESSAGE` | `/mypage/chats/{roomId}`, `/seller/chats/{roomId}`, `/admin/chats/{roomId}` |
 
-알림 종류(`type`): `ORDER_PAID` · `ORDER_NEW` · `ORDER_SHIPPED` · `ORDER_CANCELLED` · `ORDER_RETURNED` · `CLAIM_REQUESTED` · `SETTLEMENT_PAID` · `STORE_APPROVED` · `STORE_REJECTED` · `STORE_SUPPLEMENT` · `CHAT_MESSAGE`. 화면은 `CHAT_MESSAGE` 를 받으면 채팅 목록 · 안 읽은 수 배지도, `ORDER_NEW` 를 받으면 판매자 주문 목록 · 대시보드도 갱신합니다.
+알림 종류(`type`): `ORDER_PAID`, `ORDER_NEW`, `ORDER_SHIPPED`, `ORDER_CANCELLED`, `ORDER_RETURNED`, `CLAIM_REQUESTED`, `SETTLEMENT_PAID`, `STORE_APPROVED`, `STORE_REJECTED`, `STORE_SUPPLEMENT`, `CHAT_MESSAGE`. 화면은 `CHAT_MESSAGE` 를 받으면 채팅 목록, 안 읽은 수 배지도, `ORDER_NEW` 를 받으면 판매자 주문 목록, 대시보드도 갱신합니다.
 
 ### API (게이트웨이 `/api/notifications/**` → admin, 로그인한 누구나 자기 알림만)
 
-| 메서드 · 경로 | 응답 |
+| 메서드, 경로 | 응답 |
 |---|---|
 | `GET /api/notifications?cursor=&size=20` | `{items[{id, type, title, body, link, read, createdAt}], nextCursor, unreadCount}` — 최신순, `size` 최대 50 |
-| `GET /api/notifications/unread-count` | `{count}` — 받는 쪽(USER# · STORE# · ADMIN)마다 100까지만 셈(화면은 99+) |
+| `GET /api/notifications/unread-count` | `{count}` — 받는 쪽(USER#, STORE#, ADMIN)마다 100까지만 셈(화면은 99+) |
 | `PATCH /api/notifications/{id}/read` | 내 알림이 아니거나 없으면 **404** `NOTIFICATION_NOT_FOUND` |
 | `PATCH /api/notifications/read-all` | `{count}` = 읽음으로 바꾼 수 |
 | `GET /api/notifications/stream` | `text/event-stream` — `event: ready` → 새 알림마다 `event: notification`(data = 목록 항목 JSON), 25초마다 주석. 브라우저 `EventSource` 는 Authorization 헤더를 못 보내 화면은 fetch 기반 SSE 사용 |
@@ -152,44 +152,44 @@
 ```
 
 - **202** `{recipients}` — 받는 쪽마다 쌓고 바로 보냄. `sourceId` 가 같으면 한 번만(재시도 멱등), 생략하면 매번 새 알림
-- **400** `NOTIFICATION_RECIPIENT_REQUIRED`(받는 쪽 없음) · `INVALID_INPUT`(type · title 없음, 길이 초과)
+- **400** `NOTIFICATION_RECIPIENT_REQUIRED`(받는 쪽 없음), `INVALID_INPUT`(type, title 없음, 길이 초과)
 
 ## 6. 관리자 중계 API — 경로 목록 (11/3)
 
-> admin 은 관리자 화면의 입구(BFF). 아래 경로는 **하위 서비스 내부 API 를 그대로 중계**하므로 요청 · 응답 · 오류 계약은 각 서비스 문서가 정본이다.
-> 공통: 게이트웨이가 ADMIN 역할 확인 · 관리자 X-User-Id 를 그대로 전달, 동기 호출은 서킷 브레이커 · GET 재시도(1홉 규칙), 하위 서비스 장애는 502.
+> admin 은 관리자 화면의 입구(BFF). 아래 경로는 **하위 서비스 내부 API 를 그대로 중계**하므로 요청, 응답, 오류 계약은 각 서비스 문서가 정본이다.
+> 공통: 게이트웨이가 ADMIN 역할 확인, 관리자 X-User-Id 를 그대로 전달, 동기 호출은 서킷 브레이커, GET 재시도(1홉 규칙), 하위 서비스 장애는 502.
 
 | 영역 | 경로 (전부 ADMIN) | 하위 서비스 (정본 문서) |
 |---|---|---|
-| 대시보드 | `GET /api/admin/dashboard` — 영역별 병렬 조합 · 일부 실패해도 200 + `unavailable[]` | settlement · order · product 통계 |
-| 입점 심사 | `GET /api/admin/applications` · `/{id}` · `PATCH /{id}/approve` · `/reject` · `/supplement` | store (store.md 4절) |
-| 스토어 | `GET /api/admin/stores` · `/{storeId}` · `PATCH /{storeId}/status` | store (store.md 1절 확장) |
-| 스토어 상품 · 차단 | `GET /api/admin/stores/{storeId}/products` · `PATCH /api/admin/products/{productId}/block` | product (product.md 6절) |
-| 카테고리 | `GET · POST /api/admin/categories` · `PUT /{categoryId}` | product 7절 + settlement 수수료(상위 생성 · 활성화) |
-| 수수료 | `GET · PUT /api/admin/commissions` | settlement (settlement.md 2절) |
-| 정산 | `GET /api/admin/settlements` · `/{id}` · `POST /aggregate` · `/pay` · `PATCH /{id}/hold` · `GET /api/admin/stores/{storeId}/settlements` — `aggregate` · `pay` 만 settlement 호출 읽기 28초 · gateway 라우트 `admin-settlement-batch` 30초(11/6, 5,000건 집계 5.6 ~ 11.6초), 나머지는 3초 · gateway 10초 | settlement (settlement.md 3절) |
-| 회원 | `GET /api/admin/users` · `/{userId}` · `/{userId}/points` · `/{userId}/reviews` · `PATCH /{userId}/status` | user 내부 API · review 작성 리뷰 |
-| 신고 · 알림 | 1 ~ 5절 | admin 자체 (admindb · DynamoDB) |
-| 장애 시연 | 7절 | admin 자체 (쿠버네티스 API · admindb) |
+| 대시보드 | `GET /api/admin/dashboard` — 영역별 병렬 조합, 일부 실패해도 200 + `unavailable[]` | settlement, order, product 통계 |
+| 입점 심사 | `GET /api/admin/applications`, `/{id}`, `PATCH /{id}/approve`, `/reject`, `/supplement` | store (store.md 4절) |
+| 스토어 | `GET /api/admin/stores`, `/{storeId}`, `PATCH /{storeId}/status` | store (store.md 1절 확장) |
+| 스토어 상품, 차단 | `GET /api/admin/stores/{storeId}/products`, `PATCH /api/admin/products/{productId}/block` | product (product.md 6절) |
+| 카테고리 | `GET, POST /api/admin/categories`, `PUT /{categoryId}` | product 7절 + settlement 수수료(상위 생성, 활성화) |
+| 수수료 | `GET, PUT /api/admin/commissions` | settlement (settlement.md 2절) |
+| 정산 | `GET /api/admin/settlements`, `/{id}`, `POST /aggregate`, `/pay`, `PATCH /{id}/hold`, `GET /api/admin/stores/{storeId}/settlements` — `aggregate`, `pay` 만 settlement 호출 읽기 28초, gateway 라우트 `admin-settlement-batch` 30초(11/6, 5,000건 집계 5.6 ~ 11.6초), 나머지는 3초, gateway 10초 | settlement (settlement.md 3절) |
+| 회원 | `GET /api/admin/users`, `/{userId}`, `/{userId}/points`, `/{userId}/reviews`, `PATCH /{userId}/status` | user 내부 API, review 작성 리뷰 |
+| 신고, 알림 | 1 ~ 5절 | admin 자체 (admindb, DynamoDB) |
+| 장애 시연 | 7절 | admin 자체 (쿠버네티스 API, admindb) |
 
 ## 7. 장애 시연 대시보드 — F-1 (11/7)
 
-> 관리자가 서비스 파드를 내리고 상태 · 복구를 한 화면에서 본다(슬로건 "하나가 멈춰도 곳간은 열려 있다"). 근거: 노션 협업 요청 「F-1 장애 시연 대시보드」 4장 계약 · 11/6 QA 장애 영향표.
+> 관리자가 서비스 파드를 내리고 상태, 복구를 한 화면에서 본다(슬로건 "하나가 멈춰도 곳간은 열려 있다"). 근거: 노션 협업 요청 「F-1 장애 시연 대시보드」 4장 계약, 11/6 QA 장애 영향표.
 > 전부 `ADMIN` — 게이트웨이 `/api/admin/**` 확인에 더해 admin 도 `X-User-Roles` 에 ADMIN 이 없으면 403 `FORBIDDEN`.
 
 | 항목 | 규칙 |
 |---|---|
-| 데이터 | 쿠버네티스 API(in-cluster ServiceAccount 토큰 · ca.crt) — `sesac-gojigi` 네임스페이스 Deployment · StatefulSet `spec.replicas` + 파드(`app` 라벨). 권한 = gotgan-config `chaos-rbac.yaml`(pods get · list · delete, deployments · statefulsets get · list) |
-| 스위치 | `app.chaos.enabled`(env `APP_CHAOS_ENABLED`, 기본 `false`) — 꺼져 있으면 **내리기만** 403, 상태 · 타임라인은 조회 가능 |
-| 내리기 방식 | 파드 **즉시 삭제**(`gracePeriodSeconds=0`)만 — Deployment 가 새 파드를 띄움 · ArgoCD selfHeal 과 충돌 없음. 레플리카를 0 으로 줄이지 않는다. 기본 유예로 지우면 옛 파드가 preStop 10초 동안 응답해 실패 구간이 8초 안팎뿐(11/10) |
-| 기록 | admindb `chaos_event` — 내리기 1번 = 1행(서비스 · 범위 · 사유 · 지운 파드 · 관리자 · 시각 · 복구 시각) |
+| 데이터 | 쿠버네티스 API(in-cluster ServiceAccount 토큰, ca.crt) — `sesac-gojigi` 네임스페이스 Deployment, StatefulSet `spec.replicas` + 파드(`app` 라벨). 권한 = gotgan-config `chaos-rbac.yaml`(pods get, list, delete, deployments, statefulsets get, list) |
+| 스위치 | `app.chaos.enabled`(env `APP_CHAOS_ENABLED`, 기본 `false`) — 꺼져 있으면 **내리기만** 403, 상태, 타임라인은 조회 가능 |
+| 내리기 방식 | 파드 **즉시 삭제**(`gracePeriodSeconds=0`)만 — Deployment 가 새 파드를 띄움, ArgoCD selfHeal 과 충돌 없음. 레플리카를 0 으로 줄이지 않는다. 기본 유예로 지우면 옛 파드가 preStop 10초 동안 응답해 실패 구간이 8초 안팎뿐(11/10) |
+| 기록 | admindb `chaos_event` — 내리기 1번 = 1행(서비스, 범위, 사유, 지운 파드, 관리자, 시각, 복구 시각) |
 
-### 서비스 · 상태
+### 서비스, 상태
 
 | 서비스 | 내리기 |
 |---|---|
-| `order-service` · `product-service` · `payment-service` · `store-service` · `user-service` · `review-service` · `settlement-service` · `chat-service` | ✅ (`killable: true`) |
-| `gateway-service` · `admin-service` · `keycloak` · `mysql` · `redis` | ❌ 입구 · 이 화면 · 로그인 · 데이터 (`killable: false`, 상태만) |
+| `order-service`, `product-service`, `payment-service`, `store-service`, `user-service`, `review-service`, `settlement-service`, `chat-service` | ✅ (`killable: true`) |
+| `gateway-service`, `admin-service`, `keycloak`, `mysql`, `redis` | ❌ 입구, 이 화면, 로그인, 데이터 (`killable: false`, 상태만) |
 
 `ready` = 지워지는 중이 아닌 Ready 파드 수, `desired` = `spec.replicas`.
 
@@ -198,22 +198,22 @@
 | `UP` | `ready ≥ desired` |
 | `DOWN` | `ready = 0` — 새 파드가 뜨는 중이어도 응답을 못 하므로 DOWN |
 | `RECOVERING` | `0 < ready < desired` 이고 마지막 내리기가 아직 복구 전 |
-| `DEGRADED` | `0 < ready < desired` 이고 내리기와 무관(자연 장애 · 재시작) |
+| `DEGRADED` | `0 < ready < desired` 이고 내리기와 무관(자연 장애, 재시작) |
 
 ### 사용자 기능 `features` (서버 계산, 11/6 QA 실측)
 
 | `key` | `label` | 원인 서비스 |
 |---|---|---|
-| `BROWSE` | 둘러보기 · 상품 상세 | product |
+| `BROWSE` | 둘러보기, 상품 상세 | product |
 | `STORE` | 스토어 | store |
-| `REVIEW` | 리뷰 · 문의 | review |
-| `CART_ORDER` | 장바구니 · 주문 | order · product · store (장바구니가 상품 · 스토어 배송 정책을 읽음) |
-| `PAYMENT` | 결제 | order · payment |
+| `REVIEW` | 리뷰, 문의 | review |
+| `CART_ORDER` | 장바구니, 주문 | order, product, store (장바구니가 상품, 스토어 배송 정책을 읽음) |
+| `PAYMENT` | 결제 | order, payment |
 | `CHAT` | 채팅 | chat |
 | `SETTLEMENT` | 판매자 정산 | settlement |
-| `MYPAGE` | 회원 · 마이페이지 | user |
+| `MYPAGE` | 회원, 마이페이지 | user |
 
-원인 중 하나라도 `DOWN` → `DOWN`, `DEGRADED` · `RECOVERING` 만 → `DEGRADED`, 아니면 `UP`. `causes` = `UP` 이 아닌 원인 서비스.
+원인 중 하나라도 `DOWN` → `DOWN`, `DEGRADED`, `RECOVERING` 만 → `DEGRADED`, 아니면 `UP`. `causes` = `UP` 이 아닌 원인 서비스.
 
 ### 7-1. 상태 — `GET /api/admin/system/status` (2초 폴링)
 
@@ -222,12 +222,12 @@
   "services": [{ "name": "order-service", "killable": true, "desired": 2, "ready": 0, "state": "DOWN",
                  "pods": [{ "name": "order-service-…", "node": "ip-10-0-11-…", "phase": "Pending", "ready": false,
                             "restarts": 0, "ageSeconds": 3, "terminating": false }] }],
-  "features": [{ "key": "CART_ORDER", "label": "장바구니 · 주문", "state": "DOWN", "causes": ["order-service"] }] }
+  "features": [{ "key": "CART_ORDER", "label": "장바구니, 주문", "state": "DOWN", "causes": ["order-service"] }] }
 ```
 
-- `services` 는 위 표 순서(13개), `pods` 는 이름순 · 지워지는 중(`terminating: true`)인 파드 포함
+- `services` 는 위 표 순서(13개), `pods` 는 이름순, 지워지는 중(`terminating: true`)인 파드 포함
 - 복구 시각은 이 조회가 "내린 뒤 `ready ≥ desired`" 를 처음 본 때 기록(별도 감시 없음 — 정확도 = 폴링 주기)
-- **503** `SYSTEM_CLUSTER_UNAVAILABLE` — 쿠버네티스 조회 실패(클러스터 밖 · 권한 · 타임아웃). 화면은 마지막 값 유지 · "연결 끊김"
+- **503** `SYSTEM_CLUSTER_UNAVAILABLE` — 쿠버네티스 조회 실패(클러스터 밖, 권한, 타임아웃). 화면은 마지막 값 유지, "연결 끊김"
 
 ### 7-2. 내리기 — `POST /api/admin/system/services/{name}/kill`
 
@@ -240,7 +240,7 @@
 | 응답 | 코드 |
 |---|---|
 | 403 | `SYSTEM_CHAOS_DISABLED` — 스위치 꺼짐 |
-| 400 | `SYSTEM_SERVICE_NOT_KILLABLE` — 허용 목록 밖(없는 이름 포함) · `INVALID_INPUT` — scope 없음 |
+| 400 | `SYSTEM_SERVICE_NOT_KILLABLE` — 허용 목록 밖(없는 이름 포함), `INVALID_INPUT` — scope 없음 |
 | 409 | `SYSTEM_KILL_COOLDOWN` — 그 서비스를 1분 안에 내렸거나 복구 중(`RECOVERING`) |
 | 409 | `SYSTEM_NO_READY_POD` — 지울 파드가 없음(ONE 인데 Ready 0개 등) |
 | 503 | `SYSTEM_CLUSTER_UNAVAILABLE` |
@@ -256,10 +256,10 @@
                { "service": "product-service", "eventId": 32, "deletedPods": ["product-service-…"] }] }
 ```
 
-- 대상 = 내릴 수 있고(`killable`) **레플리카 2 이상**(`desired ≥ 2`)인 서비스 — 지금 order · product · payment · store · user. 화면 순서대로
-- 서비스마다 Ready 파드 1개(이름순 첫 번째)를 즉시 삭제 = 서비스별 `ONE` 내리기와 같음. **서비스마다 1행씩** 기록 → 타임라인 · 복구 시간은 서비스별로 그대로 보임
+- 대상 = 내릴 수 있고(`killable`) **레플리카 2 이상**(`desired ≥ 2`)인 서비스 — 지금 order, product, payment, store, user. 화면 순서대로
+- 서비스마다 Ready 파드 1개(이름순 첫 번째)를 즉시 삭제 = 서비스별 `ONE` 내리기와 같음. **서비스마다 1행씩** 기록 → 타임라인, 복구 시간은 서비스별로 그대로 보임
 - `reason` 을 비우면 `시나리오 — 레플리카 2 서비스 1개씩 내리기` 로 기록(타임라인에서 시나리오로 내린 것을 구분)
-- **전부 아니면 없음**: 대상 중 하나라도 1분 제한 · 정상(`UP`) 아님이면 아무것도 지우지 않음 — 이미 1개가 빠진 서비스에서 또 지우면 「1개씩 지워도 괜찮다」가 성립하지 않으므로
+- **전부 아니면 없음**: 대상 중 하나라도 1분 제한, 정상(`UP`) 아님이면 아무것도 지우지 않음 — 이미 1개가 빠진 서비스에서 또 지우면 「1개씩 지워도 괜찮다」가 성립하지 않으므로
 - 중간에 삭제가 실패하면 그때까지 지운 서비스만 기록하고 503
 - 1분 제한은 서비스별 그대로 — 시나리오 직후 대상 서비스를 따로 내리면 409, 반대도 같음
 
@@ -267,13 +267,13 @@
 |---|---|
 | 403 | `SYSTEM_CHAOS_DISABLED` — 스위치 꺼짐 |
 | 409 | `SYSTEM_KILL_COOLDOWN` — 대상 중 하나라도 1분 안에 내림 |
-| 409 | `SYSTEM_SCENARIO_NOT_READY` — 대상 중 하나라도 `ready < desired`(복구 중 · 자연 장애) |
+| 409 | `SYSTEM_SCENARIO_NOT_READY` — 대상 중 하나라도 `ready < desired`(복구 중, 자연 장애) |
 | 409 | `SYSTEM_NO_READY_POD` — 대상 서비스가 없음(레플리카 2 이상인 서비스가 없을 때) |
 | 503 | `SYSTEM_CLUSTER_UNAVAILABLE` |
 
 ### 7-3. 타임라인 — `GET /api/admin/system/events`
 
-최신순 20건: `[{ "eventId", "service", "scope", "reason", "deletedPods": [], "actorId", "killedAt", "recoveredAt", "recoverySeconds" }]` — 복구 전이면 `recoveredAt` · `recoverySeconds` 가 `null`.
+최신순 20건: `[{ "eventId", "service", "scope", "reason", "deletedPods": [], "actorId", "killedAt", "recoveredAt", "recoverySeconds" }]` — 복구 전이면 `recoveredAt`, `recoverySeconds` 가 `null`.
 
 ### 7-4. 지표 — `GET /api/admin/system/metrics` (15초 폴링)
 
@@ -282,23 +282,23 @@
                { "name": "gateway-service", "requestsPerSecond": null, "errorRate": null, "errorsPerMinute": null }] }
 ```
 
-- 출처: Prometheus `/api/v1/query`(`app.prometheus.url`, env `PROMETHEUS_URL`, 기본 `http://prometheus.monitoring:9090`) — 연결 · 읽기 제한 2초
+- 출처: Prometheus `/api/v1/query`(`app.prometheus.url`, env `PROMETHEUS_URL`, 기본 `http://prometheus.monitoring:9090`) — 연결, 읽기 제한 2초
 - 지표: gateway `spring_cloud_gateway_requests_seconds_count` 1분 rate — 서비스를 전부 내리면 그 서비스는 자기 5xx 를 못 세므로 gateway 에서 센다(11/6 실측: 내린 서비스는 502)
   - 요청량 `sum by (routeId)(rate(…[1m]))`, 오류 `sum by (routeId)(rate(…{httpStatusCode=~"5.."}[1m]))`
-  - 라우트를 서비스로 묶어 rate 를 더한 뒤 `errorRate = 5xx ÷ 전체`(0 ~ 1, 소수 4자리) · `requestsPerSecond` 소수 2자리
+  - 라우트를 서비스로 묶어 rate 를 더한 뒤 `errorRate = 5xx ÷ 전체`(0 ~ 1, 소수 4자리), `requestsPerSecond` 소수 2자리
   - `errorsPerMinute` = 5xx 초당 rate × 60 — 최근 1분 5xx 건수(요청 0 이면 0). 화면 카드는 이 값을 보여 준다(11/17 퍼센트 → 건수)
-- `services` 는 7-1 과 같은 13개 · 같은 순서. 스위치가 꺼져 있어도 조회 가능
-- `null` 규칙: 요청이 0 이면 `errorRate` 만 `null`(0% 가 아님) · 라우트가 없는 서비스(gateway · keycloak · mysql · redis)는 둘 다 `null` · **Prometheus 실패면 503 이 아니라 200 에 전부 `null`**(부분 응답, 화면은 `-`)
+- `services` 는 7-1 과 같은 13개, 같은 순서. 스위치가 꺼져 있어도 조회 가능
+- `null` 규칙: 요청이 0 이면 `errorRate` 만 `null`(0% 가 아님), 라우트가 없는 서비스(gateway, keycloak, mysql, redis)는 둘 다 `null`, **Prometheus 실패면 503 이 아니라 200 에 전부 `null`**(부분 응답, 화면은 `-`)
 
 | gateway 라우트 id | 서비스 |
 |---|---|
-| `user-auth-strict` · `user-auth` · `user-service` | user-service |
-| `admin-notification-stream` · `admin-settlement-batch` · `admin-service` | admin-service |
-| `chat-service` · `chat-websocket` | chat-service |
-| `store-service` · `product-service` · `order-service` · `settlement-service` · `payment-service` · `review-service` | 같은 이름 |
+| `user-auth-strict`, `user-auth`, `user-service` | user-service |
+| `admin-notification-stream`, `admin-settlement-batch`, `admin-service` | admin-service |
+| `chat-service`, `chat-websocket` | chat-service |
+| `store-service`, `product-service`, `order-service`, `settlement-service`, `payment-service`, `review-service` | 같은 이름 |
 | `keycloak` | 제외 |
 
-> 라우트를 추가 · 이름 변경하면 `SystemCatalog.ROUTE_SERVICES` 도 고친다 — 표에 없는 id 는 지표에서 빠진다.
+> 라우트를 추가, 이름 변경하면 `SystemCatalog.ROUTE_SERVICES` 도 고친다 — 표에 없는 id 는 지표에서 빠진다.
 
 ## 8. 관리자 화면 부하테스트 (11/16)
 
@@ -307,93 +307,93 @@
 
 | 항목 | 규칙 |
 |---|---|
-| 방식 | admin 이 k6 **Job** 을 만든다(이미지 `app.loadtest.image` = `grafana/k6:1.8.3`). 스크립트는 ConfigMap `loadtest-scripts`(gotgan-config `files/loadtest/demo.js` · `accounts.js`), 부하 대상은 클러스터 안 게이트웨이(`app.loadtest.target-url`) |
+| 방식 | admin 이 k6 **Job** 을 만든다(이미지 `app.loadtest.image` = `grafana/k6:1.8.3`). 스크립트는 ConfigMap `loadtest-scripts`(gotgan-config `files/loadtest/demo.js`, `accounts.js`), 부하 대상은 클러스터 안 게이트웨이(`app.loadtest.target-url`) |
 | 사용자 수 변경 | k6 `externally-controlled` 실행기 + REST API(`PATCH http://{파드 IP}:6565/v1/status`). **k6 v2 에서 제거된 기능이라 1.x 고정** |
 | 그래프 | k6 → Prometheus remote write(1초, `--tag testid={id}`, 응답 시간은 네이티브 히스토그램) → admin 이 `query_range`(최근 5분 또는 시작부터, 1초 간격, rate 5초 구간). p95 는 `histogram_quantile` 구간 값 — k6 p(95) 추세 값은 테스트 전체 누적이라 쓰지 않음 |
-| 스위치 | `app.loadtest.enabled`(env `APP_LOADTEST_ENABLED`, 기본 `false`) — 꺼져 있으면 시작 · 계정 준비 · 사용자 수 변경 403, 조회 · 중지는 가능 |
-| 제한 | 사용자 최대 300 · 시간 30 ~ 600초 · 실행 중인 Job(부하 · 계정 준비) 하나만. Job 은 최대 시간 + 2분 뒤 강제 종료, 끝나고 5분 뒤 자동 삭제 |
-| 라벨 | Job · 파드 `gotgan.loadtest/id` · `gotgan.loadtest/kind`(load · accounts) · `tier=backend`. **`app` 라벨 없음** — 7절 상태 화면이 `app` 라벨 파드를 서비스로 센다 |
-| 권한 | gotgan-config `chaos-rbac.yaml` 에 batch/jobs get · list · create · delete |
+| 스위치 | `app.loadtest.enabled`(env `APP_LOADTEST_ENABLED`, 기본 `false`) — 꺼져 있으면 시작, 계정 준비, 사용자 수 변경 403, 조회, 중지는 가능 |
+| 제한 | 사용자 최대 300, 시간 30 ~ 600초, 실행 중인 Job(부하, 계정 준비) 하나만. Job 은 최대 시간 + 2분 뒤 강제 종료, 끝나고 5분 뒤 자동 삭제 |
+| 라벨 | Job, 파드 `gotgan.loadtest/id`, `gotgan.loadtest/kind`(load, accounts), `tier=backend`. **`app` 라벨 없음** — 7절 상태 화면이 `app` 라벨 파드를 서비스로 센다 |
+| 권한 | gotgan-config `chaos-rbac.yaml` 에 batch/jobs get, list, create, delete |
 | 비밀번호 | 부하용 계정 공용 비밀번호는 Secret `loadtest-secret`(GitHub Secret `LOADTEST_PASSWORD` → secrets-sync). Job 이 `envFrom`(없어도 시작, 로그인 시나리오만 실패) |
 
 ### 시나리오 `scenario`
 
 | 값 | 요청 | 로그인 |
 |---|---|---|
-| `BROWSE` | 상품 목록 → 상세 → 리뷰 · 스토어 | 없음(VU 별 가상 IP) |
-| `REVIEWS` | 리뷰 목록 · 요약 반복(review 로 트래픽을 몰아 두고 내리기 시연) | 없음 |
+| `BROWSE` | 상품 목록 → 상세 → 리뷰, 스토어 | 없음(VU 별 가상 IP) |
+| `REVIEWS` | 리뷰 목록, 요약 반복(review 로 트래픽을 몰아 두고 내리기 시연) | 없음 |
 | `CART` | 장바구니 담기 → 조회 → 수량 변경 → 삭제 (주문은 만들지 않음) | 부하용 계정 `loadtest+{VU 번호}@gotgan.test` |
 | `MIXED` | VU 10명 중 3명 `CART`, 7명 `BROWSE` | 일부 |
 
 ### API
 
-| 메서드 · 경로 | 요청 | 응답 · 오류 |
+| 메서드, 경로 | 요청 | 응답, 오류 |
 |---|---|---|
-| `GET /api/admin/system/loadtest` | — | `{enabled, maxVus, load, accounts, series, result}` — `load` · `accounts` = 가장 최근 실행 `{id, scenario, state: RUNNING/DONE/FAILED, vus, durationSec, startedAt}`(없으면 null). `series` = `load` 의 `vus` · `rps` · `p95Ms` · `errorRate`(2xx 아닌 비율) 각 `[{t: epoch ms, v}]`, Prometheus 실패면 빈 목록. 쿠버네티스 실패 503 `SYSTEM_CLUSTER_UNAVAILABLE`. `load` 에 `endsAt`(최대 시간 끝), `finishedAt`(실제 끝, 실행 중 null) 추가. 끝난 실행의 `series` 는 끝난 시각에서 멈춤(그 실행 전체, 최대 15분), Job 은 24시간 보관. `result` = `{requests, failed, byStatus, p95Ms, avgRps, peakVus, elapsedSec, topFailures[{api, status, count}], serverErrors{서비스: 게이트웨이 5xx}}`(실행 중엔 지금까지, 11/17) |
-| `POST /api/admin/system/loadtest` | `{scenario, vus 1 ~ 300, durationSec 30 ~ 600}` | 202 `{id}` · 400 `INVALID_INPUT` · 403 `SYSTEM_LOADTEST_DISABLED` · 409 `SYSTEM_LOADTEST_RUNNING` |
-| `PATCH /api/admin/system/loadtest` | `{vus 0 ~ 300}` — 0 이면 요청을 멈추고 대기 | 200 · 409 `SYSTEM_LOADTEST_NOT_RUNNING`(없음 · 파드 준비 중) · 503 `SYSTEM_LOADTEST_CONTROL_FAILED` |
+| `GET /api/admin/system/loadtest` | — | `{enabled, maxVus, load, accounts, series, result}` — `load`, `accounts` = 가장 최근 실행 `{id, scenario, state: RUNNING/DONE/FAILED, vus, durationSec, startedAt}`(없으면 null). `series` = `load` 의 `vus`, `rps`, `p95Ms`, `errorRate`(2xx 아닌 비율) 각 `[{t: epoch ms, v}]`, Prometheus 실패면 빈 목록. 쿠버네티스 실패 503 `SYSTEM_CLUSTER_UNAVAILABLE`. `load` 에 `endsAt`(최대 시간 끝), `finishedAt`(실제 끝, 실행 중 null) 추가. 끝난 실행의 `series` 는 끝난 시각에서 멈춤(그 실행 전체, 최대 15분), Job 은 24시간 보관. `result` = `{requests, failed, byStatus, p95Ms, avgRps, peakVus, elapsedSec, topFailures[{api, status, count}], serverErrors{서비스: 게이트웨이 5xx}}`(실행 중엔 지금까지, 11/17) |
+| `POST /api/admin/system/loadtest` | `{scenario, vus 1 ~ 300, durationSec 30 ~ 600}` | 202 `{id}`, 400 `INVALID_INPUT`, 403 `SYSTEM_LOADTEST_DISABLED`, 409 `SYSTEM_LOADTEST_RUNNING` |
+| `PATCH /api/admin/system/loadtest` | `{vus 0 ~ 300}` — 0 이면 요청을 멈추고 대기 | 200, 409 `SYSTEM_LOADTEST_NOT_RUNNING`(없음, 파드 준비 중), 503 `SYSTEM_LOADTEST_CONTROL_FAILED` |
 | `DELETE /api/admin/system/loadtest` | — | 200 — 실행 중인 Job 전부 삭제(없으면 그대로) |
-| `POST /api/admin/system/loadtest/accounts` | — | 202 `{id}` — 부하용 계정 300개 가입(이미 있으면 그대로, 약 1분). 클러스터를 새로 만들 때마다(DB 초기화) 한 번, 11/17 부터 24시간 운영이라 이미 했으면 다시 할 필요 없음. 403 · 409 위와 같음 |
+| `POST /api/admin/system/loadtest/accounts` | — | 202 `{id}` — 부하용 계정 300개 가입(이미 있으면 그대로, 약 1분). 클러스터를 새로 만들 때마다(DB 초기화) 한 번, 11/17 부터 24시간 운영이라 이미 했으면 다시 할 필요 없음. 403, 409 위와 같음 |
 
 ## 9. 실시간 모니터링 (11/16)
 
-> 시스템 상태 화면의 모니터링 탭(총 현황 · 서비스별 · 호출 · 장애 · 분석). 부하테스트와 상관없이 **실제 트래픽을 항상** 보여 준다. 근거: 11/16 피드백.
-> 전부 `ADMIN`. 조회는 보조 정보라 Prometheus · Zipkin · Loki 가 실패해도 200 에 빈 값.
+> 시스템 상태 화면의 모니터링 탭(총 현황, 서비스별, 호출, 장애, 분석). 부하테스트와 상관없이 **실제 트래픽을 항상** 보여 준다. 근거: 11/16 피드백.
+> 전부 `ADMIN`. 조회는 보조 정보라 Prometheus, Zipkin, Loki 가 실패해도 200 에 빈 값.
 
 | 항목 | 출처 | 규칙 |
 |---|---|---|
 | 그래프 | Prometheus 게이트웨이 라우트 지표 `spring_cloud_gateway_requests_seconds_*` | 업무 서비스 수집 5초(gotgan-config #111), rate 15초 구간, 최근 3분 5초 간격. 라우트 → 서비스는 `SystemCatalog.ROUTE_SERVICES`(keycloak 제외). 평균 응답 = 합 ÷ 수, `errors` = 점마다 **최근 1분 5xx 건수**(정수, 4xx 는 업무 오류라 세지 않음). 11/17 피드백으로 에러율(%) → 건수 |
 | DB 연결 풀 | `hikaricp_connections_{active,pending,max}` | 서비스(app)별 파드 합. DB 를 안 쓰는 서비스는 null |
-| 호출 | Zipkin(샘플링 1.0, 메모리 저장) | 게이트웨이 첫 구간(SERVER, 부모 없음) — 경로 `http.url` · 상태 · 소요 시간, 라우트 태그로 서비스. 관리자 시스템 화면 폴링(`/api/admin/system/**`)과 액추에이터(`/actuator/**`, Prometheus 수집 · 상태 확인)는 뺀다. `?service=` 면 그 서비스의 게이트웨이 라우트 태그(`spring.cloud.gateway.route.id`)로 Zipkin 을 바로 조회(라우트가 여러 개면 합침). 부하 중엔 수 분이면 오래된 트레이스가 밀려남 |
-| 장애 | Zipkin `outcome=SERVER_ERROR` + Loki `{level=~"WARN\|ERROR"}` | 최근 10분, RESPONSE(5xx 응답) · LOG(로그 message · traceId)를 최신순으로 합침 |
-| 분석 | Prometheus 최근 5분 | 5xx 많은 API TOP 5(게이트웨이 라우트 + 서비스 `http_server_requests` uri), 평균 응답 느린 API TOP 5(액추에이터 · 스트림 · WebSocket · 이 화면 자체 폴링 `/api/admin/system/**` 제외), 게이트웨이 상태 코드 분포 |
+| 호출 | Zipkin(샘플링 1.0, 메모리 저장) | 게이트웨이 첫 구간(SERVER, 부모 없음) — 경로 `http.url`, 상태, 소요 시간, 라우트 태그로 서비스. 관리자 시스템 화면 폴링(`/api/admin/system/**`)과 액추에이터(`/actuator/**`, Prometheus 수집, 상태 확인)는 뺀다. `?service=` 면 그 서비스의 게이트웨이 라우트 태그(`spring.cloud.gateway.route.id`)로 Zipkin 을 바로 조회(라우트가 여러 개면 합침). 부하 중엔 수 분이면 오래된 트레이스가 밀려남 |
+| 장애 | Zipkin `outcome=SERVER_ERROR` + Loki `{level=~"WARN\|ERROR"}` | 최근 10분, RESPONSE(5xx 응답), LOG(로그 message, traceId)를 최신순으로 합침 |
+| 분석 | Prometheus 최근 5분 | 5xx 많은 API TOP 5(게이트웨이 라우트 + 서비스 `http_server_requests` uri), 평균 응답 느린 API TOP 5(액추에이터, 스트림, WebSocket, 이 화면 자체 폴링 `/api/admin/system/**` 제외), 게이트웨이 상태 코드 분포 |
 
-| 메서드 · 경로 | 응답 |
+| 메서드, 경로 | 응답 |
 |---|---|
 | `GET /api/admin/system/monitor/overview` | `{serverTime, total: {rps, avgMs, errors}, services: [{name, series: {rps, avgMs, errors}, db: {active, pending, max} \| null}]}` — 점 `[{t: epoch ms, v}]` |
 | `GET /api/admin/system/monitor/calls?service=` | `[{traceId, timestampMs, method, path, service, status, durationMs}]` 최신순 40건. service 는 선택, 라우트 없는 이름이면 400 `INVALID_INPUT` |
 | `GET /api/admin/system/monitor/errors?service=` | `[{kind: RESPONSE/LOG, timestampMs, service, level, title, status, traceId}]` 최신순 40건. service 가 있으면 5xx 응답은 그 라우트, 로그는 그 `app` 라벨만 |
-| `GET /api/admin/system/monitor/traces/{traceId}` | `{traceId, durationMs, spans: [{id, parentId, service, name, kind, startMs, durationMs, status, error}]}` — traceId 가 16 · 32자리 16진수가 아니면 400 `INVALID_INPUT` |
+| `GET /api/admin/system/monitor/traces/{traceId}` | `{traceId, durationMs, spans: [{id, parentId, service, name, kind, startMs, durationMs, status, error}]}` — traceId 가 16, 32자리 16진수가 아니면 400 `INVALID_INPUT` |
 | `GET /api/admin/system/monitor/summary` | `{topErrors: [{service, api, status, count}], slowest: [{service, api, avgMs}], statuses: [{status, count}]}` |
 | `GET /api/admin/system/monitor/visitors` | `{visitors, members, windowSeconds}` — 최근 120초 안에 요청한 접속자(회원 + 비회원 IP)와 로그인 회원. 게이트웨이 `ActiveUserFilter` 가 Redis 정렬 집합에 기록(같은 사람 15초에 한 번), 부하테스트(`X-Gotgan-Loadtest` 헤더)와 액추에이터 제외. Redis 실패면 null (11/17) |
 
 ## 10. 장애 분석 리포트 (11/17)
 
-> 실시간 화면은 최근 몇 분만 보여서 "어제 퇴근 후 무슨 일이 있었나"를 볼 수 없다 → 기간을 골라 **언제 · 어디서 · 몇 건 · 왜** 를 정리한다. 근거: 11/17 피드백(퍼센트 대신 건수, 원인 분류, 운영팀 · 개발자 보고 자료).
+> 실시간 화면은 최근 몇 분만 보여서 "어제 퇴근 후 무슨 일이 있었나"를 볼 수 없다 → 기간을 골라 **언제, 어디서, 몇 건, 왜** 를 정리한다. 근거: 11/17 피드백(퍼센트 대신 건수, 원인 분류, 운영팀, 개발자 보고 자료).
 > `ADMIN`. 화면 `/admin/system/report` 에서 같은 기간을 HTML 보고서 한 파일(운영팀 섹션 + 개발자 섹션)로 내려받는다(프론트에서 생성).
-> 전제: 클러스터 24시간 운영(gotgan-config #112) — Prometheus · Loki 보존 7일이라 기간도 최근 7일 안.
+> 전제: 클러스터 24시간 운영(gotgan-config #112) — Prometheus, Loki 보존 7일이라 기간도 최근 7일 안.
 
 `GET /api/admin/system/report?from=&to=` — ISO-8601 시각. `from < to`, 길이 7일 이하, `from` 이 7일 전보다 늦어야 함(아니면 400 `SYSTEM_REPORT_INVALID_RANGE`). `to` 가 미래면 지금까지.
 
-구간(bucket): 기간 3시간 이하 1분 · 24시간 이하 5분 · 3일 이하 15분 · 그 이상 1시간
+구간(bucket): 기간 3시간 이하 1분, 24시간 이하 5분, 3일 이하 15분, 그 이상 1시간
 
 | 응답 필드 | 내용 |
 |---|---|
 | `summary` | `{headline, issues, intendedIssues, requests, serverErrors, suspicious, rateLimited}` — `headline` 은 운영팀용 한 문장 |
-| `buckets` | 구간마다 `{t(구간 시작 ms), requests, serverErrors, byService{서비스: 5xx 건수}, rateLimited(429), notFound(404), unauthorized(401 · 403), suspicious, dbErrors, errorLogs}` |
+| `buckets` | 구간마다 `{t(구간 시작 ms), requests, serverErrors, byService{서비스: 5xx 건수}, rateLimited(429), notFound(404), unauthorized(401, 403), suspicious, dbErrors, errorLogs}` |
 | `issues` | `{no, kind, startMs, endMs, services, serverErrors, suspicious, rateLimited, requests, intended, sentence, causes[{code, label, detail}], logs[ErrorItem]}` — 같은 code 원인은 한 줄로 합침 — `logs` 는 앞 10개 이슈만, 이슈당 15줄(traceId 포함) |
-| `events` | `{t, type, service, detail}` 시간순 최대 300개 — `CHAOS_KILL` · `CHAOS_RECOVER` · `POD_START` · `POD_STOP` · `POD_RESTART` · `DEPLOY` · `LOADTEST_START` · `LOADTEST_END` · `CIRCUIT_OPEN` |
+| `events` | `{t, type, service, detail}` 시간순 최대 300개 — `CHAOS_KILL`, `CHAOS_RECOVER`, `POD_START`, `POD_STOP`, `POD_RESTART`, `DEPLOY`, `LOADTEST_START`, `LOADTEST_END`, `CIRCUIT_OPEN` |
 | `suspicious` | 게이트웨이 탐색 요청 로그 최근 20줄 |
 
 이슈 묶기 — 조건이 맞는 구간을 이어 붙임(사이 1구간 빈 것까지 같은 이슈)
 
 | kind | 조건 |
 |---|---|
-| `ERROR` | 5xx > 0 · DB 오류 로그 > 0 · 차단기 열림 |
-| `ATTACK` | 게이트웨이 탐색 요청(`gateway_suspicious_requests_total`, `/.env` · `/.git` · `../` · `/wp-admin` · `.php` 등) > 0 |
-| `TRAFFIC` | 429 ≥ 10 · 요청이 평소(구간 중앙값)의 3배 이상이고 분당 100건 이상. 같은 시간 `ERROR` 이슈가 있으면 그 원인으로만 |
+| `ERROR` | 5xx > 0, DB 오류 로그 > 0, 차단기 열림 |
+| `ATTACK` | 게이트웨이 탐색 요청(`gateway_suspicious_requests_total`, `/.env`, `/.git`, `../`, `/wp-admin`, `.php` 등) > 0 |
+| `TRAFFIC` | 429 ≥ 10, 요청이 평소(구간 중앙값)의 3배 이상이고 분당 100건 이상. 같은 시간 `ERROR` 이슈가 있으면 그 원인으로만 |
 
-원인 `causes.code` — 이슈 시간대(앞뒤 1구간 여유)와 겹치는 근거를 모두, 앞이 주 원인. `CHAOS` · `LOAD_TEST` 가 있으면 `intended = true`(의도한 시험)
+원인 `causes.code` — 이슈 시간대(앞뒤 1구간 여유)와 겹치는 근거를 모두, 앞이 주 원인. `CHAOS`, `LOAD_TEST` 가 있으면 `intended = true`(의도한 시험)
 
 | code | 근거 |
 |---|---|
 | `CHAOS` | admindb `chaos_event` 내리기 기록(복구 시간 포함) |
-| `LOAD_TEST` | Prometheus `k6_vus{testid}` 가 있던 기간 · 최대 사용자 수 |
-| `POD_RESTART` · `OOM` | `kube_pod_container_status_restarts_total` 증가, 종료 사유 `OOMKilled` |
-| `POD_DOWN` | `kube_pod_created` 가 사라진 파드 중 장애 주입 · 배포로 설명되지 않는 것 |
+| `LOAD_TEST` | Prometheus `k6_vus{testid}` 가 있던 기간, 최대 사용자 수 |
+| `POD_RESTART`, `OOM` | `kube_pod_container_status_restarts_total` 증가, 종료 사유 `OOMKilled` |
+| `POD_DOWN` | `kube_pod_created` 가 사라진 파드 중 장애 주입, 배포로 설명되지 않는 것 |
 | `DEPLOY` | `kube_replicaset_created` — 새 레플리카셋 = 새 버전 배포 |
-| `DB` | Loki WARN · ERROR 로그에 SQLException · JDBC · HikariPool · deadlock 등, 또는 `hikaricp_connections_pending > 0` |
-| `SURGE` · `RATE_LIMIT` | 요청 급증(평소의 몇 배) · 429 건수 |
+| `DB` | Loki WARN, ERROR 로그에 SQLException, JDBC, HikariPool, deadlock 등, 또는 `hikaricp_connections_pending > 0` |
+| `SURGE`, `RATE_LIMIT` | 요청 급증(평소의 몇 배), 429 건수 |
 | `ATTACK` | 탐색 요청 유형별 건수 |
 | `CIRCUIT` | `resilience4j_circuitbreaker_state{state="open"}` |
 | `UNKNOWN` | 근거 없음 — 개발자 섹션 로그 확인 |

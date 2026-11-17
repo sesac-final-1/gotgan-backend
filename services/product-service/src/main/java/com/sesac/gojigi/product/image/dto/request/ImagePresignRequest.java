@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * 상품 이미지 업로드 주소 발급 (product.md 17절) — store 입점 서류 presign 과 같은 모양(docType 없음).
- * 개수(1~5) · 형식 · 크기 위반은 서비스가 PRODUCT_IMAGE_INVALID 로 검사한다.
+ * 개수(1~5), 형식, 크기 위반은 서비스가 PRODUCT_IMAGE_INVALID 로 검사한다.
  */
 public record ImagePresignRequest(
         @Schema(description = "올릴 이미지 목록 (1~5개) — 응답은 같은 순서")

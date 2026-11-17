@@ -16,8 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 /**
- * 공개 상품 목록 · 검색 (product.md 9절) — 조건이 많아 QueryDSL.
- * 쇼핑몰에 보이는 상품(displayable)만: 판매중 · 삭제 안 됨 · 스토어 운영 중 · 하위 · 상위 카테고리 모두 사용 중.
+ * 공개 상품 목록, 검색 (product.md 9절) — 조건이 많아 QueryDSL.
+ * 쇼핑몰에 보이는 상품(displayable)만: 판매중, 삭제 안 됨, 스토어 운영 중, 하위, 상위 카테고리 모두 사용 중.
  * 상품은 categoryId 만 들고 있어(연관 없음) 카테고리는 ID 로 조인한다. 결과는 [상품, 상위 카테고리 ID].
  */
 @Repository
@@ -93,7 +93,7 @@ public class ProductSearchRepository {
         };
     }
 
-    /** 사용자가 입력한 % · _ 를 글자 그대로 찾게 — 이스케이프 문자 ! 자신도 */
+    /** 사용자가 입력한 %, _ 를 글자 그대로 찾게 — 이스케이프 문자 ! 자신도 */
     static String escapeLike(String keyword) {
         return keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }

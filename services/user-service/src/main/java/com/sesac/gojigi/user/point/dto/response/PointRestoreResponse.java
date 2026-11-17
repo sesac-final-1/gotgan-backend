@@ -3,7 +3,7 @@ package com.sesac.gojigi.user.point.dto.response;
 import com.sesac.gojigi.user.point.entity.PointHistory;
 
 /**
- * 포인트 사용 취소(Saga 보상) 결과. 되돌릴 사용이 없었으면 restoredAmount 0 · balanceAfter null
+ * 포인트 사용 취소(Saga 보상) 결과. 되돌릴 사용이 없었으면 restoredAmount 0, balanceAfter null
  * (보상은 사용 단계가 실패했어도 불리므로 정상 응답).
  */
 public record PointRestoreResponse(String sagaId, long restoredAmount, Long balanceAfter) {

@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
-/** user-store-events 큐의 StoreApproved → 판매자 전환 (SELLER 역할 · store_id) */
+/** user-store-events 큐의 StoreApproved → 판매자 전환 (SELLER 역할, store_id) */
 @Component
 @RequiredArgsConstructor
 public class StoreApprovedListener implements SqsEventListener {

@@ -8,8 +8,8 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * 작성 · 수정 imageKeys 검사 — presign 이 발급한 내 키(reviews/{userId}/{UUID}.{jpg|png|webp})만, 최대 3장 · 중복 없음.
- * S3 에 실제로 올라갔는지는 보지 않는다(10/28 결정, product 와 같음) — 형식 · 크기는 presign 서명이, 이미지가 아닌 파일은 upload-guard 가 막는다.
+ * 작성, 수정 imageKeys 검사 — presign 이 발급한 내 키(reviews/{userId}/{UUID}.{jpg|png|webp})만, 최대 3장, 중복 없음.
+ * S3 에 실제로 올라갔는지는 보지 않는다(10/28 결정, product 와 같음) — 형식, 크기는 presign 서명이, 이미지가 아닌 파일은 upload-guard 가 막는다.
  */
 final class ReviewImageKeys {
 
@@ -19,7 +19,7 @@ final class ReviewImageKeys {
     private ReviewImageKeys() {
     }
 
-    /** 사진 없음(null · 빈 목록)이면 빈 목록. 이미 붙어 있는 키(currentKeys)는 수정 때 그대로 다시 보낼 수 있다 */
+    /** 사진 없음(null, 빈 목록)이면 빈 목록. 이미 붙어 있는 키(currentKeys)는 수정 때 그대로 다시 보낼 수 있다 */
     static List<String> check(Long userId, List<String> keys, Set<String> currentKeys) {
         if (keys == null || keys.isEmpty()) {
             return List.of();

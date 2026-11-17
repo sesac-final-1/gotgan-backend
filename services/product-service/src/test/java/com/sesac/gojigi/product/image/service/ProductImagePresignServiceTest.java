@@ -50,7 +50,7 @@ class ProductImagePresignServiceTest {
     }
 
     @Test
-    @DisplayName("파일마다 내 스토어 키 · 형식별 확장자로 발급하고, 요청 순서대로 돌려준다")
+    @DisplayName("파일마다 내 스토어 키, 형식별 확장자로 발급하고, 요청 순서대로 돌려준다")
     void presign_validFiles_returnsKeysInOrder() {
         // given
         given(productImageClient.presignUpload(anyString(), anyString(), anyLong()))
@@ -74,13 +74,13 @@ class ProductImagePresignServiceTest {
     }
 
     @Test
-    @DisplayName("발급 요청의 형식 · 크기를 그대로 서명에 넘긴다")
+    @DisplayName("발급 요청의 형식, 크기를 그대로 서명에 넘긴다")
     void presign_validFile_passesTypeAndSizeToClient() {
         // given
         given(productImageClient.presignUpload(startsWith("products/7/"), eq("image/png"), eq(834512L)))
                 .willReturn(new PresignedUpload("https://s3.example/put", EXPIRES));
 
-        // when · then
+        // when, then
         assertThat(service.presign(7L, request(new FileItem("image/png", 834512L))))
                 .extracting(ImagePresignResponse::uploadUrl).containsExactly("https://s3.example/put");
     }
@@ -90,17 +90,17 @@ class ProductImagePresignServiceTest {
         return Stream.of(
                 Arguments.of("0개", List.of(), "1~5개"),
                 Arguments.of("6개", List.of(ok, ok, ok, ok, ok, ok), "1~5개"),
-                Arguments.of("GIF", List.of(ok, new FileItem("image/gif", 1000L)), "2번째 파일: 이미지는 JPG · PNG · WEBP"),
-                Arguments.of("PDF", List.of(new FileItem("application/pdf", 1000L)), "1번째 파일: 이미지는 JPG · PNG · WEBP"),
+                Arguments.of("GIF", List.of(ok, new FileItem("image/gif", 1000L)), "2번째 파일: 이미지는 JPG, PNG, WEBP"),
+                Arguments.of("PDF", List.of(new FileItem("application/pdf", 1000L)), "1번째 파일: 이미지는 JPG, PNG, WEBP"),
                 Arguments.of("10MB 초과", List.of(new FileItem("image/png", MAX + 1)), "1번째 파일: 이미지는 10MB"),
                 Arguments.of("0바이트", List.of(ok, ok, new FileItem("image/png", 0L)), "3번째 파일: 이미지는 10MB"));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("invalidRequests")
-    @DisplayName("개수 · 형식 · 크기 위반 — 하나라도 틀리면 발급 없이 전체 거절, 몇 번째 파일인지 알려 줌")
+    @DisplayName("개수, 형식, 크기 위반 — 하나라도 틀리면 발급 없이 전체 거절, 몇 번째 파일인지 알려 줌")
     void presign_invalidFiles_throwsImageInvalid(String caseName, List<FileItem> files, String message) {
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.presign(1L, new ImagePresignRequest(files)))
                 .extracting("errorCode", "message")
                 .satisfies(values -> {

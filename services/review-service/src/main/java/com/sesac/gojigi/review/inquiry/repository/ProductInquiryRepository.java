@@ -14,7 +14,7 @@ public interface ProductInquiryRepository extends JpaRepository<ProductInquiry, 
     /** 마이페이지 내 문의 — 삭제 제외 (idx_product_inquiry_user_created) */
     Page<ProductInquiry> findByUserIdAndDeletedAtIsNull(Long userId, Pageable pageable);
 
-    /** 판매자 문의 — 삭제 제외, 미답변 · 답변완료 탭 (idx_product_inquiry_store_answered) */
+    /** 판매자 문의 — 삭제 제외, 미답변, 답변완료 탭 (idx_product_inquiry_store_answered) */
     @Query("""
             select i from ProductInquiry i
             where i.storeId = :storeId and i.deletedAt is null

@@ -27,7 +27,7 @@ public class ReviewImageClient {
     }
 
     /**
-     * presigned PUT — Content-Type · Content-Length 를 서명에 넣어 발급 때 말한 형식 · 크기와 다른 파일은 S3 가 403 으로 막는다.
+     * presigned PUT — Content-Type, Content-Length 를 서명에 넣어 발급 때 말한 형식, 크기와 다른 파일은 S3 가 403 으로 막는다.
      * 서명은 로컬 계산이지만 IRSA 자격 증명을 못 얻으면 실패 → EXTERNAL_API_ERROR(502)
      */
     public PresignedUpload presignUpload(String key, String contentType, long size) {

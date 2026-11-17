@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.stream.IntStream;
 
 /**
- * 별점 분포 · 리뷰 수 · 평균 — 판매자 평점 요약(스토어) · 상품 리뷰 요약(상품) 공용.
+ * 별점 분포, 리뷰 수, 평균 — 판매자 평점 요약(스토어), 상품 리뷰 요약(상품) 공용.
  * 입력은 [rating, count] 집계 행, 분포는 항상 5 → 1점 5칸(없는 별점은 0), 평균은 소수 둘째 자리 반올림(리뷰 없으면 0).
  */
 record RatingDistribution(List<RatingCount> distribution, long count, double average) {

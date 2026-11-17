@@ -15,8 +15,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.web.client.RestClient;
 
 /**
- * 밖으로 나가는 호출 — Keycloak 공개키(STOMP CONNECT 토큰 검증) · admin 알림 센터 · user · store(상대 이름 · 스토어 상태) · product(상품 카드) · settlement(정산 카드).
- * 타임아웃은 컨벤션 2-7(연결 2초 · 읽기 3초)보다 짧게 — 알림 · 이름은 빠져도 되는 부가 정보라 오래 기다리지 않는다.
+ * 밖으로 나가는 호출 — Keycloak 공개키(STOMP CONNECT 토큰 검증), admin 알림 센터, user, store(상대 이름, 스토어 상태), product(상품 카드), settlement(정산 카드).
+ * 타임아웃은 컨벤션 2-7(연결 2초, 읽기 3초)보다 짧게 — 알림, 이름은 빠져도 되는 부가 정보라 오래 기다리지 않는다.
  * ObservationRegistry 를 붙여 나가는 요청에 traceparent 를 싣는다 — 받는 서비스가 같은 traceId 로 이어 Zipkin 에서 한 줄로 보인다.
  */
 @Configuration
@@ -68,7 +68,7 @@ public class ClientConfig {
         return RestClient.builder().baseUrl(baseUrl).requestFactory(factory).observationRegistry(observationRegistry).build();
     }
 
-    /** 알림 전송 전용 — 스레드 4개 · 대기 500건. 넘치면 버린다(ChatNotifier 가 기록). 2개는 초당 약 30건이라 500 연결(초당 약 100건)에 유실(11/5 k6) */
+    /** 알림 전송 전용 — 스레드 4개, 대기 500건. 넘치면 버린다(ChatNotifier 가 기록). 2개는 초당 약 30건이라 500 연결(초당 약 100건)에 유실(11/5 k6) */
     @Bean(defaultCandidate = false)   // 타입으로 찾히면 Boot 가 유일한 AsyncTaskExecutor 로 보고 WebSocket 채널에 씌운다(11/5 k6 S5) — @Qualifier 로만 주입
     public Executor chatNotifyExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

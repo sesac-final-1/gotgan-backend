@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 
 /**
- * user-service 호출 — 서킷 브레이커 "user". 재시도는 조회(GET)만, 포인트 사용 · 취소(POST · DELETE)는 Saga 가 sagaId 로 다시 부른다.
+ * user-service 호출 — 서킷 브레이커 "user". 재시도는 조회(GET)만, 포인트 사용, 취소(POST, DELETE)는 Saga 가 sagaId 로 다시 부른다.
  * 실패 변환 규칙은 RemoteCalls.
  */
 @Component
@@ -24,7 +24,7 @@ public class UserClientAdapter {
 
     private final UserClient userClient;
 
-    /** 주문자 스냅샷용 회원 조회 — 없는 회원 · 탈퇴는 ORDER_BUYER_NOT_FOUND */
+    /** 주문자 스냅샷용 회원 조회 — 없는 회원, 탈퇴는 ORDER_BUYER_NOT_FOUND */
     @Retry(name = CIRCUIT)
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "getUserFallback")
     public UserSummaryResponse getUser(Long userId) {
@@ -63,18 +63,18 @@ public class UserClientAdapter {
         }
     }
 
-    /** 포인트 환원 · 회수 (취소 · 반품 Saga POINT_RESTORED) — 멱등, 실패하면 Saga 가 같은 클레임으로 다시 부른다 */
+    /** 포인트 환원, 회수 (취소, 반품 Saga POINT_RESTORED) — 멱등, 실패하면 Saga 가 같은 클레임으로 다시 부른다 */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "reversePointsFallback")
     public void reversePoints(PointReversalRequest request) {
         try {
             userClient.reversePoints(request);
         } catch (HttpClientErrorException e) {
-            throw RemoteCalls.rejected(TARGET, "포인트 환원 · 회수", e);
+            throw RemoteCalls.rejected(TARGET, "포인트 환원, 회수", e);
         }
     }
 
     void reversePointsFallback(PointReversalRequest request, Throwable t) {
-        throw RemoteCalls.unavailable(TARGET, "포인트 환원 · 회수", t);
+        throw RemoteCalls.unavailable(TARGET, "포인트 환원, 회수", t);
     }
 
     UserSummaryResponse getUserFallback(Long userId, Throwable t) {

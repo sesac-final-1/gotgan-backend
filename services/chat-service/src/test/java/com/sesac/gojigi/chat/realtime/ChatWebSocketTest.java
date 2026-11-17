@@ -51,7 +51,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * STOMP 연결 수명 · 권한 · 전달 (chat.md 6 · 6-1절) — 실제 포트에 WebSocket 으로 붙는다(local 모드, Redis 없음).
+ * STOMP 연결 수명, 권한, 전달 (chat.md 6, 6-1절) — 실제 포트에 WebSocket 으로 붙는다(local 모드, Redis 없음).
  * 토큰 검증(JwtDecoder)만 가짜 — 토큰 문자열 → 클레임. 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -107,7 +107,7 @@ class ChatWebSocketTest {
     }
 
     @Test
-    @DisplayName("보낸 메시지가 같은 방 구독자에게 — 공백 · 연속 개행 정리, 판매자가 보고 있으면 접속 중 표시, 끊으면 바로 지워짐")
+    @DisplayName("보낸 메시지가 같은 방 구독자에게 — 공백, 연속 개행 정리, 판매자가 보고 있으면 접속 중 표시, 끊으면 바로 지워짐")
     void sendDeliversToSubscribersAndCleansUpOnDisconnect() throws Exception {
         long roomId = storeInquiry();
         Client buyer = connect("buyer");
@@ -132,7 +132,7 @@ class ChatWebSocketTest {
     }
 
     @Test
-    @DisplayName("읽음 · 상담 상태도 구독자에게 — 닫힌 상담방에 구매자가 보내면 다시 OPEN")
+    @DisplayName("읽음, 상담 상태도 구독자에게 — 닫힌 상담방에 구매자가 보내면 다시 OPEN")
     void readAndStatusFrames() throws Exception {
         long roomId = chatRoomService.open(user(10L, "BUYER"), new ChatRequests.OpenRoom(ChatRoomType.BUYER_SUPPORT, null, null))
                 .room().roomId();
@@ -180,7 +180,7 @@ class ChatWebSocketTest {
     }
 
     @Test
-    @DisplayName("토큰 없음 · 잘못된 토큰 · 회원 연결 없는 토큰은 CONNECT 에서 ERROR")
+    @DisplayName("토큰 없음, 잘못된 토큰, 회원 연결 없는 토큰은 CONNECT 에서 ERROR")
     void connectRequiresValidToken() throws Exception {
         assertThat(connectError(null)).contains("UNAUTHORIZED");
         assertThat(connectError("garbage")).contains("UNAUTHORIZED");
@@ -190,7 +190,7 @@ class ChatWebSocketTest {
     }
 
     @Test
-    @DisplayName("남의 방 · 모르는 주소 구독은 ERROR, 관리자는 도움 요청된 스토어 톡만 읽기 전용 — 보내면 오류 큐로(연결 유지)")
+    @DisplayName("남의 방, 모르는 주소 구독은 ERROR, 관리자는 도움 요청된 스토어 톡만 읽기 전용 — 보내면 오류 큐로(연결 유지)")
     void subscribeAndSendPermissions() throws Exception {
         long roomId = storeInquiry();
         assertThat(subscribeError("stranger", ChatRelay.DESTINATION_PREFIX + roomId)).contains("CHAT_ROOM_NOT_FOUND");
@@ -211,7 +211,7 @@ class ChatWebSocketTest {
     }
 
     @Test
-    @DisplayName("/pub 밖(브로커 주소 /sub · /user)으로 SEND 하면 ERROR — 남의 방 구독자에게 검사 · 저장 없이 전달되지 않음")
+    @DisplayName("/pub 밖(브로커 주소 /sub, /user)으로 SEND 하면 ERROR — 남의 방 구독자에게 검사, 저장 없이 전달되지 않음")
     void sendOutsideAppPrefixIsRejected() throws Exception {
         long roomId = storeInquiry();
         Client seller = connect("seller");
@@ -225,7 +225,7 @@ class ChatWebSocketTest {
     }
 
     @Test
-    @DisplayName("연결한 뒤 정지된 회원의 SEND 는 ERROR — 토큰이 남아 있어도 저장 · 전달되지 않음")
+    @DisplayName("연결한 뒤 정지된 회원의 SEND 는 ERROR — 토큰이 남아 있어도 저장, 전달되지 않음")
     void sendFromUserBlockedAfterConnectIsRejected() throws Exception {
         long roomId = storeInquiry();
         BlockingQueue<String> errors = new LinkedBlockingQueue<>();
@@ -246,7 +246,7 @@ class ChatWebSocketTest {
     }
 
     @Test
-    @DisplayName("1초 5건 넘게 보내면 CHAT_TOO_FAST · 빈 메시지는 INVALID_INPUT — 둘 다 오류 큐로")
+    @DisplayName("1초 5건 넘게 보내면 CHAT_TOO_FAST, 빈 메시지는 INVALID_INPUT — 둘 다 오류 큐로")
     void rateLimitAndValidation() throws Exception {
         long roomId = storeInquiry();
         Client buyer = connect("buyer");
@@ -356,7 +356,7 @@ class ChatWebSocketTest {
         };
     }
 
-    /** 화면처럼 JSON 문자열을 주고받는다 (content-type application/json · text/plain 모두 문자열로) */
+    /** 화면처럼 JSON 문자열을 주고받는다 (content-type application/json, text/plain 모두 문자열로) */
     private static final class JsonAsString extends StringMessageConverter {
         JsonAsString() {
             addSupportedMimeTypes(org.springframework.util.MimeTypeUtils.APPLICATION_JSON);

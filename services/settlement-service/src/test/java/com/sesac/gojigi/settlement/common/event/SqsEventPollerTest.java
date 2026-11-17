@@ -34,7 +34,7 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageResponse;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 메시지 1건 처리 규칙 — 성공 · 모르는 type 은 삭제, 실패는 남겨 재전달(3회 뒤 DLQ) */
+/** 메시지 1건 처리 규칙 — 성공, 모르는 type 은 삭제, 실패는 남겨 재전달(3회 뒤 DLQ) */
 class SqsEventPollerTest {
 
     private static final String QUEUE = "https://sqs.ap-northeast-2.amazonaws.com/0/sesac-gojigi-settlement-store-events";
@@ -76,7 +76,7 @@ class SqsEventPollerTest {
     }
 
     @Test
-    @DisplayName("DB 일시 장애면 삭제하지 않고 받은 횟수에 따라 1분 · 5분 · 15분 뒤 다시 보이게 한다 — 짧은 장애로 DLQ 에 몰리지 않게")
+    @DisplayName("DB 일시 장애면 삭제하지 않고 받은 횟수에 따라 1분, 5분, 15분 뒤 다시 보이게 한다 — 짧은 장애로 DLQ 에 몰리지 않게")
     @SuppressWarnings("unchecked")
     void dispatch_transientFailure_delaysRetryByReceiveCount() {
         ArgumentCaptor<Consumer<ChangeMessageVisibilityRequest.Builder>> change = ArgumentCaptor.forClass(Consumer.class);
@@ -128,7 +128,7 @@ class SqsEventPollerTest {
     }
 
     @Test
-    @DisplayName("재시도 간격 — 1회 60초 · 2회 300초 · 3회 이상 900초, 일시 장애 판별은 원인 사슬까지")
+    @DisplayName("재시도 간격 — 1회 60초, 2회 300초, 3회 이상 900초, 일시 장애 판별은 원인 사슬까지")
     void retryDelay_andTransientDetection() {
         assertThat(SqsEventPoller.retryDelaySeconds(0)).isEqualTo(60);
         assertThat(SqsEventPoller.retryDelaySeconds(1)).isEqualTo(60);
@@ -192,7 +192,7 @@ class SqsEventPollerTest {
     }
 
     @Test
-    @DisplayName("수신 실패 로그 — 연속 실패 첫 회(스택) · 이후 12회(1분)마다 요약만, 반복 실패로 로그가 넘치지 않게")
+    @DisplayName("수신 실패 로그 — 연속 실패 첫 회(스택), 이후 12회(1분)마다 요약만, 반복 실패로 로그가 넘치지 않게")
     void receiveFailureLogInterval() {
         assertThat(SqsEventPoller.shouldLogFailure(1)).isTrue();
         assertThat(SqsEventPoller.shouldLogFailure(2)).isFalse();
@@ -217,7 +217,7 @@ class SqsEventPollerTest {
     }
 
     @Test
-    @DisplayName("큐 URL 이 비어 있으면 폴러 스레드를 띄우지 않음 (로컬 · 테스트)")
+    @DisplayName("큐 URL 이 비어 있으면 폴러 스레드를 띄우지 않음 (로컬, 테스트)")
     void start_noQueueUrl_noWorkers() {
         SqsEventPoller idle = new SqsEventPoller(sqsClient, JsonMapper.builder().build(), List.of(), "", "", 20, 10);
         idle.start();

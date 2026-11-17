@@ -46,7 +46,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 상품 문의 등록 · 수정 · 삭제 — 스냅샷 저장 · 본문 정화 · 본인 · 답변 후 수정 막기 (MySQL 8.4 + Flyway) */
+/** 상품 문의 등록, 수정, 삭제 — 스냅샷 저장, 본문 정화, 본인, 답변 후 수정 막기 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, InquiryService.class, InquiryServiceIntegrationTest.FixedClock.class })
@@ -58,7 +58,7 @@ class InquiryServiceIntegrationTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 29, 10, 0);
     private static final long BUYER = 4L;
     private static final long OTHER = 5L;
-    /** 조회 테스트끼리 · 다른 실행과 상품 · 스토어 · 회원 ID 가 겹치지 않게 (테스트마다 커밋) */
+    /** 조회 테스트끼리, 다른 실행과 상품, 스토어, 회원 ID 가 겹치지 않게 (테스트마다 커밋) */
     private static final AtomicLong SEQ = new AtomicLong(System.nanoTime() % 1_000_000_000L);
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -96,7 +96,7 @@ class InquiryServiceIntegrationTest {
     class Write {
 
         @Test
-        @DisplayName("상품 · 회원 스냅샷과 정화한 본문을 저장한다 — storeId 는 상품에서")
+        @DisplayName("상품, 회원 스냅샷과 정화한 본문을 저장한다 — storeId 는 상품에서")
         void write_savesSnapshotAndSanitizedContent() {
             // given
             given(snapshotReader.read(BUYER, 101L))
@@ -145,7 +145,7 @@ class InquiryServiceIntegrationTest {
     class Edit {
 
         @Test
-        @DisplayName("답변 전 내 문의 — 본문 · 비밀글을 바꾸고 수정된 값을 돌려준다")
+        @DisplayName("답변 전 내 문의 — 본문, 비밀글을 바꾸고 수정된 값을 돌려준다")
         void edit_ownUnanswered_updates() {
             // given
             long inquiryId = saveInquiry(BUYER);
@@ -184,7 +184,7 @@ class InquiryServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("남의 문의 · 삭제된 문의 · 없는 문의 — 같은 404")
+        @DisplayName("남의 문의, 삭제된 문의, 없는 문의 — 같은 404")
         void edit_notOwnOrDeleted_notFound() {
             long others = saveInquiry(OTHER);
             long deleted = saveInquiry(BUYER);
@@ -221,7 +221,7 @@ class InquiryServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("남의 문의 · 이미 삭제된 문의 — 404, 남의 문의는 그대로")
+        @DisplayName("남의 문의, 이미 삭제된 문의 — 404, 남의 문의는 그대로")
         void delete_notOwnOrDeleted_notFound() {
             long others = saveInquiry(OTHER);
             long deleted = saveInquiry(BUYER);
@@ -258,7 +258,7 @@ class InquiryServiceIntegrationTest {
     class ListForProduct {
 
         @Test
-        @DisplayName("삭제 제외 최신순, 비밀글은 비로그인 · 남에게 내용 · 답변을 비우고 상태 · 이름만")
+        @DisplayName("삭제 제외 최신순, 비밀글은 비로그인, 남에게 내용, 답변을 비우고 상태, 이름만")
         void list_masksSecretForOthers() {
             // given
             long productId = SEQ.incrementAndGet();
@@ -291,7 +291,7 @@ class InquiryServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("비밀글 — 작성자(mine) · 그 스토어 판매자는 내용 · 답변을 본다")
+        @DisplayName("비밀글 — 작성자(mine), 그 스토어 판매자는 내용, 답변을 본다")
         void list_secretReadableByWriterAndStore() {
             // given
             long productId = SEQ.incrementAndGet();
@@ -329,7 +329,7 @@ class InquiryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("내 문의 — 내 것만(비밀글 · 답변 포함), 삭제 제외 최신순, 상품 스냅샷")
+    @DisplayName("내 문의 — 내 것만(비밀글, 답변 포함), 삭제 제외 최신순, 상품 스냅샷")
     void listMine_ownOnly() {
         // given
         long me = SEQ.incrementAndGet();
@@ -357,7 +357,7 @@ class InquiryServiceIntegrationTest {
     class Seller {
 
         @Test
-        @DisplayName("탭 — 미답변 · 답변완료 · 전체, 내 스토어 · 삭제 제외, 비밀글도 내용을 보여 준다 · 숫자")
+        @DisplayName("탭 — 미답변, 답변완료, 전체, 내 스토어, 삭제 제외, 비밀글도 내용을 보여 준다, 숫자")
         void listAndSummary_byTab() {
             // given
             long storeId = SEQ.incrementAndGet();
@@ -391,7 +391,7 @@ class InquiryServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("문의 없는 스토어 — 빈 목록 · 숫자 0")
+        @DisplayName("문의 없는 스토어 — 빈 목록, 숫자 0")
         void emptyStore_zero() {
             long storeId = SEQ.incrementAndGet();
 
@@ -408,7 +408,7 @@ class InquiryServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("답변 — 정화해 저장 · 시각, 다시 쓰면 덮어쓰고 미답변에서 빠진다 · 구매자 수정은 막힌다")
+        @DisplayName("답변 — 정화해 저장, 시각, 다시 쓰면 덮어쓰고 미답변에서 빠진다, 구매자 수정은 막힌다")
         void answer_savesAndOverwrites() {
             // given
             long storeId = SEQ.incrementAndGet();
@@ -430,7 +430,7 @@ class InquiryServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("답변 — 다른 스토어 · 삭제된 · 없는 문의 404, 태그만 있으면 400")
+        @DisplayName("답변 — 다른 스토어, 삭제된, 없는 문의 404, 태그만 있으면 400")
         void answer_rejected() {
             long storeId = SEQ.incrementAndGet();
             ProductInquiry others = saveFor(BUYER, 101L, SEQ.incrementAndGet(), false, "다른 스토어 문의");

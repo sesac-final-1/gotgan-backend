@@ -17,8 +17,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 이 파드에 연결된 SSE 화면들 — 받는 쪽(USER#… · STORE#… · ADMIN)마다 열린 연결. 한 화면이 여러 받는 쪽을 듣는다(판매자 = 회원 + 스토어).
- * 끊긴 연결은 보내다 실패하거나 완료 · 시간 초과 때 지운다. heartbeat 주석으로 NLB(idle 350초) · 프록시가 연결을 끊지 않게 한다.
+ * 이 파드에 연결된 SSE 화면들 — 받는 쪽(USER#…, STORE#…, ADMIN)마다 열린 연결. 한 화면이 여러 받는 쪽을 듣는다(판매자 = 회원 + 스토어).
+ * 끊긴 연결은 보내다 실패하거나 완료, 시간 초과 때 지운다. heartbeat 주석으로 NLB(idle 350초), 프록시가 연결을 끊지 않게 한다.
  */
 @Slf4j
 @Component
@@ -72,7 +72,7 @@ public class NotificationStreams {
     @PreDestroy
     void close() {
         heartbeat.shutdownNow();
-        byRecipient.values().stream().flatMap(Set::stream).distinct().forEach(SseEmitter::complete);   // 종료 · 배포 때 화면이 바로 다시 연결하게
+        byRecipient.values().stream().flatMap(Set::stream).distinct().forEach(SseEmitter::complete);   // 종료, 배포 때 화면이 바로 다시 연결하게
         log.info("SSE 연결 종료 - {}개", connections());
     }
 }

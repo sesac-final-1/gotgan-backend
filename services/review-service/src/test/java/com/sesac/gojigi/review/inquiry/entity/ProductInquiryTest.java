@@ -35,7 +35,7 @@ class ProductInquiryTest {
     }
 
     @Test
-    @DisplayName("수정하면 본문 · 비밀글 여부만 바뀐다")
+    @DisplayName("수정하면 본문, 비밀글 여부만 바뀐다")
     void edit_changesContentAndSecret() {
         // given
         ProductInquiry inquiry = inquiry(false);
@@ -64,7 +64,7 @@ class ProductInquiryTest {
     }
 
     @Test
-    @DisplayName("작성자 · 해당 스토어만 소유권 true")
+    @DisplayName("작성자, 해당 스토어만 소유권 true")
     void ownership_trueOnlyForWriterAndStore() {
         ProductInquiry inquiry = inquiry(false);
 
@@ -81,7 +81,7 @@ class ProductInquiryTest {
     }
 
     @Test
-    @DisplayName("비밀글은 작성자 · 해당 스토어 판매자만 본문을 본다")
+    @DisplayName("비밀글은 작성자, 해당 스토어 판매자만 본문을 본다")
     void isReadableBy_secretInquiry_onlyWriterAndStore() {
         ProductInquiry inquiry = inquiry(true);
 

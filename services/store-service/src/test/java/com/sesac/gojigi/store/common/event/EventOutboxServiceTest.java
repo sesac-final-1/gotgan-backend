@@ -55,7 +55,7 @@ class EventOutboxServiceTest {
     }
 
     @Test
-    @DisplayName("enqueue 는 부르는 쪽이 정한 eventId · occurredAt 으로 NEW 행을 남기고 커밋 후 발행 신호를 던진다")
+    @DisplayName("enqueue 는 부르는 쪽이 정한 eventId, occurredAt 으로 NEW 행을 남기고 커밋 후 발행 신호를 던진다")
     void enqueue_whenCalled_savesNewRowAndSignals() {
         // given
         given(repository.save(any(OutboxEvent.class))).willAnswer(inv -> withId(inv.getArgument(0), 7L));
@@ -76,7 +76,7 @@ class EventOutboxServiceTest {
     }
 
     @Test
-    @DisplayName("발행하면 봉투(eventId · eventType · occurredAt +09:00 · aggregateId · version 1 · payload)를 보내고 SENT 로 바꾼다")
+    @DisplayName("발행하면 봉투(eventId, eventType, occurredAt +09:00, aggregateId, version 1, payload)를 보내고 SENT 로 바꾼다")
     void send_whenSnsSucceeds_sendsEnvelopeAndMarksSent() {
         // given
         OutboxEvent row = row(7L, NOW.minusMinutes(1));
@@ -116,7 +116,7 @@ class EventOutboxServiceTest {
     }
 
     @Test
-    @DisplayName("발행이 실패하면 NEW 로 남기고 시도 횟수 · 실패 사유를 기록한다 — 한도 전에는 warn")
+    @DisplayName("발행이 실패하면 NEW 로 남기고 시도 횟수, 실패 사유를 기록한다 — 한도 전에는 warn")
     void send_whenSnsFails_recordsAttemptAndKeepsNew(CapturedOutput output) {
         // given
         OutboxEvent row = row(7L, NOW);

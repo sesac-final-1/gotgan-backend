@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
-/** 장바구니 선택 한꺼번에 — 전체 선택 · 해제(productOptionIds 없음) 또는 스토어 묶음 선택 */
+/** 장바구니 선택 한꺼번에 — 전체 선택, 해제(productOptionIds 없음) 또는 스토어 묶음 선택 */
 public record CartCheckRequest(
         @Schema(description = "선택 여부", example = "true")
         @NotNull

@@ -99,7 +99,7 @@ public class Payment extends BaseTimeEntity {
         this.paidAt = paidAt;
     }
 
-    /** 결제가 성립하지 않음 — 금액 불일치(자동 취소 후) · 결제 대기 만료 · 주문 Saga 보상 */
+    /** 결제가 성립하지 않음 — 금액 불일치(자동 취소 후), 결제 대기 만료, 주문 Saga 보상 */
     public void markFailed() {
         requireStatus(PaymentStatus.READY);
         this.status = PaymentStatus.FAILED;

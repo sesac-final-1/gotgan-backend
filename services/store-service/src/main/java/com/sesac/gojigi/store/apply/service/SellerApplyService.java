@@ -44,7 +44,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 입점 신청 · 보완 재제출 (STR-01 · 02 · 09 · 11, docs/api/store.md 2 · 2-3절). 담당 박지연.
+ * 입점 신청, 보완 재제출 (STR-01, 02, 09, 11, docs/api/store.md 2, 2-3절). 담당 박지연.
  * 검사는 계약 순서대로 — DB 검사 → 서류 규칙 → S3 확인 — 하고, 저장만 트랜잭션으로 묶는다.
  * S3 HeadObject(서류 최대 13개)를 트랜잭션 밖에서 불러 느린 S3 가 DB 커넥션을 붙잡지 않게 한다.
  * 보완 재제출(2-3절)도 같은 서류 검사를 쓴다.
@@ -99,7 +99,7 @@ public class SellerApplyService {
                 });
     }
 
-    /** slug · 스토어명 — 스토어(폐점 포함)와 진행 중 신청 모두와 겹치면 안 된다 */
+    /** slug, 스토어명 — 스토어(폐점 포함)와 진행 중 신청 모두와 겹치면 안 된다 */
     private void checkStoreIdentity(SellerApplyRequest request) {
         if (storeRepository.existsBySlug(request.slug())
                 || storeApplicationRepository.existsBySlugAndStatusIn(request.slug(), IN_PROGRESS)) {
@@ -112,7 +112,7 @@ public class SellerApplyService {
         }
     }
 
-    /** 개수 · 키 규칙을 먼저 보고(S3 호출 없음), 통과하면 파일마다 HeadObject 로 실제 형식 · 크기 확인 */
+    /** 개수, 키 규칙을 먼저 보고(S3 호출 없음), 통과하면 파일마다 HeadObject 로 실제 형식, 크기 확인 */
     private List<VerifiedDocument> verifyDocuments(Long userId, List<DocumentItem> items) {
         checkCounts(items, EnumSet.allOf(DocType.class));
         return verifyFiles(userId, items);
@@ -133,7 +133,7 @@ public class SellerApplyService {
         }
     }
 
-    /** 내 applications/{userId}/ 키 · 중복 확인 뒤 파일마다 S3 확인 */
+    /** 내 applications/{userId}/ 키, 중복 확인 뒤 파일마다 S3 확인 */
     private List<VerifiedDocument> verifyFiles(Long userId, List<DocumentItem> items) {
         String ownPrefix = "applications/" + userId + "/";
         Set<String> keys = new HashSet<>();
@@ -154,8 +154,8 @@ public class SellerApplyService {
                 .orElseThrow(() -> invalidDocument(label(item.docType()) + " 파일이 업로드되지 않았습니다. 다시 올려 주세요."));
         if (!DocumentRules.allows(item.docType(), meta.contentType())) {
             throw invalidDocument(item.docType() == DocType.PRODUCT_PHOTO
-                    ? "대표 상품 사진은 JPG · PNG 만 올릴 수 있습니다: " + item.originalName()
-                    : label(item.docType()) + "은 PDF · JPG · PNG 만 올릴 수 있습니다.");
+                    ? "대표 상품 사진은 JPG, PNG 만 올릴 수 있습니다: " + item.originalName()
+                    : label(item.docType()) + "은 PDF, JPG, PNG 만 올릴 수 있습니다.");
         }
         if (!DocumentRules.withinSize(meta.size())) {
             throw invalidDocument("파일은 10MB 이하만 올릴 수 있습니다: " + item.originalName());
@@ -196,8 +196,8 @@ public class SellerApplyService {
     }
 
     /**
-     * 보완 재제출 (2-3절, STR-09) — 내 보완요청 중 신청만. 상태 · 서류 구성 → S3 확인(트랜잭션 밖) → 저장 순서.
-     * 저장 순간에 자동 반려 · 관리자 처리가 먼저 끝났으면 @Version 이 달라 409 (스펙 STR-09 — 진 쪽은 실패)
+     * 보완 재제출 (2-3절, STR-09) — 내 보완요청 중 신청만. 상태, 서류 구성 → S3 확인(트랜잭션 밖) → 저장 순서.
+     * 저장 순간에 자동 반려, 관리자 처리가 먼저 끝났으면 @Version 이 달라 409 (스펙 STR-09 — 진 쪽은 실패)
      */
     public ApplicationResubmitResponse resubmit(Long userId, Long applicationId, ApplicationResubmitRequest request) {
         LocalDateTime now = LocalDateTime.now(clock);
@@ -221,7 +221,7 @@ public class SellerApplyService {
                 .orElseThrow(() -> new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
     }
 
-    /** 스토어명 · 주소를 바꾸면 신청 때와 같은 중복 확인 — 스토어(폐점 포함)와 자기 신청을 뺀 진행 중 신청 */
+    /** 스토어명, 주소를 바꾸면 신청 때와 같은 중복 확인 — 스토어(폐점 포함)와 자기 신청을 뺀 진행 중 신청 */
     private void checkRenamedStoreIdentity(StoreApplication current, ApplicationResubmitRequest request) {
         if (request.slug() != null && !request.slug().equals(current.getSlug())
                 && (storeRepository.existsBySlug(request.slug())
@@ -238,7 +238,7 @@ public class SellerApplyService {
         }
     }
 
-    /** 사업자 구분 · 대표자 · 사업자등록번호가 실제로 바뀌는지 — 바뀌면 사업자등록증으로 다시 확인해야 한다 */
+    /** 사업자 구분, 대표자, 사업자등록번호가 실제로 바뀌는지 — 바뀌면 사업자등록증으로 다시 확인해야 한다 */
     private static boolean changesBusinessIdentity(StoreApplication current, ApplicationResubmitRequest request) {
         return (request.bizType() != null && request.bizType() != current.getBizType())
                 || (request.ownerName() != null && !request.ownerName().trim().equals(current.getOwnerName()))
@@ -246,7 +246,7 @@ public class SellerApplyService {
     }
 
     /**
-     * 요청 서류는 모두 · 요청 밖 종류는 안 됨, 낸 종류마다 개수 규칙. V5 전 보완요청(요청 서류 기록 없음)은 낸 종류만 본다.
+     * 요청 서류는 모두, 요청 밖 종류는 안 됨, 낸 종류마다 개수 규칙. V5 전 보완요청(요청 서류 기록 없음)은 낸 종류만 본다.
      * 사업자 정보를 바꾸면 사업자등록증이 필수 — 보완요청에 없던 서류여도 받는다
      */
     private static void checkResubmitDocuments(List<DocType> requestedDocs, List<DocumentItem> items,
@@ -254,7 +254,7 @@ public class SellerApplyService {
         Set<DocType> submitted = items.stream().map(DocumentItem::docType)
                 .collect(Collectors.toCollection(() -> EnumSet.noneOf(DocType.class)));
         if (businessIdentityChanged && !submitted.contains(DocType.BUSINESS_REG)) {
-            throw invalidDocument("사업자 구분 · 대표자 · 사업자등록번호를 고치면 사업자등록증도 다시 올려 주세요.");
+            throw invalidDocument("사업자 구분, 대표자, 사업자등록번호를 고치면 사업자등록증도 다시 올려 주세요.");
         }
         if (requestedDocs != null) {
             for (DocType requested : requestedDocs) {
@@ -339,16 +339,16 @@ public class SellerApplyService {
         return correction;
     }
 
-    /** 이력 사유 — 예: "재제출 — 서류: 통신판매업 신고증 / 수정: 상호 · 정산 계좌" (255자 안) */
+    /** 이력 사유 — 예: "재제출 — 서류: 통신판매업 신고증 / 수정: 상호, 정산 계좌" (255자 안) */
     static String resubmitSummary(List<DocType> docTypes, List<String> changedFields) {
         StringBuilder summary = new StringBuilder("재제출");
         String separator = " — ";
         if (!docTypes.isEmpty()) {
-            summary.append(separator).append("서류: ").append(docTypes.stream().map(DocumentRules::label).collect(Collectors.joining(" · ")));
+            summary.append(separator).append("서류: ").append(docTypes.stream().map(DocumentRules::label).collect(Collectors.joining(", ")));
             separator = " / ";
         }
         if (!changedFields.isEmpty()) {
-            summary.append(separator).append("수정: ").append(String.join(" · ", changedFields));
+            summary.append(separator).append("수정: ").append(String.join(", ", changedFields));
         }
         return summary.toString();
     }

@@ -20,8 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * admin-service 내부 API (review.md 8절) — 신고 처리(노션 「신고 · 리뷰 블라인드 (B안)」 4-2) · 회원 상세 작성 리뷰. 담당 이경석.
- * 블라인드 상태의 주인은 review, 신고 · 조치 이력은 admindb. 삭제된 리뷰는 없는 것으로(404).
+ * admin-service 내부 API (review.md 8절) — 신고 처리(노션 「신고, 리뷰 블라인드 (B안)」 4-2), 회원 상세 작성 리뷰. 담당 이경석.
+ * 블라인드 상태의 주인은 review, 신고, 조치 이력은 admindb. 삭제된 리뷰는 없는 것으로(404).
  */
 @Slf4j
 @Service
@@ -41,13 +41,13 @@ public class InternalReviewService {
         return InternalReviewResponse.from(review, ReviewImages.urls(reviewImages.of(review.getId())));
     }
 
-    /** 관리자 회원 상세 "작성 리뷰" — 그 회원의 리뷰(삭제 제외 · 블라인드 포함) 최신순. 없는 회원은 빈 목록 (review 는 회원을 모름) */
+    /** 관리자 회원 상세 "작성 리뷰" — 그 회원의 리뷰(삭제 제외, 블라인드 포함) 최신순. 없는 회원은 빈 목록 (review 는 회원을 모름) */
     public PageResponse<InternalUserReviewResponse> listByUser(Long userId, int page, int size) {
         return PageResponse.from(reviewRepository.findByUserIdAndDeletedAtIsNull(userId, PageRequest.of(page, size, NEWEST))
                 .map(InternalUserReviewResponse::from));
     }
 
-    /** 블라인드 · 해제 — 같은 상태 재요청은 바꾸지 않고 200 (관리자가 두 번 눌러도 안전, 처음 사유 · 시각 유지) */
+    /** 블라인드, 해제 — 같은 상태 재요청은 바꾸지 않고 200 (관리자가 두 번 눌러도 안전, 처음 사유, 시각 유지) */
     @Transactional
     public InternalReviewResponse changeBlind(Long reviewId, ReviewBlindRequest request) {
         Review review = findNotDeleted(reviewId);

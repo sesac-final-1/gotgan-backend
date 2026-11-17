@@ -20,7 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-/** 이름 · 스토어 상태 조회 — user · store 는 가짜 서버, 시계를 움직여 캐시 만료 확인 */
+/** 이름, 스토어 상태 조회 — user, store 는 가짜 서버, 시계를 움직여 캐시 만료 확인 */
 class ChatDirectoryTest {
 
     private MockRestServiceServer users;
@@ -74,7 +74,7 @@ class ChatDirectoryTest {
     }
 
     @Test
-    @DisplayName("스토어 — 이름 · 운영 상태(ACTIVE 만 열림), 없는 스토어는 막고, 조회 실패는 막지 않는다(10초 뒤 다시)")
+    @DisplayName("스토어 — 이름, 운영 상태(ACTIVE 만 열림), 없는 스토어는 막고, 조회 실패는 막지 않는다(10초 뒤 다시)")
     void storeStatus() {
         stores.expect(once(), requestTo("http://store/internal/stores/1"))
                 .andRespond(withSuccess("{\"data\":{\"storeId\":1,\"storeName\":\"리넨하우스\",\"status\":\"ACTIVE\"}}", MediaType.APPLICATION_JSON));
@@ -95,7 +95,7 @@ class ChatDirectoryTest {
     }
 
     @Test
-    @DisplayName("회원 없음(404) · 권한 오류 · 빈 응답은 이름 없음")
+    @DisplayName("회원 없음(404), 권한 오류, 빈 응답은 이름 없음")
     void missingUser() {
         users.expect(requestTo("http://user/internal/users/1")).andRespond(withResourceNotFound());
         users.expect(requestTo("http://user/internal/users/2")).andRespond(withStatus(HttpStatus.FORBIDDEN));
@@ -108,7 +108,7 @@ class ChatDirectoryTest {
     }
 
     @Test
-    @DisplayName("정산 카드 — 상세 응답의 settlement(storeId · week · payoutAmt), 없으면 null")
+    @DisplayName("정산 카드 — 상세 응답의 settlement(storeId, week, payoutAmt), 없으면 null")
     void settlement() {
         settlements.expect(once(), requestTo("http://settlement/internal/settlements/31")).andRespond(withSuccess(
                 "{\"data\":{\"settlement\":{\"id\":31,\"storeId\":5,\"week\":\"2026-W43\",\"payoutAmt\":1234000},\"items\":[]}}", MediaType.APPLICATION_JSON));
@@ -136,7 +136,7 @@ class ChatDirectoryTest {
     }
 
     @Test
-    @DisplayName("이름 가리기 — 김지연 → 김*연, 남궁민수 → 남**수, 홍길 → 홍*, 한 글자 · null 은 그대로")
+    @DisplayName("이름 가리기 — 김지연 → 김*연, 남궁민수 → 남**수, 홍길 → 홍*, 한 글자, null 은 그대로")
     void mask() {
         assertThat(ChatDirectory.mask("김지연")).isEqualTo("김*연");
         assertThat(ChatDirectory.mask("남궁민수")).isEqualTo("남**수");

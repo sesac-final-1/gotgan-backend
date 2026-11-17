@@ -19,7 +19,7 @@ class MetricsAccessManagerTest {
     }
 
     @Test
-    @DisplayName("Prometheus 파드 · 노드(프라이빗 서브넷 2a · 2c) · localhost 는 허용")
+    @DisplayName("Prometheus 파드, 노드(프라이빗 서브넷 2a, 2c), localhost 는 허용")
     void privateSubnetsAndLocalhost_allowed() {
         assertThat(manager.isAllowed(from("10.0.11.206"))).isTrue();
         assertThat(manager.isAllowed(from("10.0.12.94"))).isTrue();
@@ -28,7 +28,7 @@ class MetricsAccessManagerTest {
     }
 
     @Test
-    @DisplayName("NLB(퍼블릭 서브넷)로 들어온 외부 요청 · 공인 IP · 그 밖 VPC 대역 · 접속 IP 모름은 거절")
+    @DisplayName("NLB(퍼블릭 서브넷)로 들어온 외부 요청, 공인 IP, 그 밖 VPC 대역, 접속 IP 모름은 거절")
     void nlbAndPublic_denied() {
         assertThat(manager.isAllowed(from("10.0.1.211"))).isFalse();
         assertThat(manager.isAllowed(from("10.0.2.6"))).isFalse();

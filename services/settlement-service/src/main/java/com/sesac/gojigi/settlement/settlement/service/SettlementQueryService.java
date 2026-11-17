@@ -38,7 +38,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 정산 조회 — 관리자 목록 · 상세(STL-05), 판매자 내역(STL-07), 대시보드 통계(STL-08) */
+/** 정산 조회 — 관리자 목록, 상세(STL-05), 판매자 내역(STL-07), 대시보드 통계(STL-08) */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -109,7 +109,7 @@ public class SettlementQueryService {
         if (storeId != null) {
             return new SettlementStatsResponse(storeStats(storeId, settlementRepository.findByStoreIdOrderByWeekStartDesc(storeId)), null);
         }
-        // 합계 · 그룹은 DB 에서 (11/3 점검 — 대시보드를 열 때마다 이번 달 · 8주치 행을 엔티티로 읽어 메모리에서 합산하던 것)
+        // 합계, 그룹은 DB 에서 (11/3 점검 — 대시보드를 열 때마다 이번 달, 8주치 행을 엔티티로 읽어 메모리에서 합산하던 것)
         Map<SettlementStatus, long[]> unpaid = new EnumMap<>(SettlementStatus.class);
         for (Object[] r : settlementRepository.sumByStatusIn(EnumSet.of(SettlementStatus.SCHEDULED, SettlementStatus.HELD))) {
             unpaid.put((SettlementStatus) r[0], new long[] {((Number) r[1]).longValue(), ((Number) r[2]).longValue()});
@@ -146,7 +146,7 @@ public class SettlementQueryService {
                 .toList();
     }
 
-    /** 스토어 미정산 현황 — 폐점 · 판매자 탈퇴 전 확인 (집계 전 구매확정 · 지급예정 · 보류가 모두 0 이어야 clear) */
+    /** 스토어 미정산 현황 — 폐점, 판매자 탈퇴 전 확인 (집계 전 구매확정, 지급예정, 보류가 모두 0 이어야 clear) */
     public SettlementOutstandingResponse outstanding(Long storeId) {
         List<SettlementItem> unsettled = settlementItemRepository.findByStoreIdAndSettlementIdIsNull(storeId);
         List<Settlement> scheduled = settlementRepository.findByStoreIdAndStatus(storeId, SettlementStatus.SCHEDULED);
@@ -157,7 +157,7 @@ public class SettlementQueryService {
                 held.size(), held.stream().mapToLong(Settlement::getPayoutAmt).sum());
     }
 
-    /** 판매자 명세서 — 내 스토어 · 지급 완료 정산서만 */
+    /** 판매자 명세서 — 내 스토어, 지급 완료 정산서만 */
     public Settlement paidSettlementForStore(Long settlementId, Long storeId) {
         Settlement settlement = load(settlementId);
         requireOwner(settlement, storeId);

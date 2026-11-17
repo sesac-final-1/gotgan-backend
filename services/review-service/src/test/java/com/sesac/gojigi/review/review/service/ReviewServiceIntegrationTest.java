@@ -41,7 +41,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 리뷰 작성 — 자격 · 이미 작성 · 기한 · 본문 정화 · 동시 제출 (MySQL 8.4 + Flyway) */
+/** 리뷰 작성 — 자격, 이미 작성, 기한, 본문 정화, 동시 제출 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, ReviewService.class, ReviewImages.class, ReviewServiceIntegrationTest.FixedClock.class })
@@ -53,7 +53,7 @@ class ReviewServiceIntegrationTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 28, 10, 0);
     private static final long BUYER = 4L;
     private static final String CONTENT = "평소 M 입는데 M 주문했고 어깨가 살짝 내려오는 오버핏이에요.";
-    /** 다른 테스트 · 실행과 상품주문 ID 가 겹치지 않게 */
+    /** 다른 테스트, 실행과 상품주문 ID 가 겹치지 않게 */
     private static final AtomicLong ORDER_ITEM_SEQ = new AtomicLong(System.nanoTime() % 1_000_000_000L);
 
     @TestConfiguration(proxyBeanMethods = false)
@@ -85,7 +85,7 @@ class ReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("자격이 있으면 저장된다 — 상품 · 스토어 · 표시 이름은 자격에서, 본문 · 요약은 태그를 지우고")
+    @DisplayName("자격이 있으면 저장된다 — 상품, 스토어, 표시 이름은 자격에서, 본문, 요약은 태그를 지우고")
     void write_eligible_savesSanitizedReview() {
         // given
         long orderItemId = saveEligibility(NOW.minusDays(1));
@@ -112,7 +112,7 @@ class ReviewServiceIntegrationTest {
         // given
         long othersOrderItem = saveEligibility(NOW.minusDays(1));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> reviewService.write(BUYER, request(-1L, CONTENT)))
                 .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_ELIGIBLE);
         assertThatThrownBy(() -> reviewService.write(99L, request(othersOrderItem, CONTENT)))
@@ -129,7 +129,7 @@ class ReviewServiceIntegrationTest {
         review.softDelete(NOW);
         reviewRepository.save(review);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> reviewService.write(BUYER, request(orderItemId, CONTENT)))
                 .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_ALREADY_WRITTEN);
     }
@@ -141,7 +141,7 @@ class ReviewServiceIntegrationTest {
         long lastDay = saveEligibility(NOW.minusDays(30));
         long expired = saveEligibility(NOW.minusDays(30).minusSeconds(1));
 
-        // when · then
+        // when, then
         assertThat(reviewService.write(BUYER, request(lastDay, CONTENT)).reviewId()).isNotNull();
         assertThatThrownBy(() -> reviewService.write(BUYER, request(expired, CONTENT)))
                 .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_WRITE_EXPIRED);
@@ -153,7 +153,7 @@ class ReviewServiceIntegrationTest {
         // given
         long orderItemId = saveEligibility(NOW.minusDays(1));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> reviewService.write(BUYER, request(orderItemId, "<script>alert('xss-xss-xss')</script>")))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", CommonErrorCode.INVALID_INPUT);
@@ -205,7 +205,7 @@ class ReviewServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("통째로 바꾼다 — 비운 요약 · 사이즈 체감은 지워지고, 본문은 태그를 지우고, 판매자 답글은 남는다")
+        @DisplayName("통째로 바꾼다 — 비운 요약, 사이즈 체감은 지워지고, 본문은 태그를 지우고, 판매자 답글은 남는다")
         void edit_own_replacesFieldsAndKeepsReply() {
             // given
             Long reviewId = writeReview(NOW.minusDays(1));
@@ -234,12 +234,12 @@ class ReviewServiceIntegrationTest {
                     .orElseThrow();
             Long reviewId = reviewRepository.save(Review.write(expired, 5, null, CONTENT, null)).getId();
 
-            // when · then
+            // when, then
             assertThat(reviewService.edit(BUYER, reviewId, update(NEW_CONTENT)).rating()).isEqualTo(2);
         }
 
         @Test
-        @DisplayName("없는 · 삭제된 · 다른 회원의 리뷰는 같은 404 REVIEW_NOT_FOUND")
+        @DisplayName("없는, 삭제된, 다른 회원의 리뷰는 같은 404 REVIEW_NOT_FOUND")
         void edit_notFoundDeletedOrOthers_throwsNotFound() {
             // given
             Long othersReviewId = writeReview(NOW.minusDays(1));
@@ -248,7 +248,7 @@ class ReviewServiceIntegrationTest {
             deleted.softDelete(NOW);
             reviewRepository.save(deleted);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> reviewService.edit(BUYER, -1L, update(NEW_CONTENT)))
                     .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
             assertThatThrownBy(() -> reviewService.edit(99L, othersReviewId, update(NEW_CONTENT)))
@@ -263,10 +263,10 @@ class ReviewServiceIntegrationTest {
             // given
             Long reviewId = writeReview(NOW.minusDays(1));
             Review review = reviewRepository.findById(reviewId).orElseThrow();
-            review.blind("욕설 · 비방", NOW);
+            review.blind("욕설, 비방", NOW);
             reviewRepository.save(review);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> reviewService.edit(BUYER, reviewId, update(NEW_CONTENT)))
                     .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_BLINDED);
             assertThat(reviewRepository.findById(reviewId).orElseThrow().getContent()).isEqualTo(CONTENT);
@@ -278,7 +278,7 @@ class ReviewServiceIntegrationTest {
             // given
             Long reviewId = writeReview(NOW.minusDays(1));
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> reviewService.edit(BUYER, reviewId, update("<script>alert('xss-xss-xss')</script>")))
                     .hasFieldOrPropertyWithValue("errorCode", CommonErrorCode.INVALID_INPUT);
             assertThat(reviewRepository.findById(reviewId).orElseThrow().getContent()).isEqualTo(CONTENT);
@@ -315,7 +315,7 @@ class ReviewServiceIntegrationTest {
             // given
             Long reviewId = writeReview();
             Review review = reviewRepository.findById(reviewId).orElseThrow();
-            review.blind("욕설 · 비방", NOW);
+            review.blind("욕설, 비방", NOW);
             reviewRepository.save(review);
 
             // when
@@ -326,14 +326,14 @@ class ReviewServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("없는 · 이미 삭제된 · 다른 회원의 리뷰는 같은 404 REVIEW_NOT_FOUND, 남의 리뷰는 그대로")
+        @DisplayName("없는, 이미 삭제된, 다른 회원의 리뷰는 같은 404 REVIEW_NOT_FOUND, 남의 리뷰는 그대로")
         void delete_notFoundDeletedOrOthers_throwsNotFound() {
             // given
             Long reviewId = writeReview();
             reviewService.delete(BUYER, reviewId);
             Long othersReviewId = writeReview();
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> reviewService.delete(BUYER, -1L))
                     .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
             assertThatThrownBy(() -> reviewService.delete(BUYER, reviewId))
@@ -376,7 +376,7 @@ class ReviewServiceIntegrationTest {
             // given
             long orderItemId = saveEligibility(NOW.minusDays(1));
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> reviewService.write(BUYER, new ReviewCreateRequest(orderItemId, 5, null, CONTENT, null,
                     List.of("reviews/5/a.jpg"))))
                     .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_IMAGE_INVALID);
@@ -384,7 +384,7 @@ class ReviewServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("수정은 사진을 통째로 바꾼다 — 남긴 기존 키 + 새 키 순서대로, 빈 목록이면 전부 삭제, 응답에 키 · URL")
+        @DisplayName("수정은 사진을 통째로 바꾼다 — 남긴 기존 키 + 새 키 순서대로, 빈 목록이면 전부 삭제, 응답에 키, URL")
         void edit_replacesImages() {
             // given
             long orderItemId = saveEligibility(NOW.minusDays(1));

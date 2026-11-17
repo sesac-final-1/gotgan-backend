@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 카테고리 관리 (CAT-02 · product.md 7절) · 공개 트리 (CAT-01 · 8절).
+ * 카테고리 관리 (CAT-02, product.md 7절), 공개 트리 (CAT-01, 8절).
  * 상위를 켜기 전 수수료율 확인은 admin 이 한다 — product 는 다른 서비스를 부르지 않는다(CAT-03).
  */
 @Service

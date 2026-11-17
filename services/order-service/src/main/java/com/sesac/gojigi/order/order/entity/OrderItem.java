@@ -22,9 +22,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 상품주문 = 상태 관리 단위 (배송 · 구매확정 · 클레임). 상품 · 카테고리 · 스토어명은 주문 시점 스냅샷.
- * usedPoint 는 주문 사용 포인트를 금액 비율로 배분한 값(취소 · 반품 시 환원액),
- * earnedPoint 는 (itemAmt - usedPoint) 의 5% — user 가 구매확정 때 적립 (OrderItemConfirmed). 취소 · 반품은 구매확정 전이라 실제 회수는 0.
+ * 상품주문 = 상태 관리 단위 (배송, 구매확정, 클레임). 상품, 카테고리, 스토어명은 주문 시점 스냅샷.
+ * usedPoint 는 주문 사용 포인트를 금액 비율로 배분한 값(취소, 반품 시 환원액),
+ * earnedPoint 는 (itemAmt - usedPoint) 의 5% — user 가 구매확정 때 적립 (OrderItemConfirmed). 취소, 반품은 구매확정 전이라 실제 회수는 0.
  */
 @Getter
 @Entity
@@ -141,14 +141,14 @@ public class OrderItem extends BaseTimeEntity {
     }
 
     /**
-     * 취소 · 반품 때 회수할 적립 포인트 — 적립은 구매확정 때(OrderItemConfirmed) 일어나므로 확정 전이면 0.
-     * 취소 · 반품은 구매확정 전에만 되므로 지금은 항상 0 — 구매확정 후 클레임이 생기면 그때 earnedPoint 를 회수한다
+     * 취소, 반품 때 회수할 적립 포인트 — 적립은 구매확정 때(OrderItemConfirmed) 일어나므로 확정 전이면 0.
+     * 취소, 반품은 구매확정 전에만 되므로 지금은 항상 0 — 구매확정 후 클레임이 생기면 그때 earnedPoint 를 회수한다
      */
     public long revocablePoint() {
         return confirmedAt == null ? 0L : earnedPoint;
     }
 
-    /** 결제 완료 — 주문 PAID 와 같은 트랜잭션 (결제 검증 성공 · 0원 주문). 주문완료 상태에서만 */
+    /** 결제 완료 — 주문 PAID 와 같은 트랜잭션 (결제 검증 성공, 0원 주문). 주문완료 상태에서만 */
     public void markPaymentDone() {
         if (status != OrderItemStatus.ORDERED) {
             throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);
@@ -166,7 +166,7 @@ public class OrderItem extends BaseTimeEntity {
         transition(OrderItemStatus.PAYMENT_DONE, OrderItemStatus.PREPARING);
     }
 
-    /** 송장 등록 (DLV-02) — 택배사 · 송장번호 · 발송 일시를 남기고 배송중 */
+    /** 송장 등록 (DLV-02) — 택배사, 송장번호, 발송 일시를 남기고 배송중 */
     public void ship(String courier, String trackingNo, LocalDateTime shippedAt) {
         transition(OrderItemStatus.PREPARING, OrderItemStatus.SHIPPING);
         this.courier = courier;
@@ -174,13 +174,13 @@ public class OrderItem extends BaseTimeEntity {
         this.shippedAt = shippedAt;
     }
 
-    /** 배송완료 (DLV-03 판매자 버튼 · DLV-04 자동) — deliveredAt 이 자동 구매확정 · 반품 기간의 기준 */
+    /** 배송완료 (DLV-03 판매자 버튼, DLV-04 자동) — deliveredAt 이 자동 구매확정, 반품 기간의 기준 */
     public void deliver(LocalDateTime deliveredAt) {
         transition(OrderItemStatus.SHIPPING, OrderItemStatus.DELIVERED);
         this.deliveredAt = deliveredAt;
     }
 
-    /** 반품 신청 (CLM-03) — 배송완료에서만, 판매자 승인 · 수거 · 환불 Saga 는 판매자 클레임 처리(CLM-05)에서 */
+    /** 반품 신청 (CLM-03) — 배송완료에서만, 판매자 승인, 수거, 환불 Saga 는 판매자 클레임 처리(CLM-05)에서 */
     public void requestReturn() {
         transition(OrderItemStatus.DELIVERED, OrderItemStatus.RETURN_REQUESTED);
     }
@@ -190,7 +190,7 @@ public class OrderItem extends BaseTimeEntity {
         transition(OrderItemStatus.DELIVERED, OrderItemStatus.EXCHANGE_REQUESTED);
     }
 
-    /** 취소 완료 — 결제 부분 취소 · 재고 복원 · 포인트 환원 · 회수가 모두 끝남 */
+    /** 취소 완료 — 결제 부분 취소, 재고 복원, 포인트 환원, 회수가 모두 끝남 */
     public void cancelled() {
         transition(OrderItemStatus.CANCEL_REQUESTED, OrderItemStatus.CANCELLED);
     }
@@ -201,22 +201,22 @@ public class OrderItem extends BaseTimeEntity {
     }
 
     /**
-     * 구매확정 (DLV-05 구매자 · DLV-06 자동) — 배송완료에서만. 반품 · 교환 진행 중이면 상태가 반품요청 · 교환요청이라 막힌다.
-     * confirmedAt 이 정산 · 리뷰 자격 · 회원등급의 기준
+     * 구매확정 (DLV-05 구매자, DLV-06 자동) — 배송완료에서만. 반품, 교환 진행 중이면 상태가 반품요청, 교환요청이라 막힌다.
+     * confirmedAt 이 정산, 리뷰 자격, 회원등급의 기준
      */
     public void confirm(LocalDateTime confirmedAt) {
         transition(OrderItemStatus.DELIVERED, OrderItemStatus.CONFIRMED);
         this.confirmedAt = confirmedAt;
     }
 
-    /** 반품 · 교환 거부 · 구매자 철회 — 다시 배송완료 (배송완료 시각은 그대로 → 반품 기간 · 자동 구매확정도 원래 기준) */
+    /** 반품, 교환 거부, 구매자 철회 — 다시 배송완료 (배송완료 시각은 그대로 → 반품 기간, 자동 구매확정도 원래 기준) */
     public void rejectClaim() {
         OrderItemStatus from = status == OrderItemStatus.EXCHANGE_REQUESTED
                 ? OrderItemStatus.EXCHANGE_REQUESTED : OrderItemStatus.RETURN_REQUESTED;
         transition(from, OrderItemStatus.DELIVERED);
     }
 
-    /** 교환 재배송 송장 — 상태는 교환요청 그대로(스펙: 교환은 클레임 상태로만), 택배사 · 송장 · 발송 시각을 재배송 것으로 */
+    /** 교환 재배송 송장 — 상태는 교환요청 그대로(스펙: 교환은 클레임 상태로만), 택배사, 송장, 발송 시각을 재배송 것으로 */
     public void reshipExchange(String courier, String trackingNo, LocalDateTime shippedAt) {
         if (status != OrderItemStatus.EXCHANGE_REQUESTED) {
             throw new OrderException(OrderErrorCode.ORDER_INVALID_STATUS);
@@ -232,7 +232,7 @@ public class OrderItem extends BaseTimeEntity {
                 && shippedAt.isAfter(deliveredAt);
     }
 
-    /** 배송완료 — 배송중이면 일반 배송완료, 교환 재배송 중이면 교환 완료(다시 배송완료 · 자동 구매확정 기간을 다시 센다) */
+    /** 배송완료 — 배송중이면 일반 배송완료, 교환 재배송 중이면 교환 완료(다시 배송완료, 자동 구매확정 기간을 다시 센다) */
     public void deliverOrRedeliver(LocalDateTime now) {
         if (isReshipping()) {
             transition(OrderItemStatus.EXCHANGE_REQUESTED, OrderItemStatus.DELIVERED);

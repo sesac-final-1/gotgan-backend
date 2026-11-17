@@ -29,8 +29,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * 가격 · 구매 가능 조회 (GET /internal/product-options?ids=, product.md 4절) — 실제 MySQL · Flyway.
- * order 의 ProductClient 가 보내는 모양(ids 반복 · 쉼표) 둘 다 확인. 상품은 저장소로 직접 만든다 (InternalProductApiIntegrationTest 와 같음).
+ * 가격, 구매 가능 조회 (GET /internal/product-options?ids=, product.md 4절) — 실제 MySQL, Flyway.
+ * order 의 ProductClient 가 보내는 모양(ids 반복, 쉼표) 둘 다 확인. 상품은 저장소로 직접 만든다 (InternalProductApiIntegrationTest 와 같음).
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게.
  */
 @SpringBootTest(properties = {"management.tracing.sampling.probability=0", "app.images.base-url=https://img.test/"})
@@ -66,7 +66,7 @@ class InternalProductOptionApiIntegrationTest {
         jdbc.update("DELETE FROM category");
     }
 
-    /** 89,000원 15% → 판매가 75,650원. 옵션 값이 있으면 그룹 2개("컬러" · "사이즈"), 없으면 옵션 없는 상품 */
+    /** 89,000원 15% → 판매가 75,650원. 옵션 값이 있으면 그룹 2개("컬러", "사이즈"), 없으면 옵션 없는 상품 */
     private Product product(long storeId, ProductStatus status, ProductOption... options) {
         boolean grouped = options[0].getOption1Value() != null;
         Product product = Product.builder()
@@ -97,7 +97,7 @@ class InternalProductOptionApiIntegrationTest {
     class Find {
 
         @Test
-        @DisplayName("판매 중 옵션 — 13개 필드, 단가 = 판매가 + 추가금, 상위 카테고리 · 대표 이미지, 품절이어도 purchasable true")
+        @DisplayName("판매 중 옵션 — 13개 필드, 단가 = 판매가 + 추가금, 상위 카테고리, 대표 이미지, 품절이어도 purchasable true")
         void findOptions_onSale_returnsSnapshotFields() throws Exception {
             // given
             Product p = product(1L, ProductStatus.ON_SALE, ProductOption.of("오트밀", "M", 0, 30), ProductOption.of("오트밀", "L", 2000, 0));
@@ -128,13 +128,13 @@ class InternalProductOptionApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("요청 순서 · 중복은 한 번 · 없는 ID 는 빠짐 · 쉼표 형식도 같음 · 옵션 없는 상품은 optionName null")
+        @DisplayName("요청 순서, 중복은 한 번, 없는 ID 는 빠짐, 쉼표 형식도 같음, 옵션 없는 상품은 optionName null")
         void findOptions_mixedIds_keepsRequestOrderAndSkipsMissing() throws Exception {
             // given
             long a = optionId(product(1L, ProductStatus.ON_SALE, ProductOption.of("오트밀", "M", 0, 1)), 0);
             long b = optionId(product(2L, ProductStatus.ON_SALE, ProductOption.of(null, null, 0, 5)), 0);
 
-            // when · then
+            // when, then
             find("ids=" + b + "," + a + ",999999," + b)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.length()").value(2))
@@ -151,7 +151,7 @@ class InternalProductOptionApiIntegrationTest {
     class NotPurchasable {
 
         @Test
-        @DisplayName("판매중지 · 강제 판매중지 · 상품 삭제 · 옵션 삭제")
+        @DisplayName("판매중지, 강제 판매중지, 상품 삭제, 옵션 삭제")
         void findOptions_stoppedBlockedOrDeleted_notPurchasable() throws Exception {
             // given
             long stopped = optionId(product(1L, ProductStatus.STOPPED, ProductOption.of(null, null, 0, 5)), 0);
@@ -166,7 +166,7 @@ class InternalProductOptionApiIntegrationTest {
             long optionDeleted = optionId(p, 1);
             jdbc.update("UPDATE product_option SET deleted_at = NOW(6) WHERE product_option_id = ?", optionDeleted);
 
-            // when · then
+            // when, then
             find("ids=" + stopped + "," + blocked + "," + productDeleted + "," + optionDeleted + "," + optionId(p, 0))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.length()").value(5))
@@ -178,13 +178,13 @@ class InternalProductOptionApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("하위 카테고리 꺼짐 · 상위 카테고리 꺼짐 · 스토어 비활성")
+        @DisplayName("하위 카테고리 꺼짐, 상위 카테고리 꺼짐, 스토어 비활성")
         void findOptions_categoryOrStoreInactive_notPurchasable() throws Exception {
             // given
             Product p = product(1L, ProductStatus.ON_SALE, ProductOption.of(null, null, 0, 5));
             long id = optionId(p, 0);
 
-            // when · then — 하위 꺼짐
+            // when, then — 하위 꺼짐
             shirt.changeActive(false);
             categoryRepository.save(shirt);
             find("ids=" + id).andExpect(jsonPath("$.data[0].purchasable").value(false));
@@ -204,7 +204,7 @@ class InternalProductOptionApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("ids 없음 · 비었음 · 101개 · 숫자 아님 — 400 INVALID_INPUT, 100개는 통과")
+    @DisplayName("ids 없음, 비었음, 101개, 숫자 아님 — 400 INVALID_INPUT, 100개는 통과")
     void findOptions_invalidIds_invalidInput() throws Exception {
         String hundred = LongStream.rangeClosed(1, 100).mapToObj(String::valueOf).collect(Collectors.joining(","));
         find("").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));

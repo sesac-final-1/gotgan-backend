@@ -5,7 +5,7 @@ import org.owasp.html.PolicyFactory;
 import org.springframework.web.util.HtmlUtils;
 
 /**
- * 리뷰 · 문의 · 답글 본문 정화 (OWASP Java HTML Sanitizer, 컨벤션 XSS 방지). 본문은 일반 텍스트라 태그를 모두 지운다.
+ * 리뷰, 문의, 답글 본문 정화 (OWASP Java HTML Sanitizer, 컨벤션 XSS 방지). 본문은 일반 텍스트라 태그를 모두 지운다.
  * Sanitizer 가 글자를 HTML 엔티티로 바꾸므로(& → &amp;) 다시 되돌려 저장한다 — 화면은 React 가 이스케이프해 출력.
  */
 public final class TextSanitizer {

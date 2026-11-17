@@ -1,4 +1,4 @@
-// review-service — 리뷰 · 판매자 답글 · 상품문의 · 리뷰 작성 자격
+// review-service — 리뷰, 판매자 답글, 상품문의, 리뷰 작성 자격
 // 의존성 선택 기준: 가이드라인 15장 4절 "의존성 매트릭스". 버전 변수는 gradle.properties (전 서비스 동일)
 plugins {
     id 'java'
@@ -24,9 +24,9 @@ dependencyManagement {
 }
 
 dependencies {
-    // 공통 응답 봉투 · 예외 처리 · @CurrentUser (libs/common-web)
+    // 공통 응답 봉투, 예외 처리, @CurrentUser (libs/common-web)
     implementation 'com.sesac.gojigi:common-web:0.0.1'
-    // 웹 · 검증 · API 문서
+    // 웹, 검증, API 문서
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
@@ -37,10 +37,10 @@ dependencies {
     runtimeOnly    'com.mysql:mysql-connector-j'
     // XSS — 사용자 입력 HTML 을 저장 전 정화 (가이드라인 12장)
     implementation "com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:${htmlSanitizerVersion}"
-    // 복원력 — 모든 동기 호출의 표준: 타임아웃 · 서킷 브레이커 · 폴백 (가이드라인 06장 · 13장)
+    // 복원력 — 모든 동기 호출의 표준: 타임아웃, 서킷 브레이커, 폴백 (가이드라인 06장, 13장)
     implementation "io.github.resilience4j:resilience4j-spring-boot4:${resilience4jVersion}"
     implementation 'org.springframework.boot:spring-boot-starter-aspectj'
-    // AWS SDK v2 — sqs · s3 (버전은 BOM)
+    // AWS SDK v2 — sqs, s3 (버전은 BOM)
     implementation 'software.amazon.awssdk:sqs'
     implementation 'software.amazon.awssdk:s3'
     implementation 'software.amazon.awssdk:sts'    // IRSA(웹 아이덴티티 토큰) 자격 증명 — 없으면 클러스터에서 기본 자격 증명 체인이 실패 (settlement 와 같음)
@@ -49,7 +49,7 @@ dependencies {
     runtimeOnly    'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-zipkin'
     implementation 'com.sesac.gojigi:common-logging:0.0.1'   // logback 공통 설정 + loki4j (libs/common-logging)
-    // Lombok — 생성자 주입(@RequiredArgsConstructor) · @Getter · @Slf4j (컨벤션 2-3)
+    // Lombok — 생성자 주입(@RequiredArgsConstructor), @Getter, @Slf4j (컨벤션 2-3)
     compileOnly         'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     // 테스트 (Boot 4는 기술별 테스트 스타터)

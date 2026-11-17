@@ -31,7 +31,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Bulkhead · 서킷 AOP 를 실제로 거쳐 application.yml 설정대로 — 파드당 동시 5개까지, 넘으면 AUTH_SIGNUP_BUSY, 거절은 서킷에 집계되지 않는다 */
+/** Bulkhead, 서킷 AOP 를 실제로 거쳐 application.yml 설정대로 — 파드당 동시 5개까지, 넘으면 AUTH_SIGNUP_BUSY, 거절은 서킷에 집계되지 않는다 */
 @SpringBootTest(classes = KeycloakClientAdapter.class)
 @ImportAutoConfiguration({ AopAutoConfiguration.class, CircuitBreakerAutoConfiguration.class,
         BulkheadAutoConfiguration.class })
@@ -65,7 +65,7 @@ class KeycloakSignupBulkheadTest {
         }
         assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
 
-        // when · then — 거절을 여러 번 받아도 (서킷 최소 호출 5 · 실패율 50%)
+        // when, then — 거절을 여러 번 받아도 (서킷 최소 호출 5, 실패율 50%)
         long start = System.nanoTime();
         for (int i = 0; i < 6; i++) {
             assertThatThrownBy(() -> adapter.createUser("over@gotgan.com", "Dem0!pass", 99L))

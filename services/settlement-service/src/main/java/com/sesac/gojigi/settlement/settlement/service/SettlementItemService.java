@@ -19,8 +19,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * OrderItemConfirmed → 정산 대상 적재 (STL-02 · 04). 다른 서비스를 호출하지 않는다 — 수수료율은 자기 DB(category_commission)에서 찾는다.
- * 구매확정일(KST)에 유효한 상위 카테고리 수수료율을 스냅샷하고, 판매수수료 · 결제수수료를 원 단위 내림으로 계산해 저장.
+ * OrderItemConfirmed → 정산 대상 적재 (STL-02, 04). 다른 서비스를 호출하지 않는다 — 수수료율은 자기 DB(category_commission)에서 찾는다.
+ * 구매확정일(KST)에 유효한 상위 카테고리 수수료율을 스냅샷하고, 판매수수료, 결제수수료를 원 단위 내림으로 계산해 저장.
  */
 @Slf4j
 @Service
@@ -43,7 +43,7 @@ public class SettlementItemService {
     public Result load(EventEnvelope<OrderItemConfirmedPayload> event) {
         OrderItemConfirmedPayload p = event.payload();
         if (processedEventRepository.existsByEventId(event.eventId()) || settlementItemRepository.existsByOrderItemId(p.orderItemId())) {
-            return Result.DUPLICATE;   // 같은 메시지 재전달 · 같은 상품주문의 다른 eventId 모두 한 번만
+            return Result.DUPLICATE;   // 같은 메시지 재전달, 같은 상품주문의 다른 eventId 모두 한 번만
         }
         LocalDateTime confirmedAt = p.confirmedAt().atZoneSameInstant(KST).toLocalDateTime();
         CategoryCommission commission = categoryCommissionRepository

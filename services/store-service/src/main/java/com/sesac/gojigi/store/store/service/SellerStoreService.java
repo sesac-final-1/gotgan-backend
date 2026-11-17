@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 판매자 스토어 설정 수정 · 대표 이미지 업로드 주소 (담당 박지연, STR-06 · store.md 13-2 · 13-3절).
+ * 판매자 스토어 설정 수정, 대표 이미지 업로드 주소 (담당 박지연, STR-06, store.md 13-2, 13-3절).
  * 스토어 행을 잠가(FOR UPDATE) 바꾼다 — store 에 @Version 이 없어, 그 사이 관리자가 바꾼 상태를 판매자 저장(전체 컬럼 UPDATE)이 덮어쓰지 않게.
  * 이벤트는 없음 — 배송비는 order 가 주문 때 1절을 읽어 스냅샷으로 저장
  */
@@ -54,7 +54,7 @@ public class SellerStoreService {
 
     /**
      * 대표 이미지 업로드 주소 (13-3절) — 키 stores/{storeId}/{UUID}.{jpg|png|webp} 는 설정 수정의 이미지 키 검사와 맞물린다.
-     * 형식 · 크기는 요청 검증이 거름. 폐점 스토어는 409(설정을 못 바꾸므로)
+     * 형식, 크기는 요청 검증이 거름. 폐점 스토어는 409(설정을 못 바꾸므로)
      */
     public StoreImagePresignResponse presignImage(Long storeId, StoreImagePresignRequest request) {
         Store store = storeRepository.findByIdAndDeletedAtIsNull(storeId)
@@ -77,7 +77,7 @@ public class SellerStoreService {
 
     /**
      * 대표 이미지 키 — 비우면 이미지 없음, 지금 키 그대로면 유지, 새 키는 업로드 주소 발급으로 받은 내 스토어 키 모양만(S3 존재는 안 봄 — product 와 같음).
-     * 다른 스토어 · 다른 폴더 키를 막아 남의 이미지를 대표로 걸지 못하게
+     * 다른 스토어, 다른 폴더 키를 막아 남의 이미지를 대표로 걸지 못하게
      */
     static String checkImageKey(Long storeId, String requested, String current) {
         if (requested == null || requested.isBlank()) {

@@ -9,9 +9,9 @@ import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 대시보드 통계 호출 — 서킷 브레이커 이름 = 대상 서비스(order · product · settlement), 조회(GET)라 재시도 1회.
- * 실패 변환 규칙은 RemoteCalls(4xx · 장애 모두 502 BusinessException) — SellerDashboardService 가 그 영역만 비운다.
- * product · settlement 는 응답의 store 객체만 꺼낸다(storeId 로 부르면 store 만 채워짐)
+ * 대시보드 통계 호출 — 서킷 브레이커 이름 = 대상 서비스(order, product, settlement), 조회(GET)라 재시도 1회.
+ * 실패 변환 규칙은 RemoteCalls(4xx, 장애 모두 502 BusinessException) — SellerDashboardService 가 그 영역만 비운다.
+ * product, settlement 는 응답의 store 객체만 꺼낸다(storeId 로 부르면 store 만 채워짐)
  */
 @Component
 public class DashboardClientAdapter {

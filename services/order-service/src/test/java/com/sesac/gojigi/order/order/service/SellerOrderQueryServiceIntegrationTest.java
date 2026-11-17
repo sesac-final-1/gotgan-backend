@@ -36,7 +36,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 판매자 주문 목록 · 상세 — 내 스토어 · 결제 후만, 상태 탭 · 검색 · 페이징 · 탭 숫자 (MySQL 8.4 + Flyway) */
+/** 판매자 주문 목록, 상세 — 내 스토어, 결제 후만, 상태 탭, 검색, 페이징, 탭 숫자 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, SellerOrderQueryService.class,
@@ -45,7 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.NOT_SUPPORTED)   // 서비스 메서드마다 실제로 커밋
 class SellerOrderQueryServiceIntegrationTest {
 
-    /** 이 테스트만의 스토어 — 다른 테스트의 상품주문과 섞이지 않게 (목록 테스트 · 상세 테스트 따로) */
+    /** 이 테스트만의 스토어 — 다른 테스트의 상품주문과 섞이지 않게 (목록 테스트, 상세 테스트 따로) */
     private static final long STORE = 981L;
     private static final long DETAIL_STORE = 982L;
     private static final long OTHER_STORE = 989L;
@@ -87,7 +87,7 @@ class SellerOrderQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("목록 — 내 스토어 · 결제 후만 최신 순, 상태 탭 · 검색 · 페이징, 탭 숫자는 전체 기준")
+    @DisplayName("목록 — 내 스토어, 결제 후만 최신 순, 상태 탭, 검색, 페이징, 탭 숫자는 전체 기준")
     void list() {
         // given
         OrderItem first = item(STORE, "유기농 사과", "김수령", true);           // PAYMENT_DONE
@@ -113,7 +113,7 @@ class SellerOrderQueryServiceIntegrationTest {
                 .doesNotContainKey(OrderItemStatus.ORDERED);
         assertThat(query.list(STORE, OrderItemStatus.ORDERED, null, 0, 20).items().content()).isEmpty();
 
-        // 검색 — 상품명 · 수령인 · 구매자(공개용 이름) · 송장번호 · 상품주문번호
+        // 검색 — 상품명, 수령인, 구매자(공개용 이름), 송장번호, 상품주문번호
         assertThat(query.list(STORE, null, "유기농", 0, 20).items().totalElements()).isEqualTo(2);
         assertThat(query.list(STORE, null, "이수령", 0, 20).items().content()).extracting(SellerOrderItemResponse::orderItemId)
                 .containsExactly(second.getId());
@@ -123,7 +123,7 @@ class SellerOrderQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("상세 — 스냅샷 · 배송지 · 공개용 구매자 이름, 남의 스토어 · 결제 전 · 없는 상품주문은 404, 스토어 없으면 403")
+    @DisplayName("상세 — 스냅샷, 배송지, 공개용 구매자 이름, 남의 스토어, 결제 전, 없는 상품주문은 404, 스토어 없으면 403")
     void get() {
         // given
         OrderItem paid = item(DETAIL_STORE, "유기농 사과", "김수령", true);

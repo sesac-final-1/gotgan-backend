@@ -19,7 +19,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
-/** store 스토어 상세 응답 매핑 · 요청 경로 · 오류 변환 (서킷 브레이커 · 재시도는 AOP 라 여기서 보지 않음) */
+/** store 스토어 상세 응답 매핑, 요청 경로, 오류 변환 (서킷 브레이커, 재시도는 AOP 라 여기서 보지 않음) */
 class StoreClientAdapterTest {
 
     private static final String BASE_URL = "http://store-service:8082";
@@ -35,7 +35,7 @@ class StoreClientAdapterTest {
     }
 
     @Test
-    @DisplayName("GET /internal/stores/{storeId} 의 status 를 읽는다 — 나머지 필드(스토어명 · 배송 정책)는 무시")
+    @DisplayName("GET /internal/stores/{storeId} 의 status 를 읽는다 — 나머지 필드(스토어명, 배송 정책)는 무시")
     void getStoreStatus_readsStatus() {
         server.expect(requestTo(BASE_URL + "/internal/stores/1")).andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("""
@@ -59,7 +59,7 @@ class StoreClientAdapterTest {
     }
 
     @Test
-    @DisplayName("폴백 — 장애 · 서킷 OPEN 은 502, 이미 바꾼 4xx 는 그대로")
+    @DisplayName("폴백 — 장애, 서킷 OPEN 은 502, 이미 바꾼 4xx 는 그대로")
     void fallback() {
         BusinessException rejected = new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "거절");
 

@@ -26,7 +26,7 @@ import software.amazon.awssdk.services.dynamodb.model.TransactWriteItemsRequest;
 import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 import software.amazon.awssdk.services.dynamodb.model.UpdateItemRequest;
 
-/** 알림함 DynamoDB 요청 모양 — 조건부 쓰기(멱등) · 최신순 조회 · 안 읽은 수(페이지 넘김) · 읽음 */
+/** 알림함 DynamoDB 요청 모양 — 조건부 쓰기(멱등), 최신순 조회, 안 읽은 수(페이지 넘김), 읽음 */
 @SuppressWarnings("unchecked")
 class InboxRepositoryTest {
 
@@ -35,9 +35,9 @@ class InboxRepositoryTest {
     private final InboxRepository repository = new InboxRepository(dynamo, "sesac-gojigi-inbox");
 
     @Test
-    @DisplayName("저장 — 표식(SRC#sourceId)과 알림을 한 트랜잭션으로 · 키 · 내용 · 안 읽음 · TTL 90일, 같은 sourceId 가 있으면(재전달 · 재시도) false")
+    @DisplayName("저장 — 표식(SRC#sourceId)과 알림을 한 트랜잭션으로, 키, 내용, 안 읽음, TTL 90일, 같은 sourceId 가 있으면(재전달, 재시도) false")
     void saveIfAbsent() {
-        NewNotification n = new NewNotification("USER#4", "e-1", "ORDER_PAID", "결제가 완료됐어요", "머그 · 28,000원", "/mypage/orders/N1", AT);
+        NewNotification n = new NewNotification("USER#4", "e-1", "ORDER_PAID", "결제가 완료됐어요", "머그, 28,000원", "/mypage/orders/N1", AT);
         ArgumentCaptor<Consumer<TransactWriteItemsRequest.Builder>> captor = ArgumentCaptor.forClass(Consumer.class);
 
         assertThat(repository.saveIfAbsent(n)).isTrue();
@@ -62,7 +62,7 @@ class InboxRepositoryTest {
     }
 
     @Test
-    @DisplayName("최신순 조회 — before 가 있으면 SK < before, 결과를 항목으로 (빈 본문 · 링크는 null)")
+    @DisplayName("최신순 조회 — before 가 있으면 SK < before, 결과를 항목으로 (빈 본문, 링크는 null)")
     void latest() {
         Map<String, AttributeValue> row = Map.of("PK", AttributeValue.fromS("STORE#1"), "SK", AttributeValue.fromS("1793062800000#e-2"),
                 "type", AttributeValue.fromS("SETTLEMENT_PAID"), "title", AttributeValue.fromS("정산금이 지급됐어요"),
@@ -90,7 +90,7 @@ class InboxRepositoryTest {
     }
 
     @Test
-    @DisplayName("안 읽은 수 · 키 — read = false 필터, 다음 페이지가 있으면 이어서")
+    @DisplayName("안 읽은 수, 키 — read = false 필터, 다음 페이지가 있으면 이어서")
     void unread_paginates() {
         given(dynamo.query(any(QueryRequest.class))).willReturn(
                 QueryResponse.builder().count(2).items(Map.of("SK", AttributeValue.fromS("a")), Map.of("SK", AttributeValue.fromS("b")))

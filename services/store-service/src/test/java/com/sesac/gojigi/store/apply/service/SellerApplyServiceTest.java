@@ -89,7 +89,7 @@ class SellerApplyServiceTest {
     }
 
     @Test
-    @DisplayName("정상 신청 — 심사대기 신청서 · 서류 6건 · 최초 이력을 저장하고 접수번호를 돌려준다")
+    @DisplayName("정상 신청 — 심사대기 신청서, 서류 6건, 최초 이력을 저장하고 접수번호를 돌려준다")
     void apply_validRequest_savesApplicationDocumentsAndHistory() {
         // given
         givenFilesUploaded();
@@ -159,7 +159,7 @@ class SellerApplyServiceTest {
         // given
         given(storeRepository.existsByUserId(USER_ID)).willReturn(true);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.apply(USER_ID, request(documents())))
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_STORE_ALREADY_EXISTS);
         verify(storeApplicationRepository, never()).save(any());
@@ -171,7 +171,7 @@ class SellerApplyServiceTest {
         // given
         given(storeApplicationRepository.existsByUserIdAndStatusIn(USER_ID, SellerApplyService.IN_PROGRESS)).willReturn(true);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.apply(USER_ID, request(documents())))
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_IN_PROGRESS);
     }
@@ -182,7 +182,7 @@ class SellerApplyServiceTest {
         // given — 10/1 반려 → 10/31 부터 가능
         givenRejectedAt(LocalDateTime.of(2026, 10, 1, 9, 0));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.apply(USER_ID, request(documents())))
                 .hasMessageContaining("2026-10-31")
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_REAPPLY_RESTRICTED);
@@ -209,18 +209,18 @@ class SellerApplyServiceTest {
         // given
         given(storeApplicationRepository.existsBySlugAndStatusIn("linen-lab", SellerApplyService.IN_PROGRESS)).willReturn(true);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.apply(USER_ID, request(documents())))
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_SLUG_DUPLICATED);
     }
 
     @Test
-    @DisplayName("스토어명은 공백 · 대소문자를 빼고 비교 — 겹치면 409 APPLY_STORE_NAME_DUPLICATED")
+    @DisplayName("스토어명은 공백, 대소문자를 빼고 비교 — 겹치면 409 APPLY_STORE_NAME_DUPLICATED")
     void apply_storeNameTaken_throwsStoreNameDuplicated() {
         // given — 요청 스토어명 "Linen Lab"
         given(storeRepository.existsByNormalizedStoreName("linenlab")).willReturn(true);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.apply(USER_ID, request(documents())))
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_STORE_NAME_DUPLICATED);
     }
@@ -232,7 +232,7 @@ class SellerApplyServiceTest {
         List<DocumentItem> documents = new ArrayList<>(documents());
         documents.removeLast();
 
-        // when · then
+        // when, then
         assertDocumentInvalid(documents, "3~10장");
         verify(sellerDocumentClient, never()).head(anyString());
     }
@@ -246,7 +246,7 @@ class SellerApplyServiceTest {
             documents.add(doc(DocType.PRODUCT_PHOTO, "photo" + i + ".jpg"));
         }
 
-        // when · then
+        // when, then
         assertDocumentInvalid(documents, "3~10장");
     }
 
@@ -257,7 +257,7 @@ class SellerApplyServiceTest {
         List<DocumentItem> documents = new ArrayList<>(documents());
         documents.removeFirst();
 
-        // when · then
+        // when, then
         assertDocumentInvalid(documents, "사업자등록증");
     }
 
@@ -268,7 +268,7 @@ class SellerApplyServiceTest {
         List<DocumentItem> documents = new ArrayList<>(documents());
         documents.set(0, new DocumentItem(DocType.BUSINESS_REG, "applications/5/stolen.pdf", "사업자등록증.pdf"));
 
-        // when · then
+        // when, then
         assertDocumentInvalid(documents, "사업자등록증");
     }
 
@@ -279,7 +279,7 @@ class SellerApplyServiceTest {
         List<DocumentItem> documents = new ArrayList<>(documents());
         documents.set(5, documents.get(4));
 
-        // when · then
+        // when, then
         assertDocumentInvalid(documents, "두 번");
     }
 
@@ -289,18 +289,18 @@ class SellerApplyServiceTest {
         // given
         given(sellerDocumentClient.head(anyString())).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertDocumentInvalid(documents(), "업로드되지 않았습니다");
     }
 
     @Test
-    @DisplayName("상품 사진이 PDF 면 400 APPLY_DOCUMENT_INVALID — 사진은 JPG · PNG 만")
+    @DisplayName("상품 사진이 PDF 면 400 APPLY_DOCUMENT_INVALID — 사진은 JPG, PNG 만")
     void apply_photoIsPdf_throwsDocumentInvalid() {
         // given
         given(sellerDocumentClient.head(anyString())).willReturn(Optional.of(PDF));
 
-        // when · then
-        assertDocumentInvalid(documents(), "JPG · PNG");
+        // when, then
+        assertDocumentInvalid(documents(), "JPG, PNG");
     }
 
     @Test
@@ -309,8 +309,8 @@ class SellerApplyServiceTest {
         // given
         given(sellerDocumentClient.head(anyString())).willReturn(Optional.of(new FileMeta("application/zip", 1000)));
 
-        // when · then
-        assertDocumentInvalid(documents(), "PDF · JPG · PNG");
+        // when, then
+        assertDocumentInvalid(documents(), "PDF, JPG, PNG");
     }
 
     @Test
@@ -319,7 +319,7 @@ class SellerApplyServiceTest {
         // given
         given(sellerDocumentClient.head(anyString())).willReturn(Optional.of(new FileMeta("application/pdf", 10L * 1024 * 1024 + 1)));
 
-        // when · then
+        // when, then
         assertDocumentInvalid(documents(), "10MB");
     }
 
@@ -330,7 +330,7 @@ class SellerApplyServiceTest {
         given(sellerDocumentClient.head(anyString()))
                 .willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.apply(USER_ID, request(documents())))
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
         verify(storeApplicationRepository, never()).save(any());
@@ -346,7 +346,7 @@ class SellerApplyServiceTest {
     // ── 보완 재제출 (2-3절) ──
 
     @Test
-    @DisplayName("재제출 — 요청 서류를 새 행으로 · 같은 종류 이전 서류는 이전 제출본으로, 보낸 항목만 고치고 심사대기 + 이력에 바뀐 것")
+    @DisplayName("재제출 — 요청 서류를 새 행으로, 같은 종류 이전 서류는 이전 제출본으로, 보낸 항목만 고치고 심사대기 + 이력에 바뀐 것")
     void resubmit_requestedDocsAndFields_savesPendingAndReplacesDocuments() {
         // given
         StoreApplication application = supplemented(List.of(DocType.ECOMMERCE_REG));
@@ -387,11 +387,11 @@ class SellerApplyServiceTest {
         assertThat(history.getValue().getFromStatus()).isEqualTo(ApplicationStatus.SUPPLEMENT);
         assertThat(history.getValue().getToStatus()).isEqualTo(ApplicationStatus.PENDING);
         assertThat(history.getValue().getActorType()).isEqualTo(ActorType.APPLICANT);
-        assertThat(history.getValue().getReason()).isEqualTo("재제출 — 서류: 통신판매업 신고증 / 수정: 상호 · 정산 계좌");
+        assertThat(history.getValue().getReason()).isEqualTo("재제출 — 서류: 통신판매업 신고증 / 수정: 상호, 정산 계좌");
     }
 
     @Test
-    @DisplayName("내용 보완(요청 서류 []) — 서류 없이 항목만 고쳐 재제출, 서류 · S3 는 건드리지 않는다")
+    @DisplayName("내용 보완(요청 서류 []) — 서류 없이 항목만 고쳐 재제출, 서류, S3 는 건드리지 않는다")
     void resubmit_contentOnly_savesWithoutDocuments() {
         // given
         StoreApplication application = supplemented(List.of());
@@ -412,9 +412,9 @@ class SellerApplyServiceTest {
     }
 
     @Test
-    @DisplayName("재제출 — 월 예상 매출 · 운영 채널도 고친 값으로 저장하고(채널은 앞뒤 공백 제거) 이력에 남긴다")
+    @DisplayName("재제출 — 월 예상 매출, 운영 채널도 고친 값으로 저장하고(채널은 앞뒤 공백 제거) 이력에 남긴다")
     void resubmit_salesFields_savesAndRecordsChange() {
-        // given — 신청 때 월 예상 매출 FROM_5M_TO_20M · 운영 채널 스마트스토어
+        // given — 신청 때 월 예상 매출 FROM_5M_TO_20M, 운영 채널 스마트스토어
         StoreApplication application = supplemented(List.of());
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
         ApplicationResubmitRequest request = new ApplicationResubmitRequest(null, null, null, null, null, null, null, null, null, null, null,
@@ -428,11 +428,11 @@ class SellerApplyServiceTest {
         assertThat(application.getSalesChannel()).isEqualTo("https://instagram.com/gotgan.store");
         ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
         verify(applicationHistoryRepository).save(history.capture());
-        assertThat(history.getValue().getReason()).isEqualTo("재제출 — 수정: 월 예상 매출 · 운영 채널");
+        assertThat(history.getValue().getReason()).isEqualTo("재제출 — 수정: 월 예상 매출, 운영 채널");
     }
 
     @Test
-    @DisplayName("재제출 — 월 예상 매출 · 운영 채널을 보내지 않으면 신청 때 값 그대로")
+    @DisplayName("재제출 — 월 예상 매출, 운영 채널을 보내지 않으면 신청 때 값 그대로")
     void resubmit_salesFieldsOmitted_keepsCurrent() {
         // given
         StoreApplication application = supplemented(List.of());
@@ -450,13 +450,13 @@ class SellerApplyServiceTest {
     }
 
     @Test
-    @DisplayName("남의 신청 · 없는 신청은 404 APPLY_NOT_FOUND")
+    @DisplayName("남의 신청, 없는 신청은 404 APPLY_NOT_FOUND")
     void resubmit_otherUsersOrMissing_throwsNotFound() {
         // given
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplemented(List.of())));
         given(storeApplicationRepository.findById(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.resubmit(5L, 27L, emptyResubmit()))
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_NOT_FOUND);
         assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 99L, emptyResubmit()))
@@ -473,7 +473,7 @@ class SellerApplyServiceTest {
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(pending));
         given(storeApplicationRepository.findById(28L)).willReturn(Optional.of(expired));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 27L, emptyResubmit()))
                 .hasMessageContaining("보완요청 중인 신청만")
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_INVALID_STATUS);
@@ -484,12 +484,12 @@ class SellerApplyServiceTest {
     }
 
     @Test
-    @DisplayName("서류 구성 — 요청 서류 빠짐 · 요청 밖 종류 · 사진 2장 · 남의 키는 400 APPLY_DOCUMENT_INVALID")
+    @DisplayName("서류 구성 — 요청 서류 빠짐, 요청 밖 종류, 사진 2장, 남의 키는 400 APPLY_DOCUMENT_INVALID")
     void resubmit_invalidDocuments_throwsDocumentInvalid() {
         // given
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplemented(List.of(DocType.PRODUCT_PHOTO))));
 
-        // when · then
+        // when, then
         assertResubmitInvalid(List.of(), "대표 상품 사진을 다시 올려 주세요");
         assertResubmitInvalid(List.of(doc(DocType.PRODUCT_PHOTO, "p1.jpg"), doc(DocType.PRODUCT_PHOTO, "p2.jpg"),
                 doc(DocType.PRODUCT_PHOTO, "p3.jpg"), doc(DocType.BANK_COPY, "bank.pdf")), "보완 요청받지 않은 서류입니다: 통장 사본");
@@ -518,14 +518,14 @@ class SellerApplyServiceTest {
     }
 
     @Test
-    @DisplayName("저장 순간 자동 반려 · 관리자 처리가 먼저 끝났으면(@Version) 409 — 서류 · 이력은 저장 안 함")
+    @DisplayName("저장 순간 자동 반려, 관리자 처리가 먼저 끝났으면(@Version) 409 — 서류, 이력은 저장 안 함")
     void resubmit_concurrentDecision_throwsInvalidStatus() {
         // given
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplemented(List.of())));
         given(storeApplicationRepository.saveAndFlush(any(StoreApplication.class)))
                 .willThrow(new ObjectOptimisticLockingFailureException(StoreApplication.class, 27L));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 27L, emptyResubmit()))
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_INVALID_STATUS);
         verify(applicationHistoryRepository, never()).save(any());
@@ -539,7 +539,7 @@ class SellerApplyServiceTest {
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
         List<DocumentItem> ecommerceOnly = List.of(doc(DocType.ECOMMERCE_REG, "ecom2.pdf"));
 
-        // when · then — 사업자등록증 없이 번호만 고침
+        // when, then — 사업자등록증 없이 번호만 고침
         assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 27L,
                 resubmitBusiness(null, null, "000-00-00100", ecommerceOnly)))
                 .hasMessageContaining("사업자등록증도 다시 올려 주세요")
@@ -558,7 +558,7 @@ class SellerApplyServiceTest {
         ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
         verify(applicationHistoryRepository).save(history.capture());
         assertThat(history.getValue().getReason())
-                .isEqualTo("재제출 — 서류: 통신판매업 신고증 · 사업자등록증 / 수정: 사업자 구분 · 대표자 · 사업자등록번호");
+                .isEqualTo("재제출 — 서류: 통신판매업 신고증, 사업자등록증 / 수정: 사업자 구분, 대표자, 사업자등록번호");
     }
 
     @Test
@@ -579,7 +579,7 @@ class SellerApplyServiceTest {
     }
 
     @Test
-    @DisplayName("스토어명 · 주소 변경 — 스토어 · 자기를 뺀 진행 중 신청과 겹치면 409, 안 겹치면 저장하고 이력에 남김")
+    @DisplayName("스토어명, 주소 변경 — 스토어, 자기를 뺀 진행 중 신청과 겹치면 409, 안 겹치면 저장하고 이력에 남김")
     void resubmit_renameStore_checksDuplicatesExcludingSelf() {
         // given — 승인 때 이름이 겹쳐 보완요청된 신청(스펙 STR-04)
         StoreApplication application = supplemented(List.of());
@@ -588,13 +588,13 @@ class SellerApplyServiceTest {
         given(storeApplicationRepository.existsByNormalizedStoreNameAndStatusInAndIdNot("다른가게", SellerApplyService.IN_PROGRESS, 27L))
                 .willReturn(true);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 27L, resubmitStore(null, "taken")))
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_SLUG_DUPLICATED);
         assertThatThrownBy(() -> sellerApplyService.resubmit(USER_ID, 27L, resubmitStore("다른 가게", null)))
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_STORE_NAME_DUPLICATED);
 
-        // when — 겹치지 않는 새 이름 · 주소
+        // when — 겹치지 않는 새 이름, 주소
         sellerApplyService.resubmit(USER_ID, 27L, resubmitStore(" 리넨랩 성수 ", "linen-lab-seongsu"));
 
         // then
@@ -603,11 +603,11 @@ class SellerApplyServiceTest {
         then(storeApplicationRepository).should().existsBySlugAndStatusInAndIdNot("linen-lab-seongsu", SellerApplyService.IN_PROGRESS, 27L);
         ArgumentCaptor<ApplicationHistory> history = ArgumentCaptor.forClass(ApplicationHistory.class);
         verify(applicationHistoryRepository).save(history.capture());
-        assertThat(history.getValue().getReason()).isEqualTo("재제출 — 수정: 스토어명 · 스토어 주소");
+        assertThat(history.getValue().getReason()).isEqualTo("재제출 — 수정: 스토어명, 스토어 주소");
     }
 
     @Test
-    @DisplayName("스토어명 · 주소를 지금 값 그대로 보내면 중복 검사를 하지 않는다(자기 이름과 겹쳐 막히지 않게)")
+    @DisplayName("스토어명, 주소를 지금 값 그대로 보내면 중복 검사를 하지 않는다(자기 이름과 겹쳐 막히지 않게)")
     void resubmit_sameStoreIdentity_skipsDuplicateCheck() {
         // given
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplemented(List.of())));
@@ -621,10 +621,10 @@ class SellerApplyServiceTest {
     }
 
     @Test
-    @DisplayName("이력 사유 — 서류만 · 수정만 · 둘 다 · 아무것도 없음")
+    @DisplayName("이력 사유 — 서류만, 수정만, 둘 다, 아무것도 없음")
     void resubmitSummary_formats() {
         assertThat(SellerApplyService.resubmitSummary(List.of(DocType.BUSINESS_REG, DocType.PRODUCT_PHOTO), List.of()))
-                .isEqualTo("재제출 — 서류: 사업자등록증 · 대표 상품 사진");
+                .isEqualTo("재제출 — 서류: 사업자등록증, 대표 상품 사진");
         assertThat(SellerApplyService.resubmitSummary(List.of(), List.of("상호"))).isEqualTo("재제출 — 수정: 상호");
         assertThat(SellerApplyService.resubmitSummary(List.of(), List.of())).isEqualTo("재제출");
     }
@@ -635,7 +635,7 @@ class SellerApplyServiceTest {
                 .extracting("errorCode").isEqualTo(ApplyErrorCode.APPLY_DOCUMENT_INVALID);
     }
 
-    /** 이 테스트 파일의 신청 본문(request)으로 만든 심사대기 신청 — id 27 · 신청자 4 */
+    /** 이 테스트 파일의 신청 본문(request)으로 만든 심사대기 신청 — id 27, 신청자 4 */
     private static StoreApplication application() {
         SellerApplyRequest r = request(documents());
         StoreApplication application = StoreApplication.builder().userId(USER_ID).categoryId(r.categoryId()).bizType(r.bizType())

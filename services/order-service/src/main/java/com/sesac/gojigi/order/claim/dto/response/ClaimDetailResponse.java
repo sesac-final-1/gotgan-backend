@@ -10,8 +10,8 @@ import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import java.time.LocalDateTime;
 
 /**
- * 클레임 1건 (내 클레임 내역 · 판매자 클레임 처리 CLM-05) — 상품은 주문 때 스냅샷.
- * refundAmt · restorePoint: 환불(예정)액 · 돌려줄 포인트, 교환이면 0. courier · trackingNo: 교환은 재배송 송장(등록 후).
+ * 클레임 1건 (내 클레임 내역, 판매자 클레임 처리 CLM-05) — 상품은 주문 때 스냅샷.
+ * refundAmt, restorePoint: 환불(예정)액, 돌려줄 포인트, 교환이면 0. courier, trackingNo: 교환은 재배송 송장(등록 후).
  * buyerName 은 공개용 이름(닉네임 또는 가운데 마스킹 실명).
  */
 public record ClaimDetailResponse(Long claimId, ClaimType type, ClaimStatus status, ClaimReasonCode reasonCode,

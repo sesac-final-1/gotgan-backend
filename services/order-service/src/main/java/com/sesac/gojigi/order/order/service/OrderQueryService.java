@@ -52,7 +52,7 @@ public class OrderQueryService {
     }
 
     /**
-     * 내 주문 상세 — 없는 주문번호 · 다른 회원의 주문은 같은 404.
+     * 내 주문 상세 — 없는 주문번호, 다른 회원의 주문은 같은 404.
      * payment 를 부르므로 트랜잭션을 걸지 않는다(원격 호출은 트랜잭션 밖) — 조회 두 번은 각각 짧은 읽기.
      */
     public OrderDetailResponse getMyOrder(Long buyerId, String orderNo) {

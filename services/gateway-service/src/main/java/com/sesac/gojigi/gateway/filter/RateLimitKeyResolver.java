@@ -14,7 +14,7 @@ import reactor.core.publisher.Mono;
  * - 비로그인 + 직접(api.gotgan.click): 공용 키 direct
  * X-Forwarded-For 는 쓰지 않는다 — Vercel 을 거쳐도 클라이언트가 보낸 값이 그대로 전달된다(11/02 캡처 확인).
  * 연결 주소도 쓰지 않는다 — NLB(TLS 종료, preserve_client_ip=false) 뒤라 NLB 내부 IP 2개뿐이다.
- * 직접 들어오는 비로그인 정상 요청은 제한을 붙인 라우트에 없어서(Keycloak · 웹훅 · 채팅 WS 는 제외, SSE 는 토큰 있음) 한 키로 묶어도 정상 사용자는 막히지 않는다.
+ * 직접 들어오는 비로그인 정상 요청은 제한을 붙인 라우트에 없어서(Keycloak, 웹훅, 채팅 WS 는 제외, SSE 는 토큰 있음) 한 키로 묶어도 정상 사용자는 막히지 않는다.
  * 남는 구멍: 직접 호출에 X-Vercel-Forwarded-For 를 지어내 넣으면 구분할 수 없다 — 2차로 Vercel 비밀 헤더(노션 gateway-service 정리).
  */
 @Component
@@ -23,7 +23,7 @@ public class RateLimitKeyResolver implements KeyResolver {
     static final String VERCEL_FORWARDED_FOR = "X-Vercel-Forwarded-For";
     static final String DIRECT = "direct";
 
-    /** IPv4 · IPv6 문자만, 최대 45자(IPv6 최대 길이) — 지어낸 긴 값으로 Redis 키를 늘리지 못하게 */
+    /** IPv4, IPv6 문자만, 최대 45자(IPv6 최대 길이) — 지어낸 긴 값으로 Redis 키를 늘리지 못하게 */
     private static final Pattern IP = Pattern.compile("[0-9A-Fa-f:.]{2,45}");
 
     @Override

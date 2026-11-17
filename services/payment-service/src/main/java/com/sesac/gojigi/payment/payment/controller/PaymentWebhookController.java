@@ -34,7 +34,7 @@ public class PaymentWebhookController {
         }
     }
 
-    @Operation(summary = "포트원 웹훅 수신", description = "서명 실패 400 PAYMENT_WEBHOOK_INVALID_SIGNATURE. 모르는 type · paymentId 는 200 무시")
+    @Operation(summary = "포트원 웹훅 수신", description = "서명 실패 400 PAYMENT_WEBHOOK_INVALID_SIGNATURE. 모르는 type, paymentId 는 200 무시")
     @PostMapping
     public ApiResponse<Void> receive(
             @RequestHeader(name = "webhook-id", required = false) String webhookId,

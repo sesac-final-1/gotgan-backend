@@ -19,10 +19,10 @@ import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
 import software.amazon.awssdk.services.dynamodb.model.TransactionCanceledException;
 
 /**
- * 알림함 (DynamoDB sesac-gojigi-inbox) — PK 받는 쪽 · SK {epoch ms 13자리}#{sourceId}, TTL 90일.
+ * 알림함 (DynamoDB sesac-gojigi-inbox) — PK 받는 쪽, SK {epoch ms 13자리}#{sourceId}, TTL 90일.
  * 같은 알림 판별은 표식 행 SK `SRC#{sourceId}` 로 — 내부 API 알림은 저장 시각이 매번 달라 SK 만으로는 중복을 못 막는다(10/29).
  * 목록 조회는 SK 가 숫자로 시작하는 범위(&lt; "A")만 읽어 표식 행이 섞이지 않는다.
- * 받는 쪽이 몇 개(회원 · 스토어 · 관리자)뿐이라 받는 쪽마다 Query 하고 화면 쪽에서 합친다.
+ * 받는 쪽이 몇 개(회원, 스토어, 관리자)뿐이라 받는 쪽마다 Query 하고 화면 쪽에서 합친다.
  */
 @Repository
 public class InboxRepository {
@@ -46,7 +46,7 @@ public class InboxRepository {
     public record Item(String recipient, String sortKey, String type, String title, String body, String link, boolean read, Instant createdAt) {
     }
 
-    /** 새 알림이면 true — 같은 받는 쪽 · 같은 sourceId(이벤트 재전달 · 내부 API 재시도)는 쓰지 않고 false (읽음 상태 유지) */
+    /** 새 알림이면 true — 같은 받는 쪽, 같은 sourceId(이벤트 재전달, 내부 API 재시도)는 쓰지 않고 false (읽음 상태 유지) */
     public boolean saveIfAbsent(NewNotification n) {
         Map<String, AttributeValue> item = new HashMap<>();
         item.put("PK", s(n.recipient()));

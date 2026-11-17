@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  공통 logback 설정을 include 만 한다 — 형식 · Loki 전송은 libs/common-logging 의 logback-base.xml 한 벌 (관측성 담당 박지연).
-  바꾸려면 모듈 파일을 고친다(10개 서비스 함께 적용). APP 은 Loki app 라벨 · 콘솔 [app] 에 쓰인다.
+  공통 logback 설정을 include 만 한다 — 형식, Loki 전송은 libs/common-logging 의 logback-base.xml 한 벌 (관측성 담당 박지연).
+  바꾸려면 모듈 파일을 고친다(10개 서비스 함께 적용). APP 은 Loki app 라벨, 콘솔 [app] 에 쓰인다.
 -->
 <configuration>
     <springProperty scope="context" name="APP" source="spring.application.name" defaultValue="chat-service"/>

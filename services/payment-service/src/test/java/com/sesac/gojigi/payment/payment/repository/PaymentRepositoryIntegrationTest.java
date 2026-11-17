@@ -28,12 +28,12 @@ class PaymentRepositoryIntegrationTest {
     private PaymentCancelRepository paymentCancelRepository;
 
     @Test
-    @DisplayName("결제는 orderNo · 포트원 paymentId 로 찾고, 같은 orderNo 두 번째 저장은 유니크 제약이 막는다")
+    @DisplayName("결제는 orderNo, 포트원 paymentId 로 찾고, 같은 orderNo 두 번째 저장은 유니크 제약이 막는다")
     void findByOrderNo_andUniqueOrderNo() {
         // given
         paymentRepository.saveAndFlush(Payment.ready(1L, "20261021-000123", 64_400L));
 
-        // when · then
+        // when, then
         assertThat(paymentRepository.findByOrderNo("20261021-000123")).isPresent();
         assertThat(paymentRepository.findByPortonePaymentId("pay-20261021-000123")).isPresent();
         assertThatThrownBy(() -> paymentRepository.saveAndFlush(Payment.ready(2L, "20261021-000123", 1_000L)))
@@ -49,7 +49,7 @@ class PaymentRepositoryIntegrationTest {
         paymentCancelRepository.saveAndFlush(PaymentCancel.pending(payment, null, null, 1_000L, 64_400L, "자동 취소"));
         paymentCancelRepository.saveAndFlush(PaymentCancel.pending(payment, null, null, 1_000L, 64_400L, "자동 취소"));
 
-        // when · then
+        // when, then
         assertThat(paymentCancelRepository.findBySagaId("saga-1")).isPresent();
         assertThatThrownBy(() -> paymentCancelRepository.saveAndFlush(
                 PaymentCancel.pending(payment, 10L, "saga-1", 1_000L, 64_400L, "구매자 취소")))

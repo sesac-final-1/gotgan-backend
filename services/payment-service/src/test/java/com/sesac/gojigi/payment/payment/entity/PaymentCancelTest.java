@@ -17,7 +17,7 @@ class PaymentCancelTest {
     }
 
     @Test
-    @DisplayName("선기록은 PENDING · 직전 잔액 보관, 확정 전에는 포트원 취소 id · 완료 시각이 없다")
+    @DisplayName("선기록은 PENDING, 직전 잔액 보관, 확정 전에는 포트원 취소 id, 완료 시각이 없다")
     void pending_initialState() {
         PaymentCancel cancel = pending();
 
@@ -44,7 +44,7 @@ class PaymentCancelTest {
     }
 
     @Test
-    @DisplayName("확정된 취소를 다시 확정 · 실패 · 미확정 처리하면 예외 — 이중 반영을 막는다")
+    @DisplayName("확정된 취소를 다시 확정, 실패, 미확정 처리하면 예외 — 이중 반영을 막는다")
     void finalizedCancel_rejectsTransitions() {
         PaymentCancel cancel = pending();
         cancel.succeed("c-1", NOW);

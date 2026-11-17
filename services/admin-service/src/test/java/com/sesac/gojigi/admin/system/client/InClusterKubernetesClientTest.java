@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.web.client.RestClient;
 
-/** 쿠버네티스 REST 호출 — 가짜 API 서버(JDK HttpServer)로 경로 · Bearer 토큰 · 응답 해석 · 실패 → 503 확인 */
+/** 쿠버네티스 REST 호출 — 가짜 API 서버(JDK HttpServer)로 경로, Bearer 토큰, 응답 해석, 실패 → 503 확인 */
 class InClusterKubernetesClientTest {
 
     private static final String NS = "/namespaces/sesac-gojigi";
@@ -120,14 +120,14 @@ class InClusterKubernetesClientTest {
     }
 
     @Test
-    @DisplayName("원하는 레플리카 — Deployment · StatefulSet 이름별, replicas 가 없으면 1")
+    @DisplayName("원하는 레플리카 — Deployment, StatefulSet 이름별, replicas 가 없으면 1")
     void desiredReplicas() throws IOException {
         writeToken();
         assertThat(client().desiredReplicas()).containsEntry("order-service", 2).containsEntry("keycloak", 1).containsEntry("mysql", 1);
     }
 
     @Test
-    @DisplayName("파드 — app 라벨 선택 · Ready 조건 · 재시작 합계 · 지워지는 중 · 노드 없음")
+    @DisplayName("파드 — app 라벨 선택, Ready 조건, 재시작 합계, 지워지는 중, 노드 없음")
     void pods() throws IOException {
         writeToken();
         List<Pod> pods = client().pods();
@@ -150,7 +150,7 @@ class InClusterKubernetesClientTest {
     }
 
     @Test
-    @DisplayName("부하테스트 Job 목록 — 라벨 선택 · 라벨 · 어노테이션 · 상태 해석, 생성 시각이 없으면 null")
+    @DisplayName("부하테스트 Job 목록 — 라벨 선택, 라벨, 어노테이션, 상태 해석, 생성 시각이 없으면 null")
     void loadJobs() throws IOException {
         writeToken();
         List<LoadJob> jobs = client().loadJobs();
@@ -208,7 +208,7 @@ class InClusterKubernetesClientTest {
     }
 
     @Test
-    @DisplayName("ca.crt 가 있으면 그 CA 로 SSLContext 를 만든다 · 깨진 파일이면 기동 실패")
+    @DisplayName("ca.crt 가 있으면 그 CA 로 SSLContext 를 만든다, 깨진 파일이면 기동 실패")
     void caCertificate() throws IOException {
         try (InputStream in = getClass().getResourceAsStream("/system/test-ca.crt")) {
             Files.write(saDir.resolve("ca.crt"), in.readAllBytes());

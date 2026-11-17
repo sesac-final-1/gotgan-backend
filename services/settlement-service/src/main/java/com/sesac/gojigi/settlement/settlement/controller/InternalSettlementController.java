@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
  * admin-service 전용 정산 내부 API — /internal/** 는 게이트웨이 라우트가 없어 외부에서 닿지 않는다.
  * ADMIN 확인은 게이트웨이(/api/admin/** hasRole ADMIN)가 하고, admin-service 가 이 API 를 부른다 (가이드라인 08장).
  */
-@Tag(name = "정산 (내부)", description = "admin-service · store(대시보드) 가 호출 — 인가: 내부")
+@Tag(name = "정산 (내부)", description = "admin-service, store(대시보드) 가 호출 — 인가: 내부")
 @RestController
 @RequiredArgsConstructor
 public class InternalSettlementController {
@@ -60,14 +60,14 @@ public class InternalSettlementController {
         return ApiResponse.success("정산 목록을 조회했습니다.", settlementQueryService.list(week(week), storeId, status));
     }
 
-    @Operation(summary = "스토어 최근 정산서", description = "관리자 스토어 상세 — storeId 의 최근 weeks(1~12, 기본 8)주 정산서, 이번 주 포함 · 최신 주차 먼저 + 합계")
+    @Operation(summary = "스토어 최근 정산서", description = "관리자 스토어 상세 — storeId 의 최근 weeks(1~12, 기본 8)주 정산서, 이번 주 포함, 최신 주차 먼저 + 합계")
     @GetMapping("/internal/settlements/recent")
     public ApiResponse<StoreRecentSettlementsResponse> recent(@RequestParam Long storeId,
             @RequestParam(defaultValue = "8") @Min(1) @Max(12) int weeks) {
         return ApiResponse.success("스토어 정산 이력을 조회했습니다.", settlementQueryService.recentForStore(storeId, weeks));
     }
 
-    @Operation(summary = "정산 상세", description = "건별 상품주문 · 수수료율 · 지급 계좌 · 상태 이력")
+    @Operation(summary = "정산 상세", description = "건별 상품주문, 수수료율, 지급 계좌, 상태 이력")
     @GetMapping("/internal/settlements/{id}")
     public ApiResponse<SettlementDetailResponse> detail(@PathVariable Long id) {
         return ApiResponse.success("정산 상세를 조회했습니다.", settlementQueryService.detail(id));
@@ -80,18 +80,18 @@ public class InternalSettlementController {
             return ApiResponse.success("정산을 집계했습니다.",
                     settlementCommandService.aggregate(week(request == null ? null : request.week()), Actor.ADMIN));
         } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
-            // 동시 집계 — 스토어 × 주차 UK · 잠금 충돌. 집계는 멱등이라 다시 누르면 된다(B-구-11)
+            // 동시 집계 — 스토어 × 주차 UK, 잠금 충돌. 집계는 멱등이라 다시 누르면 된다(B-구-11)
             throw new SettlementException(SettlementErrorCode.SETTLE_AGGREGATE_CONFLICT);
         }
     }
 
-    @Operation(summary = "지급 실행 (단건 · 일괄)", description = "지급예정 · 스토어 운영중 · 계좌 있음만 지급, 건마다 결과. 지급 후 SettlementPaid 발행")
+    @Operation(summary = "지급 실행 (단건, 일괄)", description = "지급예정, 스토어 운영중, 계좌 있음만 지급, 건마다 결과. 지급 후 SettlementPaid 발행")
     @PostMapping("/internal/settlements/pay")
     public ApiResponse<PayResultResponse> pay(@Valid @RequestBody PayRequest request) {
         return ApiResponse.success("지급을 실행했습니다.", settlementPayService.pay(request.ids()));
     }
 
-    @Operation(summary = "지급 보류 · 해제", description = "hold=true 면 reason 필수. 지급완료는 409")
+    @Operation(summary = "지급 보류, 해제", description = "hold=true 면 reason 필수. 지급완료는 409")
     @PatchMapping("/internal/settlements/{id}/hold")
     public ApiResponse<SettlementDetailResponse> hold(@PathVariable Long id, @Valid @RequestBody HoldRequest request) {
         settlementCommandService.hold(id, request.hold(), request.reason());
@@ -104,7 +104,7 @@ public class InternalSettlementController {
         return ApiResponse.success("정산 통계를 조회했습니다.", settlementQueryService.stats(storeId));
     }
 
-    @Operation(summary = "스토어 미정산 현황", description = "스토어 폐점 · 판매자 탈퇴 전 확인 — 집계 전 구매확정 · 지급예정 · 보류 정산이 모두 0 이면 clear=true")
+    @Operation(summary = "스토어 미정산 현황", description = "스토어 폐점, 판매자 탈퇴 전 확인 — 집계 전 구매확정, 지급예정, 보류 정산이 모두 0 이면 clear=true")
     @GetMapping("/internal/settlements/outstanding")
     public ApiResponse<SettlementOutstandingResponse> outstanding(@RequestParam Long storeId) {
         return ApiResponse.success("미정산 현황을 조회했습니다.", settlementQueryService.outstanding(storeId));

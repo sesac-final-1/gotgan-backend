@@ -21,9 +21,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 회원 프로필 · 포인트 잔액 · 등급 — 테이블 users (MySQL 키워드 user 회피, 컨벤션 3-1 예외).
- * 계정(이메일 · 비밀번호 · 역할)의 주인은 Keycloak 이고, 이 엔티티는 keycloak_id 로 연결만 한다.
- * point_balance · total_confirmed_amt 는 동시 변경 경합이 있어 엔티티 메서드가 아니라 조건부 UPDATE(UserRepository)로만 바꾼다.
+ * 회원 프로필, 포인트 잔액, 등급 — 테이블 users (MySQL 키워드 user 회피, 컨벤션 3-1 예외).
+ * 계정(이메일, 비밀번호, 역할)의 주인은 Keycloak 이고, 이 엔티티는 keycloak_id 로 연결만 한다.
+ * point_balance, total_confirmed_amt 는 동시 변경 경합이 있어 엔티티 메서드가 아니라 조건부 UPDATE(UserRepository)로만 바꾼다.
  */
 @Getter
 @Entity
@@ -134,7 +134,7 @@ public class User extends BaseTimeEntity {
     }
 
     /**
-     * 관리자 이용정지 — 사유 필수. Keycloak enabled=false · 세션 종료 동기화는 서비스 계층(UserStatusService)
+     * 관리자 이용정지 — 사유 필수. Keycloak enabled=false, 세션 종료 동기화는 서비스 계층(UserStatusService)
      * @param suspendedUntil 정지 종료 시각, null 이면 영구 정지
      */
     public void suspend(String reason, LocalDateTime suspendedAt, LocalDateTime suspendedUntil) {
@@ -148,7 +148,7 @@ public class User extends BaseTimeEntity {
         this.suspendedUntil = suspendedUntil;
     }
 
-    /** 정지 해제 (관리자 · 기간 만료) — 사유 필수 */
+    /** 정지 해제 (관리자, 기간 만료) — 사유 필수 */
     public void activate(String reason) {
         requireReason(reason);
         if (status != UserStatus.SUSPENDED) {
@@ -160,7 +160,7 @@ public class User extends BaseTimeEntity {
         this.suspendedUntil = null;
     }
 
-    /** 기간 정지가 끝났는지 — 영구 정지 · 정지 아님은 false */
+    /** 기간 정지가 끝났는지 — 영구 정지, 정지 아님은 false */
     public boolean isSuspensionExpired(LocalDateTime now) {
         return status == UserStatus.SUSPENDED && suspendedUntil != null && !suspendedUntil.isAfter(now);
     }

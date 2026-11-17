@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 커밋된 일만 구독자에게 — 새 메시지(+ 대화 메시지면 알림) · 읽음 · 상태 (chat.md 6 · 7절) */
+/** 커밋된 일만 구독자에게 — 새 메시지(+ 대화 메시지면 알림), 읽음, 상태 (chat.md 6, 7절) */
 @Component
 @RequiredArgsConstructor
 public class ChatRealtimeListener {

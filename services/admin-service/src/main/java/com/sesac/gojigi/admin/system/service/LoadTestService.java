@@ -39,7 +39,7 @@ import org.springframework.stereotype.Service;
 /**
  * 관리자 화면 부하테스트(11/16) — k6 Job 을 만들어 클러스터 안 게이트웨이로 부하를 보낸다.
  * k6 는 지표를 Prometheus 로 push(remote write, 1초)하고, 그래프는 testid 태그로 범위 조회한다.
- * 실행 중 사용자 수는 k6 REST API(externally-controlled)로 바꾼다. 관리자 파드가 1개라 시작 · 계정 준비는 synchronized
+ * 실행 중 사용자 수는 k6 REST API(externally-controlled)로 바꾼다. 관리자 파드가 1개라 시작, 계정 준비는 synchronized
  */
 @Slf4j
 @Service
@@ -50,7 +50,7 @@ public class LoadTestService {
     static final Duration DONE_WINDOW = Duration.ofMinutes(15);
     /** 그래프 점 간격 — k6 가 1초마다 push 해서 시연에서 바로 반응하게(11/16 피드백) */
     static final Duration STEP = Duration.ofSeconds(1);
-    /** rate 구간 — 1초 push 기준 5개 점. 짧을수록 장애 · 복구가 빨리 보인다 */
+    /** rate 구간 — 1초 push 기준 5개 점. 짧을수록 장애, 복구가 빨리 보인다 */
     static final String RATE_WINDOW = "[5s]";
     static final int ACCOUNT_COUNT = 300;
     static final String KIND_LOAD = "load";
@@ -146,7 +146,7 @@ public class LoadTestService {
         return new Result(requests, failed, byStatus, p95, Math.round(requests * 10.0 / elapsed) / 10.0, peak, elapsed, top, serverErrors);
     }
 
-    /** 시작 — 꺼짐 403, 이미 실행 중(부하 · 계정 준비 포함) 409 */
+    /** 시작 — 꺼짐 403, 이미 실행 중(부하, 계정 준비 포함) 409 */
     public synchronized LoadTestResponses.Started start(LoadTestRequests.Start request) {
         requireEnabled();
         requireIdle();
@@ -161,7 +161,7 @@ public class LoadTestService {
         return new LoadTestResponses.Started(id);
     }
 
-    /** 계정 준비 — 부하용 계정 300개 가입(이미 있으면 그대로). 장바구니 · 혼합 시나리오 전에 하루 한 번 */
+    /** 계정 준비 — 부하용 계정 300개 가입(이미 있으면 그대로). 장바구니, 혼합 시나리오 전에 하루 한 번 */
     public synchronized LoadTestResponses.Started prepareAccounts() {
         requireEnabled();
         requireIdle();
@@ -202,7 +202,7 @@ public class LoadTestService {
         }
     }
 
-    /** Job 이름 · 라벨 값 — 소문자 · 숫자 · 하이픈만(쿠버네티스 규칙) */
+    /** Job 이름, 라벨 값 — 소문자, 숫자, 하이픈만(쿠버네티스 규칙) */
     private String newId() {
         return "lt-" + clock.instant().getEpochSecond();
     }
@@ -244,7 +244,7 @@ public class LoadTestService {
     }
 
     /**
-     * k6 Job — 앱 노드, 파드 라벨 tier=backend(NetworkPolicy: 게이트웨이 · admin 과 통신). app 라벨은 붙이지 않는다(상태 화면 집계 제외).
+     * k6 Job — 앱 노드, 파드 라벨 tier=backend(NetworkPolicy: 게이트웨이, admin 과 통신). app 라벨은 붙이지 않는다(상태 화면 집계 제외).
      * 비밀번호는 loadtest-secret(없어도 시작 — 로그인 시나리오만 실패). 끝나면 5분 뒤 자동 삭제, 최대 시간 + 2분이 지나면 강제 종료
      */
     Map<String, Object> job(String id, String kind, String script, String scenario, int vus, int durationSec, Map<String, String> extraEnv) {

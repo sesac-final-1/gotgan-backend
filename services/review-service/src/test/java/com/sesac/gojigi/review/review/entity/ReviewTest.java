@@ -24,11 +24,11 @@ class ReviewTest {
     }
 
     @Nested
-    @DisplayName("작성 · 수정")
+    @DisplayName("작성, 수정")
     class WriteAndEdit {
 
         @Test
-        @DisplayName("작성하면 상품주문 · 작성자 · 상품 · 스토어 · 표시 이름을 작성 자격에서 복사한다")
+        @DisplayName("작성하면 상품주문, 작성자, 상품, 스토어, 표시 이름을 작성 자격에서 복사한다")
         void write_copiesSnapshotFromEligibility() {
             // given
             ReviewEligibility eligibility = eligibility();
@@ -51,7 +51,7 @@ class ReviewTest {
         }
 
         @Test
-        @DisplayName("본인 수정은 별점 · 한줄 요약 · 본문 · 사이즈 체감을 바꾼다")
+        @DisplayName("본인 수정은 별점, 한줄 요약, 본문, 사이즈 체감을 바꾼다")
         void edit_changesFields() {
             // given
             Review review = review();
@@ -93,41 +93,41 @@ class ReviewTest {
     class Blind {
 
         @Test
-        @DisplayName("블라인드하면 사유 · 시각이 저장된다")
+        @DisplayName("블라인드하면 사유, 시각이 저장된다")
         void blind_setsReasonAndTime() {
             // given
             Review review = review();
 
             // when
-            review.blind("욕설 · 비방", NOW);
+            review.blind("욕설, 비방", NOW);
 
             // then
             assertThat(review.isBlinded()).isTrue();
-            assertThat(review.getBlindReason()).isEqualTo("욕설 · 비방");
+            assertThat(review.getBlindReason()).isEqualTo("욕설, 비방");
             assertThat(review.getBlindedAt()).isEqualTo(NOW);
         }
 
         @Test
-        @DisplayName("이미 블라인드면 다시 요청해도 처음 사유 · 시각을 그대로 둔다 (멱등)")
+        @DisplayName("이미 블라인드면 다시 요청해도 처음 사유, 시각을 그대로 둔다 (멱등)")
         void blind_whenAlreadyBlinded_keepsFirstReasonAndTime() {
             // given
             Review review = review();
-            review.blind("욕설 · 비방", NOW);
+            review.blind("욕설, 비방", NOW);
 
             // when
             review.blind("광고", NOW.plusHours(1));
 
             // then
-            assertThat(review.getBlindReason()).isEqualTo("욕설 · 비방");
+            assertThat(review.getBlindReason()).isEqualTo("욕설, 비방");
             assertThat(review.getBlindedAt()).isEqualTo(NOW);
         }
 
         @Test
-        @DisplayName("해제하면 사유 · 시각을 비운다, 블라인드가 아니어도 그대로 해제 상태")
+        @DisplayName("해제하면 사유, 시각을 비운다, 블라인드가 아니어도 그대로 해제 상태")
         void unblind_clearsReasonAndTime() {
             // given
             Review review = review();
-            review.blind("욕설 · 비방", NOW);
+            review.blind("욕설, 비방", NOW);
 
             // when
             review.unblind();
@@ -141,7 +141,7 @@ class ReviewTest {
     }
 
     @Nested
-    @DisplayName("삭제 · 소유권")
+    @DisplayName("삭제, 소유권")
     class DeleteAndOwnership {
 
         @Test
@@ -159,7 +159,7 @@ class ReviewTest {
         }
 
         @Test
-        @DisplayName("작성자 본인만 true — 다른 회원의 리뷰 수정 · 삭제 차단")
+        @DisplayName("작성자 본인만 true — 다른 회원의 리뷰 수정, 삭제 차단")
         void isOwnedBy_trueOnlyForWriter() {
             Review review = review();
 

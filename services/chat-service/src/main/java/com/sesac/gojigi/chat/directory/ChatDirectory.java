@@ -16,9 +16,9 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 채팅에 보이는 이름 · 스토어 상태 · 정산 카드 — user GET /internal/users/{id} · store GET /internal/stores/{id} (chat.md 1 · 7절, D-1)
- * · settlement GET /internal/settlements/{id}(정산 카드 제목 · 내 스토어 정산인지) · product GET /api/products/{id}(상품 카드 제목).
- * 방 목록을 열 때마다 방 수만큼 부르지 않게 짧게 기억한다: 이름은 {@value #NAME_TTL_MINUTES}분, 스토어(정지 · 폐점 반영)는 1분, 조회 실패는 10초.
+ * 채팅에 보이는 이름, 스토어 상태, 정산 카드 — user GET /internal/users/{id}, store GET /internal/stores/{id} (chat.md 1, 7절, D-1)
+ * - settlement GET /internal/settlements/{id}(정산 카드 제목, 내 스토어 정산인지), product GET /api/products/{id}(상품 카드 제목).
+ * 방 목록을 열 때마다 방 수만큼 부르지 않게 짧게 기억한다: 이름은 {@value #NAME_TTL_MINUTES}분, 스토어(정지, 폐점 반영)는 1분, 조회 실패는 10초.
  * 실패하면 null — 화면은 번호("스토어 #5")로, 스토어 상태는 막지 않는 쪽(fail-open)으로
  */
 @Slf4j
@@ -63,7 +63,7 @@ public class ChatDirectory {
         return info == null ? null : info.name();
     }
 
-    /** 새 스토어 톡 · 스토어 톡 전송 가능 여부 (D-1) — 정지 · 폐점 · 없는 스토어면 false, 조회 실패면 true(막지 않음) */
+    /** 새 스토어 톡, 스토어 톡 전송 가능 여부 (D-1) — 정지, 폐점, 없는 스토어면 false, 조회 실패면 true(막지 않음) */
     public boolean storeOpen(Long storeId) {
         StoreInfo info = store(storeId);
         return info == null || info.open();
@@ -80,7 +80,7 @@ public class ChatDirectory {
         });
     }
 
-    /** 정산 카드 — 스토어 · 주차 · 지급액. 없거나 조회 실패면 null (상태가 바뀌어도 이 값들은 그대로라 이름과 같이 10분) */
+    /** 정산 카드 — 스토어, 주차, 지급액. 없거나 조회 실패면 null (상태가 바뀌어도 이 값들은 그대로라 이름과 같이 10분) */
     public SettlementInfo settlement(Long settlementId) {
         return cached(settlements, settlementId, Duration.ofMinutes(NAME_TTL_MINUTES), id -> data(settlementClient, "/internal/settlements/{id}", id)
                 .map(d -> d.path("settlement"))

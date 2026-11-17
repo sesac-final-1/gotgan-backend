@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 /**
- * 내 정보 — userdb 값만. signupProvider 가 LOCAL 이 아니면(소셜 가입) 비밀번호 변경 불가 · phone 이 비어 있을 수 있음.
+ * 내 정보 — userdb 값만. signupProvider 가 LOCAL 이 아니면(소셜 가입) 비밀번호 변경 불가, phone 이 비어 있을 수 있음.
  * TODO(이경석) orderCount — order-service 내부 API 가 생기면 추가
  */
 public record MyInfoResponse(Long userId, String email, String name, String nick, String phone, Grade grade,

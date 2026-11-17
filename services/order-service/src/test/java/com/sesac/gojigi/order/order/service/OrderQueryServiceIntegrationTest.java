@@ -39,7 +39,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 내 주문 목록 · 상세 — 본인 주문만 · 최신순 · 상태별 개수 · 결제수단 (MySQL 8.4 + Flyway) */
+/** 내 주문 목록, 상세 — 본인 주문만, 최신순, 상태별 개수, 결제수단 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderQueryService.class,
@@ -78,7 +78,7 @@ class OrderQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("내 주문 목록 — 본인 주문만 최신순, 결제 전 · 실패 주문의 상품주문은 ORDERED 로 센다")
+    @DisplayName("내 주문 목록 — 본인 주문만 최신순, 결제 전, 실패 주문의 상품주문은 ORDERED 로 센다")
     void getMyOrders() {
         // given
         Order paid = create(LISTER, 1_000L);
@@ -105,7 +105,7 @@ class OrderQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("주문이 없으면 빈 목록 · 모든 상태 0")
+    @DisplayName("주문이 없으면 빈 목록, 모든 상태 0")
     void getMyOrders_empty() {
         OrderListResponse result = orderQuery.getMyOrders(499L);
 
@@ -114,7 +114,7 @@ class OrderQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("내 주문 상세 — 배송지 · 금액 · 적립 합계 · 결제수단, 다른 회원의 주문번호는 404")
+    @DisplayName("내 주문 상세 — 배송지, 금액, 적립 합계, 결제수단, 다른 회원의 주문번호는 404")
     void getMyOrder() {
         // given
         Order order = create(BUYER, 1_000L);

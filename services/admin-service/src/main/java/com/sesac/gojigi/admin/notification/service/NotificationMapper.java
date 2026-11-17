@@ -14,7 +14,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 업무 이벤트 봉투 → 받는 쪽별 알림 (docs/events.md 의 payload 필드 그대로). 알림을 만들지 않는 이벤트면 빈 목록.
- * 문구는 화면 알림함 · 헤더 벨에 그대로 보인다 — 메일(order-notification Lambda)보다 짧게.
+ * 문구는 화면 알림함, 헤더 벨에 그대로 보인다 — 메일(order-notification Lambda)보다 짧게.
  */
 @Component
 public class NotificationMapper {
@@ -29,14 +29,14 @@ public class NotificationMapper {
         return switch (eventType) {
             case "OrderPaid" -> orderPaid(p, eventId, at);
             case "OrderItemShipped" -> List.of(toUser(p, eventId, at, "ORDER_SHIPPED", "배송이 시작됐어요",
-                    p.path("productName").asString() + " · " + p.path("courier").asString() + " " + p.path("trackingNo").asString(), orderLink(p)));
+                    p.path("productName").asString() + ", " + p.path("courier").asString() + " " + p.path("trackingNo").asString(), orderLink(p)));
             case "OrderItemCancelled" -> List.of(toUser(p, eventId, at, "ORDER_CANCELLED", "취소가 완료됐어요",
-                    p.path("productName").asString() + " · 환불 " + won(p.path("refundAmt").asLong()), orderLink(p)));
+                    p.path("productName").asString() + ", 환불 " + won(p.path("refundAmt").asLong()), orderLink(p)));
             case "OrderItemReturned" -> List.of(toUser(p, eventId, at, "ORDER_RETURNED", "반품이 완료됐어요",
-                    p.path("productName").asString() + " · 환불 " + won(p.path("refundAmt").asLong()), orderLink(p)));
+                    p.path("productName").asString() + ", 환불 " + won(p.path("refundAmt").asLong()), orderLink(p)));
             case "OrderClaimRequested" -> List.of(claimRequested(p, eventId, at));
             case "SettlementPaid" -> List.of(new NewNotification("STORE#" + p.path("storeId").asLong(), eventId, "SETTLEMENT_PAID",
-                    "정산금이 지급됐어요", p.path("week").asString() + " · " + won(p.path("payoutAmt").asLong()), "/seller/settlements", at));
+                    "정산금이 지급됐어요", p.path("week").asString() + ", " + won(p.path("payoutAmt").asLong()), "/seller/settlements", at));
             case "StoreApproved" -> List.of(toUser(p, eventId, at, "STORE_APPROVED", "입점이 승인됐어요",
                     p.path("storeName").asString() + " — 다시 로그인하면 판매자센터를 쓸 수 있어요", "/seller"));
             case "StoreApplicationRejected" -> List.of(toUser(p, eventId, at, "STORE_REJECTED", "입점 신청이 반려됐어요",
@@ -53,7 +53,7 @@ public class NotificationMapper {
      */
     private static List<NewNotification> orderPaid(JsonNode p, String eventId, Instant at) {
         List<NewNotification> result = new ArrayList<>();
-        result.add(toUser(p, eventId, at, "ORDER_PAID", "결제가 완료됐어요", itemsSummary(p) + " · " + won(p.path("payAmt").asLong()), orderLink(p)));
+        result.add(toUser(p, eventId, at, "ORDER_PAID", "결제가 완료됐어요", itemsSummary(p) + ", " + won(p.path("payAmt").asLong()), orderLink(p)));
         Map<Long, List<JsonNode>> byStore = new LinkedHashMap<>();
         for (JsonNode item : p.path("items")) {
             long storeId = item.path("storeId").asLong(0);
@@ -65,16 +65,16 @@ public class NotificationMapper {
             String first = items.getFirst().path("productName").asString("주문 상품");
             long amount = items.stream().mapToLong(i -> i.path("itemAmt").asLong()).sum();
             result.add(new NewNotification("STORE#" + storeId, eventId, "ORDER_NEW", "새 주문이 들어왔어요",
-                    (items.size() > 1 ? first + " 외 " + (items.size() - 1) + "건" : first) + " · " + won(amount), "/seller/orders", at));
+                    (items.size() > 1 ? first + " 외 " + (items.size() - 1) + "건" : first) + ", " + won(amount), "/seller/orders", at));
         });
         return result;
     }
 
-    /** 반품 · 교환 요청 — 판매자에게(Q-구-15). 취소는 판매자 확인 없이 끝나 이 이벤트가 없다 */
+    /** 반품, 교환 요청 — 판매자에게(Q-구-15). 취소는 판매자 확인 없이 끝나 이 이벤트가 없다 */
     private static NewNotification claimRequested(JsonNode p, String eventId, Instant at) {
         String title = "EXCHANGE".equals(p.path("claimType").asString()) ? "교환 요청이 들어왔어요" : "반품 요청이 들어왔어요";
         String option = p.path("optionName").asString("");
-        String body = p.path("productName").asString("주문 상품") + (option.isBlank() ? "" : " · " + option);
+        String body = p.path("productName").asString("주문 상품") + (option.isBlank() ? "" : ", " + option);
         return new NewNotification("STORE#" + p.path("storeId").asLong(), eventId, "CLAIM_REQUESTED", title, body, "/seller/claims", at);
     }
 

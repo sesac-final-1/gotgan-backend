@@ -12,8 +12,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * admin 은 조합 계층이라 다른 서비스의 오류를 그대로 전달한다 (관리자 화면이 같은 code 로 분기):
- * - 4xx 거절: 응답 봉투의 HTTP 상태 · code · message 그대로 — 서킷 실패로 세지 않음(BusinessException)
- * - 연결 실패 · 타임아웃 · 5xx · 서킷 OPEN: 폴백에서 502 EXTERNAL_API_ERROR
+ * - 4xx 거절: 응답 봉투의 HTTP 상태, code, message 그대로 — 서킷 실패로 세지 않음(BusinessException)
+ * - 연결 실패, 타임아웃, 5xx, 서킷 OPEN: 폴백에서 502 EXTERNAL_API_ERROR
  */
 @Slf4j
 public final class RemoteCalls {
@@ -23,7 +23,7 @@ public final class RemoteCalls {
     private RemoteCalls() {
     }
 
-    /** 대상 서비스가 준 오류 — code · message 를 못 읽으면(봉투가 아님) 502 */
+    /** 대상 서비스가 준 오류 — code, message 를 못 읽으면(봉투가 아님) 502 */
     public static BusinessException relay(String target, HttpClientErrorException e) {
         try {
             JsonNode body = JSON.readTree(e.getResponseBodyAsString());
@@ -47,7 +47,7 @@ public final class RemoteCalls {
         if (t instanceof CallNotPermittedException) {
             log.warn("{} 호출 차단(서킷 OPEN)", target);
         } else {
-            log.error("{} 호출 실패", target, t);   // 연결 실패 · 타임아웃 · 5xx — 스택트레이스 포함 (컨벤션 2-8)
+            log.error("{} 호출 실패", target, t);   // 연결 실패, 타임아웃, 5xx — 스택트레이스 포함 (컨벤션 2-8)
         }
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, target + " 서비스를 잠시 사용할 수 없습니다.");
     }

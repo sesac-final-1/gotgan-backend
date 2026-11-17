@@ -19,7 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
-/** Zipkin · Loki 클라이언트 — 가짜 서버(JDK HttpServer)로 쿼리 · 응답 해석 · 실패면 빈 목록 확인 */
+/** Zipkin, Loki 클라이언트 — 가짜 서버(JDK HttpServer)로 쿼리, 응답 해석, 실패면 빈 목록 확인 */
 class MonitorClientsTest {
 
     private HttpServer server;
@@ -54,7 +54,7 @@ class MonitorClientsTest {
     }
 
     @Test
-    @DisplayName("Zipkin 최근 트레이스 — 게이트웨이 · 시각 · 조건을 보내고 트레이스 목록, 실패면 빈 목록")
+    @DisplayName("Zipkin 최근 트레이스 — 게이트웨이, 시각, 조건을 보내고 트레이스 목록, 실패면 빈 목록")
     void zipkin_recentTraces() {
         body = "[[{\"traceId\":\"a1\"}],[{\"traceId\":\"b2\"}]]";
         ZipkinClient client = new ZipkinClient(RestClient.builder(), url());
@@ -82,7 +82,7 @@ class MonitorClientsTest {
     }
 
     @Test
-    @DisplayName("Loki 에러 로그 — WARN · ERROR 쿼리, JSON 본문의 message · traceId, 최신순 · limit, 실패면 빈 목록")
+    @DisplayName("Loki 에러 로그 — WARN, ERROR 쿼리, JSON 본문의 message, traceId, 최신순, limit, 실패면 빈 목록")
     void loki_errors() {
         body = """
                 {"status":"success","data":{"resultType":"streams","result":[
@@ -109,7 +109,7 @@ class MonitorClientsTest {
     }
 
     @Test
-    @DisplayName("Loki 리포트용 — 지표 쿼리를 라벨 · 구간 끝 시각(ms)별로 합치고, 줄 조회는 아무 쿼리나, 실패면 빈 결과")
+    @DisplayName("Loki 리포트용 — 지표 쿼리를 라벨, 구간 끝 시각(ms)별로 합치고, 줄 조회는 아무 쿼리나, 실패면 빈 결과")
     void loki_countBy_and_lines() {
         body = """
                 {"status":"success","data":{"resultType":"matrix","result":[

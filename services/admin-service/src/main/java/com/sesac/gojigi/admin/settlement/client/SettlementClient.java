@@ -12,7 +12,7 @@ import org.springframework.web.service.annotation.PutExchange;
 import tools.jackson.databind.JsonNode;
 
 /**
- * settlement-service 내부 API (docs/api/settlement.md) — 정산 · 수수료. 응답은 관리자 화면에 그대로 전달하므로 JsonNode.
+ * settlement-service 내부 API (docs/api/settlement.md) — 정산, 수수료. 응답은 관리자 화면에 그대로 전달하므로 JsonNode.
  * 직접 쓰지 않고 SettlementClientAdapter 를 거친다
  */
 @HttpExchange("/internal")

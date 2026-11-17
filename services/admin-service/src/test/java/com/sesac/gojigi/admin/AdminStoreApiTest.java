@@ -36,8 +36,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 입점 심사 · 스토어 관리 — store.md 3~9절(#97 계약) 응답 · 오류 그대로 + 목록 · 상세 categoryName(product 카테고리).
- * store · product 클라이언트는 가짜, 서킷 · 재시도 · 오류 전달은 실제. 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
+ * 입점 심사, 스토어 관리 — store.md 3~9절(#97 계약) 응답, 오류 그대로 + 목록, 상세 categoryName(product 카테고리).
+ * store, product 클라이언트는 가짜, 서킷, 재시도, 오류 전달은 실제. 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
 @Import(TestcontainersConfiguration.class)   // admindb(신고) 가 생겨 컨텍스트에 DB 가 필요
@@ -54,7 +54,7 @@ class AdminStoreApiTest {
     @MockitoBean StoreClient storeClient;
     @MockitoBean ProductClient productClient;
 
-    /** 목 · 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
+    /** 목, 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
     @BeforeEach
     void resetMocks() {
         reset(storeClient, productClient);
@@ -111,7 +111,7 @@ class AdminStoreApiTest {
     }
 
     @Test
-    @DisplayName("승인 · 반려 · 보완요청 — 본문 그대로, 이미 처리된 신청 409 그대로, 승인은 재시도 없이 502")
+    @DisplayName("승인, 반려, 보완요청 — 본문 그대로, 이미 처리된 신청 409 그대로, 승인은 재시도 없이 502")
     void applications_decisions() throws Exception {
         when(storeClient.approve(27L)).thenReturn(ok("{\"applicationId\":27,\"status\":\"APPROVED\",\"storeId\":3}"));
         mockMvc.perform(patch("/api/admin/applications/27/approve"))
@@ -133,7 +133,7 @@ class AdminStoreApiTest {
     }
 
     @Test
-    @DisplayName("스토어 — 목록 · 상세 · 정지 그대로, 폐점 스토어 409 그대로, 목록 장애는 한 번 더 시도 후 502")
+    @DisplayName("스토어 — 목록, 상세, 정지 그대로, 폐점 스토어 409 그대로, 목록 장애는 한 번 더 시도 후 502")
     void stores_relay() throws Exception {
         when(storeClient.stores("SUSPENDED")).thenReturn(ok("[{\"storeId\":1,\"status\":\"SUSPENDED\"}]"));
         mockMvc.perform(get("/api/admin/stores").param("status", "SUSPENDED"))

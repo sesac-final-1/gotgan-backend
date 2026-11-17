@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
-/** category 도메인 오류 코드 (접두어 CATEGORY — docs/api/error-codes.md · product.md 18절) */
+/** category 도메인 오류 코드 (접두어 CATEGORY — docs/api/error-codes.md, product.md 18절) */
 @Getter
 @RequiredArgsConstructor
 public enum CategoryErrorCode implements ErrorCode {

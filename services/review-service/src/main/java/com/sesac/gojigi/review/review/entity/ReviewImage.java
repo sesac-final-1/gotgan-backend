@@ -15,8 +15,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 리뷰 사진 — 리뷰당 최대 3장 · 10MB (REV-03). review_image → review 단방향.
- * 파일은 브라우저가 presigned PUT 으로 S3 에 직접 올리고, 여기에는 키 · 순서만 저장한다 (크기 제한은 presign 서명이 막음, V5).
+ * 리뷰 사진 — 리뷰당 최대 3장, 10MB (REV-03). review_image → review 단방향.
+ * 파일은 브라우저가 presigned PUT 으로 S3 에 직접 올리고, 여기에는 키, 순서만 저장한다 (크기 제한은 presign 서명이 막음, V5).
  */
 @Getter
 @Entity

@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-/** 401 — 토큰 없음 · 서명 불일치 · 만료 · issuer 불일치. 응답은 업무 서비스와 같은 봉투 */
+/** 401 — 토큰 없음, 서명 불일치, 만료, issuer 불일치. 응답은 업무 서비스와 같은 봉투 */
 @Component
 @RequiredArgsConstructor
 public class GatewayAuthenticationEntryPoint implements ServerAuthenticationEntryPoint {

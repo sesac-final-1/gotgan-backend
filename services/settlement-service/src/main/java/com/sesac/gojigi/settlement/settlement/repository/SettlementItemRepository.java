@@ -51,7 +51,7 @@ public interface SettlementItemRepository extends JpaRepository<SettlementItem, 
             """)
     List<Object[]> sumByCategory(@Param("from") LocalDateTime from, @Param("until") LocalDateTime until);
 
-    /** 관리자 대시보드 스토어 거래액 순위 — [storeId, 건수, 매출 합, 수수료 합], 매출 많은 순 · pageable 로 상위 N */
+    /** 관리자 대시보드 스토어 거래액 순위 — [storeId, 건수, 매출 합, 수수료 합], 매출 많은 순, pageable 로 상위 N */
     @Query("""
             select i.storeId, count(i), sum(i.itemAmt), sum(i.commissionAmt) from SettlementItem i
              where i.confirmedAt >= :from and i.confirmedAt < :until

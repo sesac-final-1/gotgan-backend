@@ -3,7 +3,7 @@ package com.sesac.gojigi.chat.room.entity;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-/** 문맥 카드 대상 (chat.md "문맥 카드"). 대상 서비스 조회 전 · 실패 시 카드 제목은 "{label} #{id}" */
+/** 문맥 카드 대상 (chat.md "문맥 카드"). 대상 서비스 조회 전, 실패 시 카드 제목은 "{label} #{id}" */
 @Getter
 @RequiredArgsConstructor
 public enum ContextType {

@@ -12,7 +12,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * 관리자 입점 심사 상세 — 신청서 전체 + 서류 열람 주소 + 상태 이력 + 같은 사업자번호의 다른 신청 · 스토어 (docs/api/store.md 4절).
+ * 관리자 입점 심사 상세 — 신청서 전체 + 서류 열람 주소 + 상태 이력 + 같은 사업자번호의 다른 신청, 스토어 (docs/api/store.md 4절).
  * 필드는 추가만 한다. 조립은 ApplicationQueryService 가 한다
  */
 public record InternalApplicationDetailResponse(
@@ -25,7 +25,7 @@ public record InternalApplicationDetailResponse(
         @Schema(description = "신청 상태", example = "SUPPLEMENT")
         ApplicationStatus status,
 
-        @Schema(description = "반려 · 보완요청 사유 (없으면 null)", example = "통신판매업 신고증 사본이 흐려 확인이 어렵습니다")
+        @Schema(description = "반려, 보완요청 사유 (없으면 null)", example = "통신판매업 신고증 사본이 흐려 확인이 어렵습니다")
         String statusReason,
 
         @Schema(description = "제출 시각", example = "2026-10-22T14:05:11+09:00")
@@ -91,13 +91,13 @@ public record InternalApplicationDetailResponse(
         @Schema(description = "필수 약관 동의 시각", example = "2026-10-22T14:05:11+09:00")
         OffsetDateTime termsAgreedAt,
 
-        @Schema(description = "서류 — 지금 서류와 재제출로 바뀐 이전 서류 모두, 종류별 · 올린 순서")
+        @Schema(description = "서류 — 지금 서류와 재제출로 바뀐 이전 서류 모두, 종류별, 올린 순서")
         List<Document> documents,
 
         @Schema(description = "상태 이력 — 오래된 순")
         List<History> history,
 
-        @Schema(description = "같은 사업자등록번호의 이 신청을 뺀 다른 신청 · 스토어 — 중복 입점 확인 근거")
+        @Schema(description = "같은 사업자등록번호의 이 신청을 뺀 다른 신청, 스토어 — 중복 입점 확인 근거")
         SameBizRegNo sameBizRegNo) {
 
     public record SettlementAccount(

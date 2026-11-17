@@ -25,7 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 
 /**
- * 이벤트 순서 규칙(10/15 A안) 검증 — 실제 MySQL(Testcontainers) + Flyway V1 · V2.
+ * 이벤트 순서 규칙(10/15 A안) 검증 — 실제 MySQL(Testcontainers) + Flyway V1, V2.
  * 시나리오: store 가 ① 10:00 정지 ② 10:05 정지 해제 를 발행했는데 SQS 가 ② → ① 순서로 전달
  */
 @DataJpaTest
@@ -41,7 +41,7 @@ class StoreStatusServiceTest {
 
     @Autowired StoreStatusService service;
     @Autowired SettlementStoreRepository repository;
-    @MockitoBean EventOutboxService eventOutboxService;   // SettlementCommandService 의존 — 이 테스트는 지급 · 발행을 다루지 않음
+    @MockitoBean EventOutboxService eventOutboxService;   // SettlementCommandService 의존 — 이 테스트는 지급, 발행을 다루지 않음
     @MockitoBean tools.jackson.databind.json.JsonMapper jsonMapper;   // SettlementCommandService 의존 — JPA 슬라이스에는 없음
 
     static final long STORE_ID = 1L;

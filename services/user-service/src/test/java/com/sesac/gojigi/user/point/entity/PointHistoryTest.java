@@ -56,7 +56,7 @@ class PointHistoryTest {
     }
 
     @Test
-    @DisplayName("적립 · 환원은 잔액 증가, 사용 · 회수는 잔액 감소")
+    @DisplayName("적립, 환원은 잔액 증가, 사용, 회수는 잔액 감소")
     void pointType_isIncrease() {
         assertThat(PointType.EARN.isIncrease()).isTrue();
         assertThat(PointType.RESTORE.isIncrease()).isTrue();

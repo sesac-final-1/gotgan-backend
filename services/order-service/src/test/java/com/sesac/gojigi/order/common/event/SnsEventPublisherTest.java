@@ -33,7 +33,7 @@ class SnsEventPublisherTest {
     }
 
     @Test
-    @DisplayName("토픽이 비면(로컬 · 테스트) 발행하지 않음")
+    @DisplayName("토픽이 비면(로컬, 테스트) 발행하지 않음")
     void send_noTopic_skips() {
         SnsClient sns = mock(SnsClient.class);
 

@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
-/** product 도메인 오류 코드 (접두어 PRODUCT — docs/api/error-codes.md · product.md 18절). 나머지 코드는 쓰는 API PR 에서 추가 */
+/** product 도메인 오류 코드 (접두어 PRODUCT — docs/api/error-codes.md, product.md 18절). 나머지 코드는 쓰는 API PR 에서 추가 */
 @Getter
 @RequiredArgsConstructor
 public enum ProductErrorCode implements ErrorCode {

@@ -56,7 +56,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 주문 생성 Saga — 단계 순서 · 0원 주문 · 실패 시 역순 보상 · 보상 실패 시 재시도 기록 */
+/** 주문 생성 Saga — 단계 순서, 0원 주문, 실패 시 역순 보상, 보상 실패 시 재시도 기록 */
 @ExtendWith(MockitoExtension.class)
 class PlaceOrderSagaTest {
 
@@ -153,7 +153,7 @@ class PlaceOrderSagaTest {
         }
 
         @Test
-        @DisplayName("전액 포인트(0원)는 결제 준비 없이 바로 PAID · Saga 완료")
+        @DisplayName("전액 포인트(0원)는 결제 준비 없이 바로 PAID, Saga 완료")
         void place_zeroPayAmount_paidWithoutPayment() {
             // given
             givenPending(64_000L);
@@ -198,7 +198,7 @@ class PlaceOrderSagaTest {
             DataIntegrityViolationException collision = new DataIntegrityViolationException("uk_orders_order_no");
             given(sagaTx.startPlaceOrder(any(), any(), any(), any(), any())).willThrow(collision);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 2))))
                     .isInstanceOf(OrderException.class)
                     .hasCause(collision)
@@ -210,13 +210,13 @@ class PlaceOrderSagaTest {
     }
 
     @Nested
-    @DisplayName("주문 전 검증 — 주문 · Saga 를 만들지 않는다")
+    @DisplayName("주문 전 검증 — 주문, Saga 를 만들지 않는다")
     class BeforeOrder {
 
         @Test
         @DisplayName("같은 옵션이 두 번이면 400 INVALID_INPUT")
         void place_duplicateOption_invalidInput() {
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 1), item(11L, 2))))
                     .isInstanceOf(BusinessException.class)
                     .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
@@ -230,7 +230,7 @@ class PlaceOrderSagaTest {
             given(product.getOptions(List.of(11L))).willReturn(List.of(option(11L, false)));
             given(product.getOptions(List.of(12L))).willReturn(List.of());
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 1))))
                     .extracting(e -> ((OrderException) e).getErrorCode())
                     .isEqualTo(OrderErrorCode.ORDER_PRODUCT_NOT_PURCHASABLE);
@@ -245,7 +245,7 @@ class PlaceOrderSagaTest {
             // given — 옵션 11 은 스토어 1 상품
             given(product.getOptions(List.of(11L))).willReturn(List.of(option(11L, true)));
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, 1L, request(0L, item(11L, 1))))
                     .extracting(e -> ((OrderException) e).getErrorCode())
                     .isEqualTo(OrderErrorCode.ORDER_OWN_STORE_PRODUCT);
@@ -263,13 +263,13 @@ class PlaceOrderSagaTest {
         }
 
         @Test
-        @DisplayName("재고 예약 실패 — 선점 → 재고 해제 · 포인트 환원, 결제 취소는 부르지 않음 · 결제창 정보 없이 409")
+        @DisplayName("재고 예약 실패 — 선점 → 재고 해제, 포인트 환원, 결제 취소는 부르지 않음, 결제창 정보 없이 409")
         void place_outOfStock_compensatesStockAndPoints() {
             // given
             givenPending(2_000L);
             willThrow(new OrderException(OrderErrorCode.ORDER_OUT_OF_STOCK)).given(product).reserve(any());
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(2_000L, item(11L, 2))))
                     .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_OUT_OF_STOCK);
             InOrder back = inOrder(sagaTx, orderTx, product, user);
@@ -290,7 +290,7 @@ class PlaceOrderSagaTest {
             givenPending(2_000L);
             willThrow(new OrderException(OrderErrorCode.ORDER_POINT_INSUFFICIENT)).given(user).usePoints(any());
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(2_000L, item(11L, 2))))
                     .isInstanceOf(OrderException.class);
             verify(user).restorePoints(SAGA_ID);
@@ -306,7 +306,7 @@ class PlaceOrderSagaTest {
             givenPending(2_000L);
             willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR)).given(payment).prepare(any());
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(2_000L, item(11L, 2))))
                     .isInstanceOf(BusinessException.class);
             InOrder back = inOrder(orderTx, payment, product, user);
@@ -325,7 +325,7 @@ class PlaceOrderSagaTest {
             willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "PAYMENT_CANCEL_PENDING"))
                     .given(payment).cancel(anyString(), any());
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 2))))
                     .isInstanceOf(BusinessException.class);
             verify(orderTx).claimForCompensation(1L);
@@ -341,7 +341,7 @@ class PlaceOrderSagaTest {
             givenPending(0L);
             willThrow(new IllegalStateException("boom")).given(product).reserve(any());
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> saga.place(BUYER_ID, null, request(0L, item(11L, 2))))
                     .isInstanceOf(IllegalStateException.class);
             verify(sagaTx).startCompensating(7L, "IllegalStateException: boom");
@@ -355,7 +355,7 @@ class PlaceOrderSagaTest {
         // given
         Order o = OrderFixtures.order();
 
-        // when · then
+        // when, then
         assertThat(PlaceOrderSaga.orderName(List.of(OrderFixtures.item(o), OrderFixtures.item(o), OrderFixtures.item(o))))
                 .isEqualTo("제철 사과 3kg 외 2건");
     }

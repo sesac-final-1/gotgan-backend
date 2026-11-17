@@ -30,7 +30,7 @@ public record SettlementPaidPayload(Long settlementId, Long storeId, String week
         @JsonInclude(JsonInclude.Include.NON_NULL) String itemsGzip) {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    /** SNS · SQS 한도 256KB — 나머지 필드 · 봉투 몫을 남긴다. 넘으면 항목을 gzip + Base64 로 (11/5, 평문 약 900건) */
+    /** SNS, SQS 한도 256KB — 나머지 필드, 봉투 몫을 남긴다. 넘으면 항목을 gzip + Base64 로 (11/5, 평문 약 900건) */
     static final int INLINE_ITEMS_LIMIT = 200 * 1024;
 
     /** 명세서 한 줄 = 상품주문 1건 (판매자 정산 상세와 같은 값) */

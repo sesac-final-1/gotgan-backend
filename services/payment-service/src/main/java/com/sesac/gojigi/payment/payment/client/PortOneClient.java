@@ -11,7 +11,7 @@ import org.springframework.web.service.annotation.PostExchange;
 
 /**
  * 포트원 V2 REST API (https://api.portone.io, 인증 헤더 Authorization: PortOne {API Secret}).
- * 직접 쓰지 않고 PortOneClientAdapter(서킷 브레이커 "portone" · GET 재시도)를 거친다.
+ * 직접 쓰지 않고 PortOneClientAdapter(서킷 브레이커 "portone", GET 재시도)를 거친다.
  */
 @HttpExchange("/payments")
 public interface PortOneClient {

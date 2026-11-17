@@ -26,9 +26,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 리뷰 작성 · 수정 · 삭제 (REV-02 · 05, docs/api/review.md 1 ~ 3절). 담당 이경석.
+ * 리뷰 작성, 수정, 삭제 (REV-02, 05, docs/api/review.md 1 ~ 3절). 담당 이경석.
  * 자격은 review_eligibility(OrderItemConfirmed 로 저장)만 본다 — order 를 호출하지 않는다.
- * 검사 순서: 자격(없음 · 남의 상품주문) → 이미 작성 → 기한 30일.
+ * 검사 순서: 자격(없음, 남의 상품주문) → 이미 작성 → 기한 30일.
  */
 @Slf4j
 @Service
@@ -42,7 +42,7 @@ public class ReviewService {
 
     @Transactional
     public ReviewCreateResponse write(Long userId, ReviewCreateRequest request) {
-        // 없는 상품주문 · 남의 상품주문은 같은 응답 — 다른 회원의 구매 여부를 드러내지 않는다
+        // 없는 상품주문, 남의 상품주문은 같은 응답 — 다른 회원의 구매 여부를 드러내지 않는다
         ReviewEligibility eligibility = eligibilityRepository.findByOrderItemId(request.orderItemId())
                 .filter(e -> e.isOwnedBy(userId))
                 .orElseThrow(() -> new ReviewException(ReviewErrorCode.REVIEW_NOT_ELIGIBLE));
@@ -68,7 +68,7 @@ public class ReviewService {
     }
 
     /**
-     * 내 리뷰 수정 (REV-05, review.md 2절) — 기한 없이 본인만. 없음 · 삭제됨 · 남의 리뷰는 같은 404.
+     * 내 리뷰 수정 (REV-05, review.md 2절) — 기한 없이 본인만. 없음, 삭제됨, 남의 리뷰는 같은 404.
      * 블라인드된 리뷰는 수정 불가 — 블라인드 사유가 된 내용을 고쳐 노출을 되살리는 것을 막는다(해제는 관리자만).
      */
     @Transactional
@@ -90,7 +90,7 @@ public class ReviewService {
     }
 
     /**
-     * 내 리뷰 삭제 (REV-05, review.md 3절) — soft delete, 평균 · 리뷰 수에서 빠진다. 블라인드된 리뷰도 지울 수 있다.
+     * 내 리뷰 삭제 (REV-05, review.md 3절) — soft delete, 평균, 리뷰 수에서 빠진다. 블라인드된 리뷰도 지울 수 있다.
      * 상품주문당 1개(uk)라 지운 뒤 같은 상품주문에 다시 쓸 수 없다.
      */
     @Transactional
@@ -100,7 +100,7 @@ public class ReviewService {
         log.info("리뷰 삭제 reviewId={} userId={} orderItemId={}", review.getId(), userId, review.getOrderItemId());
     }
 
-    /** 없음 · 삭제됨 · 남의 리뷰는 같은 404 — 다른 회원 리뷰의 존재를 드러내지 않는다 */
+    /** 없음, 삭제됨, 남의 리뷰는 같은 404 — 다른 회원 리뷰의 존재를 드러내지 않는다 */
     private Review findOwnReview(Long userId, Long reviewId) {
         return reviewRepository.findById(reviewId)
                 .filter(r -> !r.isDeleted() && r.isOwnedBy(userId))

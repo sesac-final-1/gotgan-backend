@@ -19,7 +19,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
-/** 실제 MySQL + Flyway V3 + 시연 시드 위에서 스냅샷 · 상품 일괄 반영 · 옛 이벤트 무시 · 중복 처리 확인 */
+/** 실제 MySQL + Flyway V3 + 시연 시드 위에서 스냅샷, 상품 일괄 반영, 옛 이벤트 무시, 중복 처리 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfiguration.class, StoreStatusService.class})
@@ -35,7 +35,7 @@ class StoreStatusServiceIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    @DisplayName("시드 스토어 1 정지 → 스냅샷 생성 · 그 스토어 상품만 전부 숨김 · 처리 기록 1건")
+    @DisplayName("시드 스토어 1 정지 → 스냅샷 생성, 그 스토어 상품만 전부 숨김, 처리 기록 1건")
     void applyStatusChanged_whenSuspended_hidesStoreProducts() {
         // given
         int storeProducts = count("SELECT COUNT(*) FROM product WHERE store_id = 1");
@@ -87,7 +87,7 @@ class StoreStatusServiceIntegrationTest {
         // given
         service.applyStatusChanged(event("e-dup", 2L, "SUSPENDED", AT));
 
-        // when · then
+        // when, then
         assertThat(service.applyStatusChanged(event("e-dup", 2L, "SUSPENDED", AT))).isEqualTo(StoreStatusService.Result.DUPLICATE);
         assertThat(count("SELECT COUNT(*) FROM processed_event WHERE event_id = 'e-dup'")).isOne();
     }

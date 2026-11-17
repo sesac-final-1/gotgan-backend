@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 자동 배송완료 (DLV-04) — 택배 추적 API 대신, 발송 후 auto-deliver-after(운영 1시간 · 데모 1분)가 지난 배송중 상품주문을 배송완료로.
+ * 자동 배송완료 (DLV-04) — 택배 추적 API 대신, 발송 후 auto-deliver-after(운영 1시간, 데모 1분)가 지난 배송중 상품주문을 배송완료로.
  * 판매자 "배송완료" 버튼과 겹치면 @Version 으로 한쪽만 반영되고, 늦은 쪽은 이미 바뀐 상태라 건너뛴다.
  */
 @Slf4j
@@ -41,7 +41,7 @@ public class AutoDeliverScheduler {
             try {
                 deliveryTx.deliverBySystem(orderItemId);
             } catch (RuntimeException e) {
-                // 그 사이 판매자가 먼저 처리(상태 · @Version 충돌) — 다음 주기에는 대상이 아니다
+                // 그 사이 판매자가 먼저 처리(상태, @Version 충돌) — 다음 주기에는 대상이 아니다
                 log.warn("자동 배송완료 건너뜀 orderItemId={} cause={}", orderItemId, e.toString());
             }
         }

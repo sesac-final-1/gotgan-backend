@@ -12,7 +12,7 @@ import reactor.core.publisher.Mono;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 게이트웨이가 직접 내는 오류 응답 — 업무 서비스와 같은 봉투 { code, message, data: null } (컨벤션 2-4 · 2-5).
+ * 게이트웨이가 직접 내는 오류 응답 — 업무 서비스와 같은 봉투 { code, message, data: null } (컨벤션 2-4, 2-5).
  * 필터 체인(WebFlux) 안에서는 BusinessException 을 던지지 않고 이걸로 바로 쓴다.
  */
 @Component

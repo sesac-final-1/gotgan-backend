@@ -35,7 +35,7 @@ class TextSanitizerTest {
     }
 
     @Test
-    @DisplayName("null · 태그만 있는 값은 null")
+    @DisplayName("null, 태그만 있는 값은 null")
     void plainText_nullOrOnlyTags_returnsNull() {
         assertThat(TextSanitizer.plainText(null)).isNull();
         assertThat(TextSanitizer.plainText("<script>alert(1)</script>  ")).isNull();

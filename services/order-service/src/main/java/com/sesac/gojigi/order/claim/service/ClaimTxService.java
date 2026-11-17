@@ -36,13 +36,13 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 클레임 로컬 트랜잭션 — 클레임 대상(주문 · 상품주문 · 남은 결제 금액 · 스토어 마지막 여부) 조회와 신청 가능 여부 검사, 반품 · 교환 접수.
+ * 클레임 로컬 트랜잭션 — 클레임 대상(주문, 상품주문, 남은 결제 금액, 스토어 마지막 여부) 조회와 신청 가능 여부 검사, 반품, 교환 접수.
  * 취소 접수는 Saga 를 함께 만들어야 해서 saga 패키지의 CancelItemTxService 가 lock() 을 같은 트랜잭션에서 부른다.
  */
 @Service
 public class ClaimTxService {
 
-    /** 진행 중 클레임 — 요청됐거나 승인 후 환불 · 재배송 중 */
+    /** 진행 중 클레임 — 요청됐거나 승인 후 환불, 재배송 중 */
     private static final Set<ClaimStatus> OPEN = ClaimStatus.OPEN;
     /** 환불했거나 환불 중인 클레임 — 남은 결제 금액 계산에서 빼는 금액 */
     private static final Set<ClaimStatus> REFUNDING = Set.of(ClaimStatus.APPROVED, ClaimStatus.COLLECTED,
@@ -74,7 +74,7 @@ public class ClaimTxService {
         this.returnWindow = returnWindow;
     }
 
-    /** 반품 · 교환 신청 저장 — 같은 트랜잭션에서 OrderClaimRequested 를 남긴다 (ClaimEventRecorder) */
+    /** 반품, 교환 신청 저장 — 같은 트랜잭션에서 OrderClaimRequested 를 남긴다 (ClaimEventRecorder) */
     public record ClaimRequested(Long claimId) {
     }
 
@@ -82,14 +82,14 @@ public class ClaimTxService {
     public record ClaimTarget(Order order, OrderItem item, long cashLeft, long storeShippingFeeIfLast) {
     }
 
-    /** 미리보기 · 접수 전 확인 — 잠그지 않는다. 신청할 수 없으면 예외 */
+    /** 미리보기, 접수 전 확인 — 잠그지 않는다. 신청할 수 없으면 예외 */
     @Transactional(readOnly = true)
     public ClaimTarget find(Long buyerId, String orderNo, Long orderItemId, ClaimType type) {
         return check(load(orderRepository.findByOrderNoAndBuyerId(orderNo, buyerId), orderItemId), type);
     }
 
     /**
-     * 접수 — 주문 행을 잠가 같은 주문의 클레임이 동시에 와도 남은 결제 금액 · 스토어 마지막 여부를 차례로 계산한다.
+     * 접수 — 주문 행을 잠가 같은 주문의 클레임이 동시에 와도 남은 결제 금액, 스토어 마지막 여부를 차례로 계산한다.
      * 호출하는 쪽 트랜잭션 안에서만 (잠금이 그 트랜잭션 끝까지 간다).
      */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -98,9 +98,9 @@ public class ClaimTxService {
     }
 
     /**
-     * 반품 · 교환 신청 (CLM-03 · 04) — 클레임 REQUESTED · 상품주문 RETURN_REQUESTED / EXCHANGE_REQUESTED · 이력.
-     * 반품은 환불 예정액(반품 배송비 차감)을 클레임에 남긴다. 교환은 결제 · 재고 변동이 없어 금액 없음.
-     * 판매자 승인 · 수거 · 환불 · 재배송은 판매자 클레임 처리(CLM-05).
+     * 반품, 교환 신청 (CLM-03, 04) — 클레임 REQUESTED, 상품주문 RETURN_REQUESTED / EXCHANGE_REQUESTED, 이력.
+     * 반품은 환불 예정액(반품 배송비 차감)을 클레임에 남긴다. 교환은 결제, 재고 변동이 없어 금액 없음.
+     * 판매자 승인, 수거, 환불, 재배송은 판매자 클레임 처리(CLM-05).
      */
     @Transactional
     public ClaimResponse openReturnOrExchange(Long buyerId, String orderNo, ClaimCreateRequest request,
@@ -127,7 +127,7 @@ public class ClaimTxService {
                 refund == null ? 0L : refund.refundAmt(), refund == null ? 0L : refund.restorePoint());
     }
 
-    /** 구매자 철회 — 본인 클레임만(아니면 같은 404), 상품주문은 다시 배송완료 · 이력 */
+    /** 구매자 철회 — 본인 클레임만(아니면 같은 404), 상품주문은 다시 배송완료, 이력 */
     @Transactional
     public ClaimDetailResponse withdraw(Long buyerId, Long claimId) {
         OrderClaim claim = claimRepository.findById(claimId).filter(c -> c.getRequesterId().equals(buyerId))
@@ -151,7 +151,7 @@ public class ClaimTxService {
         return new ClaimTarget(order, item, cashLeft, shippingFee);
     }
 
-    /** 한 상품주문에 진행 중 클레임 1개 · 취소는 결제완료에서만 · 반품 · 교환은 배송완료 후 반품 기간 안에서만 */
+    /** 한 상품주문에 진행 중 클레임 1개, 취소는 결제완료에서만, 반품, 교환은 배송완료 후 반품 기간 안에서만 */
     private ClaimTarget check(ClaimTarget target, ClaimType type) {
         OrderItem item = target.item();
         if (claimRepository.existsByOrderItemIdAndStatusIn(item.getId(), OPEN)) {

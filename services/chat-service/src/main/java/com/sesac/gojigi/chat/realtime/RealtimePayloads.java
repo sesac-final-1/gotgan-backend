@@ -48,7 +48,7 @@ public final class RealtimePayloads {
         }
     }
 
-    /** /user/queue/errors — 보낸 연결에만. 연결은 유지된다 (토큰 · 권한 오류는 STOMP ERROR 후 끊김) */
+    /** /user/queue/errors — 보낸 연결에만. 연결은 유지된다 (토큰, 권한 오류는 STOMP ERROR 후 끊김) */
     public record Error(String code, String message) {
     }
 }

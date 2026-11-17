@@ -13,7 +13,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-/** 경로별 인가 — 401 · 403 은 업무 서비스와 같은 봉투. (라우팅 대상 서비스는 띄우지 않는다) */
+/** 경로별 인가 — 401, 403 은 업무 서비스와 같은 봉투. (라우팅 대상 서비스는 띄우지 않는다) */
 // 트레이스 샘플링 0 — 요청이 만든 span 의 Zipkin 전송 실패 WARN 이 같은 JVM 의 LogbackConfigTest 가짜 Loki 에 섞이지 않게 (product #90 과 같은 이유)
 @SpringBootTest(properties = {"spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:1/realms/gotgan",
         "management.tracing.sampling.probability=0"})
@@ -30,7 +30,7 @@ class SecurityConfigTest {
     }
 
     @Test
-    @DisplayName("API 응답 보안 헤더 — CSP(아무것도 못 불러옴 · 끼워 넣기 금지) · HSTS(http 로 와도) · nosniff · X-Frame-Options DENY, 401 응답에도")
+    @DisplayName("API 응답 보안 헤더 — CSP(아무것도 못 불러옴, 끼워 넣기 금지), HSTS(http 로 와도), nosniff, X-Frame-Options DENY, 401 응답에도")
     void apiResponses_haveSecurityHeaders() {
         client.get().uri("/actuator/health").exchange()
                 .expectHeader().valueEquals("Content-Security-Policy", SecurityConfig.API_CSP)
@@ -46,7 +46,7 @@ class SecurityConfigTest {
     private static final String LOCAL = "http://localhost";
 
     @Test
-    @DisplayName("실시간 알림 스트림 — 프론트 출처의 preflight 허용(Authorization), 다른 출처 · 다른 경로는 CORS 헤더 없음, 토큰 없으면 401")
+    @DisplayName("실시간 알림 스트림 — 프론트 출처의 preflight 허용(Authorization), 다른 출처, 다른 경로는 CORS 헤더 없음, 토큰 없으면 401")
     void notificationStream_cors() {
         client.options().uri(LOCAL + "/api/notifications/stream")
                 .header("Origin", "https://gotgan-ashy.vercel.app")
@@ -135,7 +135,7 @@ class SecurityConfigTest {
     }
 
     @Test
-    @DisplayName("신고 접수는 구매자 · 판매자만 — 관리자 토큰만 있으면 403, 토큰 없으면 401")
+    @DisplayName("신고 접수는 구매자, 판매자만 — 관리자 토큰만 있으면 403, 토큰 없으면 401")
     void reportPath_buyerOrSellerOnly() {
         client.mutateWith(mockJwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
                 .post().uri("/api/reports").exchange()

@@ -18,7 +18,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.client.RestClient;
 
-/** k6 REST API — 가짜 서버(JDK HttpServer)로 PATCH /v1/status 본문 · 실패면 503 확인 */
+/** k6 REST API — 가짜 서버(JDK HttpServer)로 PATCH /v1/status 본문, 실패면 503 확인 */
 class K6ClientTest {
 
     private HttpServer server;
@@ -60,7 +60,7 @@ class K6ClientTest {
     }
 
     @Test
-    @DisplayName("k6 오류 응답 · 연결 실패 — 503 SYSTEM_LOADTEST_CONTROL_FAILED")
+    @DisplayName("k6 오류 응답, 연결 실패 — 503 SYSTEM_LOADTEST_CONTROL_FAILED")
     void scale_failures() {
         status = 500;
         assertThatThrownBy(() -> client().scale("127.0.0.1", 10)).isInstanceOf(SystemException.class)

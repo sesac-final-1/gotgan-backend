@@ -31,13 +31,13 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Keycloak 호출 규칙 (가이드라인 08장):
- * - 서킷 브레이커 "keycloak" — 연결 실패 · 타임아웃 · 5xx 만 장애로 센다. OPEN 이면 바로 EXTERNAL_API_ERROR(502)
+ * - 서킷 브레이커 "keycloak" — 연결 실패, 타임아웃, 5xx 만 장애로 센다. OPEN 이면 바로 EXTERNAL_API_ERROR(502)
  * - 토큰 요청(POST)은 재시도하지 않는다 (Brute Force 실패 횟수가 이중으로 쌓임)
- * - invalid_grant(비밀번호 불일치 · 임시 잠금 · 정지)는 도메인 예외로 바꾸고 서킷 실패로 세지 않는다
- * - 계정 생성 · 삭제(Admin API)는 서비스 계정 토큰(client_credentials)으로 — 409 는 이메일 중복, 비밀번호 정책 위반 400 은 도메인 예외
- * - client 인증(client-id · secret)은 KeycloakClientConfig 가 Basic 헤더로 붙인다 — 여기서는 grant 별 폼만 만든다
+ * - invalid_grant(비밀번호 불일치, 임시 잠금, 정지)는 도메인 예외로 바꾸고 서킷 실패로 세지 않는다
+ * - 계정 생성, 삭제(Admin API)는 서비스 계정 토큰(client_credentials)으로 — 409 는 이메일 중복, 비밀번호 정책 위반 400 은 도메인 예외
+ * - client 인증(client-id, secret)은 KeycloakClientConfig 가 Basic 헤더로 붙인다 — 여기서는 grant 별 폼만 만든다
  * - 계정 생성은 Bulkhead "keycloak-signup" 으로 동시 호출을 제한한다 — 거절은 AUTH_SIGNUP_BUSY(503), 서킷에 집계하지 않는다 (로그인까지 막히지 않게)
- * - 비밀번호 · client secret · 토큰은 로그에 남기지 않는다
+ * - 비밀번호, client secret, 토큰은 로그에 남기지 않는다
  * - 여기서는 로그를 찍지 않는다 — 원인을 예외에 실어 던지면 GlobalExceptionHandler 가 warn 한 번 (컨벤션 5-6)
  */
 @Component
@@ -56,7 +56,7 @@ public class KeycloakClientAdapter {
     private final KeycloakAdminClient keycloakAdminClient;
     private final JsonMapper jsonMapper;
 
-    /** 로그인 — 이메일(= Keycloak username) · 비밀번호로 Direct Grant */
+    /** 로그인 — 이메일(= Keycloak username), 비밀번호로 Direct Grant */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "tokenFallback")
     public KeycloakTokenResponse passwordGrant(String email, String password) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
@@ -71,8 +71,8 @@ public class KeycloakClientAdapter {
     }
 
     /**
-     * 토큰 재발급 — Refresh Token 으로 새 Access · Refresh Token (realm 설정상 Refresh Token 은 한 번 쓰면 바뀐다).
-     * 만료 · 로그아웃 · 이미 쓴 토큰(invalid_grant)은 AUTH_SESSION_EXPIRED.
+     * 토큰 재발급 — Refresh Token 으로 새 Access, Refresh Token (realm 설정상 Refresh Token 은 한 번 쓰면 바뀐다).
+     * 만료, 로그아웃, 이미 쓴 토큰(invalid_grant)은 AUTH_SESSION_EXPIRED.
      */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "refreshGrantFallback")
     public KeycloakTokenResponse refreshGrant(String refreshToken) {
@@ -91,7 +91,7 @@ public class KeycloakClientAdapter {
 
     /**
      * 소셜 로그인 콜백 — Keycloak 이 준 code 를 토큰으로 바꾼다 (PKCE code_verifier, 시작할 때와 같은 redirect_uri).
-     * 만료 · 재사용 · 위조 code(invalid_grant)는 AUTH_SOCIAL_LOGIN_FAILED.
+     * 만료, 재사용, 위조 code(invalid_grant)는 AUTH_SOCIAL_LOGIN_FAILED.
      */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "authorizationCodeGrantFallback")
     public KeycloakTokenResponse authorizationCodeGrant(String code, String codeVerifier, String redirectUri) {
@@ -161,7 +161,7 @@ public class KeycloakClientAdapter {
 
     /**
      * 로그아웃 — Refresh Token 의 Keycloak 세션 종료.
-     * 이미 끝난 세션 · 만료 · 잘못된 토큰(invalid_grant)은 로그아웃된 것과 같으니 성공으로 본다.
+     * 이미 끝난 세션, 만료, 잘못된 토큰(invalid_grant)은 로그아웃된 것과 같으니 성공으로 본다.
      */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "logoutFallback")
     public void logout(String refreshToken) {
@@ -171,7 +171,7 @@ public class KeycloakClientAdapter {
             keycloakClient.logout(form);
         } catch (HttpClientErrorException e) {
             if (INVALID_GRANT.equals(readBody(e).path("error").asString(""))) {
-                return;   // Session not active · Token is not active · Invalid refresh token
+                return;   // Session not active, Token is not active, Invalid refresh token
             }
             throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
         }
@@ -182,8 +182,8 @@ public class KeycloakClientAdapter {
     }
 
     /**
-     * 탈퇴 — Keycloak 계정 삭제 (세션 · Refresh Token 도 함께 무효).
-     * keycloakId 가 없으면(첫 로그인 전 회원) username 으로 찾는다. 이미 없으면(404 · 검색 결과 없음) 성공으로 본다.
+     * 탈퇴 — Keycloak 계정 삭제 (세션, Refresh Token 도 함께 무효).
+     * keycloakId 가 없으면(첫 로그인 전 회원) username 으로 찾는다. 이미 없으면(404, 검색 결과 없음) 성공으로 본다.
      */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "deleteUserFallback")
     public void deleteUser(String keycloakId, String email) {
@@ -226,7 +226,7 @@ public class KeycloakClientAdapter {
         throw unavailable(t);
     }
 
-    /** 호출이 Keycloak 에 닿았는데 결과를 모르는 실패(타임아웃 · 끊김 · 5xx) — 계정이 만들어졌을 수 있다. 서킷 OPEN · 4xx · 상한 초과는 아니다 */
+    /** 호출이 Keycloak 에 닿았는데 결과를 모르는 실패(타임아웃, 끊김, 5xx) — 계정이 만들어졌을 수 있다. 서킷 OPEN, 4xx, 상한 초과는 아니다 */
     public static boolean outcomeUnknown(RuntimeException e) {
         return e.getCause() instanceof ResourceAccessException || e.getCause() instanceof HttpServerErrorException;
     }
@@ -243,8 +243,8 @@ public class KeycloakClientAdapter {
     }
 
     /**
-     * 이용정지 — 계정 비활성(enabled=false → 새 로그인 · 소셜 로그인 · Refresh 불가) 후 모든 세션 종료(발급된 Refresh Token 전부 무효).
-     * keycloakId 가 없으면 username 으로 찾는다. 계정이 없으면(검색 결과 없음 · 404) 막을 것이 없어 성공으로 본다.
+     * 이용정지 — 계정 비활성(enabled=false → 새 로그인, 소셜 로그인, Refresh 불가) 후 모든 세션 종료(발급된 Refresh Token 전부 무효).
+     * keycloakId 가 없으면 username 으로 찾는다. 계정이 없으면(검색 결과 없음, 404) 막을 것이 없어 성공으로 본다.
      */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "disableUserFallback")
     public void disableUser(String keycloakId, String email) {
@@ -289,7 +289,7 @@ public class KeycloakClientAdapter {
     }
 
     /**
-     * 판매자 전환 (StoreApproved) — store_id 속성 저장 후 realm 역할 SELLER 부여. 다음 토큰부터 roles 에 SELLER · store_id 클레임.
+     * 판매자 전환 (StoreApproved) — store_id 속성 저장 후 realm 역할 SELLER 부여. 다음 토큰부터 roles 에 SELLER, store_id 클레임.
      * 속성을 먼저 넣어 store_id 없는 SELLER 가 생기지 않게 한다. 이미 있는 것은 건너뛰어 재전달에도 같은 결과.
      * 이미 다른 store_id 가 있으면(1인 1스토어 위반) 아무것도 바꾸지 않는다. keycloakId 가 없으면 username 으로 찾는다.
      */
@@ -355,7 +355,7 @@ public class KeycloakClientAdapter {
     }
 
     /**
-     * 비밀번호 변경 — Admin API 로 새 비밀번호 설정 (임시 비밀번호 아님). 기존 세션 · 토큰은 그대로 둔다.
+     * 비밀번호 변경 — Admin API 로 새 비밀번호 설정 (임시 비밀번호 아님). 기존 세션, 토큰은 그대로 둔다.
      * keycloakId 가 없으면(첫 로그인 전 시드 회원) username 으로 찾는다. 정책 위반은 AUTH_PASSWORD_POLICY_VIOLATION.
      */
     @CircuitBreaker(name = CIRCUIT, fallbackMethod = "resetPasswordFallback")
@@ -377,7 +377,7 @@ public class KeycloakClientAdapter {
         throw unavailable(t);
     }
 
-    /** 비밀번호 정책 위반은 400 + errorMessage(invalidPassword...Message) — 그 외 400 · 401 · 403 · 404 는 설정 · 데이터 문제 */
+    /** 비밀번호 정책 위반은 400 + errorMessage(invalidPassword...Message) — 그 외 400, 401, 403, 404 는 설정, 데이터 문제 */
     private BusinessException toPasswordPolicyException(HttpClientErrorException e) {
         String body = e.getResponseBodyAsString().toLowerCase();
         if (e.getStatusCode().isSameCodeAs(HttpStatus.BAD_REQUEST) && body.contains("password")) {
@@ -392,7 +392,7 @@ public class KeycloakClientAdapter {
         try {
             return keycloakClient.serviceAccountToken(form).accessToken();
         } catch (HttpClientErrorException e) {
-            // 서비스 계정 꺼짐 · client 인증 실패 — 설정 문제
+            // 서비스 계정 꺼짐, client 인증 실패 — 설정 문제
             throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
         }
     }
@@ -429,7 +429,7 @@ public class KeycloakClientAdapter {
                     ? AuthErrorCode.AUTH_ACCOUNT_DISABLED
                     : AuthErrorCode.AUTH_INVALID_CREDENTIALS);
         }
-        // invalid_client(시크릿 불일치) · unauthorized_client(Direct Grant 꺼짐) 등은 설정 문제 — 사용자 탓이 아니다
+        // invalid_client(시크릿 불일치), unauthorized_client(Direct Grant 꺼짐) 등은 설정 문제 — 사용자 탓이 아니다
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버 요청이 거절되었습니다.", e);
     }
 
@@ -449,7 +449,7 @@ public class KeycloakClientAdapter {
         if (t instanceof BusinessException business) {
             return business;   // 4xx 거절 — 이미 변환됨
         }
-        // 연결 실패 · 타임아웃 · 5xx · 서킷 OPEN(CallNotPermittedException) — 폴백은 warn (핸들러가 cause 와 함께 기록)
+        // 연결 실패, 타임아웃, 5xx, 서킷 OPEN(CallNotPermittedException) — 폴백은 warn (핸들러가 cause 와 함께 기록)
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버에 연결할 수 없습니다.", t);
     }
 }

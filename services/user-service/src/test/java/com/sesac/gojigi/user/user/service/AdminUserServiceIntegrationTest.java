@@ -22,8 +22,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * 실제 MySQL — 관리자 회원 검색(이름 · 이메일 LIKE, 상태 필터, 탈퇴 제외, 최신순 페이징)과 상세.
- * 다른 테스트가 남긴 회원과 섞이지 않도록 테스트마다 고유 태그를 이름 · 이메일에 넣고 그 태그로 검색한다.
+ * 실제 MySQL — 관리자 회원 검색(이름, 이메일 LIKE, 상태 필터, 탈퇴 제외, 최신순 페이징)과 상세.
+ * 다른 테스트가 남긴 회원과 섞이지 않도록 테스트마다 고유 태그를 이름, 이메일에 넣고 그 태그로 검색한다.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -62,7 +62,7 @@ class AdminUserServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("상태 필터 · 탈퇴 회원 제외")
+    @DisplayName("상태 필터, 탈퇴 회원 제외")
     void search_filtersStatusAndExcludesDeleted() {
         String tag = tag();
         save(tag + "-active@gotgan.com", "정상");
@@ -78,7 +78,7 @@ class AdminUserServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("최신 가입순 서버 페이징 — 전체 건수 · 페이지 수 · 다음 페이지 여부")
+    @DisplayName("최신 가입순 서버 페이징 — 전체 건수, 페이지 수, 다음 페이지 여부")
     void search_pagesLatestFirst() {
         String tag = tag();
         save(tag + "-1@gotgan.com", "첫째");
@@ -97,7 +97,7 @@ class AdminUserServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("검색어의 % · _ 는 와일드카드가 아니라 글자 그대로")
+    @DisplayName("검색어의 %, _ 는 와일드카드가 아니라 글자 그대로")
     void search_escapesWildcards() {
         String tag = tag();
         save(tag + "-a@gotgan.com", tag + "100%할인");
@@ -120,7 +120,7 @@ class AdminUserServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("상세 — 연락처 · 정지 사유 · 정지 시각(+09:00), 탈퇴 · 없는 회원은 USER_NOT_FOUND")
+    @DisplayName("상세 — 연락처, 정지 사유, 정지 시각(+09:00), 탈퇴, 없는 회원은 USER_NOT_FOUND")
     void getDetail() {
         String tag = tag();
         User user = save(tag + "@gotgan.com", "정지회원");

@@ -36,7 +36,7 @@ class ReviewEligibilityTest {
         ReviewEligibility eligibility = eligibility();
         LocalDateTime expiresAt = eligibility.getExpiresAt();
 
-        // when · then
+        // when, then
         assertThat(eligibility.isExpired(expiresAt.minusSeconds(1))).isFalse();
         assertThat(eligibility.isExpired(expiresAt)).isFalse();
         assertThat(eligibility.isExpired(expiresAt.plusNanos(1000))).isTrue();
@@ -48,7 +48,7 @@ class ReviewEligibilityTest {
         // given
         ReviewEligibility eligibility = eligibility();
 
-        // when · then
+        // when, then
         assertThat(eligibility.isOwnedBy(4L)).isTrue();
         assertThat(eligibility.isOwnedBy(5L)).isFalse();
         assertThat(eligibility.isOwnedBy(null)).isFalse();

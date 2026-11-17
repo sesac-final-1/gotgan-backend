@@ -22,7 +22,7 @@ class NotificationMapperTest {
     }
 
     @Test
-    @DisplayName("결제 완료 → 구매자에게, 상품 요약(외 n건) · 결제 금액 · 내 주문 상세 링크 · 이벤트 시각")
+    @DisplayName("결제 완료 → 구매자에게, 상품 요약(외 n건), 결제 금액, 내 주문 상세 링크, 이벤트 시각")
     void orderPaid() {
         List<NewNotification> n = map("OrderPaid", """
                 {"orderNo":"20261027-000001","buyerId":4,"payAmt":59960,"items":[{"productName":"리넨 셔츠"},{"productName":"머그"}]}""");
@@ -30,7 +30,7 @@ class NotificationMapperTest {
         assertThat(n).singleElement().satisfies(x -> {
             assertThat(x.recipient()).isEqualTo("USER#4");
             assertThat(x.type()).isEqualTo("ORDER_PAID");
-            assertThat(x.body()).isEqualTo("리넨 셔츠 외 1건 · 59,960원");
+            assertThat(x.body()).isEqualTo("리넨 셔츠 외 1건, 59,960원");
             assertThat(x.link()).isEqualTo("/mypage/orders/20261027-000001");
             assertThat(x.occurredAt()).isEqualTo(Instant.parse("2026-10-27T01:00:00Z"));
             assertThat(x.sortKey()).isEqualTo("1793062800000#e-1");
@@ -38,7 +38,7 @@ class NotificationMapperTest {
     }
 
     @Test
-    @DisplayName("결제 완료 — 구매자 결제 알림 + 주문에 든 스토어마다 판매자 새 주문 알림(스토어 상품만 요약 · 합계), storeId 없는 항목은 건너뜀")
+    @DisplayName("결제 완료 — 구매자 결제 알림 + 주문에 든 스토어마다 판매자 새 주문 알림(스토어 상품만 요약, 합계), storeId 없는 항목은 건너뜀")
     void orderPaidNotifiesEachStore() {
         List<NewNotification> n = map("OrderPaid", """
                 {"orderNo":"20261103-000002","buyerId":4,"payAmt":110000,"items":[
@@ -49,19 +49,19 @@ class NotificationMapperTest {
 
         assertThat(n).extracting(NewNotification::recipient).containsExactly("USER#4", "STORE#1", "STORE#2");
         assertThat(n.get(1)).extracting(NewNotification::type, NewNotification::title, NewNotification::body, NewNotification::link)
-                .containsExactly("ORDER_NEW", "새 주문이 들어왔어요", "햇감귤 외 1건 · 74,980원", "/seller/orders");
-        assertThat(n.get(2).body()).isEqualTo("머그 · 28,000원");
+                .containsExactly("ORDER_NEW", "새 주문이 들어왔어요", "햇감귤 외 1건, 74,980원", "/seller/orders");
+        assertThat(n.get(2).body()).isEqualTo("머그, 28,000원");
     }
 
     @Test
-    @DisplayName("배송 시작 · 반품 완료 → 구매자, 정산 지급 → 스토어(판매자), 입점 결과 → 신청 회원")
+    @DisplayName("배송 시작, 반품 완료 → 구매자, 정산 지급 → 스토어(판매자), 입점 결과 → 신청 회원")
     void otherEvents() {
         assertThat(map("OrderItemShipped", """
                 {"orderNo":"N1","buyerId":5,"productName":"머그","courier":"CJ대한통운","trackingNo":"6512"}""").getFirst().body())
-                .isEqualTo("머그 · CJ대한통운 6512");
+                .isEqualTo("머그, CJ대한통운 6512");
         assertThat(map("OrderItemReturned", """
                 {"orderNo":"N1","buyerId":5,"productName":"머그","refundAmt":28000}""").getFirst())
-                .extracting(NewNotification::recipient, NewNotification::body).containsExactly("USER#5", "머그 · 환불 28,000원");
+                .extracting(NewNotification::recipient, NewNotification::body).containsExactly("USER#5", "머그, 환불 28,000원");
         assertThat(map("SettlementPaid", """
                 {"settlementId":42,"storeId":3,"week":"2026-W43","payoutAmt":51212}""").getFirst())
                 .extracting(NewNotification::recipient, NewNotification::type, NewNotification::link)
@@ -72,19 +72,19 @@ class NotificationMapperTest {
     }
 
     @Test
-    @DisplayName("반품 · 교환 요청 → 그 스토어 판매자에게 CLAIM_REQUESTED, 옵션이 없으면 상품명만 (Q-구-15)")
+    @DisplayName("반품, 교환 요청 → 그 스토어 판매자에게 CLAIM_REQUESTED, 옵션이 없으면 상품명만 (Q-구-15)")
     void claimRequested() {
         assertThat(map("OrderClaimRequested", """
                 {"claimId":7,"claimType":"RETURN","storeId":3,"productName":"머그","optionName":"화이트"}""").getFirst())
                 .extracting(NewNotification::recipient, NewNotification::type, NewNotification::title, NewNotification::body, NewNotification::link)
-                .containsExactly("STORE#3", "CLAIM_REQUESTED", "반품 요청이 들어왔어요", "머그 · 화이트", "/seller/claims");
+                .containsExactly("STORE#3", "CLAIM_REQUESTED", "반품 요청이 들어왔어요", "머그, 화이트", "/seller/claims");
         assertThat(map("OrderClaimRequested", """
                 {"claimId":8,"claimType":"EXCHANGE","storeId":3,"productName":"머그","optionName":null}""").getFirst())
                 .extracting(NewNotification::title, NewNotification::body).containsExactly("교환 요청이 들어왔어요", "머그");
     }
 
     @Test
-    @DisplayName("알림을 만들지 않는 이벤트(구매확정 · 스토어 상태)는 빈 목록")
+    @DisplayName("알림을 만들지 않는 이벤트(구매확정, 스토어 상태)는 빈 목록")
     void ignored() {
         assertThat(map("OrderItemConfirmed", "{\"orderItemId\":1}")).isEmpty();
         assertThat(map("StoreStatusChanged", "{\"storeId\":1,\"status\":\"SUSPENDED\"}")).isEmpty();

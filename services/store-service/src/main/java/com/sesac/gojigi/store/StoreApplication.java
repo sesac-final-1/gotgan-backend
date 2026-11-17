@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * store-service (:8082) — 입점 신청 · 심사 · 서류 · 스토어 · 판매자 대시보드(조합)
- * 담당: VoC-100 · 구조: 가이드라인 15장 · 컨벤션 2-1
+ * store-service (:8082) — 입점 신청, 심사, 서류, 스토어, 판매자 대시보드(조합)
+ * 담당: VoC-100, 구조: 가이드라인 15장, 컨벤션 2-1
  */
 @SpringBootApplication
 @EnableScheduling

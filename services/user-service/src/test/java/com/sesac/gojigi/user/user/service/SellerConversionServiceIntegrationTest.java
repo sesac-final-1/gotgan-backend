@@ -81,7 +81,7 @@ class SellerConversionServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("승인 → Keycloak 에 SELLER · store_id, processed_event 저장 — 같은 eventId 재전달은 Keycloak 을 다시 부르지 않음")
+    @DisplayName("승인 → Keycloak 에 SELLER, store_id, processed_event 저장 — 같은 eventId 재전달은 Keycloak 을 다시 부르지 않음")
     void applyApproved_grantsOnceAndSkipsDuplicate() {
         User user = member();
         EventEnvelope<StoreApprovedPayload> event = approved(user.getId(), 3L);
@@ -95,7 +95,7 @@ class SellerConversionServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("Keycloak 장애면 예외 그대로 · processed_event 없음 — 메시지가 남아 재전달되면 다시 처리")
+    @DisplayName("Keycloak 장애면 예외 그대로, processed_event 없음 — 메시지가 남아 재전달되면 다시 처리")
     void applyApproved_keycloakDown_notMarked() {
         User user = member();
         EventEnvelope<StoreApprovedPayload> event = approved(user.getId(), 3L);
@@ -122,7 +122,7 @@ class SellerConversionServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("회원이 없으면(탈퇴 · 잘못된 userId) Keycloak 을 부르지 않고 처리됨으로 남긴다")
+    @DisplayName("회원이 없으면(탈퇴, 잘못된 userId) Keycloak 을 부르지 않고 처리됨으로 남긴다")
     void applyApproved_unknownUser_skips() {
         EventEnvelope<StoreApprovedPayload> event = approved(Long.MAX_VALUE, 3L);
 
@@ -132,7 +132,7 @@ class SellerConversionServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("이미 SELLER · 같은 store_id (다른 eventId 로 다시 승인) — ALREADY_GRANTED")
+    @DisplayName("이미 SELLER, 같은 store_id (다른 eventId 로 다시 승인) — ALREADY_GRANTED")
     void applyApproved_alreadyGranted() {
         User user = member();
         EventEnvelope<StoreApprovedPayload> event = approved(user.getId(), 3L);

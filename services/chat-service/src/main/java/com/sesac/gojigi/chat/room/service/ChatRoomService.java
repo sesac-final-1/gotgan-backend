@@ -41,11 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 방 열기 · 목록 · 메시지 · 읽음 · 상담 상태 (chat.md 1~5절) + 실시간 전송(6절, STOMP SEND → send).
- * 저장 · 읽음 · 상태 변경은 ChatEvents 로 알리고, 커밋 뒤 realtime 이 구독자에게 전달 · 알림을 보낸다.
- * 남의 방은 404(있는지 알려 주지 않음). 상대 이름은 user · store 조회(ChatDirectory, 실패하면 번호), 관리자 쪽은 "곳간 운영팀" 고정(D-2).
- * 정지 · 폐점 스토어는 새 스토어 톡을 막고 기존 방은 읽기만(D-1).
- * user · store · product · settlement 조회(ChatDirectory — HTTP)는 트랜잭션 밖에서, 저장만 TransactionTemplate 으로 짧게 — 상대 서비스가 느려도 DB 커넥션을 잡고 있지 않게
+ * 방 열기, 목록, 메시지, 읽음, 상담 상태 (chat.md 1~5절) + 실시간 전송(6절, STOMP SEND → send).
+ * 저장, 읽음, 상태 변경은 ChatEvents 로 알리고, 커밋 뒤 realtime 이 구독자에게 전달, 알림을 보낸다.
+ * 남의 방은 404(있는지 알려 주지 않음). 상대 이름은 user, store 조회(ChatDirectory, 실패하면 번호), 관리자 쪽은 "곳간 운영팀" 고정(D-2).
+ * 정지, 폐점 스토어는 새 스토어 톡을 막고 기존 방은 읽기만(D-1).
+ * user, store, product, settlement 조회(ChatDirectory — HTTP)는 트랜잭션 밖에서, 저장만 TransactionTemplate 으로 짧게 — 상대 서비스가 느려도 DB 커넥션을 잡고 있지 않게
  */
 @Service
 @RequiredArgsConstructor
@@ -71,7 +71,7 @@ public class ChatRoomService {
     private final ChatDirectory directory;
     private final TransactionTemplate transactions;
 
-    /** 1절 — 같은 방이 있으면 그 방(문맥 카드만 추가), 없으면 새로. 스토어 상태 · 카드 제목 조회는 먼저, 방 · 카드 저장만 트랜잭션 */
+    /** 1절 — 같은 방이 있으면 그 방(문맥 카드만 추가), 없으면 새로. 스토어 상태, 카드 제목 조회는 먼저, 방, 카드 저장만 트랜잭션 */
     public Opened open(AuthUser user, ChatRequests.OpenRoom request) {
         try {
             return openOnce(user, request);
@@ -110,14 +110,14 @@ public class ChatRoomService {
     }
 
     /**
-     * 4절 — 헤더 '톡' 배지. 방 목록(상대 이름 조회 · 미리보기)을 만들지 않고 안 읽은 수만 센다 (11/3 점검 — 배지가 방 목록 전체를
-     * 다시 만들고, 이름 캐시가 비면 방 수만큼 user · store 를 부르던 것)
+     * 4절 — 헤더 '톡' 배지. 방 목록(상대 이름 조회, 미리보기)을 만들지 않고 안 읽은 수만 센다 (11/3 점검 — 배지가 방 목록 전체를
+     * 다시 만들고, 이름 캐시가 비면 방 수만큼 user, store 를 부르던 것)
      */
     public long unreadCount(AuthUser user) {
         return unreadByRoom(seatedRooms(user)).values().stream().mapToLong(Long::longValue).sum();
     }
 
-    /** 역할별로 내가 앉을 수 있는 방 (구매자 · 판매자 · 관리자 자리, 같은 방은 먼저 찾은 자리) */
+    /** 역할별로 내가 앉을 수 있는 방 (구매자, 판매자, 관리자 자리, 같은 방은 먼저 찾은 자리) */
     private List<Seated> seatedRooms(AuthUser user) {
         Map<Long, Seated> seated = new LinkedHashMap<>();
         if (user.hasRole(BUYER)) {
@@ -145,7 +145,7 @@ public class ChatRoomService {
                 .toList();
     }
 
-    /** 4절 — 그 메시지까지 읽음. 방의 마지막 메시지를 넘지 않게 · 읽기 전용 열람은 기록하지 않음 */
+    /** 4절 — 그 메시지까지 읽음. 방의 마지막 메시지를 넘지 않게, 읽기 전용 열람은 기록하지 않음 */
     @Transactional
     public void markRead(AuthUser user, Long roomId, Long lastMessageId) {
         Seated seated = seated(user, roomId);
@@ -159,7 +159,7 @@ public class ChatRoomService {
     }
 
     /**
-     * 6절 SEND — 앞뒤 공백 제거 · 개행 3줄 이상은 2줄로, 1~1,000자. 읽기 전용 열람이면 CHAT_NOT_ALLOWED.
+     * 6절 SEND — 앞뒤 공백 제거, 개행 3줄 이상은 2줄로, 1~1,000자. 읽기 전용 열람이면 CHAT_NOT_ALLOWED.
      * 닫힌 상담방에 관리자가 아닌 쪽이 보내면 다시 OPEN. 스토어 상태 조회는 먼저, 저장만 트랜잭션
      */
     public void send(AuthUser user, Long roomId, String content) {
@@ -188,7 +188,7 @@ public class ChatRoomService {
         return seated(user, roomId).seat();
     }
 
-    /** 5절 — 관리자만 · 상담방만. RESOLVED 로 바꾸면 SYSTEM 안내. 응답의 상대 이름 조회는 커밋 뒤 */
+    /** 5절 — 관리자만, 상담방만. RESOLVED 로 바꾸면 SYSTEM 안내. 응답의 상대 이름 조회는 커밋 뒤 */
     public Room changeStatus(AuthUser user, Long roomId, ChatRoomStatus status) {
         if (!user.hasRole(ADMIN)) {
             throw new ChatException(ChatErrorCode.CHAT_NOT_ALLOWED);
@@ -212,7 +212,7 @@ public class ChatRoomService {
         return view(room, ChatSeat.admin(false));
     }
 
-    /** 방 종류 · 역할로 같은 방 기준(buyerId · storeId)과 내 자리를 정한다 (1절 표) */
+    /** 방 종류, 역할로 같은 방 기준(buyerId, storeId)과 내 자리를 정한다 (1절 표) */
     private Opening opening(AuthUser user, ChatRequests.OpenRoom request) {
         return switch (request.type()) {
             case STORE_INQUIRY -> {
@@ -324,7 +324,7 @@ public class ChatRoomService {
         return views(List.of(new Seated(room, seat))).getFirst();
     }
 
-    /** 미리보기 · 안 읽은 수를 자리(readerKey)별 한 번의 쿼리로 */
+    /** 미리보기, 안 읽은 수를 자리(readerKey)별 한 번의 쿼리로 */
     private List<Room> views(List<Seated> seatedRooms) {
         List<Long> lastIds = seatedRooms.stream().map(s -> s.room().getLastMessageId()).filter(Objects::nonNull).toList();
         Map<Long, ChatMessage> lasts = messageRepository.findAllById(lastIds).stream()
@@ -351,8 +351,8 @@ public class ChatRoomService {
     }
 
     /**
-     * 상대 표시 (1절) — 구매자에겐 스토어명, 판매자에겐 가린 구매자 이름(김*연), 관리자에겐 스토어명 · 회원 이름, 관리자 쪽은 "곳간 운영팀".
-     * 이름을 못 받으면 번호("스토어 #5" · "회원 #10")
+     * 상대 표시 (1절) — 구매자에겐 스토어명, 판매자에겐 가린 구매자 이름(김*연), 관리자에겐 스토어명, 회원 이름, 관리자 쪽은 "곳간 운영팀".
+     * 이름을 못 받으면 번호("스토어 #5", "회원 #10")
      */
     private Counterpart counterpart(ChatRoom room, SenderRole viewer) {
         return switch (viewer) {
@@ -391,7 +391,7 @@ public class ChatRoomService {
         return digits.length() == ORDER_NO_DIGITS ? digits.substring(0, 8) + "-" + digits.substring(8) : "#" + digits;
     }
 
-    /** 정산 카드 — 판매자 운영 상담에만 · 그 스토어 정산만. 제목 "정산 2026-W43 · 1,234,000원", 조회 실패면 번호 */
+    /** 정산 카드 — 판매자 운영 상담에만, 그 스토어 정산만. 제목 "정산 2026-W43, 1,234,000원", 조회 실패면 번호 */
     private String settlementTitle(ChatRoomType roomType, Long storeId, Long settlementId, String fallback) {
         if (roomType != ChatRoomType.SELLER_SUPPORT) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT, "정산 문의는 판매자 운영 상담에서만 할 수 있습니다.");
@@ -403,7 +403,7 @@ public class ChatRoomService {
         if (!info.storeId().equals(storeId)) {
             throw new BusinessException(CommonErrorCode.INVALID_INPUT, "이 스토어의 정산만 문의할 수 있습니다.");
         }
-        return "정산 " + info.week() + " · " + String.format("%,d원", info.payoutAmt());
+        return "정산 " + info.week() + ", " + String.format("%,d원", info.payoutAmt());
     }
 
     private static String normalize(String content) {

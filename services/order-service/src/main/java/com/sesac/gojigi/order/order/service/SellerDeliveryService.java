@@ -17,7 +17,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 /**
- * 판매자 발주확인 · 송장 등록 · 배송완료 (DLV-01 ~ 03) — 일괄 요청을 상품주문마다 따로 처리해 하나가 실패해도 나머지는 반영한다.
+ * 판매자 발주확인, 송장 등록, 배송완료 (DLV-01 ~ 03) — 일괄 요청을 상품주문마다 따로 처리해 하나가 실패해도 나머지는 반영한다.
  * 같은 상품주문을 다시 처리하면(중복 등록) 상태 전이에서 걸려 failed 로 돌려준다 — 이미 바뀐 값은 그대로.
  */
 @Slf4j
@@ -59,11 +59,11 @@ public class SellerDeliveryService {
                 failed.add(new SellerBulkResponse.Failure(id, code.getCode(), code.getMessage()));
             }
         }
-        log.info("판매자 일괄 처리 - 성공 {}건 · 실패 {}건", succeeded.size(), failed.size());
+        log.info("판매자 일괄 처리 - 성공 {}건, 실패 {}건", succeeded.size(), failed.size());
         return new SellerBulkResponse(succeeded, failed);
     }
 
-    /** 판매자인데 스토어가 없음(입점 승인 전 · 토큰 갱신 전) — 게이트웨이가 SELLER 역할은 이미 확인 */
+    /** 판매자인데 스토어가 없음(입점 승인 전, 토큰 갱신 전) — 게이트웨이가 SELLER 역할은 이미 확인 */
     private static void requireStore(Long storeId) {
         if (storeId == null) {
             throw new BusinessException(CommonErrorCode.FORBIDDEN, "스토어 정보가 없습니다.");

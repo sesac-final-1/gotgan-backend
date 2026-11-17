@@ -35,7 +35,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-/** 내 포인트(외부) · 사용 · 사용 취소 · 회원 포인트(내부) 컨트롤러 */
+/** 내 포인트(외부), 사용, 사용 취소, 회원 포인트(내부) 컨트롤러 */
 @ExtendWith(MockitoExtension.class)
 class PointControllerTest {
 
@@ -55,7 +55,7 @@ class PointControllerTest {
     private static final String USE_BODY = "{\"sagaId\":\"saga-1\",\"userId\":4,\"orderNo\":\"20261022-0001\",\"amount\":300}";
 
     @Test
-    @DisplayName("내 포인트 — 잔액 · 이력(type · 양수 amount · 오프셋 포함 시각)")
+    @DisplayName("내 포인트 — 잔액, 이력(type, 양수 amount, 오프셋 포함 시각)")
     void getMyPoints() throws Exception {
         given(pointService.getMyPoints(4L)).willReturn(new MyPointsResponse(700L, List.of(new MyPointsResponse.Item(
                 1L, PointType.USE, 300L, 700L, "20261022-0001", OffsetDateTime.parse("2026-10-22T11:00:00+09:00")))));
@@ -69,7 +69,7 @@ class PointControllerTest {
     }
 
     @Test
-    @DisplayName("포인트 환원 · 회수 — 200 결과, 음수 금액은 400 INVALID_INPUT")
+    @DisplayName("포인트 환원, 회수 — 200 결과, 음수 금액은 400 INVALID_INPUT")
     void reverse() throws Exception {
         String body = "{\"claimId\":789,\"orderItemId\":456,\"userId\":4,\"orderNo\":\"20261023-000001\","
                 + "\"restoreAmount\":2000,\"reclaimAmount\":300}";
@@ -107,7 +107,7 @@ class PointControllerTest {
     }
 
     @Test
-    @DisplayName("사용 — 잔액 부족 409 POINT_INSUFFICIENT, amount 0 · sagaId 없음은 400")
+    @DisplayName("사용 — 잔액 부족 409 POINT_INSUFFICIENT, amount 0, sagaId 없음은 400")
     void use_errors() throws Exception {
         given(pointService.use(any())).willThrow(new PointException(PointErrorCode.POINT_INSUFFICIENT));
         mockMvc.perform(post("/internal/points/use").contentType(MediaType.APPLICATION_JSON).content(USE_BODY))
@@ -123,7 +123,7 @@ class PointControllerTest {
     }
 
     @Test
-    @DisplayName("사용 취소 — 돌려준 금액 · 잔액, 사용 기록이 없어도 200 (restoredAmount 0)")
+    @DisplayName("사용 취소 — 돌려준 금액, 잔액, 사용 기록이 없어도 200 (restoredAmount 0)")
     void cancelUse() throws Exception {
         given(pointService.cancelUse("saga-1")).willReturn(new PointRestoreResponse("saga-1", 300L, 1000L));
         given(pointService.cancelUse("saga-x")).willReturn(PointRestoreResponse.nothingToRestore("saga-x"));
@@ -138,7 +138,7 @@ class PointControllerTest {
     }
 
     @Test
-    @DisplayName("회원 포인트(관리자) — 잔액 + 이력 PageResponse, page · size 를 그대로 넘긴다")
+    @DisplayName("회원 포인트(관리자) — 잔액 + 이력 PageResponse, page, size 를 그대로 넘긴다")
     void getUserPoints() throws Exception {
         given(pointService.getUserPoints(7L, 1, 10)).willReturn(new UserPointsResponse(700L, new PageResponse<>(
                 List.of(new MyPointsResponse.Item(3L, PointType.USE, 300L, 700L, "20261022-0001",
@@ -155,7 +155,7 @@ class PointControllerTest {
     }
 
     @Test
-    @DisplayName("회원 포인트(관리자) — 파라미터 생략 시 0페이지 · 20개, 없는 회원 · 탈퇴는 404 USER_NOT_FOUND")
+    @DisplayName("회원 포인트(관리자) — 파라미터 생략 시 0페이지, 20개, 없는 회원, 탈퇴는 404 USER_NOT_FOUND")
     void getUserPoints_defaultsAndNotFound() throws Exception {
         given(pointService.getUserPoints(7L, 0, 20))
                 .willReturn(new UserPointsResponse(0L, new PageResponse<>(List.of(), 0, 20, 0, 0, false)));
@@ -170,7 +170,7 @@ class PointControllerTest {
     }
 
     @Test
-    @DisplayName("회원 포인트(관리자) — size 범위 밖 · 음수 page 는 서비스 호출 없이 400 INVALID_INPUT")
+    @DisplayName("회원 포인트(관리자) — size 범위 밖, 음수 page 는 서비스 호출 없이 400 INVALID_INPUT")
     void getUserPoints_invalidParams() throws Exception {
         for (String[] param : new String[][] { { "size", "101" }, { "size", "0" }, { "page", "-1" } }) {
             mockMvc.perform(get("/internal/users/7/points").param(param[0], param[1]))

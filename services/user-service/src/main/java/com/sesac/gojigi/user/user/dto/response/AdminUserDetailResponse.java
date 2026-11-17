@@ -9,8 +9,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 /**
- * 관리자 회원 상세 — 목록 항목 + 연락처 · 상태 사유 · 정지 시각 · 정지 종료 시각.
- * statusReason 은 마지막 정지 · 해제 때 관리자가 입력한 사유 (정상 회원도 해제 사유가 남아 있을 수 있음).
+ * 관리자 회원 상세 — 목록 항목 + 연락처, 상태 사유, 정지 시각, 정지 종료 시각.
+ * statusReason 은 마지막 정지, 해제 때 관리자가 입력한 사유 (정상 회원도 해제 사유가 남아 있을 수 있음).
  * suspendedUntil 은 정지 중일 때만 — null 이면 영구 정지(또는 정지 아님).
  */
 public record AdminUserDetailResponse(Long userId, String email, String name, String nick, String phone, Grade grade,

@@ -30,7 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * 관리자 신고 처리 — 목록은 대상별로 묶고, 처리는 대상 서비스(review 블라인드 · user 정지)를 먼저 부른 뒤 성공하면 기록한다.
+ * 관리자 신고 처리 — 목록은 대상별로 묶고, 처리는 대상 서비스(review 블라인드, user 정지)를 먼저 부른 뒤 성공하면 기록한다.
  * 대상 서비스 호출이 실패하면 아무것도 남기지 않는다 (신고는 그대로 OPEN — 다시 처리하면 됨)
  */
 @Service
@@ -61,7 +61,7 @@ public class AdminReportService {
                 .toList();
     }
 
-    /** 대상 종류(리뷰 · 회원)별로 한 번씩 — 목록에 나온 대상의 마지막 조치만 */
+    /** 대상 종류(리뷰, 회원)별로 한 번씩 — 목록에 나온 대상의 마지막 조치만 */
     private Map<Key, ModerationAction> lastActions(Collection<Key> keys) {
         Map<ReportTargetType, List<Long>> idsByType = keys.stream()
                 .collect(Collectors.groupingBy(Key::type, Collectors.mapping(Key::id, Collectors.toList())));
@@ -79,7 +79,7 @@ public class AdminReportService {
                 ReportResponses.ReportItem.of(latest).createdAt(), ReportResponses.ActionItem.of(lastAction));
     }
 
-    /** 상세 — 신고 목록 · 조치 이력 + 대상 서비스의 현재 값 (불러오지 못해도 신고 기록은 보여 준다) */
+    /** 상세 — 신고 목록, 조치 이력 + 대상 서비스의 현재 값 (불러오지 못해도 신고 기록은 보여 준다) */
     public ReportResponses.TargetDetail detail(ReportTargetType type, Long targetId, Long adminId) {
         JsonNode target = null;
         String targetError = null;
@@ -94,7 +94,7 @@ public class AdminReportService {
                         .map(ReportResponses.ActionItem::of).toList());
     }
 
-    /** 처리 — 리뷰: 블라인드 · 해제 / 회원: 정지 · 해제 / 공통: 기각. 대상 서비스 → 기록 순서 */
+    /** 처리 — 리뷰: 블라인드, 해제 / 회원: 정지, 해제 / 공통: 기각. 대상 서비스 → 기록 순서 */
     public ReportResponses.Resolved resolve(ReportTargetType type, Long targetId, Long adminId, ReportResolveRequest request) {
         ModerationActionType action = request.action();
         if (!action.appliesTo(type) || (request.days() != null && action != ModerationActionType.SUSPEND)) {

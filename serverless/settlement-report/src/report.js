@@ -1,12 +1,12 @@
 // SQS(SettlementPaid) → 정산 명세서 CSV → S3 reports/{storeId}/{week}.csv → SES 메일(판매자 정산 화면 링크) + DynamoDB 발송 이력
-// 담당 jihoon-devstu · 이벤트 봉투 형식: gotgan-config docs/events.md · 명세서 내용은 이벤트 payload 에 모두 있음(10/21 방식 B)
+// 담당 jihoon-devstu, 이벤트 봉투 형식: gotgan-config docs/events.md, 명세서 내용은 이벤트 payload 에 모두 있음(10/21 방식 B)
 //
 // 모든 단계가 실패할 수 있다고 보고 짠다:
-//  ① DynamoDB 선점(PROCESSING) — 이미 SENT 면 건너뜀(같은 이벤트 재전달 · 아웃박스 재발행). PROCESSING 은 앞선 시도가 중간에 실패한 것이라 다시 처리
+//  ① DynamoDB 선점(PROCESSING) — 이미 SENT 면 건너뜀(같은 이벤트 재전달, 아웃박스 재발행). PROCESSING 은 앞선 시도가 중간에 실패한 것이라 다시 처리
 //  ② CSV 를 S3 에 올림 — 키가 정해져 있어 다시 올려도 같은 파일(덮어쓰기)
 //  ③ SES 메일 — 판매자 정산 화면 링크(다운로드는 화면에서 10분 presigned, 스펙 STL-10)
 //  ④ DynamoDB SENT 기록
-// 어느 단계든 실패하면 그 메시지만 batchItemFailures → SQS 재전달 → 3회 실패 시 DLQ(CloudWatch 알람). ③ 성공 · ④ 실패면 메일이 한 번 더 갈 수 있다(최소 1회)
+// 어느 단계든 실패하면 그 메시지만 batchItemFailures → SQS 재전달 → 3회 실패 시 DLQ(CloudWatch 알람). ③ 성공, ④ 실패면 메일이 한 번 더 갈 수 있다(최소 1회)
 import { DynamoDBClient, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { gunzipSync } from 'node:zlib';
@@ -23,14 +23,14 @@ export function esc(v) {
 }
 
 const COLOR = { ink: '#141414', ink2: '#3b3b3b', mute: '#8a8780', line: '#e6e3dc', cream: '#f6f4ef', point: '#ff5a1f', moss: '#3f6b4f', mossSoft: '#e5eee7', rust: '#b4371f', rustSoft: '#f8e4de', pointSoft: '#ffe9df' };
-// 배지 색 — good: 완료 · 승인 · 출발 / info: 주문 · 보완요청 / bad: 취소 · 반품 · 반려
+// 배지 색 — good: 완료, 승인, 출발 / info: 주문, 보완요청 / bad: 취소, 반품, 반려
 const TONE = { good: [COLOR.mossSoft, COLOR.moss], info: [COLOR.pointSoft, COLOR.point], bad: [COLOR.rustSoft, COLOR.rust] };
 const FONT = "font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;";
 export const FOOTNOTE = { buyer: '문의는 곳간 마이페이지의 1:1 채팅을 이용해 주세요.', seller: '문의는 판매자 센터 채팅의 "운영팀에 문의"를 이용해 주세요.' };
 
 /**
- * 곳간 메일 공통 HTML — 메일 앱 호환을 위해 표(table) + 인라인 스타일만(외부 CSS · 이미지 · 웹폰트 없음). 색은 쇼핑몰 화면과 같은 값
- * 값은 전부 글자로 받아 여기서 이스케이프한다. rows: [[이름, 값, 강조?]] · notes: [[제목, 문장]] · cta: { label, url }
+ * 곳간 메일 공통 HTML — 메일 앱 호환을 위해 표(table) + 인라인 스타일만(외부 CSS, 이미지, 웹폰트 없음). 색은 쇼핑몰 화면과 같은 값
+ * 값은 전부 글자로 받아 여기서 이스케이프한다. rows: [[이름, 값, 강조?]], notes: [[제목, 문장]], cta: { label, url }
  */
 export function mailHtml({ badge, tone = 'good', title, intro = [], caption, rows = [], notes = [], cta, ctaHint, footnote = FOOTNOTE.buyer }) {
   const C = COLOR;
@@ -88,7 +88,7 @@ export function mailHtml({ badge, tone = 'good', title, intro = [], caption, row
 }
 
 
-/** CSV 한 칸 — 쉼표 · 따옴표 · 줄바꿈이 있으면 따옴표로 감싸고 따옴표는 두 번 (RFC 4180) */
+/** CSV 한 칸 — 쉼표, 따옴표, 줄바꿈이 있으면 따옴표로 감싸고 따옴표는 두 번 (RFC 4180) */
 export function csvCell(value) {
   const s = value == null ? '' : String(value);
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -124,9 +124,9 @@ export function buildEmail(p, frontUrl) {
   const text = [
     `${p.storeName} 판매자님, ${p.week}(${p.weekStart} ~ ${p.weekEnd}) 정산금이 지급되었습니다.`,
     '',
-    `· 판매금액 ${won(p.salesAmt)} (${(p.items ?? []).length}건)`,
-    `· 판매수수료 ${won(p.commissionAmt)} · 결제수수료 ${won(p.paymentFeeAmt)}`,
-    `· 지급액 ${won(p.payoutAmt)}`,
+    `, 판매금액 ${won(p.salesAmt)} (${(p.items ?? []).length}건)`,
+    `, 판매수수료 ${won(p.commissionAmt)}, 결제수수료 ${won(p.paymentFeeAmt)}`,
+    `, 지급액 ${won(p.payoutAmt)}`,
     '',
     `정산 명세서(CSV)는 판매자 센터 정산 화면에서 받을 수 있습니다: ${frontUrl}/seller/settlements`,
   ].join('\n');
@@ -155,7 +155,7 @@ export function reportKey(p) {
 /** 선점(PROCESSING)을 다른 실행 중으로 보는 시간 — Lambda 타임아웃(30초)보다 넉넉히 */
 const PROCESSING_STALE_MS = 2 * 60 * 1000;
 
-/** 의존성(클라이언트 · 설정)을 받아 핸들러를 만든다 — 테스트는 가짜 클라이언트를 넣는다 */
+/** 의존성(클라이언트, 설정)을 받아 핸들러를 만든다 — 테스트는 가짜 클라이언트를 넣는다 */
 export function createHandler({ ddb, s3, ses, env, log = console }) {
   async function processRecord(record) {
     const envelope = JSON.parse(record.body);
@@ -235,7 +235,7 @@ export function createHandler({ ddb, s3, ses, env, log = console }) {
       try {
         await processRecord(record);
       } catch (e) {
-        // 개인정보(이메일)는 남기지 않는다 — messageId 로 SQS · DLQ 에서 찾는다
+        // 개인정보(이메일)는 남기지 않는다 — messageId 로 SQS, DLQ 에서 찾는다
         log.error(JSON.stringify({ msg: '정산 명세서 처리 실패 — 재전달', messageId: record.messageId, error: String(e?.name ?? e), detail: e?.message }));
         failures.push({ itemIdentifier: record.messageId });
       }

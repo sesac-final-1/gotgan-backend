@@ -38,7 +38,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-/** 실제 MySQL + Flyway(V5 requested_docs) 위에서 보완 재제출 — 서류 교체(is_current) · 고친 항목 · 요청 서류 비움 · 이력 */
+/** 실제 MySQL + Flyway(V5 requested_docs) 위에서 보완 재제출 — 서류 교체(is_current), 고친 항목, 요청 서류 비움, 이력 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfiguration.class, SellerApplyService.class, SupplementDeadline.class,
@@ -74,9 +74,9 @@ class SellerApplyServiceIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    @DisplayName("재제출 — 요청 서류만 이전 제출본으로 바뀌고 새 행 추가, 다른 서류 · 안 보낸 항목은 그대로, requested_docs 는 NULL")
+    @DisplayName("재제출 — 요청 서류만 이전 제출본으로 바뀌고 새 행 추가, 다른 서류, 안 보낸 항목은 그대로, requested_docs 는 NULL")
     void resubmit_persistsDocumentsFieldsAndHistory() {
-        // given — 하루 전 통신판매업 신고증 보완요청, 서류는 사업자등록증 · 신고증(옛것)
+        // given — 하루 전 통신판매업 신고증 보완요청, 서류는 사업자등록증, 신고증(옛것)
         StoreApplication application = application();
         application.requestSupplement("신고증 사본이 흐립니다", List.of(DocType.ECOMMERCE_REG), NOW.minusDays(1));
         application = storeApplicationRepository.saveAndFlush(application);

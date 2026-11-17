@@ -51,7 +51,7 @@ public class ChatRetentionJob {
         purge();
     }
 
-    /** 지운 메시지 · 방 수 — 묶음마다 별도 트랜잭션(잠금을 짧게) */
+    /** 지운 메시지, 방 수 — 묶음마다 별도 트랜잭션(잠금을 짧게) */
     public Result purge() {
         long started = clock.millis();
         LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(days);
@@ -65,7 +65,7 @@ public class ChatRetentionJob {
         }
         readRepository.deleteOfEmptyRoomsOlderThan(cutoff);
         int rooms = roomRepository.deleteEmptyOlderThan(cutoff);
-        log.info("채팅 보관 삭제 — 기준 {} 이전, 메시지 {}건 · 빈 방 {}개, {}ms", cutoff, messages, rooms, clock.millis() - started);
+        log.info("채팅 보관 삭제 — 기준 {} 이전, 메시지 {}건, 빈 방 {}개, {}ms", cutoff, messages, rooms, clock.millis() - started);
         return new Result(messages, rooms);
     }
 

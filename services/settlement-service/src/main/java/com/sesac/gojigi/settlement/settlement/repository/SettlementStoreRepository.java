@@ -14,7 +14,7 @@ public interface SettlementStoreRepository extends JpaRepository<SettlementStore
 
     Optional<SettlementStore> findByStoreId(Long storeId);
 
-    /** 여러 스토어 스냅샷을 한 번에 — 정산 목록 · 대시보드 순위의 스토어명 (스토어마다 조회하던 N+1 대신) */
+    /** 여러 스토어 스냅샷을 한 번에 — 정산 목록, 대시보드 순위의 스토어명 (스토어마다 조회하던 N+1 대신) */
     List<SettlementStore> findByStoreIdIn(Collection<Long> storeIds);
 
     boolean existsByStoreId(Long storeId);
@@ -22,7 +22,7 @@ public interface SettlementStoreRepository extends JpaRepository<SettlementStore
     /**
      * 이벤트 순서 규칙(docs/events.md, 10/15 A안) — 마지막으로 반영한 occurredAt 보다 새 이벤트만 반영한다.
      * SQS 표준 큐는 순서를 보장하지 않으므로, 늦게 도착한 옛 이벤트는 조건에 걸려 0행 갱신(무시)된다.
-     * 비교 · 갱신을 UPDATE 한 문장에서 해서 동시 처리(레플리카 2개)에도 안전하다.
+     * 비교, 갱신을 UPDATE 한 문장에서 해서 동시 처리(레플리카 2개)에도 안전하다.
      *
      * @return 갱신된 행 수 — 0 이면 옛 이벤트(또는 스토어 없음)
      */

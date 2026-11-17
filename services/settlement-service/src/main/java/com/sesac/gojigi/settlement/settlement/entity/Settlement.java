@@ -94,7 +94,7 @@ public class Settlement extends BaseTimeEntity {
         return new Settlement(storeId, weekStart, weekEnd, scheduledPayDate);
     }
 
-    /** 연결된 상품주문 합계로 금액을 다시 계산 — 집계 · 늦게 들어온 구매확정 반영 */
+    /** 연결된 상품주문 합계로 금액을 다시 계산 — 집계, 늦게 들어온 구매확정 반영 */
     public void recalculate(List<SettlementItem> items) {
         if (status == SettlementStatus.PAID) {
             throw new SettlementException(SettlementErrorCode.SETTLE_INVALID_STATUS);

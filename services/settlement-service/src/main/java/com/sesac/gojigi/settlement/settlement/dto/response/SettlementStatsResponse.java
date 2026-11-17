@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * 정산 통계 (STL-08, /internal/stats/settlements) — storeId 가 있으면 store 필드(판매자 대시보드), 없으면 platform 필드(관리자 대시보드).
- * 대시보드 조합(store · admin)이 부분 응답을 만들 때 그대로 쓴다.
+ * 대시보드 조합(store, admin)이 부분 응답을 만들 때 그대로 쓴다.
  */
 public record SettlementStatsResponse(StoreStats store, PlatformStats platform) {
 
@@ -22,7 +22,7 @@ public record SettlementStatsResponse(StoreStats store, PlatformStats platform) 
     }
 
     /**
-     * scheduled · held = 지급 전 정산서 수 · 금액, commissionRevenueThisMonth = 이번 달(KST) 구매확정분 판매수수료 합.
+     * scheduled, held = 지급 전 정산서 수, 금액, commissionRevenueThisMonth = 이번 달(KST) 구매확정분 판매수수료 합.
      * salesFrom 부터 오늘까지(이번 주 포함 8주) 구매확정분 — categorySales 상위 카테고리별 전부, topStores 매출 상위 10개 스토어.
      */
     public record PlatformStats(long scheduledCount, long scheduledAmt, long heldCount, long heldAmt,
