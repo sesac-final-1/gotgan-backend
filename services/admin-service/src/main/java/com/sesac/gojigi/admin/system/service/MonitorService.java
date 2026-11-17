@@ -21,6 +21,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,6 +44,9 @@ public class MonitorService {
     static final int LIST_LIMIT = 40;
     /** 관리자 시스템 화면이 1 ~ 2초마다 부르는 요청 — 호출 목록을 덮지 않게 뺀다 */
     static final String SELF_PATH = "/api/admin/system";
+    /** Prometheus 수집(5초) · 상태 확인 요청 — 게이트웨이 파드를 직접 부르므로 업무 요청이 아니다 */
+    static final String ACTUATOR_PATH = "/actuator";
+    static final String ROUTE_TAG = "spring.cloud.gateway.route.id";
 
     static final String GW = "spring_cloud_gateway_requests_seconds";
     static final String COUNT_BY_ROUTE = "sum by (routeId)(rate(" + GW + "_count[15s]))";
@@ -143,22 +147,25 @@ public class MonitorService {
 
     // ── 호출 · 장애 목록
 
-    public List<Call> calls() {
+    /** service 가 있으면 그 서비스로 간 요청만(게이트웨이 라우트 태그로 Zipkin 에서 바로 조회) — 트래픽이 적은 서비스도 묻히지 않게 */
+    public List<Call> calls(String service) {
         long now = clock.millis();
-        return zipkin.recentTraces(null, now, Duration.ofMinutes(1).toMillis(), LIST_LIMIT * 2).stream()
+        return traces(service, null, now, Duration.ofMinutes(1).toMillis(), LIST_LIMIT * 2).stream()
                 .map(MonitorService::call)
                 .filter(Objects::nonNull)
+                .filter(c -> service == null || service.equals(c.service()))
                 .sorted(Comparator.comparingLong(Call::timestampMs).reversed())
                 .limit(LIST_LIMIT)
                 .toList();
     }
 
-    public List<ErrorItem> errors() {
+    public List<ErrorItem> errors(String service) {
         Instant now = clock.instant();
-        Stream<ErrorItem> responses = zipkin.recentTraces("outcome=SERVER_ERROR", now.toEpochMilli(), Duration.ofMinutes(10).toMillis(), LIST_LIMIT)
+        Stream<ErrorItem> responses = traces(service, "outcome=SERVER_ERROR", now.toEpochMilli(), Duration.ofMinutes(10).toMillis(), LIST_LIMIT)
                 .stream().map(MonitorService::call).filter(Objects::nonNull)
+                .filter(c -> service == null || service.equals(c.service()))
                 .map(c -> new ErrorItem("RESPONSE", c.timestampMs(), c.service(), "ERROR", c.method() + " " + c.path(), c.status(), c.traceId()));
-        Stream<ErrorItem> logs = loki.errors(now.minus(Duration.ofMinutes(10)), now, LIST_LIMIT).stream()
+        Stream<ErrorItem> logs = loki.errors(now.minus(Duration.ofMinutes(10)), now, LIST_LIMIT, service).stream()
                 .map(l -> new ErrorItem("LOG", l.timestampMs(), l.service(), l.level(), l.message(), null, l.traceId()));
         return Stream.concat(responses, logs)
                 .sorted(Comparator.comparingLong(ErrorItem::timestampMs).reversed())
@@ -166,7 +173,28 @@ public class MonitorService {
                 .toList();
     }
 
-    /** 트레이스 하나 → 게이트웨이 첫 구간(SERVER, 부모 없음)으로 요청 한 줄. 관리자 시스템 화면 폴링 · 경로 없는 것은 null */
+    /** 서비스 필터가 있으면 그 서비스의 게이트웨이 라우트마다 조회해 합친다(user 는 user-auth · user-auth-strict · user-service) */
+    private List<JsonNode> traces(String service, String condition, long endTsMs, long lookbackMs, int limit) {
+        if (service == null) {
+            return zipkin.recentTraces(condition, endTsMs, lookbackMs, limit);
+        }
+        Map<String, JsonNode> byId = new LinkedHashMap<>();
+        SystemCatalog.ROUTE_SERVICES.forEach((route, owner) -> {
+            if (owner.equals(service)) {
+                String query = (condition == null ? "" : condition + " and ") + ROUTE_TAG + "=" + route;
+                zipkin.recentTraces(query, endTsMs, lookbackMs, limit)
+                        .forEach(tr -> byId.putIfAbsent(tr.path(0).path("traceId").asString(""), tr));
+            }
+        });
+        return List.copyOf(byId.values());
+    }
+
+    /** 필터로 받을 수 있는 서비스 — 게이트웨이 라우트가 있는 서비스만 */
+    public static boolean isFilterable(String service) {
+        return service == null || SystemCatalog.ROUTE_SERVICES.containsValue(service);
+    }
+
+    /** 트레이스 하나 → 게이트웨이 첫 구간(SERVER, 부모 없음)으로 요청 한 줄. 관리자 시스템 화면 폴링 · 액추에이터 · 경로 없는 것은 null */
     static Call call(JsonNode trace) {
         JsonNode root = null;
         String route = null;
@@ -175,8 +203,8 @@ public class MonitorService {
             if (gateway && "SERVER".equals(span.path("kind").asString(null)) && !span.hasNonNull("parentId")) {
                 root = span;
             }
-            if (route == null && span.path("tags").has("spring.cloud.gateway.route.id")) {
-                route = span.path("tags").path("spring.cloud.gateway.route.id").asString();
+            if (route == null && span.path("tags").has(ROUTE_TAG)) {
+                route = span.path("tags").path(ROUTE_TAG).asString();
             }
         }
         if (root == null) {
@@ -184,7 +212,7 @@ public class MonitorService {
         }
         JsonNode tags = root.path("tags");
         String path = tags.path("http.url").asString(null);
-        if (path == null || path.startsWith(SELF_PATH)) {
+        if (path == null || path.startsWith(SELF_PATH) || path.startsWith(ACTUATOR_PATH)) {
             return null;
         }
         String service = route == null ? null : SystemCatalog.ROUTE_SERVICES.getOrDefault(route, route);

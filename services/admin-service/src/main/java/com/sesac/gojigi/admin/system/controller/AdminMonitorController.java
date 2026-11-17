@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 관리자 화면 실시간 모니터링 (11/16) — 운영 지표 · 요청 · 로그를 보여 주므로 게이트웨이 ADMIN 확인에 더해 여기서도 확인한다 */
@@ -40,18 +41,22 @@ public class AdminMonitorController {
         return ApiResponse.success("모니터링 현황을 조회했습니다.", monitorService.overview());
     }
 
-    @Operation(summary = "최근 호출 (1초 폴링)", description = "게이트웨이를 지난 최근 1분 요청 최신순 40건(Zipkin). 관리자 시스템 화면 폴링은 뺀다")
+    @Operation(summary = "최근 호출 (1초 폴링)", description = "게이트웨이를 지난 최근 1분 요청 최신순 40건(Zipkin). 관리자 시스템 화면 폴링 · 액추에이터는 뺀다. ?service=product-service 면 그 서비스만(라우트 없는 이름 400)")
     @GetMapping("/calls")
-    public ApiResponse<List<MonitorResponses.Call>> calls(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
+    public ApiResponse<List<MonitorResponses.Call>> calls(@Parameter(hidden = true) @CurrentUser AuthUser admin,
+                                                          @RequestParam(required = false) String service) {
         requireAdmin(admin);
-        return ApiResponse.success("최근 호출을 조회했습니다.", monitorService.calls());
+        requireFilterable(service);
+        return ApiResponse.success("최근 호출을 조회했습니다.", monitorService.calls(service));
     }
 
-    @Operation(summary = "최근 장애 (1초 폴링)", description = "최근 10분 — RESPONSE(게이트웨이 5xx 응답, Zipkin) · LOG(서비스 WARN · ERROR 로그, Loki) 최신순 40건")
+    @Operation(summary = "최근 장애 (1초 폴링)", description = "최근 10분 — RESPONSE(게이트웨이 5xx 응답, Zipkin) · LOG(서비스 WARN · ERROR 로그, Loki) 최신순 40건. ?service= 로 그 서비스만")
     @GetMapping("/errors")
-    public ApiResponse<List<MonitorResponses.ErrorItem>> errors(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
+    public ApiResponse<List<MonitorResponses.ErrorItem>> errors(@Parameter(hidden = true) @CurrentUser AuthUser admin,
+                                                                @RequestParam(required = false) String service) {
         requireAdmin(admin);
-        return ApiResponse.success("최근 장애를 조회했습니다.", monitorService.errors());
+        requireFilterable(service);
+        return ApiResponse.success("최근 장애를 조회했습니다.", monitorService.errors(service));
     }
 
     @Operation(summary = "트레이스", description = "구간을 시작 시각순으로(서비스 · 이름 · 시작 오프셋 · 소요 시간 · 상태). 없으면 spans 빈 목록")
@@ -70,6 +75,13 @@ public class AdminMonitorController {
     public ApiResponse<MonitorResponses.Summary> summary(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
         requireAdmin(admin);
         return ApiResponse.success("모니터링 분석을 조회했습니다.", monitorService.summary());
+    }
+
+    /** 서비스 필터 — 게이트웨이 라우트가 있는 서비스 이름만(Loki · Zipkin 조회문에 들어가므로 다른 값은 400) */
+    private static void requireFilterable(String service) {
+        if (!MonitorService.isFilterable(service)) {
+            throw new BusinessException(CommonErrorCode.INVALID_INPUT);
+        }
     }
 
     private static void requireAdmin(AuthUser user) {

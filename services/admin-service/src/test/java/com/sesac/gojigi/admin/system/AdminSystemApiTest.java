@@ -372,7 +372,7 @@ class AdminSystemApiTest {
         when(zipkin.recentTraces(any(), org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
         when(zipkin.trace(any())).thenReturn(List.of());
-        when(loki.errors(any(), any(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(List.of());
+        when(loki.errors(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any())).thenReturn(List.of());
 
         loadtest(get("/api/admin/system/monitor/overview"), null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.services[0].name").value("order-service"))
@@ -384,6 +384,8 @@ class AdminSystemApiTest {
         loadtest(get("/api/admin/system/monitor/summary"), null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.topErrors").isArray());
         loadtest(get("/api/admin/system/monitor/traces/not-hex!"), null).andExpect(status().isBadRequest());
+        loadtest(get("/api/admin/system/monitor/calls?service=product-service"), null).andExpect(status().isOk());
+        loadtest(get("/api/admin/system/monitor/errors?service=mysql"), null).andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/admin/system/monitor/overview").header("X-User-Id", 4L).header("X-User-Roles", "BUYER"))
                 .andExpect(status().isForbidden());
     }

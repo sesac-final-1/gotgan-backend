@@ -102,15 +102,16 @@ class MonitorServiceTest {
     }
 
     @Test
-    @DisplayName("호출 — 게이트웨이 첫 구간으로 한 줄(경로 · 상태 · ms · 라우트 → 서비스), 최신순, 관리자 시스템 폴링은 뺀다")
+    @DisplayName("호출 — 게이트웨이 첫 구간으로 한 줄(경로 · 상태 · ms · 라우트 → 서비스), 최신순, 관리자 시스템 폴링 · 액추에이터는 뺀다")
     void calls() {
         when(zipkin.recentTraces(isNull(), anyLong(), anyLong(), anyInt())).thenReturn(traces("[" + String.join(",",
                 trace("t1", 1_000_000, "/api/products/101", "200", "product-service"),
                 trace("t2", 3_000_000, "/api/auth/login", "502", "user-auth"),
                 trace("t3", 2_000_000, "/api/admin/system/status", "200", "admin-service"),
+                trace("t5", 4_000_000, "/actuator/prometheus", "200", "gateway-service"),
                 "[{\"traceId\":\"t4\",\"id\":\"x\",\"parentId\":\"y\",\"kind\":\"CLIENT\",\"localEndpoint\":{\"serviceName\":\"order-service\"},\"tags\":{}}]") + "]"));
 
-        List<MonitorResponses.Call> calls = service.calls();
+        List<MonitorResponses.Call> calls = service.calls(null);
 
         assertThat(calls).containsExactly(
                 new MonitorResponses.Call("t2", 3000, "GET", "/api/auth/login", "user-service", 502, 12.5),
@@ -122,11 +123,11 @@ class MonitorServiceTest {
     void errors() {
         when(zipkin.recentTraces(eq("outcome=SERVER_ERROR"), anyLong(), anyLong(), anyInt()))
                 .thenReturn(traces("[" + trace("t9", 5_000_000, "/api/reviews", "502", "review-service") + "]"));
-        when(loki.errors(any(), any(), anyInt())).thenReturn(List.of(
+        when(loki.errors(any(), any(), anyInt(), isNull())).thenReturn(List.of(
                 new LokiClient.LogLine(7000, "order-service", "WARN", "business exception - code=EXTERNAL_API_ERROR", "t8"),
                 new LokiClient.LogLine(1000, "user-service", "ERROR", "boom", null)));
 
-        List<MonitorResponses.ErrorItem> errors = service.errors();
+        List<MonitorResponses.ErrorItem> errors = service.errors(null);
 
         assertThat(errors).containsExactly(
                 new MonitorResponses.ErrorItem("LOG", 7000, "order-service", "WARN", "business exception - code=EXTERNAL_API_ERROR", null, "t8"),
@@ -178,5 +179,33 @@ class MonitorServiceTest {
                 new MonitorResponses.ApiLatency("product-service", "GET /api/products", 300),
                 new MonitorResponses.ApiLatency("order-service", "POST /api/orders", 120));
         assertThat(summary.statuses()).containsExactly(new MonitorResponses.StatusCount("200", 901), new MonitorResponses.StatusCount("502", 40));
+    }
+
+    @Test
+    @DisplayName("서비스 필터 — 그 서비스의 라우트마다 Zipkin 을 조회해 합치고(중복 traceId 하나), 다른 서비스 줄은 뺀다")
+    void calls_byService() {
+        when(zipkin.recentTraces(eq("spring.cloud.gateway.route.id=user-auth"), anyLong(), anyLong(), anyInt()))
+                .thenReturn(traces("[" + trace("u1", 2_000_000, "/api/auth/login", "200", "user-auth") + "]"));
+        when(zipkin.recentTraces(eq("spring.cloud.gateway.route.id=user-service"), anyLong(), anyLong(), anyInt()))
+                .thenReturn(traces("[" + trace("u2", 3_000_000, "/api/users/me", "200", "user-service") + ","
+                        + trace("u1", 2_000_000, "/api/auth/login", "200", "user-auth") + "]"));
+        when(zipkin.recentTraces(eq("spring.cloud.gateway.route.id=user-auth-strict"), anyLong(), anyLong(), anyInt()))
+                .thenReturn(traces("[" + trace("p1", 1_000_000, "/api/products", "200", "product-service") + "]"));
+
+        assertThat(service.calls("user-service")).extracting(MonitorResponses.Call::traceId).containsExactly("u2", "u1");
+    }
+
+    @Test
+    @DisplayName("서비스 필터 — 장애는 5xx 조건과 라우트를 함께, 로그는 그 서비스만")
+    void errors_byService() {
+        when(zipkin.recentTraces(eq("outcome=SERVER_ERROR and spring.cloud.gateway.route.id=review-service"), anyLong(), anyLong(), anyInt()))
+                .thenReturn(traces("[" + trace("r1", 5_000_000, "/api/reviews", "502", "review-service") + "]"));
+        when(loki.errors(any(), any(), anyInt(), eq("review-service")))
+                .thenReturn(List.of(new LokiClient.LogLine(6000, "review-service", "ERROR", "boom", "r2")));
+
+        assertThat(service.errors("review-service")).extracting(MonitorResponses.ErrorItem::traceId).containsExactly("r2", "r1");
+        assertThat(MonitorService.isFilterable("review-service")).isTrue();
+        assertThat(MonitorService.isFilterable(null)).isTrue();
+        assertThat(MonitorService.isFilterable("mysql")).isFalse();
     }
 }

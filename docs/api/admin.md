@@ -343,14 +343,14 @@
 |---|---|---|
 | 그래프 | Prometheus 게이트웨이 라우트 지표 `spring_cloud_gateway_requests_seconds_*` | 업무 서비스 수집 5초(gotgan-config #111), rate 15초 구간, 최근 3분 5초 간격. 라우트 → 서비스는 `SystemCatalog.ROUTE_SERVICES`(keycloak 제외). 평균 응답 = 합 ÷ 수, 에러율 = **5xx** ÷ 전체(4xx 는 업무 오류라 세지 않음) |
 | DB 연결 풀 | `hikaricp_connections_{active,pending,max}` | 서비스(app)별 파드 합. DB 를 안 쓰는 서비스는 null |
-| 호출 | Zipkin(샘플링 1.0, 메모리 저장) | 게이트웨이 첫 구간(SERVER, 부모 없음) — 경로 `http.url` · 상태 · 소요 시간, 라우트 태그로 서비스. 관리자 시스템 화면 폴링(`/api/admin/system/**`)은 뺀다. 부하 중엔 수 분이면 오래된 트레이스가 밀려남 |
+| 호출 | Zipkin(샘플링 1.0, 메모리 저장) | 게이트웨이 첫 구간(SERVER, 부모 없음) — 경로 `http.url` · 상태 · 소요 시간, 라우트 태그로 서비스. 관리자 시스템 화면 폴링(`/api/admin/system/**`)과 액추에이터(`/actuator/**`, Prometheus 수집 · 상태 확인)는 뺀다. `?service=` 면 그 서비스의 게이트웨이 라우트 태그(`spring.cloud.gateway.route.id`)로 Zipkin 을 바로 조회(라우트가 여러 개면 합침). 부하 중엔 수 분이면 오래된 트레이스가 밀려남 |
 | 장애 | Zipkin `outcome=SERVER_ERROR` + Loki `{level=~"WARN\|ERROR"}` | 최근 10분, RESPONSE(5xx 응답) · LOG(로그 message · traceId)를 최신순으로 합침 |
 | 분석 | Prometheus 최근 5분 | 5xx 많은 API TOP 5(게이트웨이 라우트 + 서비스 `http_server_requests` uri), 평균 응답 느린 API TOP 5(액추에이터 · 스트림 · WebSocket 제외), 게이트웨이 상태 코드 분포 |
 
 | 메서드 · 경로 | 응답 |
 |---|---|
 | `GET /api/admin/system/monitor/overview` | `{serverTime, total: {rps, avgMs, errorRate}, services: [{name, series: {rps, avgMs, errorRate}, db: {active, pending, max} \| null}]}` — 점 `[{t: epoch ms, v}]` |
-| `GET /api/admin/system/monitor/calls` | `[{traceId, timestampMs, method, path, service, status, durationMs}]` 최신순 40건 |
-| `GET /api/admin/system/monitor/errors` | `[{kind: RESPONSE/LOG, timestampMs, service, level, title, status, traceId}]` 최신순 40건 |
+| `GET /api/admin/system/monitor/calls?service=` | `[{traceId, timestampMs, method, path, service, status, durationMs}]` 최신순 40건. service 는 선택, 라우트 없는 이름이면 400 `INVALID_INPUT` |
+| `GET /api/admin/system/monitor/errors?service=` | `[{kind: RESPONSE/LOG, timestampMs, service, level, title, status, traceId}]` 최신순 40건. service 가 있으면 5xx 응답은 그 라우트, 로그는 그 `app` 라벨만 |
 | `GET /api/admin/system/monitor/traces/{traceId}` | `{traceId, durationMs, spans: [{id, parentId, service, name, kind, startMs, durationMs, status, error}]}` — traceId 가 16 · 32자리 16진수가 아니면 400 `INVALID_INPUT` |
 | `GET /api/admin/system/monitor/summary` | `{topErrors: [{service, api, status, count}], slowest: [{service, api, avgMs}], statuses: [{status, count}]}` |
