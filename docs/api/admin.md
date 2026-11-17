@@ -333,7 +333,7 @@
 | `POST /api/admin/system/loadtest` | `{scenario, vus 1 ~ 300, durationSec 30 ~ 600}` | 202 `{id}` · 400 `INVALID_INPUT` · 403 `SYSTEM_LOADTEST_DISABLED` · 409 `SYSTEM_LOADTEST_RUNNING` |
 | `PATCH /api/admin/system/loadtest` | `{vus 0 ~ 300}` — 0 이면 요청을 멈추고 대기 | 200 · 409 `SYSTEM_LOADTEST_NOT_RUNNING`(없음 · 파드 준비 중) · 503 `SYSTEM_LOADTEST_CONTROL_FAILED` |
 | `DELETE /api/admin/system/loadtest` | — | 200 — 실행 중인 Job 전부 삭제(없으면 그대로) |
-| `POST /api/admin/system/loadtest/accounts` | — | 202 `{id}` — 부하용 계정 300개 가입(이미 있으면 그대로, 약 1분). 매일 08:00 DB 가 새로 만들어져 시연 날 아침 한 번. 403 · 409 위와 같음 |
+| `POST /api/admin/system/loadtest/accounts` | — | 202 `{id}` — 부하용 계정 300개 가입(이미 있으면 그대로, 약 1분). 클러스터를 새로 만들 때마다(DB 초기화) 한 번, 11/17 부터 24시간 운영이라 이미 했으면 다시 할 필요 없음. 403 · 409 위와 같음 |
 
 ## 9. 실시간 모니터링 (11/16)
 
