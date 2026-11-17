@@ -345,7 +345,7 @@
 | DB 연결 풀 | `hikaricp_connections_{active,pending,max}` | 서비스(app)별 파드 합. DB 를 안 쓰는 서비스는 null |
 | 호출 | Zipkin(샘플링 1.0, 메모리 저장) | 게이트웨이 첫 구간(SERVER, 부모 없음) — 경로 `http.url` · 상태 · 소요 시간, 라우트 태그로 서비스. 관리자 시스템 화면 폴링(`/api/admin/system/**`)과 액추에이터(`/actuator/**`, Prometheus 수집 · 상태 확인)는 뺀다. `?service=` 면 그 서비스의 게이트웨이 라우트 태그(`spring.cloud.gateway.route.id`)로 Zipkin 을 바로 조회(라우트가 여러 개면 합침). 부하 중엔 수 분이면 오래된 트레이스가 밀려남 |
 | 장애 | Zipkin `outcome=SERVER_ERROR` + Loki `{level=~"WARN\|ERROR"}` | 최근 10분, RESPONSE(5xx 응답) · LOG(로그 message · traceId)를 최신순으로 합침 |
-| 분석 | Prometheus 최근 5분 | 5xx 많은 API TOP 5(게이트웨이 라우트 + 서비스 `http_server_requests` uri), 평균 응답 느린 API TOP 5(액추에이터 · 스트림 · WebSocket 제외), 게이트웨이 상태 코드 분포 |
+| 분석 | Prometheus 최근 5분 | 5xx 많은 API TOP 5(게이트웨이 라우트 + 서비스 `http_server_requests` uri), 평균 응답 느린 API TOP 5(액추에이터 · 스트림 · WebSocket · 이 화면 자체 폴링 `/api/admin/system/**` 제외), 게이트웨이 상태 코드 분포 |
 
 | 메서드 · 경로 | 응답 |
 |---|---|
