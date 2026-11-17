@@ -37,16 +37,14 @@ public class PresenceWebFilter implements WebFilter {
         if ((!ping && !leave) || exchange.getRequest().getMethod() != HttpMethod.POST) {
             return chain.filter(exchange);
         }
-        return AuthenticatedUser.current()
-                .filter(AuthenticatedUser::linked)
-                .map(user -> "u:" + user.userId())
-                .defaultIfEmpty("")
+        String visitor = ActiveUserFilter.visitorKey(exchange);
+        return ActiveUserFilter.memberKey()
                 .doOnNext(member -> {
-                    String visitor = member.isEmpty() ? RateLimitKeyResolver.anonymousKey(exchange.getRequest().getHeaders()) : member;
+                    String m = member.isEmpty() ? null : member;
                     if (ping) {
-                        activeUsers.record(visitor, !member.isEmpty());
+                        activeUsers.record(visitor, m);
                     } else {
-                        activeUsers.forget(visitor);
+                        activeUsers.forget(visitor, m);
                     }
                 })
                 .then(Mono.fromRunnable(() -> exchange.getResponse().setStatusCode(HttpStatus.NO_CONTENT)))

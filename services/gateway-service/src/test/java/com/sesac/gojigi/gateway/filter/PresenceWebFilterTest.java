@@ -1,7 +1,6 @@
 package com.sesac.gojigi.gateway.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -31,7 +30,7 @@ class PresenceWebFilterTest {
 
         filter.filter(exchange, ex -> { passed[0] = true; return Mono.empty(); }).block();
 
-        verify(activeUsers).record("ip:203.0.113.9", false);
+        verify(activeUsers).record("ip:203.0.113.9", null);
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(passed[0]).isFalse();
     }
@@ -41,7 +40,7 @@ class PresenceWebFilterTest {
     void leave() {
         filter.filter(post(PresenceWebFilter.LEAVE), ex -> Mono.empty()).block();
 
-        verify(activeUsers).forget("ip:203.0.113.9");
+        verify(activeUsers).forget("ip:203.0.113.9", null);
     }
 
     @Test
@@ -53,6 +52,6 @@ class PresenceWebFilterTest {
                 ex -> { passed[1] = true; return Mono.empty(); }).block();
 
         assertThat(passed).containsExactly(true, true);
-        verify(activeUsers, never()).record(anyString(), anyBoolean());
+        verify(activeUsers, never()).record(anyString(), org.mockito.ArgumentMatchers.any());
     }
 }
