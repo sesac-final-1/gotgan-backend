@@ -22,7 +22,7 @@ class VisitorServiceTest {
     private static final Instant NOW = Instant.parse("2026-11-17T05:00:00Z");
 
     @Test
-    @DisplayName("최근 1분 안의 접속자, 회원 수 — 오래된 항목은 지우고 센다")
+    @DisplayName("최근 1분 안의 접속자, 회원 수, 역할별 회원 수 — 오래된 항목은 지우고 센다")
     @SuppressWarnings("unchecked")
     void counts() {
         StringRedisTemplate redis = mock(StringRedisTemplate.class);
@@ -30,10 +30,13 @@ class VisitorServiceTest {
         when(redis.opsForZSet()).thenReturn(zset);
         when(zset.zCard(VisitorService.VISITORS_KEY)).thenReturn(12L);
         when(zset.zCard(VisitorService.MEMBERS_KEY)).thenReturn(5L);
+        when(zset.zCard(VisitorService.ROLE_KEY_PREFIX + "BUYER")).thenReturn(3L);
+        when(zset.zCard(VisitorService.ROLE_KEY_PREFIX + "SELLER")).thenReturn(1L);
+        when(zset.zCard(VisitorService.ROLE_KEY_PREFIX + "ADMIN")).thenReturn(1L);
 
         Visitors v = new VisitorService(redis, Clock.fixed(NOW, ZoneId.of("Asia/Seoul"))).visitors();
 
-        assertThat(v).isEqualTo(new Visitors(12L, 5L, 60));
+        assertThat(v).isEqualTo(new Visitors(12L, 5L, 3L, 1L, 1L, 60));
         verify(zset).removeRangeByScore(VisitorService.VISITORS_KEY, 0, NOW.getEpochSecond() - 60);
     }
 
@@ -46,6 +49,6 @@ class VisitorServiceTest {
         when(redis.opsForZSet()).thenReturn(zset);
         when(zset.removeRangeByScore(anyString(), anyDouble(), anyDouble())).thenThrow(new RedisConnectionFailureException("down"));
 
-        assertThat(new VisitorService(redis, Clock.fixed(NOW, ZoneId.of("Asia/Seoul"))).visitors()).isEqualTo(new Visitors(null, null, 60));
+        assertThat(new VisitorService(redis, Clock.fixed(NOW, ZoneId.of("Asia/Seoul"))).visitors()).isEqualTo(new Visitors(null, null, null, null, null, 60));
     }
 }

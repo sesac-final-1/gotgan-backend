@@ -38,8 +38,8 @@ public final class LoadTestResponses {
     public record Failure(String api, String status, long count) {
     }
 
-    /** GET /monitor/visitors — 최근 windowSeconds 초 안에 요청한 접속자(회원 + 비회원 IP)와 그중 로그인 회원. 부하테스트 요청은 뺀다. Redis 실패면 null */
-    public record Visitors(Long visitors, Long members, int windowSeconds) {
+    /** GET /monitor/visitors — 최근 windowSeconds 초 안에 요청한 접속자(회원 + 비회원 IP)와 그중 로그인 회원. 부하테스트 요청은 뺀다. Redis 실패면 null buyers, sellers, admins = 로그인 회원을 대표 역할(관리자 > 판매자 > 구매자) 하나로 나눈 수(11/17) */
+    public record Visitors(Long visitors, Long members, Long buyers, Long sellers, Long admins, int windowSeconds) {
     }
 
     /** vus = 동시 사용자, rps = 초당 요청, p95Ms = 응답 시간 p95(ms), errorRate = 2xx 가 아닌 비율(0 ~ 1). Prometheus 실패면 빈 목록 */
