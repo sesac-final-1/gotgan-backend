@@ -123,4 +123,20 @@ class ActiveUserFilterTest {
 
         verify(zset, never()).add(anyString(), anyString(), anyDouble());
     }
+
+    @Test
+    @DisplayName("역할별 회원 — 대표 역할(관리자 > 판매자 > 구매자) 집합에도 기록, 로그아웃하면 거기서도 뺀다")
+    void role_recordedAndForgotten() {
+        when(zset.remove(anyString(), org.mockito.ArgumentMatchers.<Object>any())).thenReturn(Mono.just(1L));
+        assertThat(ActiveUserFilter.primaryRole(java.util.List.of("BUYER", "SELLER"))).isEqualTo("SELLER");
+        assertThat(ActiveUserFilter.primaryRole(java.util.List.of("BUYER", "ADMIN"))).isEqualTo("ADMIN");
+        assertThat(ActiveUserFilter.primaryRole(java.util.List.of("offline_access"))).isNull();
+
+        filter.record("v:browser-1234", "u:9", "SELLER");
+        filter.forgetMember("u:9", "SELLER");
+
+        verify(zset).add(ActiveUserFilter.roleKey("SELLER"), "u:9", NOW.getEpochSecond());
+        verify(zset).remove(ActiveUserFilter.roleKey("SELLER"), "u:9");
+        verify(zset).remove(ActiveUserFilter.MEMBERS_KEY, "u:9");
+    }
 }

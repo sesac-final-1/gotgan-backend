@@ -38,13 +38,12 @@ public class PresenceWebFilter implements WebFilter {
             return chain.filter(exchange);
         }
         String visitor = ActiveUserFilter.visitorKey(exchange);
-        return ActiveUserFilter.memberKey()
-                .doOnNext(member -> {
-                    String m = member.isEmpty() ? null : member;
+        return ActiveUserFilter.member()
+                .doOnNext(m -> {
                     if (ping) {
-                        activeUsers.record(visitor, m);
+                        activeUsers.record(visitor, m.key(), m.role());
                     } else {
-                        activeUsers.forget(visitor, m);
+                        activeUsers.forget(visitor, m.key(), m.role());
                     }
                 })
                 .then(Mono.fromRunnable(() -> exchange.getResponse().setStatusCode(HttpStatus.NO_CONTENT)))

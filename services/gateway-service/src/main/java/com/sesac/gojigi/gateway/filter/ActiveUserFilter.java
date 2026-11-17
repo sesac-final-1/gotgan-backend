@@ -30,6 +30,8 @@ public class ActiveUserFilter implements GlobalFilter, Ordered {
     static final String LOADTEST_HEADER = "X-Gotgan-Loadtest";
     static final String LOGOUT_PATH = "/api/auth/logout";
     static final String VISITOR_HEADER = "X-Gotgan-Visitor";
+    static final String ROLE_KEY_PREFIX = "gotgan:active:role:";   // 역할별 로그인 회원 ZSET (ADMIN, SELLER, BUYER)
+    static final java.util.List<String> ROLES = java.util.List.of("ADMIN", "SELLER", "BUYER");
     private static final Pattern VISITOR_ID = Pattern.compile("[A-Za-z0-9-]{8,64}");
     static final long THROTTLE_SECONDS = 15;
     private static final int MAX_CACHED = 20_000;
@@ -55,20 +57,35 @@ public class ActiveUserFilter implements GlobalFilter, Ordered {
         }
         boolean logout = LOGOUT_PATH.equals(exchange.getRequest().getPath().value());
         String visitor = visitorKey(exchange);
-        return memberKey()
-                .doOnNext(member -> {
+        return member()
+                .doOnNext(m -> {
                     if (logout) {
-                        forgetMember(member);   // 로그아웃은 회원에서만 바로 뺀다 — 같은 브라우저라 접속자 수는 그대로
+                        forgetMember(m.key(), m.role());   // 로그아웃은 회원에서만 바로 뺀다 — 같은 브라우저라 접속자 수는 그대로
                     } else {
-                        record(visitor, member.isEmpty() ? null : member);
+                        record(visitor, m.key(), m.role());
                     }
                 })
                 .then(chain.filter(exchange));
     }
 
-    /** 로그인 회원이면 u:{userId}, 아니면 "" */
-    static Mono<String> memberKey() {
-        return AuthenticatedUser.current().filter(AuthenticatedUser::linked).map(user -> "u:" + user.userId()).defaultIfEmpty("");
+    /** 로그인 회원 키(u:{userId})와 대표 역할(ADMIN > SELLER > BUYER). 비로그인이면 둘 다 null */
+    record Member(String key, String role) {
+        static final Member GUEST = new Member(null, null);
+    }
+
+    static Mono<Member> member() {
+        return AuthenticatedUser.current().filter(AuthenticatedUser::linked)
+                .map(user -> new Member("u:" + user.userId(), primaryRole(user.roles())))
+                .defaultIfEmpty(Member.GUEST);
+    }
+
+    /** 역할이 여러 개면 하나로만 센다 — 관리자 > 판매자 > 구매자 */
+    static String primaryRole(java.util.List<String> roles) {
+        return ROLES.stream().filter(r -> roles != null && roles.contains(r)).findFirst().orElse(null);
+    }
+
+    static String roleKey(String role) {
+        return ROLE_KEY_PREFIX + role;
     }
 
     /**
@@ -86,8 +103,12 @@ public class ActiveUserFilter implements GlobalFilter, Ordered {
         return exchange.getRequest().getHeaders().containsHeader(LOADTEST_HEADER) || path.startsWith("/actuator");
     }
 
-    /** 접속자(visitor)와 로그인 회원(member, 없으면 null)을 기록. 따로 보내고 기다리지 않는다 — Redis 가 느리거나 죽어도 요청은 그대로 */
     void record(String visitor, String member) {
+        record(visitor, member, null);
+    }
+
+    /** 접속자(visitor), 로그인 회원(member), 역할별 회원(role)을 기록(없으면 null). 따로 보내고 기다리지 않는다 — Redis 가 느리거나 죽어도 요청은 그대로 */
+    void record(String visitor, String member, String role) {
         long now = clock.instant().getEpochSecond();
         String key = visitor + "|" + member;
         Long last = lastWritten.get(key);
@@ -101,27 +122,45 @@ public class ActiveUserFilter implements GlobalFilter, Ordered {
         Mono<Boolean> write = redis.opsForZSet().add(VISITORS_KEY, visitor, now);
         if (member != null) {
             write = write.then(redis.opsForZSet().add(MEMBERS_KEY, member, now));
+            if (role != null) {
+                write = write.then(redis.opsForZSet().add(roleKey(role), member, now));
+            }
         }
         write.subscribe(ok -> { }, e -> log.debug("접속자 기록 실패 - {}", e.getMessage()));
     }
 
     /** 나감 — 접속자와 (로그인했으면) 회원에서 바로 빼고, 다시 오면 15초 제한 없이 기록되게 기록 시각도 지운다 */
     void forget(String visitor, String member) {
+        forget(visitor, member, null);
+    }
+
+    void forget(String visitor, String member, String role) {
         lastWritten.keySet().removeIf(k -> k.startsWith(visitor + "|"));
         Mono<Long> remove = redis.opsForZSet().remove(VISITORS_KEY, visitor);
         if (member != null) {
             remove = remove.then(redis.opsForZSet().remove(MEMBERS_KEY, member));
+            if (role != null) {
+                remove = remove.then(redis.opsForZSet().remove(roleKey(role), member));
+            }
         }
         remove.subscribe(n -> { }, e -> log.debug("접속자 삭제 실패 - {}", e.getMessage()));
     }
 
-    /** 로그아웃 — 회원에서만 뺀다 */
     void forgetMember(String member) {
+        forgetMember(member, null);
+    }
+
+    /** 로그아웃 — 회원(과 역할별 회원)에서만 뺀다 */
+    void forgetMember(String member, String role) {
         if (member == null || member.isEmpty()) {
             return;
         }
         lastWritten.keySet().removeIf(k -> k.endsWith("|" + member));
-        redis.opsForZSet().remove(MEMBERS_KEY, member).subscribe(n -> { }, e -> log.debug("회원 삭제 실패 - {}", e.getMessage()));
+        Mono<Long> remove = redis.opsForZSet().remove(MEMBERS_KEY, member);
+        if (role != null) {
+            remove = remove.then(redis.opsForZSet().remove(roleKey(role), member));
+        }
+        remove.subscribe(n -> { }, e -> log.debug("회원 삭제 실패 - {}", e.getMessage()));
     }
 
     /** 요청 제한, 인증 뒤, 라우팅 전 */

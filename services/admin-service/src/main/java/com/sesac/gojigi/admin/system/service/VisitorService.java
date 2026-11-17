@@ -17,6 +17,8 @@ public class VisitorService {
 
     public static final String VISITORS_KEY = "gotgan:active:visitors";
     public static final String MEMBERS_KEY = "gotgan:active:members";
+    /** 역할별 로그인 회원 — 게이트웨이가 대표 역할(관리자 > 판매자 > 구매자) 하나에만 기록 */
+    public static final String ROLE_KEY_PREFIX = "gotgan:active:role:";
     static final int WINDOW_SECONDS = 60;
 
     private final StringRedisTemplate redis;
@@ -29,7 +31,8 @@ public class VisitorService {
 
     public Visitors visitors() {
         long since = clock.instant().getEpochSecond() - WINDOW_SECONDS;
-        return new Visitors(count(VISITORS_KEY, since), count(MEMBERS_KEY, since), WINDOW_SECONDS);
+        return new Visitors(count(VISITORS_KEY, since), count(MEMBERS_KEY, since), count(ROLE_KEY_PREFIX + "BUYER", since),
+                count(ROLE_KEY_PREFIX + "SELLER", since), count(ROLE_KEY_PREFIX + "ADMIN", since), WINDOW_SECONDS);
     }
 
     /** 오래된 항목을 지우고 남은 수 — 집합이 계속 커지지 않게 읽을 때 정리한다 */
