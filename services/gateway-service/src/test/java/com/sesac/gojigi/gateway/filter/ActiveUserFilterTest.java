@@ -72,4 +72,27 @@ class ActiveUserFilterTest {
         verify(zset).add(ActiveUserFilter.VISITORS_KEY, "u:42", NOW.getEpochSecond());
         verify(zset).add(ActiveUserFilter.MEMBERS_KEY, "u:42", NOW.getEpochSecond());
     }
+
+    @Test
+    @DisplayName("나감 — 두 집합에서 지우고, 다시 들어오면 15초 제한 없이 바로 기록")
+    void forget_removesAndAllowsImmediateRecord() {
+        when(zset.remove(anyString(), org.mockito.ArgumentMatchers.<Object>any())).thenReturn(Mono.just(1L));
+        filter.record("u:7", true);
+
+        filter.forget("u:7");
+        filter.record("u:7", true);
+
+        verify(zset).remove(ActiveUserFilter.VISITORS_KEY, "u:7");
+        verify(zset).remove(ActiveUserFilter.MEMBERS_KEY, "u:7");
+        verify(zset, times(2)).add(ActiveUserFilter.VISITORS_KEY, "u:7", NOW.getEpochSecond());
+    }
+
+    @Test
+    @DisplayName("로그아웃 요청은 기록하지 않는다(토큰이 있으면 그 회원을 바로 빼고, 없으면 아무것도 안 함)")
+    void logout_notRecorded() {
+        filter.filter(MockServerWebExchange.from(MockServerHttpRequest.post(ActiveUserFilter.LOGOUT_PATH)
+                .header(RateLimitKeyResolver.VERCEL_FORWARDED_FOR, "203.0.113.7").build()), ex -> Mono.empty()).block();
+
+        verify(zset, never()).add(anyString(), anyString(), anyDouble());
+    }
 }
