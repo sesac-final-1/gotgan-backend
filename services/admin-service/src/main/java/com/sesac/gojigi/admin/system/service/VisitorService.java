@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 현재 접속자 (11/17) — 게이트웨이 ActiveUserFilter 가 요청마다 Redis 정렬 집합에 남긴 "마지막 요청 시각"을 센다.
- * visitors = 회원(u:{userId}) + 비회원(ip:{주소}) 전부, members = 로그인 회원만. 최근 2분 안에 요청한 사람만(화면은 5초마다 다시 센다).
+ * visitors = 회원(u:{userId}) + 비회원(ip:{주소}) 전부, members = 로그인 회원만. 최근 1분 안에 요청한 사람만(화면은 5초마다 다시 센다). 쇼핑몰 탭은 20초마다 접속 신호, 나갈 때 leave 를 보내 바로 빠진다.
  * 부하테스트 요청(X-Gotgan-Loadtest 헤더)은 게이트웨이가 기록하지 않는다. Redis 실패면 null(화면은 '-')
  */
 @Slf4j
@@ -17,7 +17,7 @@ public class VisitorService {
 
     public static final String VISITORS_KEY = "gotgan:active:visitors";
     public static final String MEMBERS_KEY = "gotgan:active:members";
-    static final int WINDOW_SECONDS = 120;
+    static final int WINDOW_SECONDS = 60;
 
     private final StringRedisTemplate redis;
     private final Clock clock;

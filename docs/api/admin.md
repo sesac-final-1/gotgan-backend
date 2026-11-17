@@ -355,7 +355,7 @@
 | `GET /api/admin/system/monitor/errors?service=` | `[{kind: RESPONSE/LOG, timestampMs, service, level, title, status, traceId}]` 최신순 40건. service 가 있으면 5xx 응답은 그 라우트, 로그는 그 `app` 라벨만 |
 | `GET /api/admin/system/monitor/traces/{traceId}` | `{traceId, durationMs, spans: [{id, parentId, service, name, kind, startMs, durationMs, status, error}]}` — traceId 가 16 · 32자리 16진수가 아니면 400 `INVALID_INPUT` |
 | `GET /api/admin/system/monitor/summary` | `{topErrors: [{service, api, status, count}], slowest: [{service, api, avgMs}], statuses: [{status, count}]}` |
-| `GET /api/admin/system/monitor/visitors` | `{visitors, members, windowSeconds}` — 최근 120초 안에 요청한 접속자(회원 + 비회원 IP)와 로그인 회원. 게이트웨이 `ActiveUserFilter` 가 Redis 정렬 집합에 기록(같은 사람 15초에 한 번), 부하테스트(`X-Gotgan-Loadtest` 헤더)와 액추에이터 제외. Redis 실패면 null (11/17) |
+| `GET /api/admin/system/monitor/visitors` | `{visitors, members, windowSeconds}` — 최근 60초 안에 요청한 접속자(회원 + 비회원 IP)와 로그인 회원. 게이트웨이 `ActiveUserFilter` 가 Redis 정렬 집합에 기록(같은 사람 15초에 한 번), 부하테스트(`X-Gotgan-Loadtest` 헤더)와 액추에이터 제외. 쇼핑몰 탭은 보이는 동안 20초마다 `POST /api/presence/ping`, 닫거나 숨길 때 `POST /api/presence/leave`(게이트웨이 `PresenceWebFilter` 가 바로 204, 업무 서비스로 가지 않음) → 나가면 바로 빠짐. Redis 실패면 null (11/17) |
 
 ## 10. 장애 분석 리포트 (11/17)
 
