@@ -108,7 +108,7 @@ cd services/order-service
 
 - 스키마 · 계정은 `gotgan-config/deploy/k8s/db/init-schemas.sh`가 만들고(빈 볼륨으로 처음 뜰 때 1회), 테이블은 각 서비스의 Flyway(`db/migration`)가 만듭니다. 스크립트를 바꿨다면 `docker compose down -v`.
 - 다른 서비스가 필요하면 dev 클러스터로 `kubectl port-forward svc/product-service 8083:8083 -n sesac-gojigi`, 또는 클라이언트 호출이 실패해도 폴백으로 동작하는지 확인하는 기회로 씁니다.
-- dev 클러스터는 **매일 08:00 생성 · 22:00 삭제**됩니다(gotgan-config `infra-schedule`). 아침마다 DB는 Flyway 시드로 새로 시작합니다.
+- dev 클러스터는 **매일 08:00 생성 · 22:00 삭제**됩니다(gotgan-config `infra-schedule`). 아침마다 DB는 Flyway 시드로 새로 시작합니다. — **11/17 부터 24시간 운영(자동 생성, 삭제 꺼짐, 11/20 발표 후 수동 정리)**
 - Windows는 WSL 안에서 작업하세요. `.gitattributes`가 `gradlew` · `*.sh`를 LF로 고정합니다.
 
 ---
