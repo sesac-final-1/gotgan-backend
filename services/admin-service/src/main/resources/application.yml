@@ -60,6 +60,10 @@ app:
   monitor:                                  # 관리자 화면 실시간 모니터링(11/16) — 호출, 트레이스, 에러 로그. 실패하면 빈 목록
     zipkin-url: ${ZIPKIN_URL:http://zipkin.monitoring:9411}
     loki-url: ${LOKI_QUERY_URL:http://loki.monitoring.svc.cluster.local:3100}   # 조회 주소. 공용 LOKI_URL 은 로그 전송(push) 주소라 쓰지 않는다(11/17, 조회가 404 였음)
+  report:                                   # 장애 분석 리포트(11/17)
+    # 점검용 요청 시간대(시작/끝, 쉼표로 여러 개) — 우리가 일부러 보낸 탐색 경로 요청을 공격 의심에서 뺀다
+    # 11/17 16:11 게이트웨이 방어 확인(401) 5건
+    test-windows: ${REPORT_TEST_WINDOWS:2026-11-17T16:11:20+09:00/2026-11-17T16:11:30+09:00}
   prometheus:                               # F-1 장애 시연 지표(/api/admin/system/metrics) — gateway 라우트 요청량, 5xx
     url: ${PROMETHEUS_URL:http://prometheus.monitoring:9090}
     timeout: 2s                             # 연결, 읽기 — 실패면 값 null(부분 응답), 15초 폴링이 쌓이지 않게

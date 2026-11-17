@@ -394,7 +394,7 @@
 | `DEPLOY` | `kube_replicaset_created` — 새 레플리카셋 = 새 버전 배포 |
 | `DB` | Loki WARN, ERROR 로그에 SQLException, JDBC, HikariPool, deadlock 등, 또는 `hikaricp_connections_pending > 0` |
 | `SURGE`, `RATE_LIMIT` | 요청 급증(평소의 몇 배), 429 건수 |
-| `ATTACK` | 탐색 요청 유형별 건수 |
+| `ATTACK` | 탐색 요청 유형별 건수. 점검용 시간대(`app.report.test-windows`, 우리가 방어 확인으로 보낸 요청)는 건수와 로그에서 뺌 |
 | `CIRCUIT` | `resilience4j_circuitbreaker_state{state="open"}` |
 | `UNKNOWN` | 근거 없음 — 개발자 섹션 로그 확인 |
 
