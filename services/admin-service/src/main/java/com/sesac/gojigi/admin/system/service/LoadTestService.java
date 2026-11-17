@@ -182,11 +182,17 @@ public class LoadTestService {
         log.info("부하테스트 사용자 수 변경 - id={}, vus={}", running.id(), request.vus());
     }
 
-    /** 중지 — 실행 중인 Job 전부 삭제(파드까지). 없으면 아무것도 하지 않는다 */
+    /**
+     * 중지 — 부하는 k6 에 정상 종료를 보내 Job 을 완료로 남긴다(그래프, 결과가 그대로 보이게, 11/17).
+     * 파드가 아직 없거나 k6 에 닿지 않으면, 그리고 계정 준비 Job 은 지금처럼 삭제. 실행 중인 것이 없으면 아무것도 하지 않는다
+     */
     public void stop() {
         kubernetes.loadJobs().stream().filter(j -> j.active() > 0).forEach(j -> {
-            kubernetes.deleteJob(j.name());
-            log.info("부하테스트 중지 - id={}, kind={}", j.id(), j.kind());
+            boolean graceful = KIND_LOAD.equals(j.kind()) && kubernetes.loadJobPodIp(j.id()).map(k6::stop).orElse(false);
+            if (!graceful) {
+                kubernetes.deleteJob(j.name());
+            }
+            log.info("부하테스트 중지 - id={}, kind={}, {}", j.id(), j.kind(), graceful ? "정상 종료" : "Job 삭제");
         });
     }
 

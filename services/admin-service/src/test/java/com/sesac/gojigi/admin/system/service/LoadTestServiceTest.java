@@ -152,14 +152,25 @@ class LoadTestServiceTest {
     }
 
     @Test
-    @DisplayName("중지 — 실행 중인 Job 만 삭제")
+    @DisplayName("중지 — 실행 중인 부하는 k6 정상 종료(Job 남김), 파드가 없거나 k6 에 닿지 않으면 삭제, 끝난 Job 은 그대로")
     void stop() {
         when(kubernetes.loadJobs()).thenReturn(List.of(job("lt-1", "load", NOW.minusSeconds(100), 0, 1, 0),
                 job("lt-2", "load", NOW.minusSeconds(30), 1, 0, 0)));
+        when(kubernetes.loadJobPodIp("lt-2")).thenReturn(Optional.of("10.0.11.5"));
+        when(k6.stop("10.0.11.5")).thenReturn(true);
 
         service(true).stop();
 
+        verify(k6).stop("10.0.11.5");
+        verify(kubernetes, never()).deleteJob(anyString());
+
+        when(k6.stop("10.0.11.5")).thenReturn(false);
+        service(true).stop();
         verify(kubernetes).deleteJob("loadtest-lt-2");
+
+        when(kubernetes.loadJobPodIp("lt-2")).thenReturn(Optional.empty());
+        service(true).stop();
+        verify(kubernetes, org.mockito.Mockito.times(2)).deleteJob("loadtest-lt-2");
         verify(kubernetes, never()).deleteJob("loadtest-lt-1");
     }
 

@@ -42,4 +42,17 @@ public class K6Client {
             throw new SystemException(SystemErrorCode.SYSTEM_LOADTEST_CONTROL_FAILED, e);
         }
     }
+
+    /** 정상 종료 — k6 가 요청을 멈추고 끝나 Job 이 완료로 남는다(결과 화면 유지, 11/17). 실패하면 false(호출한 쪽이 Job 을 지운다) */
+    public boolean stop(String podIp) {
+        Map<String, Object> body = Map.of("data", Map.of("type", "status", "id", "default", "attributes", Map.of("stopped", true)));
+        try {
+            restClient.patch().uri(apiUrl + "/v1/status", podIp).contentType(MediaType.APPLICATION_JSON).body(body)
+                    .retrieve().toBodilessEntity();
+            return true;
+        } catch (RestClientException e) {
+            log.warn("k6 정상 종료 실패 - pod={}, {}", podIp, e.getMessage());
+            return false;
+        }
+    }
 }

@@ -80,7 +80,7 @@ public class AdminMonitorController {
         return ApiResponse.success("모니터링 분석을 조회했습니다.", monitorService.summary());
     }
 
-    @Operation(summary = "현재 접속자 (5초 폴링)", description = "최근 2분 안에 요청한 접속자(회원 + 비회원 IP)와 로그인 회원 수. 부하테스트 요청은 뺀다. Redis 실패면 null")
+    @Operation(summary = "현재 접속자 (5초 폴링)", description = "최근 1분 안에 요청한 접속자(회원 + 비회원 IP)와 로그인 회원 수. 부하테스트 요청은 뺀다. Redis 실패면 null")
     @GetMapping("/visitors")
     public ApiResponse<LoadTestResponses.Visitors> visitors(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
         requireAdmin(admin);

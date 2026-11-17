@@ -70,4 +70,14 @@ class K6ClientTest {
         server.stop(0);
         assertThatThrownBy(() -> client.scale("127.0.0.1", 10)).isInstanceOf(SystemException.class);
     }
+
+    @Test
+    @DisplayName("정상 종료 — 본문 data.attributes.stopped true, 실패면 예외 없이 false")
+    void gracefulStop() {
+        assertThat(client().stop("127.0.0.1")).isTrue();
+        assertThat(requests.get(0)).startsWith("PATCH /v1/status ").contains("\"stopped\":true");
+
+        status = 500;
+        assertThat(client().stop("127.0.0.1")).isFalse();
+    }
 }
