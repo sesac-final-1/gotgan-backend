@@ -65,26 +65,54 @@ class ActiveUserFilterTest {
     }
 
     @Test
-    @DisplayName("회원 기록은 접속자와 회원 두 집합에")
+    @DisplayName("회원은 접속자(방문자 ID)와 회원(u:id) 두 집합에 따로")
     void member_recordedInBoth() {
-        filter.record("u:42", true);
+        filter.record("v:browser-1234", "u:42");
 
-        verify(zset).add(ActiveUserFilter.VISITORS_KEY, "u:42", NOW.getEpochSecond());
+        verify(zset).add(ActiveUserFilter.VISITORS_KEY, "v:browser-1234", NOW.getEpochSecond());
         verify(zset).add(ActiveUserFilter.MEMBERS_KEY, "u:42", NOW.getEpochSecond());
+    }
+
+    @Test
+    @DisplayName("방문자 ID 헤더가 있으면 그것으로 센다 — 로그인 전후 같은 브라우저는 접속자 1명, 형식이 틀리면 IP 키")
+    void visitorKey_prefersBrowserId() {
+        MockServerWebExchange withId = MockServerWebExchange.from(MockServerHttpRequest.get("/api/products")
+                .header(ActiveUserFilter.VISITOR_HEADER, "a1b2c3d4-e5f6").header(RateLimitKeyResolver.VERCEL_FORWARDED_FOR, "203.0.113.7").build());
+        MockServerWebExchange badId = MockServerWebExchange.from(MockServerHttpRequest.get("/api/products")
+                .header(ActiveUserFilter.VISITOR_HEADER, "<script>").header(RateLimitKeyResolver.VERCEL_FORWARDED_FOR, "203.0.113.7").build());
+
+        assertThat(ActiveUserFilter.visitorKey(withId)).isEqualTo("v:a1b2c3d4-e5f6");
+        assertThat(ActiveUserFilter.visitorKey(badId)).isEqualTo("ip:203.0.113.7");
+
+        filter.record("v:a1b2c3d4-e5f6", null);   // 로그인 전
+        filter.record("v:a1b2c3d4-e5f6", "u:7");  // 로그인 후 — 접속자 키는 같다
+        verify(zset, times(2)).add(ActiveUserFilter.VISITORS_KEY, "v:a1b2c3d4-e5f6", NOW.getEpochSecond());
+        verify(zset).add(ActiveUserFilter.MEMBERS_KEY, "u:7", NOW.getEpochSecond());
     }
 
     @Test
     @DisplayName("나감 — 두 집합에서 지우고, 다시 들어오면 15초 제한 없이 바로 기록")
     void forget_removesAndAllowsImmediateRecord() {
         when(zset.remove(anyString(), org.mockito.ArgumentMatchers.<Object>any())).thenReturn(Mono.just(1L));
-        filter.record("u:7", true);
+        filter.record("v:browser-1234", "u:7");
 
-        filter.forget("u:7");
-        filter.record("u:7", true);
+        filter.forget("v:browser-1234", "u:7");
+        filter.record("v:browser-1234", "u:7");
 
-        verify(zset).remove(ActiveUserFilter.VISITORS_KEY, "u:7");
+        verify(zset).remove(ActiveUserFilter.VISITORS_KEY, "v:browser-1234");
         verify(zset).remove(ActiveUserFilter.MEMBERS_KEY, "u:7");
-        verify(zset, times(2)).add(ActiveUserFilter.VISITORS_KEY, "u:7", NOW.getEpochSecond());
+        verify(zset, times(2)).add(ActiveUserFilter.VISITORS_KEY, "v:browser-1234", NOW.getEpochSecond());
+    }
+
+    @Test
+    @DisplayName("로그아웃 정리는 회원에서만 — 접속자는 그대로")
+    void forgetMember_onlyMembers() {
+        when(zset.remove(anyString(), org.mockito.ArgumentMatchers.<Object>any())).thenReturn(Mono.just(1L));
+
+        filter.forgetMember("u:7");
+
+        verify(zset).remove(ActiveUserFilter.MEMBERS_KEY, "u:7");
+        verify(zset, never()).remove(eq(ActiveUserFilter.VISITORS_KEY), org.mockito.ArgumentMatchers.<Object>any());
     }
 
     @Test
