@@ -1,7 +1,9 @@
 package com.sesac.gojigi.admin.system.controller;
 
 import com.sesac.gojigi.admin.system.dto.response.MonitorResponses;
+import com.sesac.gojigi.admin.system.dto.response.LoadTestResponses;
 import com.sesac.gojigi.admin.system.service.MonitorService;
+import com.sesac.gojigi.admin.system.service.VisitorService;
 import com.sesac.gojigi.common.web.auth.AuthUser;
 import com.sesac.gojigi.common.web.auth.CurrentUser;
 import com.sesac.gojigi.common.web.dto.ApiResponse;
@@ -31,6 +33,7 @@ public class AdminMonitorController {
     private static final Pattern TRACE_ID = Pattern.compile("[0-9a-f]{16,32}");
 
     private final MonitorService monitorService;
+    private final VisitorService visitorService;
 
     @Operation(summary = "총 현황 · 서비스별 그래프 (2초 폴링)", description = """
             게이트웨이 라우트 지표(실제 트래픽 포함) 최근 3분 5초 간격 — rps · avgMs · errorRate(5xx ÷ 전체) [t ms, v],
@@ -75,6 +78,13 @@ public class AdminMonitorController {
     public ApiResponse<MonitorResponses.Summary> summary(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
         requireAdmin(admin);
         return ApiResponse.success("모니터링 분석을 조회했습니다.", monitorService.summary());
+    }
+
+    @Operation(summary = "현재 접속자 (5초 폴링)", description = "최근 2분 안에 요청한 접속자(회원 + 비회원 IP)와 로그인 회원 수. 부하테스트 요청은 뺀다. Redis 실패면 null")
+    @GetMapping("/visitors")
+    public ApiResponse<LoadTestResponses.Visitors> visitors(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
+        requireAdmin(admin);
+        return ApiResponse.success("현재 접속자를 조회했습니다.", visitorService.visitors());
     }
 
     /** 서비스 필터 — 게이트웨이 라우트가 있는 서비스 이름만(Loki · Zipkin 조회문에 들어가므로 다른 값은 400) */

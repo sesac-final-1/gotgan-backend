@@ -329,7 +329,7 @@
 
 | 메서드 · 경로 | 요청 | 응답 · 오류 |
 |---|---|---|
-| `GET /api/admin/system/loadtest` | — | `{enabled, maxVus, load, accounts, series}` — `load` · `accounts` = 가장 최근 실행 `{id, scenario, state: RUNNING/DONE/FAILED, vus, durationSec, startedAt}`(없으면 null). `series` = `load` 의 `vus` · `rps` · `p95Ms` · `errorRate`(2xx 아닌 비율) 각 `[{t: epoch ms, v}]`, Prometheus 실패면 빈 목록. 쿠버네티스 실패 503 `SYSTEM_CLUSTER_UNAVAILABLE` |
+| `GET /api/admin/system/loadtest` | — | `{enabled, maxVus, load, accounts, series, result}` — `load` · `accounts` = 가장 최근 실행 `{id, scenario, state: RUNNING/DONE/FAILED, vus, durationSec, startedAt}`(없으면 null). `series` = `load` 의 `vus` · `rps` · `p95Ms` · `errorRate`(2xx 아닌 비율) 각 `[{t: epoch ms, v}]`, Prometheus 실패면 빈 목록. 쿠버네티스 실패 503 `SYSTEM_CLUSTER_UNAVAILABLE`. `load` 에 `endsAt`(최대 시간 끝), `finishedAt`(실제 끝, 실행 중 null) 추가. 끝난 실행의 `series` 는 끝난 시각에서 멈춤(그 실행 전체, 최대 15분), Job 은 24시간 보관. `result` = `{requests, failed, byStatus, p95Ms, avgRps, peakVus, elapsedSec, topFailures[{api, status, count}], serverErrors{서비스: 게이트웨이 5xx}}`(실행 중엔 지금까지, 11/17) |
 | `POST /api/admin/system/loadtest` | `{scenario, vus 1 ~ 300, durationSec 30 ~ 600}` | 202 `{id}` · 400 `INVALID_INPUT` · 403 `SYSTEM_LOADTEST_DISABLED` · 409 `SYSTEM_LOADTEST_RUNNING` |
 | `PATCH /api/admin/system/loadtest` | `{vus 0 ~ 300}` — 0 이면 요청을 멈추고 대기 | 200 · 409 `SYSTEM_LOADTEST_NOT_RUNNING`(없음 · 파드 준비 중) · 503 `SYSTEM_LOADTEST_CONTROL_FAILED` |
 | `DELETE /api/admin/system/loadtest` | — | 200 — 실행 중인 Job 전부 삭제(없으면 그대로) |
@@ -355,6 +355,7 @@
 | `GET /api/admin/system/monitor/errors?service=` | `[{kind: RESPONSE/LOG, timestampMs, service, level, title, status, traceId}]` 최신순 40건. service 가 있으면 5xx 응답은 그 라우트, 로그는 그 `app` 라벨만 |
 | `GET /api/admin/system/monitor/traces/{traceId}` | `{traceId, durationMs, spans: [{id, parentId, service, name, kind, startMs, durationMs, status, error}]}` — traceId 가 16 · 32자리 16진수가 아니면 400 `INVALID_INPUT` |
 | `GET /api/admin/system/monitor/summary` | `{topErrors: [{service, api, status, count}], slowest: [{service, api, avgMs}], statuses: [{status, count}]}` |
+| `GET /api/admin/system/monitor/visitors` | `{visitors, members, windowSeconds}` — 최근 120초 안에 요청한 접속자(회원 + 비회원 IP)와 로그인 회원. 게이트웨이 `ActiveUserFilter` 가 Redis 정렬 집합에 기록(같은 사람 15초에 한 번), 부하테스트(`X-Gotgan-Loadtest` 헤더)와 액추에이터 제외. Redis 실패면 null (11/17) |
 
 ## 10. 장애 분석 리포트 (11/17)
 
