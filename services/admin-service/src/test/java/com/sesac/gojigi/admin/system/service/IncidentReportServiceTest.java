@@ -186,14 +186,26 @@ class IncidentReportServiceTest {
     @Test
     @DisplayName("점검용 요청 시간대의 탐색 요청은 공격 의심 건수와 로그에서 뺀다")
     void testWindow_excludesOwnProbes() {
+        // 형식이 틀린 항목은 무시, 기간 밖 시간대는 조회하지 않음
         IncidentReportService withWindow = new IncidentReportService(prometheus, loki, chaos, Clock.fixed(NOW, KST),
-                List.of("2026-11-17T11:24:00+09:00/2026-11-17T11:25:00+09:00"));
+                List.of("not-a-window", "2026-11-17T11:24:00+09:00/2026-11-17T11:25:00+09:00", "2026-11-16T01:00:00+09:00/2026-11-16T01:01:00+09:00"));
+        when(loki.lines(contains("의심 요청"), any(), any(), anyInt())).thenReturn(List.of(
+                new LogLine(ms("11:24") + 5_000, "gateway-service", "WARN", "의심 요청 type=secret-file path=/.env", null),
+                new LogLine(ms("11:24") + 6_000, "gateway-service", "WARN", "유형 표시 없는 로그", null),
+                new LogLine(ms("11:26"), "gateway-service", "WARN", "의심 요청 type=cms-probe path=/wp-admin", null)));
+        when(loki.lines(contains("level=~"), any(), any(), anyInt())).thenReturn(List.of(
+                new LogLine(ms("11:07"), "gateway-service", "WARN", "업무 서비스 연결 실패 route=product-service", "abc123"),
+                new LogLine(ms("11:24") + 5_000, "gateway-service", "WARN", "의심 요청 type=secret-file path=/.env", null)));
 
         Report report = withWindow.report(at("10:50"), at("11:30"));
 
         Issue attack = report.issues().stream().filter(i -> "ATTACK".equals(i.kind())).findFirst().orElseThrow();
         assertThat(attack.suspicious()).isEqualTo(2);   // 3건 중 점검용 1건 제외
-        assertThat(report.suspicious()).isEmpty();
+        assertThat(attack.logs()).extracting(l -> l.title())   // 근거 로그에서도 점검용 요청은 뺀다(가짜 Loki 는 시간과 상관없이 같은 목록)
+                .doesNotContain("의심 요청 type=secret-file path=/.env");
+        assertThat(report.issues().get(0).logs()).extracting(l -> l.traceId()).containsExactly("abc123");
+        assertThat(report.suspicious()).extracting(l -> l.title())   // 점검용 시간대 안의 탐색 로그는 모두 빠지고 밖의 것만
+                .containsExactly("의심 요청 type=cms-probe path=/wp-admin");
         assertThat(report.summary().suspicious()).isEqualTo(2);
     }
 
