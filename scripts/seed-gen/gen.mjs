@@ -230,7 +230,7 @@ const paidAt = (g) => `TIMESTAMP(${g.start} + INTERVAL 10 DAY, '10:00:00')`;
 const settlementHistory = groups.flatMap((g) => [
   [g.id * 10 + 1, g.id, 'NULL', "'SCHEDULED'", "'SYSTEM'", "'주간 집계'", aggregatedAt(g)],
   ...(g.status === 'PAID' ? [[g.id * 10 + 2, g.id, "'SCHEDULED'", "'PAID'", "'ADMIN'", 'NULL', paidAt(g)]] : []),
-  ...(g.held ? [[g.id * 10 + 2, g.id, "'SCHEDULED'", "'HELD'", "'SYSTEM'", "'스토어 정지, 폐점 — 자동 보류'", aggregatedAt(g)]] : []),
+  ...(g.held ? [[g.id * 10 + 2, g.id, "'SCHEDULED'", "'HELD'", "'SYSTEM'", "'스토어 정지 · 폐점 — 자동 보류'", aggregatedAt(g)]] : []),
 ]);
 const settlementSql = `${header('jihoon-devstu', `-- 정산 = order 시드의 구매확정 상품주문(order_item_id, 금액 같음)을 스토어 × 주차로 묶어 서버 규칙으로 계산
 --   수수료 = 상품주문마다 내림(상위 카테고리율, 결제 ${PAYMENT_FEE_RATE}%), 지난주 = 지급예정(정지 스토어는 자동 보류), 지지난주 = 지급 완료 + 지급 기록
@@ -246,7 +246,7 @@ ${insert('settlement_store', ['settlement_store_id', 'store_id', 'store_name', '
 ${insert('settlement', ['settlement_id', 'store_id', 'week_start', 'week_end', 'item_count', 'carried_over_count', 'sales_amt', 'commission_amt', 'payment_fee_amt',
   'payout_amt', 'status', 'hold_reason', 'scheduled_pay_date', 'held_at', 'paid_at', 'created_at'],
 groups.map((g) => [g.id, g.storeId, g.start, `${g.start} + INTERVAL 6 DAY`, g.items.length, 0, g.sum('itemAmt'), g.sum('commission'), g.sum('fee'), g.sum('payout'),
-  q(g.status), g.held ? "'스토어 정지, 폐점 — 자동 보류'" : 'NULL', `${g.start} + INTERVAL 10 DAY`, g.held ? aggregatedAt(g) : 'NULL',
+  q(g.status), g.held ? "'스토어 정지 · 폐점 — 자동 보류'" : 'NULL', `${g.start} + INTERVAL 10 DAY`, g.held ? aggregatedAt(g) : 'NULL',
   g.status === 'PAID' ? paidAt(g) : 'NULL', aggregatedAt(g)]))}
 ${insert('settlement_item', ['settlement_item_id', 'settlement_id', 'order_item_id', 'order_no', 'store_id', 'product_id', 'product_name', 'category_id', 'item_amt',
   'commission_rate', 'commission_amt', 'payment_fee_amt', 'confirmed_at'],

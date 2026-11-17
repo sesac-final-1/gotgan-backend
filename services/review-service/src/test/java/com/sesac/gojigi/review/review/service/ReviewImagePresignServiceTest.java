@@ -86,7 +86,7 @@ class ReviewImagePresignServiceTest {
 
     @ParameterizedTest(name = "{0}, {1}바이트")
     @CsvSource({
-            "image/gif, 1000, 2번째 파일: 사진은 JPG, PNG, WEBP 만 올릴 수 있습니다.",
+            "image/gif, 1000, '2번째 파일: 사진은 JPG, PNG, WEBP 만 올릴 수 있습니다.'",
             "image/jpeg, 0, 2번째 파일: 사진은 10MB 이하만 올릴 수 있습니다.",
             "image/jpeg, 10485761, 2번째 파일: 사진은 10MB 이하만 올릴 수 있습니다."
     })

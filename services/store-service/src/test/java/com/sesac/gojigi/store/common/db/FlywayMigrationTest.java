@@ -95,7 +95,7 @@ class FlywayMigrationTest {
                 .containsEntry("COLUMN_DEFAULT", "ACTIVE");
         assertThat((String) status.get("COLUMN_COMMENT")).contains("CLOSED").doesNotContain("DORMANT");
         assertThat(actorType).containsEntry("COLUMN_TYPE", "varchar(10)").containsEntry("IS_NULLABLE", "NO")
-                .containsEntry("COLUMN_COMMENT", "SELLER(폐점) / ADMIN(정지, 해제)");
+                .containsEntry("COLUMN_COMMENT", "SELLER(폐점) / ADMIN(정지 · 해제)");
     }
 
     @Test

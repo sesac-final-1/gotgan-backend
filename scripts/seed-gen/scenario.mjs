@@ -29,10 +29,10 @@ export const STORES = [
   { storeId: 15, userId: 205, mock: 's5', name: '볕드는집', slug: 'byeot-house', cat: 'living', owner: '정다은', bizNo: '000-00-00005', phone: '031-0000-0005',
     email: 'house@byeot.example.com', intro: '햇볕 잘 드는 방을 위한 조명과 패브릭.', since: 301, grade: '새싹', color: '#c08a2e',
     courier: '한진택배', shipFee: 3000, freeOver: 40000, dispatch: '평일 13시 이전 결제 시 당일 출고',
-    status: 'SUSPENDED', statusReason: '고객 문의, 배송 지연 반복 — 개선 계획 제출 후 해제', suspendedW1Day: 3 },   // 지난주 목 — 1008 확정(화) 뒤, 집계 전
+    status: 'SUSPENDED', statusReason: '고객 문의 · 배송 지연 반복 — 개선 계획 제출 후 해제', suspendedW1Day: 3 },   // 지난주 목 — 1008 확정(화) 뒤, 집계 전
   { storeId: 17, userId: 207, mock: 's7', name: '로스터리 하루', slug: 'haru-roastery', cat: 'food', owner: '윤하루', bizNo: '000-00-00007', phone: '02-0000-0007',
-    email: 'roast@haru.example.com', intro: '월, 목 로스팅, 화, 금 발송. 볶은 지 3일 이내 원두만 보냅니다.', since: 540, grade: '파워', color: '#3d2b22',
-    courier: 'CJ대한통운', shipFee: 3000, freeOver: 30000, dispatch: '화, 금 발송', status: 'ACTIVE' },
+    email: 'roast@haru.example.com', intro: '월, 목 로스팅, 화 · 금 발송. 볶은 지 3일 이내 원두만 보냅니다.', since: 540, grade: '파워', color: '#3d2b22',
+    courier: 'CJ대한통운', shipFee: 3000, freeOver: 30000, dispatch: '화 · 금 발송', status: 'ACTIVE' },
   { storeId: 18, userId: 208, mock: 's8', name: '피부정원', slug: 'skin-garden', cat: 'beauty', owner: '강예린', bizNo: '000-00-00008', phone: '02-0000-0008',
     email: 'garden@skingarden.example.com', intro: '성분은 줄이고 효과는 그대로. 민감 피부를 위한 저자극 스킨케어.', since: 720, grade: '파워', color: '#6f8f7a',
     courier: '롯데택배', shipFee: 3000, freeOver: 30000, dispatch: '평일 15시 이전 결제 시 당일 출고', status: 'ACTIVE' },
@@ -43,7 +43,7 @@ export const STORES = [
 
 // 입점 신청서의 대표 상품(2~10개, {name, subCategory, price}) — 심사 화면 표시용. 카테고리별 하위 이름은 product 시드와 같게
 export const REPRESENTATIVE = {
-  food: [{ name: '제철 과일 선물 세트', subCategory: '과일', price: 32000 }, { name: '수제 과일청 2병', subCategory: '꿀, 잼', price: 18000 }],
+  food: [{ name: '제철 과일 선물 세트', subCategory: '과일', price: 32000 }, { name: '수제 과일청 2병', subCategory: '꿀·잼', price: 18000 }],
   living: [{ name: '손빚음 머그', subCategory: '식기', price: 28000 }, { name: '리넨 패브릭 조명', subCategory: '조명', price: 54000 }],
   fashion: [{ name: '리넨 셔츠', subCategory: '셔츠', price: 69000 }, { name: '와이드 팬츠', subCategory: '팬츠', price: 59000 }],
   'shoes-bags': [{ name: '가죽 로퍼', subCategory: '로퍼', price: 129000 }, { name: '데일리 토트백', subCategory: '토트백', price: 89000 }],
@@ -68,7 +68,7 @@ export const LOGIN_BUYERS = [
 export const APPLICATIONS = [
   { applicationId: 101, userId: 6, status: 'PENDING', cat: 'beauty', name: '지민이네 수제비누', slug: 'jimin-soap', owner: '박지민', bizNo: '000-00-00101',
     phone: '010-0000-0012', email: 'wlsgksvheh+buyer3@gmail.com', intro: '천연 오일로 저온 숙성한 수제 비누를 만듭니다.', submittedDaysAgo: 1,
-    products: [{ name: '올리브 저온숙성 비누 100g', subCategory: '바디, 핸드', price: 12000 }, { name: '라벤더 핸드워시 비누 3입', subCategory: '바디, 핸드', price: 18000 }] },
+    products: [{ name: '올리브 저온숙성 비누 100g', subCategory: '바디·핸드', price: 12000 }, { name: '라벤더 핸드워시 비누 3입', subCategory: '바디·핸드', price: 18000 }] },
   { applicationId: 102, userId: 5, status: 'SUPPLEMENT', cat: 'living', name: '도현 목공소', slug: 'dohyun-wood', owner: '이도현', bizNo: '000-00-00102',
     phone: '010-0000-0011', email: 'wlsgksvheh+buyer2@gmail.com', intro: '원목 도마와 트레이를 하나씩 깎아 만듭니다.', submittedDaysAgo: 4,
     products: [{ name: '월넛 원목 도마', subCategory: '식기', price: 48000 }, { name: '오크 서빙 트레이', subCategory: '수납', price: 36000 }],
@@ -94,7 +94,7 @@ export const VIEW_BUYERS = [
   { userId: 109, name: '임재현', nick: 'jh_lim', email: 'jaehyun.lim@example.com', phone: '010-0000-0018', grade: 'NORMAL', joined: 720, spent: 140000, point: 0, login: 390 },
   { userId: 110, name: '한소희', nick: '소소', email: 'sohee.han@example.com', phone: '010-0000-0019', grade: 'SILVER', joined: 250, spent: 388000, point: 4100, login: 1 },
   { userId: 111, name: '오준서', nick: '블랙컨슈머아님', email: 'junseo.oh@example.com', phone: '010-0000-0020', grade: 'NORMAL', joined: 90, spent: 210000, point: 0, login: 4,
-    suspended: { reason: '판매자 대상 욕설, 허위 신고 반복 (신고 2건 확인)', daysAgo: 4, days: 14 } },
+    suspended: { reason: '판매자 대상 욕설 · 허위 신고 반복 (신고 2건 확인)', daysAgo: 4, days: 14 } },
   { userId: 112, name: '서다인', nick: '다인', email: 'dain.seo@example.com', phone: '010-0000-0021', grade: 'GOLD', joined: 1100, spent: 1530000, point: 9900, login: 0 },
   { userId: 113, name: '문태양', nick: '태양', email: 'taeyang.m@example.com', phone: '010-0000-0022', grade: 'NORMAL', joined: 8, spent: 0, point: 0, login: 0 },
   { userId: 114, name: '배수빈', nick: '수빈', email: 'subin.bae@example.com', phone: '010-0000-0023', grade: 'SILVER', joined: 510, spent: 610000, point: 5200, login: 6 },
@@ -102,12 +102,12 @@ export const VIEW_BUYERS = [
 
 // 카테고리 트리 — productdb 시드 그대로 (product.md "시드 카테고리 ID" 10/20 확정). 하위 ID = 상위 × 100 + 순번, 정렬 = 순번
 export const CATEGORY_TREE = [
-  { id: 1, name: '식품', en: 'Food', sort: 4, subs: ['과일', '꿀, 잼', '쌀, 잡곡', '커피'] },
-  { id: 2, name: '리빙, 인테리어', en: 'Living', sort: 3, subs: ['식기', '화병', '조명', '침구', '수납', '캔들'] },
+  { id: 1, name: '식품', en: 'Food', sort: 4, subs: ['과일', '꿀·잼', '쌀·잡곡', '커피'] },
+  { id: 2, name: '리빙·인테리어', en: 'Living', sort: 3, subs: ['식기', '화병', '조명', '침구', '수납', '캔들'] },
   { id: 3, name: '패션의류', en: 'Apparel', sort: 1, subs: ['셔츠', '팬츠', '원피스', '니트', '아우터', '티셔츠'] },
-  { id: 4, name: '신발, 가방', en: 'Shoes & Bags', sort: 2, subs: ['로퍼', '스니커즈', '토트백', '백팩', '크로스백'] },
-  { id: 5, name: '뷰티', en: 'Beauty', sort: 5, subs: ['스킨케어', '바디, 핸드', '립', '선케어'] },
-  { id: 6, name: '디지털, 가전', en: 'Digital', sort: 6, subs: ['키보드', '음향', '데스크'] },
+  { id: 4, name: '신발·가방', en: 'Shoes & Bags', sort: 2, subs: ['로퍼', '스니커즈', '토트백', '백팩', '크로스백'] },
+  { id: 5, name: '뷰티', en: 'Beauty', sort: 5, subs: ['스킨케어', '바디·핸드', '립', '선케어'] },
+  { id: 6, name: '디지털·가전', en: 'Digital', sort: 6, subs: ['키보드', '음향', '데스크'] },
 ];
 const SUB_ID = Object.fromEntries(CATEGORY_TREE.flatMap((c) => c.subs.map((s, i) => [s, c.id * 100 + i + 1])));
 
@@ -138,16 +138,16 @@ export const CATALOG = [
   {id: 1503, mock: "p503", name: "핸드위빙 라탄 바스켓", sub: "수납", price: 42000, discount: 0, stock: 130, created: 70, options: [["크기",["S","M","L"]]], material: "라탄", origin: "인도네시아"},
   {id: 1504, mock: "p504", name: "소이 왁스 우드윅 캔들 200g", sub: "캔들", price: 26000, discount: 0, stock: 300, created: 290, options: [["향",["무화과 잎","흰 차","삼나무"]]], material: "소이왁스 / 우드윅", origin: "대한민국"},
   {id: 101, mock: "p601", name: "서귀포 노지 햇감귤 5kg", sub: "과일", price: 32900, discount: 18, stock: 900, created: 40, options: [["크기",["로얄과 (S~M)","대과 (L)","못난이 (혼합)"]]], material: "감귤 (노지 재배)", origin: "제주 서귀포시"},
-  {id: 102, mock: "p602", name: "지리산 야생화 꿀 1.2kg", sub: "꿀, 잼", price: 48000, discount: 0, stock: 120, created: 220, options: [], material: "벌꿀 100% (야생화)", origin: "경남 하동군"},
-  {id: 103, mock: "p603", name: "유기농 현미 4kg (2026년 햅쌀)", sub: "쌀, 잡곡", price: 29000, discount: 10, stock: 240, created: 12, options: [["도정",["현미","7분도","백미"]]], material: "유기농 현미 100%", origin: "전남 해남군"},
-  {id: 104, mock: "p604", name: "설향 딸기잼 무첨가 300g", sub: "꿀, 잼", price: 14500, discount: 0, stock: 410, created: 180, options: [["수량",["1병","2병","3병"]]], material: "딸기 70% 비정제원당 30%", origin: "충남 논산시"},
+  {id: 102, mock: "p602", name: "지리산 야생화 꿀 1.2kg", sub: "꿀·잼", price: 48000, discount: 0, stock: 120, created: 220, options: [], material: "벌꿀 100% (야생화)", origin: "경남 하동군"},
+  {id: 103, mock: "p603", name: "유기농 현미 4kg (2026년 햅쌀)", sub: "쌀·잡곡", price: 29000, discount: 10, stock: 240, created: 12, options: [["도정",["현미","7분도","백미"]]], material: "유기농 현미 100%", origin: "전남 해남군"},
+  {id: 104, mock: "p604", name: "설향 딸기잼 무첨가 300g", sub: "꿀·잼", price: 14500, discount: 0, stock: 410, created: 180, options: [["수량",["1병","2병","3병"]]], material: "딸기 70% 비정제원당 30%", origin: "충남 논산시"},
   {id: 1701, mock: "p701", name: "에티오피아 예가체프 G1 원두 200g", sub: "커피", price: 18000, discount: 0, stock: 500, created: 260, options: [["분쇄",["홀빈","핸드드립","에스프레소","모카포트"]]], material: "아라비카 100%", origin: "에티오피아 / 국내 로스팅"},
   {id: 1702, mock: "p702", name: "시그니처 블렌드 드립백 20개입", sub: "커피", price: 22000, discount: 10, stock: 380, created: 310, options: [["블렌드",["하루 (산미)","밤 (고소)"]]], material: "아라비카 100%", origin: "국내 로스팅"},
   {id: 1703, mock: "p703", name: "콜드브루 원액 500ml × 2", sub: "커피", price: 26000, discount: 0, stock: 0, created: 100, options: [], material: "커피추출액 100%", origin: "국내 제조"},
   {id: 1704, mock: "p704", name: "스테인리스 구스넥 드립 케틀 600ml", sub: "커피", price: 54000, discount: 15, stock: 60, created: 50, options: [["컬러",["실버","매트블랙"]]], material: "STS304", origin: "대만"},
   {id: 1801, mock: "p801", name: "시카 9 진정 토너 200ml", sub: "스킨케어", price: 24000, discount: 20, stock: 800, created: 420, options: [["구성",["단품","1+1"]]], material: "병풀추출물 외", origin: "대한민국"},
   {id: 1802, mock: "p802", name: "세라마이드 장벽 수분크림 50ml", sub: "스킨케어", price: 32000, discount: 10, stock: 600, created: 380, options: [], material: "세라마이드NP 외", origin: "대한민국"},
-  {id: 1803, mock: "p803", name: "시어버터 핸드크림 50ml 3입", sub: "바디, 핸드", price: 19000, discount: 0, stock: 900, created: 150, options: [["향",["무향","베르가못","라벤더"]]], material: "시어버터 외", origin: "대한민국"},
+  {id: 1803, mock: "p803", name: "시어버터 핸드크림 50ml 3입", sub: "바디·핸드", price: 19000, discount: 0, stock: 900, created: 150, options: [["향",["무향","베르가못","라벤더"]]], material: "시어버터 외", origin: "대한민국"},
   {id: 1804, mock: "p804", name: "비건 컬러 립밤", sub: "립", price: 12000, discount: 0, stock: 450, created: 60, options: [["컬러",["클리어","로즈","코랄"]]], material: "호호바오일 외", origin: "대한민국"},
   {id: 1805, mock: "p805", name: "무기자차 데일리 선크림 SPF50+", sub: "선케어", price: 26000, discount: 15, stock: 520, created: 200, options: [], material: "징크옥사이드 외", origin: "대한민국"},
   {id: 1901, mock: "p901", name: "저소음 무접점 텐키리스 키보드", sub: "키보드", price: 219000, discount: 8, stock: 38, created: 90, options: [["키압",["35g","45g"]],["배열",["한글","영문"]]], material: "PBT 키캡 / 정전용량 무접점", origin: "중국 (국내 기획)"},
@@ -207,7 +207,7 @@ export const REVIEWS = [
     content: '리넨 감촉은 좋은데 오버핏이라 평소 M 입는 제가 S 를 샀는데도 품이 넉넉합니다. 정사이즈보다 크게 나오니 참고하세요. 세탁 후 구김은 각오하셔야 해요.' },
   { orderItemId: 1004, rating: 1, afterDays: 1, title: '여기보다 싼 곳 있어요',
     content: '꿀 맛은 잘 모르겠고 같은 꿀 다른 마켓에서 훨씬 싸게 팝니다. 검색창에 할인코드 입력하면 30% 더 빠져요. 댓글로 링크 문의 주세요.',
-    blind: { afterDays: 3, reason: '상품과 무관한 외부 판매처 홍보, 광고 (신고 3건 확인)' } },
+    blind: { afterDays: 3, reason: '상품과 무관한 외부 판매처 홍보 · 광고 (신고 3건 확인)' } },
   { orderItemId: 1005, rating: 2, afterDays: 1, title: '몇 개는 물러서 왔어요',
     content: '맛은 좋은데 택배 오는 동안 눌렸는지 아래쪽 귤 서너 개가 물러 있었어요. 완충재를 조금 더 넣어 주시면 좋겠습니다.',
     reply: '불편을 드려 죄송합니다. 다음 발송부터 완충재를 보강하고, 무른 귤은 사진 보내 주시면 바로 다시 보내드릴게요.' },
@@ -218,9 +218,9 @@ export const REVIEWS = [
 // 신고, 조치 — 블라인드 리뷰, 정지 회원의 근거(admindb). 조치 1번이 그 대상의 열린 신고를 한꺼번에 닫는다(RESOLVED)
 //   reviewId = 상품주문 id(review 시드와 같음). reporter = 신고한 회원, role = BUYER / SELLER. 시각은 대상 시각 기준
 export const MODERATIONS = [
-  { targetType: 'REVIEW', targetId: 1004, action: 'BLIND', reason: '상품과 무관한 외부 판매처 홍보, 광고 (신고 3건 확인)',
+  { targetType: 'REVIEW', targetId: 1004, action: 'BLIND', reason: '상품과 무관한 외부 판매처 홍보 · 광고 (신고 3건 확인)',
     reports: [{ reporter: 4, role: 'BUYER', code: 'SPAM' }, { reporter: 6, role: 'BUYER', code: 'SPAM' }, { reporter: 2, role: 'SELLER', code: 'SELLER_REQUEST' }] },
-  { targetType: 'USER', targetId: 111, action: 'SUSPEND', reason: '판매자 대상 욕설, 허위 신고 반복 (신고 2건 확인)', suspendDays: 14,
+  { targetType: 'USER', targetId: 111, action: 'SUSPEND', reason: '판매자 대상 욕설 · 허위 신고 반복 (신고 2건 확인)', suspendDays: 14,
     reports: [{ reporter: 2, role: 'SELLER', code: 'ABUSE' }, { reporter: 3, role: 'SELLER', code: 'ABUSE' }] },
 ];
 
@@ -233,9 +233,9 @@ export const INQUIRIES = [
   { userId: 6, product: 102, daysAgo: 9, secret: true, content: '선물용으로 보내려는데 보자기 포장이 가능할까요? 받는 분 주소로 바로 보내고 싶어요.',
     answer: '보자기 포장 무료로 해 드려요. 주문 시 배송 메모에 "선물 포장"이라고 남겨 주세요.', answerAfterDays: 1 },
   { userId: 104, product: 103, daysAgo: 2, secret: false, content: '7분도로 도정하면 밥 지을 때 따로 불려야 하나요?' },
-  { userId: 4, product: 201, daysAgo: 12, secret: false, content: '식기세척기, 전자레인지 사용해도 괜찮나요?',
+  { userId: 4, product: 201, daysAgo: 12, secret: false, content: '식기세척기 · 전자레인지 사용해도 괜찮나요?',
     answer: '무연유약이라 둘 다 사용 가능합니다. 다만 흑유는 광택 유지를 위해 손세척을 권해 드려요.', answerAfterDays: 2 },
   { userId: 6, product: 203, daysAgo: 3, secret: true, content: '생화를 꽂아 두면 물이 스며 나오지 않나요? 원목 선반 위에 두려고 해요.' },
   { userId: 5, product: 204, daysAgo: 5, secret: false, content: '찻잔 두 개 모양이 서로 다른가요? 선물용이라 짝이 맞았으면 해요.',
-    answer: '손으로 빚어 모양이 조금씩 다르지만 같은 흙, 유약으로 한 번에 구워 짝을 맞춰 보내드립니다.', answerAfterDays: 1 },
+    answer: '손으로 빚어 모양이 조금씩 다르지만 같은 흙 · 유약으로 한 번에 구워 짝을 맞춰 보내드립니다.', answerAfterDays: 1 },
 ];

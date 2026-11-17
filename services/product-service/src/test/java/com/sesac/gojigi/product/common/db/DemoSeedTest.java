@@ -43,7 +43,7 @@ class DemoSeedTest {
         List<String> tops = jdbc.queryForList("SELECT CONCAT(category_id, ':', name, ':', sort_order) FROM category WHERE parent_id IS NULL ORDER BY category_id",
                 String.class);
 
-        assertThat(tops).containsExactly("1:식품:4", "2:리빙, 인테리어:3", "3:패션의류:1", "4:신발, 가방:2", "5:뷰티:5", "6:디지털, 가전:6");
+        assertThat(tops).containsExactly("1:식품:4", "2:리빙·인테리어:3", "3:패션의류:1", "4:신발·가방:2", "5:뷰티:5", "6:디지털·가전:6");
     }
 
     @Test
