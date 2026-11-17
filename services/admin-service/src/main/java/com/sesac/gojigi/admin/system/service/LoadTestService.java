@@ -13,6 +13,8 @@ import com.sesac.gojigi.admin.system.client.PrometheusClient;
 import com.sesac.gojigi.admin.system.client.PrometheusClient.Sample;
 import com.sesac.gojigi.admin.system.dto.request.LoadTestRequests;
 import com.sesac.gojigi.admin.system.dto.response.LoadTestResponses;
+import com.sesac.gojigi.admin.system.dto.response.LoadTestResponses.Failure;
+import com.sesac.gojigi.admin.system.dto.response.LoadTestResponses.Result;
 import com.sesac.gojigi.admin.system.dto.response.LoadTestResponses.Run;
 import com.sesac.gojigi.admin.system.dto.response.LoadTestResponses.RunState;
 import com.sesac.gojigi.admin.system.dto.response.LoadTestResponses.Series;
@@ -23,10 +25,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.function.UnaryOperator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +47,7 @@ public class LoadTestService {
 
     static final int MAX_VUS = 300;
     static final Duration WINDOW = Duration.ofMinutes(5);
+    static final Duration DONE_WINDOW = Duration.ofMinutes(15);
     /** 그래프 점 간격 — k6 가 1초마다 push 해서 시연에서 바로 반응하게(11/16 피드백) */
     static final Duration STEP = Duration.ofSeconds(1);
     /** rate 구간 — 1초 push 기준 5개 점. 짧을수록 장애 · 복구가 빨리 보인다 */
@@ -78,13 +83,67 @@ public class LoadTestService {
         this.namespace = namespace;
     }
 
-    /** 최근 부하 실행 · 계정 준비 상태 + 부하 그래프(최근 5분) — 쿠버네티스 조회 실패면 503, Prometheus 실패면 빈 그래프 */
+    /**
+     * 최근 부하 실행, 계정 준비 상태 + 부하 그래프 + 결과 — 쿠버네티스 조회 실패면 503, Prometheus 실패면 빈 그래프와 0 결과.
+     * 끝난 실행은 그래프를 끝난 시각에서 멈추고(지금까지 흘러가 '-' 로 비지 않게) 결과를 계속 보여 준다(Job 은 24시간 보관)
+     */
     public LoadTestResponses.Status status() {
         List<LoadJob> jobs = kubernetes.loadJobs();
         Optional<LoadJob> load = latest(jobs, KIND_LOAD);
         Optional<LoadJob> accounts = latest(jobs, KIND_ACCOUNTS);
-        Series series = load.map(this::series).orElse(Series.EMPTY);
-        return new LoadTestResponses.Status(enabled, MAX_VUS, load.map(this::run).orElse(null), accounts.map(this::run).orElse(null), series);
+        Instant now = clock.instant();
+        Instant end = load.map(j -> j.active() > 0 ? now : finishedAt(j, now)).orElse(now);
+        Series series = load.map(j -> series(j, end)).orElse(Series.EMPTY);
+        Result result = load.map(j -> result(j, end)).orElse(null);
+        return new LoadTestResponses.Status(enabled, MAX_VUS, load.map(j -> run(j, j.active() > 0 ? null : end)).orElse(null),
+                accounts.map(j -> run(j, null)).orElse(null), series, result);
+    }
+
+    /** 끝난 실행의 실제 끝 시각 — k6 지표가 마지막으로 들어온 시각, 없으면 시작 + 최대 시간 */
+    private Instant finishedAt(LoadJob job, Instant now) {
+        long span = Math.max(60, Duration.between(job.createdAt(), now).toSeconds() + 60);
+        Instant planned = job.createdAt().plusSeconds(job.durationSec());
+        return prometheus.vector("max(max_over_time(timestamp(k6_vus{testid=\"" + job.id() + "\"})[" + span + "s:5s]))")
+                .flatMap(s -> s.stream().findFirst()).map(s -> Instant.ofEpochMilli(Math.round(s.value() * 1000)))
+                .filter(t -> t.isAfter(job.createdAt())).orElse(planned.isBefore(now) ? planned : now);
+    }
+
+    /** 누적 결과 — end 시각 기준, 시작부터의 구간. 실행 중이면 지금까지 값 */
+    private Result result(LoadJob job, Instant end) {
+        long elapsed = Math.max(1, Duration.between(job.createdAt(), end).toSeconds());
+        String t = "testid=\"" + job.id() + "\"";
+        String w = "[" + (elapsed + 30) + "s]";
+        Map<String, Long> byStatus = new TreeMap<>();
+        Map<String, Long> failures = new HashMap<>();
+        long requests = 0;
+        for (PrometheusClient.Series s : prometheus.vector("sum by (name, status)(last_over_time(k6_http_reqs_total{" + t + "}" + w + "))", end)
+                .orElse(List.of())) {
+            long n = Math.round(s.value());
+            String status = s.labels().getOrDefault("status", "");
+            requests += n;
+            byStatus.merge(status.isEmpty() || "0".equals(status) ? "연결 실패" : status, n, Long::sum);
+            if (!status.startsWith("2")) {
+                failures.merge(s.labels().getOrDefault("name", "-") + "	" + status, n, Long::sum);
+            }
+        }
+        long failed = failures.values().stream().mapToLong(Long::longValue).sum();
+        List<Failure> top = failures.entrySet().stream().filter(e -> e.getValue() > 0)
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed()).limit(5)
+                .map(e -> new Failure(e.getKey().split("	")[0], e.getKey().split("	")[1], e.getValue())).toList();
+        Double p95 = prometheus.vector("histogram_quantile(0.95, sum(increase(k6_http_req_duration_seconds{" + t + "}" + w + ")))", end)
+                .flatMap(s -> s.stream().findFirst()).map(s -> Math.round(s.value() * 10000) / 10.0).orElse(null);
+        int peak = prometheus.vector("max_over_time(sum(k6_vus{" + t + "})" + "[" + (elapsed + 30) + "s:5s])", end)
+                .flatMap(s -> s.stream().findFirst()).map(s -> (int) Math.round(s.value())).orElse(0);
+        Map<String, Long> serverErrors = new TreeMap<>();
+        prometheus.vector("sum by (routeId)(increase(spring_cloud_gateway_requests_seconds_count{httpStatusCode=~\"5..\"}" + w + "))", end)
+                .orElse(List.of()).forEach(s -> {
+                    long n = Math.round(s.value());
+                    String route = s.labels().getOrDefault("routeId", "");
+                    if (n > 0) {
+                        serverErrors.merge(SystemCatalog.ROUTE_SERVICES.getOrDefault(route, route), n, Long::sum);
+                    }
+                });
+        return new Result(requests, failed, byStatus, p95, Math.round(requests * 10.0 / elapsed) / 10.0, peak, elapsed, top, serverErrors);
     }
 
     /** 시작 — 꺼짐 403, 이미 실행 중(부하 · 계정 준비 포함) 409 */
@@ -152,20 +211,22 @@ public class LoadTestService {
         return jobs.stream().filter(j -> kind.equals(j.kind()) && j.createdAt() != null).max(Comparator.comparing(LoadJob::createdAt));
     }
 
-    private Run run(LoadJob job) {
+    private Run run(LoadJob job, Instant finished) {
         RunState state = RunState.DONE;
         if (job.active() > 0) {
             state = RunState.RUNNING;
         } else if (job.failed() > 0) {
             state = RunState.FAILED;
         }
-        return new Run(job.id(), job.scenario(), state, job.vus(), job.durationSec(), OffsetDateTime.ofInstant(job.createdAt(), clock.getZone()));
+        return new Run(job.id(), job.scenario(), state, job.vus(), job.durationSec(), OffsetDateTime.ofInstant(job.createdAt(), clock.getZone()),
+                OffsetDateTime.ofInstant(job.createdAt().plusSeconds(job.durationSec()), clock.getZone()),
+                finished == null ? null : OffsetDateTime.ofInstant(finished, clock.getZone()));
     }
 
-    /** 최근 5분 또는 시작 시각부터(더 늦은 쪽), 1초 간격 — testid 태그로 이 실행만 */
-    private Series series(LoadJob job) {
-        Instant end = clock.instant();
-        Instant start = job.createdAt().isAfter(end.minus(WINDOW)) ? job.createdAt() : end.minus(WINDOW);
+    /** 실행 중은 최근 5분, 끝났으면 그 실행 전체(최대 15분)를 끝난 시각에서 멈춰서, 1초 간격 — testid 태그로 이 실행만 */
+    private Series series(LoadJob job, Instant end) {
+        Duration window = job.active() > 0 ? WINDOW : DONE_WINDOW;
+        Instant start = job.createdAt().isAfter(end.minus(window)) ? job.createdAt() : end.minus(window);
         String t = "testid=\"" + job.id() + "\"";
         String requests = "sum(rate(k6_http_reqs_total{" + t + "}" + RATE_WINDOW + "))";
         return new Series(
@@ -223,7 +284,7 @@ public class LoadTestService {
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("backoffLimit", 0);
         spec.put("activeDeadlineSeconds", durationSec + 120);
-        spec.put("ttlSecondsAfterFinished", 300);
+        spec.put("ttlSecondsAfterFinished", 86_400);   // 끝난 뒤 24시간 보관 — 결과 화면이 마지막 실행을 계속 보여 준다(11/17)
         spec.put("template", Map.of("metadata", Map.of("labels", labels), "spec", podSpec));
 
         return Map.of("apiVersion", "batch/v1", "kind", "Job",

@@ -76,7 +76,7 @@ class LoadTestServiceTest {
                 .containsEntry("gotgan.loadtest/vus", "20").containsEntry("gotgan.loadtest/duration-sec", "120");
 
         Map<String, Object> spec = (Map<String, Object>) job.get("spec");
-        assertThat(spec).containsEntry("activeDeadlineSeconds", 240).containsEntry("ttlSecondsAfterFinished", 300).containsEntry("backoffLimit", 0);
+        assertThat(spec).containsEntry("activeDeadlineSeconds", 240).containsEntry("ttlSecondsAfterFinished", 86_400).containsEntry("backoffLimit", 0);
         Map<String, Object> podSpec = (Map<String, Object>) ((Map<String, Object>) spec.get("template")).get("spec");
         Map<String, Object> container = ((List<Map<String, Object>>) podSpec.get("containers")).get(0);
         assertThat(container).containsEntry("image", "grafana/k6:1.8.3");
@@ -187,7 +187,7 @@ class LoadTestServiceTest {
     }
 
     @Test
-    @DisplayName("상태 — 끝난 지 오래된 실행은 최근 5분만, Prometheus 실패면 빈 그래프, 실행 기록 없으면 null")
+    @DisplayName("상태 — 끝난 실행은 그래프를 끝난 시각(지표 없으면 시작 + 최대 시간)에서 멈춤, Prometheus 실패면 빈 그래프, 기록 없으면 null")
     void status_windowAndEmpty() {
         when(kubernetes.loadJobs()).thenReturn(List.of(job("lt-1", "load", NOW.minusSeconds(900), 0, 1, 0)));
         when(prometheus.range(anyString(), any(), any(), any())).thenReturn(Optional.empty());
@@ -197,10 +197,45 @@ class LoadTestServiceTest {
         assertThat(status.load().state()).isEqualTo(RunState.DONE);
         assertThat(status.accounts()).isNull();
         assertThat(status.series().rps()).isEmpty();
-        verify(prometheus).range(eq("sum(k6_vus{testid=\"lt-1\"})"), eq(NOW.minus(Duration.ofMinutes(5))), eq(NOW), any());
+        verify(prometheus).range(eq("sum(k6_vus{testid=\"lt-1\"})"), eq(NOW.minusSeconds(900)), eq(NOW.minusSeconds(600)), any());
+        assertThat(status.load().finishedAt().toInstant()).isEqualTo(NOW.minusSeconds(600));
+        assertThat(status.load().endsAt().toInstant()).isEqualTo(NOW.minusSeconds(600));
+        assertThat(status.result().requests()).isZero();
 
         when(kubernetes.loadJobs()).thenReturn(List.of());
         assertThat(service(true).status().load()).isNull();
+    }
+
+    @Test
+    @DisplayName("결과 — 상태 코드별 건수, 실패(2xx 아님 + 연결 실패), 실패 많은 API, p95, 최대 사용자, 같은 시간 게이트웨이 5xx 서비스별")
+    void status_result() {
+        when(kubernetes.loadJobs()).thenReturn(List.of(job("lt-2", "load", NOW.minusSeconds(400), 0, 1, 0)));
+        when(prometheus.range(anyString(), any(), any(), any())).thenReturn(Optional.of(List.of()));
+        when(prometheus.vector(contains("timestamp(k6_vus"))).thenReturn(Optional.of(List.of(
+                new PrometheusClient.Series(Map.of(), NOW.minusSeconds(100).getEpochSecond()))));
+        when(prometheus.vector(contains("k6_http_reqs_total"), any(Instant.class))).thenReturn(Optional.of(List.of(
+                new PrometheusClient.Series(Map.of("name", "GET /api/products", "status", "200"), 2900),
+                new PrometheusClient.Series(Map.of("name", "GET /api/products", "status", "502"), 7),
+                new PrometheusClient.Series(Map.of("name", "POST /api/carts/items", "status", "0"), 3))));
+        when(prometheus.vector(contains("histogram_quantile"), any(Instant.class)))
+                .thenReturn(Optional.of(List.of(new PrometheusClient.Series(Map.of(), 0.1234))));
+        when(prometheus.vector(contains("max_over_time(sum(k6_vus"), any(Instant.class)))
+                .thenReturn(Optional.of(List.of(new PrometheusClient.Series(Map.of(), 200))));
+        when(prometheus.vector(contains("spring_cloud_gateway_requests_seconds_count"), any(Instant.class))).thenReturn(Optional.of(List.of(
+                new PrometheusClient.Series(Map.of("routeId", "product-service"), 6.6), new PrometheusClient.Series(Map.of("routeId", "review-service"), 0.2))));
+
+        LoadTestResponses.Result result = service(true).status().result();
+
+        assertThat(result.requests()).isEqualTo(2910);
+        assertThat(result.failed()).isEqualTo(10);
+        assertThat(result.byStatus()).containsEntry("200", 2900L).containsEntry("502", 7L).containsEntry("연결 실패", 3L);
+        assertThat(result.topFailures()).containsExactly(new LoadTestResponses.Failure("GET /api/products", "502", 7),
+                new LoadTestResponses.Failure("POST /api/carts/items", "0", 3));
+        assertThat(result.p95Ms()).isEqualTo(123.4);
+        assertThat(result.peakVus()).isEqualTo(200);
+        assertThat(result.elapsedSec()).isEqualTo(300);
+        assertThat(result.avgRps()).isEqualTo(9.7);
+        assertThat(result.serverErrors()).containsExactly(Map.entry("product-service", 7L));
     }
 
     private static void assertCode(Runnable call, SystemErrorCode code) {
