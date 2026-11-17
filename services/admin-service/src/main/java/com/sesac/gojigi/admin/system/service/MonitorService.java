@@ -53,7 +53,8 @@ public class MonitorService {
     static final String SUM_BY_ROUTE = "sum by (routeId)(rate(" + GW + "_sum[15s]))";
     static final String ERRORS_BY_ROUTE = "sum by (routeId)(rate(" + GW + "_count{httpStatusCode=~\"5..\"}[15s]))";
 
-    static final String APP_FILTER = "namespace=\"sesac-gojigi\",app!=\"gateway-service\",uri!~\"/actuator.*|UNKNOWN|.*stream.*|/ws.*\"";
+    /** 분석 대상 — 액추에이터 · 스트림 · WebSocket 과 이 화면 자체 폴링(/api/admin/system/**, 1 ~ 2초)은 뺀다(느린 API 순위를 자기 조회가 차지했음, 11/17) */
+    static final String APP_FILTER = "namespace=\"sesac-gojigi\",app!=\"gateway-service\",uri!~\"/actuator.*|UNKNOWN|.*stream.*|/ws.*|/api/admin/system.*\"";
     static final String TOP_GATEWAY_ERRORS = "topk(5, sum by (routeId, httpStatusCode)(increase(" + GW + "_count{httpStatusCode=~\"5..\"}[5m])))";
     static final String TOP_APP_ERRORS = "topk(5, sum by (app, method, uri, status)(increase(http_server_requests_seconds_count{"
             + APP_FILTER + ",status=~\"5..\"}[5m])))";
