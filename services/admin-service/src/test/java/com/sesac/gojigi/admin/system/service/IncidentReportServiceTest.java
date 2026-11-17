@@ -148,6 +148,8 @@ class IncidentReportServiceTest {
 
         Issue attack = report.issues().stream().filter(i -> "ATTACK".equals(i.kind())).findFirst().orElseThrow();
         assertThat(attack.suspicious()).isEqualTo(3);
+        assertThat(attack.intended()).isFalse();   // 외부 탐색은 우리 시험과 무관 — 늘 실제
+        assertThat(attack.causes()).extracting(Cause::code).doesNotContain("CHAOS", "LOAD_TEST");
         assertThat(attack.causes().get(0).code()).isEqualTo("ATTACK");
         assertThat(attack.causes().get(0).detail()).contains("설정, 비밀 파일 탐색(/.env 등) 3건");
 
