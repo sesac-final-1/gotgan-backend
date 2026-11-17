@@ -91,6 +91,8 @@ class IncidentReportServiceTest {
         when(prometheus.vector(contains("timestamp(kube_pod_created"), any(Instant.class))).thenReturn(vector("pod", Map.of(
                 "product-service-757dd8467b-new", "11:30:00", "product-service-757dd8467b-old", "11:06:46",
                 "order-service-775744fdf6-gone", "11:20:00")));
+        when(prometheus.vector(org.mockito.ArgumentMatchers.eq("kube_pod_created{namespace=\"sesac-gojigi\"}"), any(Instant.class)))
+                .thenReturn(vector("pod", Map.of("product-service-757dd8467b-new", "11:30:00")));   // 기간 끝에 살아 있는 파드
         when(prometheus.vector(contains("min_over_time(timestamp(k6_vus)"), any(Instant.class)))
                 .thenReturn(vector("testid", Map.of("lt-1", "11:06:29")));
         when(prometheus.vector(contains("max_over_time(timestamp(k6_vus)"), any(Instant.class)))
@@ -189,6 +191,19 @@ class IncidentReportServiceTest {
                 .extracting("errorCode").isEqualTo(SystemErrorCode.SYSTEM_REPORT_INVALID_RANGE);
         assertThatThrownBy(() -> service.report(NOW.minus(Duration.ofDays(8)), NOW)).isInstanceOf(SystemException.class);
         assertThatThrownBy(() -> service.report(NOW.plusSeconds(60), NOW.plusSeconds(120))).isInstanceOf(SystemException.class);
+    }
+
+    @Test
+    @DisplayName("원인 합치기 — 같은 code 는 한 줄, 근거는 이어 붙이고 4개 넘으면 '외 n건', 처음 순서 유지")
+    void mergeCauses() {
+        List<Cause> merged = IncidentReportService.merge(List.of(
+                new Cause("CHAOS", "관리자 장애 주입(의도한 시험)", "a"), new Cause("LOAD_TEST", "부하테스트 중(의도한 시험)", "x"),
+                new Cause("CHAOS", "관리자 장애 주입(의도한 시험)", "b"), new Cause("CHAOS", "관리자 장애 주입(의도한 시험)", "c"),
+                new Cause("CHAOS", "관리자 장애 주입(의도한 시험)", "d"), new Cause("CHAOS", "관리자 장애 주입(의도한 시험)", "e"),
+                new Cause("CHAOS", "관리자 장애 주입(의도한 시험)", "a")));
+
+        assertThat(merged).extracting(Cause::code).containsExactly("CHAOS", "LOAD_TEST");
+        assertThat(merged.get(0).detail()).isEqualTo("a, b, c, d 외 1건");
     }
 
     @Test

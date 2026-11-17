@@ -370,7 +370,7 @@
 |---|---|
 | `summary` | `{headline, issues, intendedIssues, requests, serverErrors, suspicious, rateLimited}` — `headline` 은 운영팀용 한 문장 |
 | `buckets` | 구간마다 `{t(구간 시작 ms), requests, serverErrors, byService{서비스: 5xx 건수}, rateLimited(429), notFound(404), unauthorized(401 · 403), suspicious, dbErrors, errorLogs}` |
-| `issues` | `{no, kind, startMs, endMs, services, serverErrors, suspicious, rateLimited, intended, sentence, causes[{code, label, detail}], logs[ErrorItem]}` — `logs` 는 앞 10개 이슈만, 이슈당 15줄(traceId 포함) |
+| `issues` | `{no, kind, startMs, endMs, services, serverErrors, suspicious, rateLimited, requests, intended, sentence, causes[{code, label, detail}], logs[ErrorItem]}` — 같은 code 원인은 한 줄로 합침 — `logs` 는 앞 10개 이슈만, 이슈당 15줄(traceId 포함) |
 | `events` | `{t, type, service, detail}` 시간순 최대 300개 — `CHAOS_KILL` · `CHAOS_RECOVER` · `POD_START` · `POD_STOP` · `POD_RESTART` · `DEPLOY` · `LOADTEST_START` · `LOADTEST_END` · `CIRCUIT_OPEN` |
 | `suspicious` | 게이트웨이 탐색 요청 로그 최근 20줄 |
 

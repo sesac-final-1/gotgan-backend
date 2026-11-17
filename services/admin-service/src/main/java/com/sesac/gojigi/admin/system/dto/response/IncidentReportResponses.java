@@ -32,7 +32,7 @@ public final class IncidentReportResponses {
      * sentence = 운영팀용 문장, causes = 원인 후보(앞이 주 원인), logs = 개발자용 근거 로그(traceId 포함)
      */
     public record Issue(int no, String kind, long startMs, long endMs, List<String> services, long serverErrors, long suspicious,
-                        long rateLimited, boolean intended, String sentence, List<Cause> causes, List<MonitorResponses.ErrorItem> logs) {
+                        long rateLimited, long requests, boolean intended, String sentence, List<Cause> causes, List<MonitorResponses.ErrorItem> logs) {
     }
 
     /** code: CHAOS · LOAD_TEST · POD_RESTART · OOM · POD_DOWN · DEPLOY · DB · SURGE · RATE_LIMIT · ATTACK · CIRCUIT · UNKNOWN */
