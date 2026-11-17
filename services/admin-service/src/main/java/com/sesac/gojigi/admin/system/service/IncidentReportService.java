@@ -383,7 +383,12 @@ public class IncidentReportService {
         List<String> services = byService.entrySet().stream().sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                 .map(Map.Entry::getKey).toList();
         List<Cause> causes = causes(kind, s - b, e + b, in, ctx, b);
-        boolean intended = causes.stream().anyMatch(c -> "CHAOS".equals(c.code()) || "LOAD_TEST".equals(c.code()));
+        if ("ATTACK".equals(kind)) {
+            // 외부 탐색은 우리 시험(장애 주입, 부하테스트)과 무관 — 같은 시간에 시험이 있어도 원인에서 빼고 늘 실제로 본다
+            causes = causes.stream().filter(c -> !"CHAOS".equals(c.code()) && !"LOAD_TEST".equals(c.code())).toList();
+        }
+        boolean intended = !"ATTACK".equals(kind)
+                && causes.stream().anyMatch(c -> "CHAOS".equals(c.code()) || "LOAD_TEST".equals(c.code()));
         List<ErrorItem> logs = no <= EVIDENCE_ISSUES
                 ? loki.lines(LokiClient.ERROR_QUERY, Instant.ofEpochMilli(s - b), Instant.ofEpochMilli(e), ISSUE_LOG_LIMIT).stream()
                         .filter(l -> !(inTestWindow(l.timestampMs()) && PROBE_TYPE.matcher(l.message()).find()))
