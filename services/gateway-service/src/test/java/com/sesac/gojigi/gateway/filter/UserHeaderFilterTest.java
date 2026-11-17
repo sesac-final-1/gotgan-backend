@@ -38,7 +38,7 @@ class UserHeaderFilterTest {
     }
 
     @Test
-    @DisplayName("판매자 토큰 — 클라이언트가 보낸 X-User-* 는 지우고 토큰의 user_id · 업무 역할 · store_id 로 다시 붙인다")
+    @DisplayName("판매자 토큰 — 클라이언트가 보낸 X-User-* 는 지우고 토큰의 user_id, 업무 역할, store_id 로 다시 붙인다")
     void filter_seller_replacesSpoofedHeadersWithClaims() {
         HttpHeaders headers = forwardedHeaders(spoofedRequest(), TestJwts.seller());
 
@@ -58,7 +58,7 @@ class UserHeaderFilterTest {
     }
 
     @Test
-    @DisplayName("토큰 없음(공개 경로) · user_id 없는 토큰 — 위조 헤더를 지우기만 한다 → 업무 서비스가 401")
+    @DisplayName("토큰 없음(공개 경로), user_id 없는 토큰 — 위조 헤더를 지우기만 한다 → 업무 서비스가 401")
     void filter_anonymousOrUnlinked_stripsOnly() {
         HttpHeaders anonymous = forwardedHeaders(spoofedRequest(), null);
         HttpHeaders unlinked = forwardedHeaders(spoofedRequest(), Map.of("sub", "kc-x", "roles", java.util.List.of("BUYER")));

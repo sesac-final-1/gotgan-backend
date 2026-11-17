@@ -25,7 +25,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * 서킷 · 재시도 AOP 를 실제로 거쳐 application.yml 설정대로 동작하는지 — 장애는 한 번 더, 4xx 는 다시 부르지 않음.
+ * 서킷, 재시도 AOP 를 실제로 거쳐 application.yml 설정대로 동작하는지 — 장애는 한 번 더, 4xx 는 다시 부르지 않음.
  * 재시도가 서킷 바깥이면 폴백이 바꾼 502 까지 다시 불러 4xx 도 두 번 호출된다.
  */
 @SpringBootTest(classes = StoreClientAdapter.class)

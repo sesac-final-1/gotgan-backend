@@ -73,7 +73,7 @@ class InternalApplicationControllerTest {
                 new InternalApplicationSummaryResponse(27L, "AP-2610-027", "곳간상회", "홍길동", BizType.INDIVIDUAL, 1L,
                         ExpectedMonthlySales.FROM_5M_TO_20M, ApplicationStatus.PENDING, submittedAt, submittedAt)));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/applications").param("status", "PENDING"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].applicationId").value(27))
@@ -89,7 +89,7 @@ class InternalApplicationControllerTest {
         // given
         given(applicationQueryService.getList(null)).willReturn(List.of());
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/applications"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
@@ -107,7 +107,7 @@ class InternalApplicationControllerTest {
     }
 
     @Test
-    @DisplayName("상세 조회 — 200, 계좌 · 서류(열람 주소 없음은 null) · 이력 · 같은 사업자번호")
+    @DisplayName("상세 조회 — 200, 계좌, 서류(열람 주소 없음은 null), 이력, 같은 사업자번호")
     void get_whenApplicationExists_returns200() throws Exception {
         // given
         OffsetDateTime at = OffsetDateTime.parse("2026-10-22T14:05:11+09:00");
@@ -121,7 +121,7 @@ class InternalApplicationControllerTest {
                 List.of(new History(null, ApplicationStatus.PENDING, ActorType.APPLICANT, null, at)),
                 new SameBizRegNo(List.of(), List.of(new SameStore(5L, "곳간상점", StoreStatus.CLOSED)))));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/applications/27"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.applicationId").value(27))
@@ -142,7 +142,7 @@ class InternalApplicationControllerTest {
         // given
         given(applicationQueryService.getDetail(99L)).willThrow(new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/internal/applications/99"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("APPLY_NOT_FOUND"))
@@ -158,13 +158,13 @@ class InternalApplicationControllerTest {
     }
 
     @Test
-    @DisplayName("승인 — 200, 상태 APPROVED · 새 storeId · 승인 시각 +09:00")
+    @DisplayName("승인 — 200, 상태 APPROVED, 새 storeId, 승인 시각 +09:00")
     void approve_whenPending_returns200() throws Exception {
         // given
         given(applicationReviewService.approve(27L)).willReturn(new ApplicationApproveResponse(27L, ApplicationStatus.APPROVED,
                 3L, OffsetDateTime.parse("2026-10-28T14:30:00+09:00")));
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/applications/27/approve"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("입점 신청을 승인했습니다."))
@@ -180,7 +180,7 @@ class InternalApplicationControllerTest {
         // given
         given(applicationReviewService.approve(27L)).willThrow(new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS));
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/applications/27/approve"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("APPLY_INVALID_STATUS"))
@@ -193,7 +193,7 @@ class InternalApplicationControllerTest {
         // given
         given(applicationReviewService.approve(99L)).willThrow(new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/applications/99/approve"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("APPLY_NOT_FOUND"));
@@ -209,13 +209,13 @@ class InternalApplicationControllerTest {
     }
 
     @Test
-    @DisplayName("반려 — 200, 상태 REJECTED · 반려 시각 +09:00, 사유를 서비스에 넘긴다")
+    @DisplayName("반려 — 200, 상태 REJECTED, 반려 시각 +09:00, 사유를 서비스에 넘긴다")
     void reject_whenPending_returns200() throws Exception {
         // given
         given(applicationReviewService.reject(27L, "사업자등록증 정보가 신청서와 다릅니다")).willReturn(
                 new ApplicationRejectResponse(27L, ApplicationStatus.REJECTED, OffsetDateTime.parse("2026-10-28T14:30:00+09:00")));
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/applications/27/reject")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"사업자등록증 정보가 신청서와 다릅니다\"}"))
@@ -244,7 +244,7 @@ class InternalApplicationControllerTest {
         given(applicationReviewService.reject(27L, "가".repeat(255))).willReturn(
                 new ApplicationRejectResponse(27L, ApplicationStatus.REJECTED, OffsetDateTime.parse("2026-10-28T14:30:00+09:00")));
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/applications/27/reject").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reason\":\"" + "가".repeat(255) + "\"}"))
                 .andExpect(status().isOk());
@@ -269,7 +269,7 @@ class InternalApplicationControllerTest {
         given(applicationReviewService.reject(27L, "사유")).willThrow(new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS));
         given(applicationReviewService.reject(99L, "사유")).willThrow(new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/applications/27/reject").contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"사유\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("APPLY_INVALID_STATUS"));
@@ -279,14 +279,14 @@ class InternalApplicationControllerTest {
     }
 
     @Test
-    @DisplayName("보완요청 — 200, 상태 SUPPLEMENT · 기한 +09:00, 메시지 · 서류 enum 을 서비스에 넘긴다")
+    @DisplayName("보완요청 — 200, 상태 SUPPLEMENT, 기한 +09:00, 메시지, 서류 enum 을 서비스에 넘긴다")
     void supplement_whenPending_returns200() throws Exception {
         // given
         given(applicationReviewService.requestSupplement(27L, "사본이 흐려 확인이 어렵습니다", List.of(DocType.ECOMMERCE_REG)))
                 .willReturn(new ApplicationSupplementResponse(27L, ApplicationStatus.SUPPLEMENT,
                         OffsetDateTime.parse("2026-11-04T14:30:00+09:00")));
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/applications/27/supplement").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"사본이 흐려 확인이 어렵습니다\",\"requestedDocs\":[\"ECOMMERCE_REG\"]}"))
                 .andExpect(status().isOk())
@@ -305,7 +305,7 @@ class InternalApplicationControllerTest {
             "{\"message\":\"보완\",\"requestedDocs\":[\"CATEGORY_CERT\"]}",
             "{\"message\":\"보완\",\"requestedDocs\":[null]}"
     })
-    @DisplayName("보완요청 형식 오류(메시지 없음 · 공백, 서류 목록 없음 · 5개 · 모르는 종류 · null) — 400 INVALID_INPUT 이고 서비스를 부르지 않는다")
+    @DisplayName("보완요청 형식 오류(메시지 없음, 공백, 서류 목록 없음, 5개, 모르는 종류, null) — 400 INVALID_INPUT 이고 서비스를 부르지 않는다")
     void supplement_whenInvalidBody_returns400(String body) throws Exception {
         mockMvc.perform(patch("/internal/applications/27/supplement").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -324,7 +324,7 @@ class InternalApplicationControllerTest {
     }
 
     @Test
-    @DisplayName("보완요청 중 · 처리된 신청 — 409 APPLY_INVALID_STATUS / 없는 신청 — 404 APPLY_NOT_FOUND")
+    @DisplayName("보완요청 중, 처리된 신청 — 409 APPLY_INVALID_STATUS / 없는 신청 — 404 APPLY_NOT_FOUND")
     void supplement_whenNotPendingOrMissing_returnsDomainError() throws Exception {
         // given
         given(applicationReviewService.requestSupplement(27L, "보완", List.of()))
@@ -333,7 +333,7 @@ class InternalApplicationControllerTest {
                 .willThrow(new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND));
         String body = "{\"message\":\"보완\",\"requestedDocs\":[]}";
 
-        // when · then
+        // when, then
         mockMvc.perform(patch("/internal/applications/27/supplement").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("APPLY_INVALID_STATUS"));

@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * settlement-service (:8085) — 정산 적재 · 주간 집계 · 지급 · 보류 · 카테고리별 수수료
- * 담당: jihoon-devstu · 구조: 가이드라인 15장 · 컨벤션 2-1
+ * settlement-service (:8085) — 정산 적재, 주간 집계, 지급, 보류, 카테고리별 수수료
+ * 담당: jihoon-devstu, 구조: 가이드라인 15장, 컨벤션 2-1
  */
 @SpringBootApplication
 @EnableScheduling

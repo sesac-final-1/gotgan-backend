@@ -14,7 +14,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 이용정지 기간 만료 자동 해제 — 1분마다 종료 시각이 지난 기간 정지(7일 · 30일 …)를 해제한다. 영구 정지는 대상 아님.
+ * 이용정지 기간 만료 자동 해제 — 1분마다 종료 시각이 지난 기간 정지(7일, 30일 …)를 해제한다. 영구 정지는 대상 아님.
  * fixedDelay 라 앱이 뜨자마자 한 번 돈다 — 클러스터가 꺼져 있던 밤사이 끝난 정지도 기동 직후 따라잡는다.
  * 레플리카가 여러 개여도 ShedLock 으로 한 파드만, 회원마다 잠근 뒤 다시 확인하므로 겹쳐 돌아도 한 번만 해제된다.
  * 만료 후 이 작업 전까지(최대 1분)는 아직 정지 상태 — 로그인은 막힌다.

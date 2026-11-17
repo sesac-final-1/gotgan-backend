@@ -35,7 +35,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 채팅 REST (chat.md 1~5절) — 방 열기 규칙 · 문맥 카드 · 목록 · 안 읽은 수 · 남의 방 404 · 관리자 읽기 전용 열람 · 상담 상태.
+ * 채팅 REST (chat.md 1~5절) — 방 열기 규칙, 문맥 카드, 목록, 안 읽은 수, 남의 방 404, 관리자 읽기 전용 열람, 상담 상태.
  * 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -53,7 +53,7 @@ class ChatRoomApiTest {
     @Autowired MockMvc mockMvc;
     @Autowired JsonMapper json;
     @Autowired JdbcTemplate jdbc;
-    @MockitoBean ChatDirectory directory;   // user · store 이름 · 스토어 상태 — 기본은 이름 없음(번호 표시) · 운영 중
+    @MockitoBean ChatDirectory directory;   // user, store 이름, 스토어 상태 — 기본은 이름 없음(번호 표시), 운영 중
 
     @BeforeEach
     void clean() {
@@ -64,7 +64,7 @@ class ChatRoomApiTest {
     }
 
     @Test
-    @DisplayName("스토어 톡: 처음 201 · 같은 방 200, 같은 문맥은 카드를 다시 붙이지 않고 다른 문맥만 추가")
+    @DisplayName("스토어 톡: 처음 201, 같은 방 200, 같은 문맥은 카드를 다시 붙이지 않고 다른 문맥만 추가")
     void storeInquiryReusesRoomAndContext() throws Exception {
         given(directory.productName(101L)).willReturn("햇사과 5kg");
         long roomId = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5,\"context\":{\"type\":\"PRODUCT\",\"id\":101}}")
@@ -113,7 +113,7 @@ class ChatRoomApiTest {
     }
 
     @Test
-    @DisplayName("방 열기 규칙 — 403 CHAT_NOT_ALLOWED · 400 CHAT_SELF · 400 INVALID_INPUT")
+    @DisplayName("방 열기 규칙 — 403 CHAT_NOT_ALLOWED, 400 CHAT_SELF, 400 INVALID_INPUT")
     void openRules() throws Exception {
         open(post("/api/chats/rooms").header("X-User-Id", SELLER_ID).header("X-User-Roles", "SELLER").header("X-Store-Id", STORE_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":9}")
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("CHAT_NOT_ALLOWED"));
@@ -146,7 +146,7 @@ class ChatRoomApiTest {
     }
 
     @Test
-    @DisplayName("남의 방은 404 — 다른 구매자 · 관계없는 판매자 · 도움 요청 전 관리자")
+    @DisplayName("남의 방은 404 — 다른 구매자, 관계없는 판매자, 도움 요청 전 관리자")
     void othersRoomIsNotFound() throws Exception {
         long roomId = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5}"));
 
@@ -185,7 +185,7 @@ class ChatRoomApiTest {
     }
 
     @Test
-    @DisplayName("상담 상태: 관리자가 RESOLVED → SYSTEM 안내(안 읽은 수에는 안 셈) · 상태 필터 · 스토어 톡 400 · 관리자 외 403")
+    @DisplayName("상담 상태: 관리자가 RESOLVED → SYSTEM 안내(안 읽은 수에는 안 셈), 상태 필터, 스토어 톡 400, 관리자 외 403")
     void statusChange() throws Exception {
         long supportRoom = id(open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\"}"));
         long storeRoom = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5}"));
@@ -234,7 +234,7 @@ class ChatRoomApiTest {
     }
 
     @Test
-    @DisplayName("상대 이름: 구매자엔 스토어명 · 판매자엔 가린 구매자 이름 · 관리자엔 스토어명/회원 이름, 스토어 · 도움 요청 카드 제목에 스토어명")
+    @DisplayName("상대 이름: 구매자엔 스토어명, 판매자엔 가린 구매자 이름, 관리자엔 스토어명/회원 이름, 스토어, 도움 요청 카드 제목에 스토어명")
     void counterpartNamesAndCardTitles() throws Exception {
         given(directory.storeName(STORE_ID)).willReturn("리넨하우스");
         given(directory.userName(BUYER_ID)).willReturn("김지연");
@@ -253,7 +253,7 @@ class ChatRoomApiTest {
     }
 
     @Test
-    @DisplayName("D-1: 정지 · 폐점 스토어엔 새 스토어 톡 409 CHAT_STORE_INACTIVE, 기존 방은 보기만 되고 보내면 CHAT_STORE_INACTIVE")
+    @DisplayName("D-1: 정지, 폐점 스토어엔 새 스토어 톡 409 CHAT_STORE_INACTIVE, 기존 방은 보기만 되고 보내면 CHAT_STORE_INACTIVE")
     void inactiveStoreBlocksNewRoomsAndSending(@Autowired ChatRoomService chatRoomService) throws Exception {
         long existing = id(open(buyer(BUYER_ID), "{\"type\":\"STORE_INQUIRY\",\"storeId\":5}"));
         given(directory.storeOpen(STORE_ID)).willReturn(false);
@@ -268,7 +268,7 @@ class ChatRoomApiTest {
     }
 
     @Test
-    @DisplayName("user · store · product · settlement 조회(HTTP)는 트랜잭션 밖 — 방 열기 · 보내기 · 상태 변경 · 목록 모두")
+    @DisplayName("user, store, product, settlement 조회(HTTP)는 트랜잭션 밖 — 방 열기, 보내기, 상태 변경, 목록 모두")
     void directoryCallsRunOutsideTransaction(@Autowired ChatRoomService chatRoomService) throws Exception {
         List<Boolean> inTx = new java.util.concurrent.CopyOnWriteArrayList<>();
         org.mockito.stubbing.Answer<Object> record = invocation -> {
@@ -296,7 +296,7 @@ class ChatRoomApiTest {
     }
 
     @Test
-    @DisplayName("주문 카드는 주문번호 모양으로, 정산 카드는 주차 · 지급액 — 정산은 판매자 상담 · 그 스토어 것만")
+    @DisplayName("주문 카드는 주문번호 모양으로, 정산 카드는 주차, 지급액 — 정산은 판매자 상담, 그 스토어 것만")
     void orderAndSettlementCards() throws Exception {
         open(buyer(BUYER_ID), "{\"type\":\"BUYER_SUPPORT\",\"context\":{\"type\":\"ORDER\",\"id\":20261027000001}}")
                 .andExpect(jsonPath("$.data.lastMessage.preview").value("주문 20261027-000001"));
@@ -306,7 +306,7 @@ class ChatRoomApiTest {
         given(directory.settlement(31L)).willReturn(new ChatDirectory.SettlementInfo(STORE_ID, "2026-W43", 1_234_000));
         given(directory.settlement(32L)).willReturn(new ChatDirectory.SettlementInfo(99L, "2026-W43", 10));
         open(seller(post("/api/chats/rooms")), "{\"type\":\"SELLER_SUPPORT\",\"context\":{\"type\":\"SETTLEMENT\",\"id\":31}}")
-                .andExpect(jsonPath("$.data.lastMessage.preview").value("정산 2026-W43 · 1,234,000원"));
+                .andExpect(jsonPath("$.data.lastMessage.preview").value("정산 2026-W43, 1,234,000원"));
         open(seller(post("/api/chats/rooms")), "{\"type\":\"SELLER_SUPPORT\",\"context\":{\"type\":\"SETTLEMENT\",\"id\":32}}")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
         open(seller(post("/api/chats/rooms")), "{\"type\":\"SELLER_SUPPORT\",\"context\":{\"type\":\"SETTLEMENT\",\"id\":33}}")

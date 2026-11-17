@@ -24,7 +24,7 @@ import org.springframework.web.socket.WebSocketSession;
  * <ul>
  *   <li>CONNECT 가 거절된 연결 — ERROR 프레임 뒤 1초 안에 (rejected)</li>
  *   <li>CONNECT 없이 {@value #CONNECT_GRACE_SECONDS}초 넘게 열린 연결</li>
- *   <li>토큰이 만료된 연결 — 탈퇴 · 정지된 회원이 열어 둔 연결도 토큰 수명(30분) 안에 끊긴다</li>
+ *   <li>토큰이 만료된 연결 — 탈퇴, 정지된 회원이 열어 둔 연결도 토큰 수명(30분) 안에 끊긴다</li>
  *   <li>한 사용자의 연결이 상한을 넘으면 가장 오래된 것 — 탭을 많이 열거나 화면이 정리하지 못한 연결이 쌓이지 않게</li>
  * </ul>
  * 연결 수는 지표 chat_ws_sessions 로 Grafana 에서 본다
@@ -96,7 +96,7 @@ public class ChatSessionRegistry {
         }
     }
 
-    /** 닫으면 afterConnectionClosed → closed() · SessionDisconnectEvent → 접속 중 표시 · 속도 제한 정리 */
+    /** 닫으면 afterConnectionClosed → closed(), SessionDisconnectEvent → 접속 중 표시, 속도 제한 정리 */
     private void close(Entry entry, CloseStatus status) {
         sessions.remove(entry.session().getId());
         try {

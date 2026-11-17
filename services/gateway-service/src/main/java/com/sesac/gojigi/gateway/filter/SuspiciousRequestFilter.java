@@ -17,8 +17,8 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
 /**
- * 탐색 · 공격 의심 요청 기록 (11/17 장애 분석 리포트) — 막지 않고 남기기만 한다. 응답은 원래대로(대부분 404 · 401).
- * 인터넷에 열린 서버에는 /.env · /.git · /wp-admin 같은 경로를 훑는 자동 스캐너가 계속 들어온다.
+ * 탐색, 공격 의심 요청 기록 (11/17 장애 분석 리포트) — 막지 않고 남기기만 한다. 응답은 원래대로(대부분 404, 401).
+ * 인터넷에 열린 서버에는 /.env, /.git, /wp-admin 같은 경로를 훑는 자동 스캐너가 계속 들어온다.
  * 리포트가 "공격이 들어왔는가"를 판단할 수 있게 WARN 로그(Loki) + 카운터 gateway_suspicious_requests_total{type}(Prometheus) 를 남긴다.
  * 보안 필터보다 먼저 봐야 401 로 끝나는 요청도 센다 → 가장 앞 순서.
  */

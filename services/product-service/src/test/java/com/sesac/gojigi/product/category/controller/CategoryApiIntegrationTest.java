@@ -33,8 +33,8 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 카테고리 관리 (/internal/categories) · 공개 트리 (/api/categories) — 실제 MySQL · Flyway V1~V2.
- * 테스트마다 카테고리 · 상품 표를 비우고 필요한 것만 만든다 (product.category_id 는 논리 참조라 FK 없음).
+ * 카테고리 관리 (/internal/categories), 공개 트리 (/api/categories) — 실제 MySQL, Flyway V1~V2.
+ * 테스트마다 카테고리, 상품 표를 비우고 필요한 것만 만든다 (product.category_id 는 논리 참조라 FK 없음).
  * 트레이스 샘플링 0 — span 이 생기면 Zipkin 전송 스레드가 없는 localhost:9411 에 실패해 WARN 을 남기고,
  * 그 줄이 같은 JVM 의 LogbackConfigTest 가짜 Loki 에 섞여 "1줄" 검사가 깨진다 (CI 실패 10/26).
  */
@@ -76,7 +76,7 @@ class CategoryApiIntegrationTest {
     class Create {
 
         @Test
-        @DisplayName("상위는 사용 중지 · 하위는 사용 중으로 만들고, sortOrder 생략은 같은 부모 안 맨 뒤, 빈 영문명은 null")
+        @DisplayName("상위는 사용 중지, 하위는 사용 중으로 만들고, sortOrder 생략은 같은 부모 안 맨 뒤, 빈 영문명은 null")
         void topInactiveChildActive() throws Exception {
             send(post("/internal/categories"), "{\"name\":\" 패션의류 \",\"nameEn\":\"Apparel\",\"sortOrder\":1}")
                     .andExpect(status().isCreated())
@@ -98,7 +98,7 @@ class CategoryApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("하위 아래(3단계) 400 · 없는 부모 404 · 같은 부모 아래 같은 이름 409 (다른 부모는 허용) · 이름 없음 400")
+        @DisplayName("하위 아래(3단계) 400, 없는 부모 404, 같은 부모 아래 같은 이름 409 (다른 부모는 허용), 이름 없음 400")
         void rules() throws Exception {
             long top = create("{\"name\":\"리빙\"}");
             long other = create("{\"name\":\"식품\"}");
@@ -120,11 +120,11 @@ class CategoryApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("수정 · 사용 여부")
+    @DisplayName("수정, 사용 여부")
     class Update {
 
         @Test
-        @DisplayName("이름 · 영문명 · 정렬 수정 — 부모는 그대로, 자기 이름 유지는 허용, 형제 이름과 겹치면 409, 없는 카테고리 404")
+        @DisplayName("이름, 영문명, 정렬 수정 — 부모는 그대로, 자기 이름 유지는 허용, 형제 이름과 겹치면 409, 없는 카테고리 404")
         void update() throws Exception {
             long top = create("{\"name\":\"패션의류\"}");
             long shirts = create("{\"parentId\":" + top + ",\"name\":\"셔츠\"}");
@@ -165,7 +165,7 @@ class CategoryApiIntegrationTest {
     class Tree {
 
         @Test
-        @DisplayName("관리자 트리는 비활성 포함 · 공개 트리는 꺼진 상위는 통째로, 꺼진 하위는 그것만 빼고, 둘 다 sortOrder 순")
+        @DisplayName("관리자 트리는 비활성 포함, 공개 트리는 꺼진 상위는 통째로, 꺼진 하위는 그것만 빼고, 둘 다 sortOrder 순")
         void trees() throws Exception {
             long fashion = create("{\"name\":\"패션의류\",\"nameEn\":\"Apparel\",\"sortOrder\":2}");
             long living = create("{\"name\":\"리빙\",\"sortOrder\":1}");
@@ -194,7 +194,7 @@ class CategoryApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("관리자 트리의 productCount — 삭제 안 된 상품 전부(판매중지 포함), 상위는 하위 합, 없으면 0 · 공개 트리엔 없음")
+        @DisplayName("관리자 트리의 productCount — 삭제 안 된 상품 전부(판매중지 포함), 상위는 하위 합, 없으면 0, 공개 트리엔 없음")
         void adminTree_countsProducts_excludingDeleted() throws Exception {
             // given
             long fashion = create("{\"name\":\"패션의류\",\"sortOrder\":1}");
@@ -217,7 +217,7 @@ class CategoryApiIntegrationTest {
             assertThat(admin.get(0).path("productCount").asLong()).isEqualTo(2);                         // 패션의류 = 셔츠 2 + 팬츠 0
             assertThat(admin.get(0).path("children").get(0).path("productCount").asLong()).isEqualTo(2); // 셔츠 (판매중 + 판매중지)
             assertThat(admin.get(0).path("children").get(1).path("productCount").asLong()).isZero();     // 팬츠 (삭제 상품만)
-            assertThat(admin.get(1).path("productCount").asLong()).isZero();                             // 리빙 (상품 없음 · 꺼짐)
+            assertThat(admin.get(1).path("productCount").asLong()).isZero();                             // 리빙 (상품 없음, 꺼짐)
             assertThat(admin.get(1).path("children").get(0).path("productCount").asLong()).isZero();
             assertThat(open.get(0).has("productCount")).isFalse();
             assertThat(open.get(0).path("children").get(0).has("productCount")).isFalse();

@@ -33,7 +33,7 @@ public interface OrderClaimRepository extends JpaRepository<OrderClaim, Long> {
     /** 상품주문의 그 상태 클레임 — 교환 재배송 배송완료 때 RESHIPPED 클레임 찾기 */
     Optional<OrderClaim> findByOrderItemIdAndStatus(Long orderItemId, ClaimStatus status);
 
-    /** 판매자 클레임 목록 — 내 스토어 · statuses · 유형(없으면 전체), 최신 요청 먼저. 상품주문 · 주문(스냅샷)을 함께 읽는다 */
+    /** 판매자 클레임 목록 — 내 스토어, statuses, 유형(없으면 전체), 최신 요청 먼저. 상품주문, 주문(스냅샷)을 함께 읽는다 */
     @Query(value = """
             select c from OrderClaim c join fetch c.orderItem i join fetch i.order o
             where i.storeId = :storeId and c.status in :statuses and (:type is null or c.claimType = :type)

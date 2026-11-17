@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
- * 내 정보 수정 — 보낸 항목만 바꾼다 (null = 그대로). 이름 · 휴대폰 규칙은 회원가입(SignupRequest)과 같다.
+ * 내 정보 수정 — 보낸 항목만 바꾼다 (null = 그대로). 이름, 휴대폰 규칙은 회원가입(SignupRequest)과 같다.
  * 닉네임은 빈 문자열이면 지운다.
  */
 public record UpdateMyInfoRequest(

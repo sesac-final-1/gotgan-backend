@@ -27,7 +27,7 @@ class UpstreamRetryConfigTest {
     }
 
     @Test
-    @DisplayName("GET 은 연결 끊김 · 연결 실패 때 최대 2번 다시 보낸다")
+    @DisplayName("GET 은 연결 끊김, 연결 실패 때 최대 2번 다시 보낸다")
     void get_retriesOnIoFailure() {
         AtomicInteger calls = new AtomicInteger();
         filter.filter(MockServerWebExchange.from(MockServerHttpRequest.get("/api/products").build()),

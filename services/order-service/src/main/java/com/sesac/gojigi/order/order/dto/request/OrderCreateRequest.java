@@ -13,11 +13,11 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 주문서 제출 (ORD-03 · 04) — 장바구니 선택분 또는 바로 구매의 옵션 · 수량 + 배송지 스냅샷 + 사용 포인트.
- * 가격 · 배송비 · 결제 금액은 받지 않는다 — 서버가 product 현재가 · 스토어 배송비 정책으로 다시 계산.
+ * 주문서 제출 (ORD-03, 04) — 장바구니 선택분 또는 바로 구매의 옵션, 수량 + 배송지 스냅샷 + 사용 포인트.
+ * 가격, 배송비, 결제 금액은 받지 않는다 — 서버가 product 현재가, 스토어 배송비 정책으로 다시 계산.
  */
 public record OrderCreateRequest(
-        @Schema(description = "주문할 옵션 · 수량 (같은 옵션은 한 번만)")
+        @Schema(description = "주문할 옵션, 수량 (같은 옵션은 한 번만)")
         @NotEmpty(message = "주문할 상품을 선택해 주세요.") @Size(max = 50, message = "한 번에 50개 상품까지 주문할 수 있습니다.")
         List<@Valid @NotNull Item> items,
 

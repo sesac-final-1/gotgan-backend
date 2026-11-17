@@ -24,7 +24,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * SQS 구독 큐 롱폴링 → eventType 별 SqsEventListener 로 전달 (가이드라인 10장: Spring Cloud AWS 대신 AWS SDK v2 SqsClient 롱폴링).
  * settlement-service SqsEventPoller 와 같은 틀 — product 는 큐 1개(sesac-gojigi-product-store-events).
- * 큐마다 가상 스레드 1개. 큐 URL 이 비어 있으면(로컬 · 테스트) 띄우지 않는다. 종료 시 진행 중인 메시지를 마치고 멈춘다.
+ * 큐마다 가상 스레드 1개. 큐 URL 이 비어 있으면(로컬, 테스트) 띄우지 않는다. 종료 시 진행 중인 메시지를 마치고 멈춘다.
  */
 @Slf4j
 @Component
@@ -93,7 +93,7 @@ public class SqsEventPoller implements SmartLifecycle {
                 }
                 consecutiveFailures++;
                 logReceiveFailure(queueUrl, consecutiveFailures, e);
-                sleepQuietly();   // 자격 증명 · 네트워크 오류가 계속될 때 로그 폭주 방지
+                sleepQuietly();   // 자격 증명, 네트워크 오류가 계속될 때 로그 폭주 방지
             }
         }
     }
@@ -114,7 +114,7 @@ public class SqsEventPoller implements SmartLifecycle {
         }
     }
 
-    /** 한 메시지 처리 — 성공 · 모르는 type 이면 삭제, 실패면 남겨 재전달 */
+    /** 한 메시지 처리 — 성공, 모르는 type 이면 삭제, 실패면 남겨 재전달 */
     void dispatch(String queueUrl, Message message) {
         String eventType = null;
         try {
@@ -169,7 +169,7 @@ public class SqsEventPoller implements SmartLifecycle {
         }
     }
 
-    /** 원인 사슬에 DB · 네트워크 일시 장애가 있는가 */
+    /** 원인 사슬에 DB, 네트워크 일시 장애가 있는가 */
     static boolean isTransient(Throwable e) {
         for (Throwable t = e; t != null; t = t.getCause()) {
             if (t instanceof TransientDataAccessException || t instanceof DataAccessResourceFailureException

@@ -12,7 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 상품 카테고리 (상위/하위 2단계, CAT-01 · 02). 삭제하지 않는다 — store 희망 카테고리 · settlement 수수료가 category_id 를 논리 참조.
+ * 상품 카테고리 (상위/하위 2단계, CAT-01, 02). 삭제하지 않는다 — store 희망 카테고리, settlement 수수료가 category_id 를 논리 참조.
  * 상위는 사용 중지(active=false)로 만들고 수수료 등록 뒤 켠다(10/20 결정). 부모는 바꿀 수 없다(수수료 기준이 조용히 바뀜 — product.md 결정 11).
  */
 @Getter

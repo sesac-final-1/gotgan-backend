@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
-/** 카테고리 수정 — 이름 · 영문명 · 정렬은 product PUT, 사용 여부가 바뀌면 product PATCH 로 따로 (상위를 켤 때는 수수료 확인) */
+/** 카테고리 수정 — 이름, 영문명, 정렬은 product PUT, 사용 여부가 바뀌면 product PATCH 로 따로 (상위를 켤 때는 수수료 확인) */
 public record AdminCategoryUpdateRequest(
         @Schema(description = "카테고리 이름", example = "셔츠")
         @NotBlank(message = "카테고리 이름을 입력해 주세요.") @Size(max = 50, message = "카테고리 이름은 50자 이하로 입력해 주세요.")

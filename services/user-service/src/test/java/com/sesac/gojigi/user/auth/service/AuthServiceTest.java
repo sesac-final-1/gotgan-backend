@@ -96,7 +96,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("로그인하면 토큰 · 회원 정보를 돌려주고 keycloak_id 연결 · 마지막 로그인을 기록한다")
+    @DisplayName("로그인하면 토큰, 회원 정보를 돌려주고 keycloak_id 연결, 마지막 로그인을 기록한다")
     void login_success_linksKeycloakAndRecordsLogin() {
         // given
         User user = user(2L);
@@ -140,7 +140,7 @@ class AuthServiceTest {
         // given
         givenKeycloakToken("{\"sub\":\"kc-2\",\"roles\":[\"BUYER\"]}");
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.login(new LoginRequest("seller1@gotgan.com", "Dem0!pass")))
                 .isInstanceOf(AuthException.class)
                 .extracting(e -> ((AuthException) e).getErrorCode())
@@ -154,7 +154,7 @@ class AuthServiceTest {
         givenKeycloakToken("{\"sub\":\"kc-2\",\"user_id\":99,\"roles\":[\"BUYER\"]}");
         given(userRepository.findByIdAndDeletedAtIsNull(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.login(new LoginRequest("seller1@gotgan.com", "Dem0!pass")))
                 .isInstanceOf(AuthException.class)
                 .extracting(e -> ((AuthException) e).getErrorCode())
@@ -170,7 +170,7 @@ class AuthServiceTest {
         givenKeycloakToken("{\"sub\":\"kc-2\",\"user_id\":2,\"roles\":[\"BUYER\"]}");
         given(userRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(user));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.login(new LoginRequest("seller1@gotgan.com", "Dem0!pass")))
                 .isInstanceOf(AuthException.class)
                 .extracting(e -> ((AuthException) e).getErrorCode())
@@ -228,12 +228,12 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("이미 가입된 이메일(탈퇴 회원 포함)은 AUTH_EMAIL_DUPLICATE — 행 · 계정을 만들지 않는다")
+    @DisplayName("이미 가입된 이메일(탈퇴 회원 포함)은 AUTH_EMAIL_DUPLICATE — 행, 계정을 만들지 않는다")
     void signup_duplicateEmail_throwsWithoutCreating() {
         // given
         given(userRepository.existsByEmail("new1@gotgan.com")).willReturn(true);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.signup(SIGNUP))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_EMAIL_DUPLICATE);
@@ -247,7 +247,7 @@ class AuthServiceTest {
         // given
         SignupRequest request = new SignupRequest("pw.x@gotgan.com", "PW.X@gotgan.com", "새회원", "010-1234-5678");
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.signup(request))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_PASSWORD_POLICY_VIOLATION);
@@ -261,7 +261,7 @@ class AuthServiceTest {
         given(userRepository.existsByEmail("new1@gotgan.com")).willReturn(false);
         given(userRepository.saveAndFlush(any(User.class))).willThrow(new DataIntegrityViolationException("uk_users_email"));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.signup(SIGNUP))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_EMAIL_DUPLICATE);
@@ -277,7 +277,7 @@ class AuthServiceTest {
         BusinessException failure = new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버에 연결할 수 없습니다.");
         given(keycloakClientAdapter.createUser("new1@gotgan.com", "Newbie!pass1", 8L)).willThrow(failure);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.signup(SIGNUP)).isSameAs(failure);
         verify(userRepository).deleteById(8L);
         verify(keycloakClientAdapter, never()).passwordGrant(anyString(), anyString());
@@ -294,7 +294,7 @@ class AuthServiceTest {
                 new ResourceAccessException("timeout"));
         given(keycloakClientAdapter.createUser("new1@gotgan.com", "Newbie!pass1", 8L)).willThrow(failure);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.signup(SIGNUP)).isSameAs(failure);
         verify(userRepository).deleteById(8L);
         verify(signupOrphanCleaner).schedule("new1@gotgan.com", 8L);
@@ -310,7 +310,7 @@ class AuthServiceTest {
         given(keycloakClientAdapter.createUser("new1@gotgan.com", "Newbie!pass1", 8L))
                 .willThrow(new AuthException(AuthErrorCode.AUTH_SIGNUP_BUSY));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.signup(SIGNUP))
                 .extracting(e -> ((AuthException) e).getErrorCode()).isEqualTo(AuthErrorCode.AUTH_SIGNUP_BUSY);
         verify(userRepository).deleteById(8L);
@@ -356,7 +356,7 @@ class AuthServiceTest {
                 .willReturn(Optional.empty());
         given(userRepository.existsById(3L)).willReturn(true);
 
-        // when · then — 살아 있는 계정 · 소셜 진행 중 · 그 사이 사라짐
+        // when, then — 살아 있는 계정, 소셜 진행 중, 그 사이 사라짐
         for (int i = 0; i < 3; i++) {
             assertThatThrownBy(() -> authService.signup(SIGNUP))
                     .extracting(e -> ((AuthException) e).getErrorCode()).isEqualTo(AuthErrorCode.AUTH_EMAIL_DUPLICATE);
@@ -412,7 +412,7 @@ class AuthServiceTest {
         given(userRepository.existsByEmail("new1@gotgan.com")).willReturn(false);
         given(userRepository.existsByEmail("seller1@gotgan.com")).willReturn(true);
 
-        // when · then
+        // when, then
         assertThat(authService.isEmailAvailable("new1@gotgan.com")).isTrue();
         assertThat(authService.isEmailAvailable("seller1@gotgan.com")).isFalse();
     }
@@ -458,7 +458,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("로그아웃 — 쿠키가 없으면 Keycloak 을 부르지 않는다 (쿠키 삭제만)")
     void logout_withoutCookie_skipsKeycloak() {
-        // when · then
+        // when, then
         assertThat(authService.logout(null)).isFalse();
         assertThat(authService.logout(" ")).isFalse();
         verify(keycloakClientAdapter, never()).logout(anyString());
@@ -470,7 +470,7 @@ class AuthServiceTest {
         // given
         willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR)).given(keycloakClientAdapter).logout("rt-1");
 
-        // when · then
+        // when, then
         assertThat(authService.logout("rt-1")).isFalse();
     }
 
@@ -481,7 +481,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("재발급 — 새 토큰 · 새 Refresh Token 을 돌려주고, 마지막 로그인은 기록하지 않는다")
+    @DisplayName("재발급 — 새 토큰, 새 Refresh Token 을 돌려주고, 마지막 로그인은 기록하지 않는다")
     void refresh_returnsNewTokensWithoutRecordingLogin() {
         // given
         User user = user(2L);
@@ -501,7 +501,7 @@ class AuthServiceTest {
     @Test
     @DisplayName("재발급 — 쿠키가 없으면 Keycloak 을 부르지 않고 AUTH_SESSION_EXPIRED")
     void refresh_withoutCookie_throwsSessionExpired() {
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.refresh(null))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_SESSION_EXPIRED);
@@ -518,7 +518,7 @@ class AuthServiceTest {
                 .willReturn(tokenOf("{\"sub\":\"kc-2\",\"user_id\":2,\"roles\":[\"BUYER\"]}", "new-rt"));
         given(userRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(user));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> authService.refresh("old-rt"))
                 .isInstanceOf(AuthException.class)
                 .extracting("errorCode").isEqualTo(AuthErrorCode.AUTH_ACCOUNT_DISABLED);
@@ -527,7 +527,7 @@ class AuthServiceTest {
     // ── 소셜 로그인
 
     @Test
-    @DisplayName("소셜 시작 — Keycloak 로그인 주소(kc_idp_hint · PKCE S256 · 콜백) 와 state 쿠키 값")
+    @DisplayName("소셜 시작 — Keycloak 로그인 주소(kc_idp_hint, PKCE S256, 콜백) 와 state 쿠키 값")
     void startSocialLogin_buildsKeycloakUrlAndState() {
         // when
         SocialLoginStart start = authService.startSocialLogin("kakao");
@@ -543,12 +543,12 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("소셜 콜백 — state 불일치 · 쿠키 없음 · 제공자 오류(로그인 취소)는 Keycloak 을 부르지 않고 실패")
+    @DisplayName("소셜 콜백 — state 불일치, 쿠키 없음, 제공자 오류(로그인 취소)는 Keycloak 을 부르지 않고 실패")
     void completeSocialLogin_invalidCallback_failsWithoutKeycloak() {
         // given
         SocialLoginState state = SocialLoginState.start(SocialProvider.KAKAO);
 
-        // when · then
+        // when, then
         assertThat(authService.completeSocialLogin(state.cookieValue(), "code", "forged", null).errorCode())
                 .isEqualTo("AUTH_SOCIAL_LOGIN_FAILED");
         assertThat(authService.completeSocialLogin(null, "code", state.state(), null).succeeded()).isFalse();
@@ -648,13 +648,13 @@ class AuthServiceTest {
         given(userRepository.saveAndFlush(any(User.class))).willThrow(new DataIntegrityViolationException("uk_users_email"));
         willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR)).given(keycloakClientAdapter).deleteUser("kc-7", null);
 
-        // when · then
+        // when, then
         assertThat(authService.completeSocialLogin(state.cookieValue(), "code", state.state(), null).errorCode())
                 .isEqualTo("AUTH_EMAIL_DUPLICATE");
     }
 
     @Test
-    @DisplayName("소셜 로그인 — 이미 연결된 회원(재로그인 · 자체 계정 연결)은 행을 만들지 않고 로그인")
+    @DisplayName("소셜 로그인 — 이미 연결된 회원(재로그인, 자체 계정 연결)은 행을 만들지 않고 로그인")
     void completeSocialLogin_linkedMember_logsIn() {
         // given
         SocialLoginState state = givenSocialToken("{\"sub\":\"kc-4\",\"user_id\":4,\"roles\":[\"BUYER\"]}");
@@ -681,7 +681,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("비밀번호 확인 — 불일치 · 임시 잠금(AUTH_INVALID_CREDENTIALS)은 false, 정지는 예외 그대로")
+    @DisplayName("비밀번호 확인 — 불일치, 임시 잠금(AUTH_INVALID_CREDENTIALS)은 false, 정지는 예외 그대로")
     void verifyPassword_mismatchOrDisabled() {
         given(keycloakClientAdapter.passwordGrant("seller1@gotgan.com", "wrong"))
                 .willThrow(new AuthException(AuthErrorCode.AUTH_INVALID_CREDENTIALS));

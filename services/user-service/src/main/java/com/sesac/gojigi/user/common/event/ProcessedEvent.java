@@ -11,7 +11,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 소비한 이벤트 ID — 같은 eventId 재처리 방지 (컨벤션 2-7). StoreApproved · OrderPaid · OrderItemConfirmed.
+ * 소비한 이벤트 ID — 같은 eventId 재처리 방지 (컨벤션 2-7). StoreApproved, OrderPaid, OrderItemConfirmed.
  * 처리와 같은 트랜잭션에서 저장, uk_processed_event_event_id 가 최종 방어선
  */
 @Getter

@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class SocialLoginStateTest {
 
     @Test
-    @DisplayName("쿠키 값으로 저장했다가 그대로 되돌린다 — 매번 다른 state · verifier")
+    @DisplayName("쿠키 값으로 저장했다가 그대로 되돌린다 — 매번 다른 state, verifier")
     void cookieValue_roundTrip() {
         SocialLoginState state = SocialLoginState.start(SocialProvider.NAVER);
 

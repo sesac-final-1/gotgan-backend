@@ -1,9 +1,9 @@
 package com.sesac.gojigi.order.order.client.dto;
 
 /**
- * payment 결제 취소 — POST /internal/payments/{orderNo}/cancel (payment.md 3 · 8절).
- * orderItemId · amount 를 비우면 전액 취소(주문 Saga 보상), 넣으면 부분 취소(취소 · 반품 Saga). 취소 금액은 order 가 계산.
- * 409 PAYMENT_CANCEL_PENDING · 타임아웃 · 5xx 는 "결과 모름" → 같은 sagaId 로 재시도 (포트원에 두 번 나가지 않음).
+ * payment 결제 취소 — POST /internal/payments/{orderNo}/cancel (payment.md 3, 8절).
+ * orderItemId, amount 를 비우면 전액 취소(주문 Saga 보상), 넣으면 부분 취소(취소, 반품 Saga). 취소 금액은 order 가 계산.
+ * 409 PAYMENT_CANCEL_PENDING, 타임아웃, 5xx 는 "결과 모름" → 같은 sagaId 로 재시도 (포트원에 두 번 나가지 않음).
  */
 public record PaymentCancelRequest(String sagaId, Long orderItemId, Long amount, String reason) {
 

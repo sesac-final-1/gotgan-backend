@@ -33,10 +33,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 구매자 · 공개 상품 문의 — 게이트웨이 /api/inquiries/** (GET 공개, 그 외 로그인) → review-service.
- * 등록 · 수정 · 삭제(13 ~ 15절), 상품 Q&A · 내 문의(16 · 17절) — docs/api/review.md. 판매자는 SellerInquiryController.
+ * 구매자, 공개 상품 문의 — 게이트웨이 /api/inquiries/** (GET 공개, 그 외 로그인) → review-service.
+ * 등록, 수정, 삭제(13 ~ 15절), 상품 Q&A, 내 문의(16, 17절) — docs/api/review.md. 판매자는 SellerInquiryController.
  */
-@Tag(name = "상품 문의", description = "상품 상세 Q&A — 등록 · 수정 · 삭제 · 상품 문의 · 내 문의")
+@Tag(name = "상품 문의", description = "상품 상세 Q&A — 등록, 수정, 삭제, 상품 문의, 내 문의")
 @RestController
 @RequestMapping("/api/inquiries")
 @RequiredArgsConstructor
@@ -45,11 +45,11 @@ public class InquiryController {
     private final InquiryService inquiryService;
 
     @Operation(summary = "상품 문의 등록", description = """
-            인가: 로그인 (작성자 = X-User-Id). 구매 여부와 관계없이 누구나 문의할 수 있다. 판매 중지 · 품절 상품도 가능(삭제된 상품만 불가).
-            내용은 일반 텍스트 1~1,000자 — 태그는 지우고 저장한다. secret=true 면 작성자 · 판매자만 내용을 본다.
-            스토어 · 상품명 · 대표 사진(product) · 작성자 표시 이름(user — 닉네임, 없으면 가운데 가린 실명)은 등록 시점 값을 저장한다.
-            에러: 400 INVALID_INPUT(형식) · 401 UNAUTHORIZED · 404 INQUIRY_PRODUCT_NOT_FOUND(없는 · 삭제된 상품) ·
-            502 EXTERNAL_API_ERROR(product · user 호출 실패)""")
+            인가: 로그인 (작성자 = X-User-Id). 구매 여부와 관계없이 누구나 문의할 수 있다. 판매 중지, 품절 상품도 가능(삭제된 상품만 불가).
+            내용은 일반 텍스트 1~1,000자 — 태그는 지우고 저장한다. secret=true 면 작성자, 판매자만 내용을 본다.
+            스토어, 상품명, 대표 사진(product), 작성자 표시 이름(user — 닉네임, 없으면 가운데 가린 실명)은 등록 시점 값을 저장한다.
+            에러: 400 INVALID_INPUT(형식), 401 UNAUTHORIZED, 404 INQUIRY_PRODUCT_NOT_FOUND(없는, 삭제된 상품), 
+            502 EXTERNAL_API_ERROR(product, user 호출 실패)""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "등록"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT"),
@@ -65,9 +65,9 @@ public class InquiryController {
     }
 
     @Operation(summary = "내 문의 수정", description = """
-            인가: 로그인 (작성자 본인). 내용 · 비밀글 여부를 통째로 바꾼다 — 등록과 같은 규칙, 상품은 바꿀 수 없다. 응답은 수정된 값(200).
+            인가: 로그인 (작성자 본인). 내용, 비밀글 여부를 통째로 바꾼다 — 등록과 같은 규칙, 상품은 바꿀 수 없다. 응답은 수정된 값(200).
             판매자가 답변한 뒤에는 수정할 수 없다(삭제는 가능).
-            에러: 400 INVALID_INPUT(형식) · 401 UNAUTHORIZED · 404 INQUIRY_NOT_FOUND(없는 · 삭제된 · 다른 회원의 문의) ·
+            에러: 400 INVALID_INPUT(형식), 401 UNAUTHORIZED, 404 INQUIRY_NOT_FOUND(없는, 삭제된, 다른 회원의 문의), 
             409 INQUIRY_ALREADY_ANSWERED(답변 완료)""")
     @PutMapping("/{inquiryId}")
     public ApiResponse<InquiryResponse> edit(@Parameter(hidden = true) @CurrentUser AuthUser user,
@@ -76,8 +76,8 @@ public class InquiryController {
     }
 
     @Operation(summary = "내 문의 삭제", description = """
-            인가: 로그인 (작성자 본인). 소프트 삭제 — 상품 문의 목록 · 판매자 문의 목록에서 빠진다. 답변이 달린 문의도 지울 수 있다.
-            에러: 401 UNAUTHORIZED · 404 INQUIRY_NOT_FOUND(없는 · 이미 삭제된 · 다른 회원의 문의)""")
+            인가: 로그인 (작성자 본인). 소프트 삭제 — 상품 문의 목록, 판매자 문의 목록에서 빠진다. 답변이 달린 문의도 지울 수 있다.
+            에러: 401 UNAUTHORIZED, 404 INQUIRY_NOT_FOUND(없는, 이미 삭제된, 다른 회원의 문의)""")
     @DeleteMapping("/{inquiryId}")
     public ApiResponse<Void> delete(@Parameter(hidden = true) @CurrentUser AuthUser user, @PathVariable Long inquiryId) {
         inquiryService.delete(user.userId(), inquiryId);
@@ -85,10 +85,10 @@ public class InquiryController {
     }
 
     @Operation(summary = "상품 문의 목록 (공개)", description = """
-            인가: 없음(공개). 로그인 상태면 게이트웨이가 넣은 X-User-Id · X-Store-Id 로 비밀글을 연다.
-            삭제 제외, 최신 등록순. 비밀글은 작성자 · 그 스토어 판매자가 아니면 content · answerContent 가 null(답변 여부 · 작성자 이름은 보임).
-            mine = 내가 쓴 문의(수정 · 삭제 버튼). 탭 숫자는 totalElements. page(0부터) · size(1~50, 기본 10). 없는 상품은 빈 목록.
-            에러: 400 INVALID_INPUT(productId 없음 · page · size)""")
+            인가: 없음(공개). 로그인 상태면 게이트웨이가 넣은 X-User-Id, X-Store-Id 로 비밀글을 연다.
+            삭제 제외, 최신 등록순. 비밀글은 작성자, 그 스토어 판매자가 아니면 content, answerContent 가 null(답변 여부, 작성자 이름은 보임).
+            mine = 내가 쓴 문의(수정, 삭제 버튼). 탭 숫자는 totalElements. page(0부터), size(1~50, 기본 10). 없는 상품은 빈 목록.
+            에러: 400 INVALID_INPUT(productId 없음, page, size)""")
     @GetMapping
     public ApiResponse<PageResponse<ProductInquiryResponse>> listForProduct(@RequestParam Long productId,
             @Parameter(hidden = true) @RequestHeader(value = CurrentUserArgumentResolver.USER_ID_HEADER, required = false) Long viewerUserId,
@@ -100,8 +100,8 @@ public class InquiryController {
     }
 
     @Operation(summary = "내 문의", description = """
-            인가: 로그인. 내가 쓴 문의(삭제 제외 · 비밀글 포함) 최신 등록순 — 상품명 · 대표 사진은 등록 시점 값, 답변 포함.
-            page(0부터) · size(1~50, 기본 10). 에러: 400 INVALID_INPUT(page · size) · 401 UNAUTHORIZED""")
+            인가: 로그인. 내가 쓴 문의(삭제 제외, 비밀글 포함) 최신 등록순 — 상품명, 대표 사진은 등록 시점 값, 답변 포함.
+            page(0부터), size(1~50, 기본 10). 에러: 400 INVALID_INPUT(page, size), 401 UNAUTHORIZED""")
     @GetMapping("/me")
     public ApiResponse<PageResponse<InquiryResponse>> listMine(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @RequestParam(defaultValue = "0") @Min(0) int page,

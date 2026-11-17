@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
 
-/** order 가 보내는 OrderItemConfirmed 봉투(docs/events.md 전체 필드)를 읽는지 — 정산 · 리뷰용 필드는 무시 */
+/** order 가 보내는 OrderItemConfirmed 봉투(docs/events.md 전체 필드)를 읽는지 — 정산, 리뷰용 필드는 무시 */
 class OrderItemConfirmedListenerTest {
 
     private static final String CONFIRMED = """
@@ -26,7 +26,7 @@ class OrderItemConfirmedListenerTest {
     private final OrderItemConfirmedListener listener = new OrderItemConfirmedListener(JsonMapper.builder().build(), service);
 
     @Test
-    @DisplayName("OrderItemConfirmed 봉투를 읽어 회원 · 상품주문 금액 · 적립 포인트로 구매확정 반영을 부른다")
+    @DisplayName("OrderItemConfirmed 봉투를 읽어 회원, 상품주문 금액, 적립 포인트로 구매확정 반영을 부른다")
     @SuppressWarnings("unchecked")
     void onMessage_parsesEnvelope() {
         ArgumentCaptor<EventEnvelope<OrderItemConfirmedPayload>> captor = ArgumentCaptor.forClass(EventEnvelope.class);

@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 판매자 상품 문의 (/seller/qna) — 게이트웨이 /api/seller/** (SELLER) → review-service, 스토어 = X-Store-Id (docs/api/review.md 18 ~ 20절) */
-@Tag(name = "판매자 상품 문의", description = "내 스토어 상품 문의 목록 · 탭 숫자 · 답변 — 인가: SELLER")
+@Tag(name = "판매자 상품 문의", description = "내 스토어 상품 문의 목록, 탭 숫자, 답변 — 인가: SELLER")
 @RestController
 @RequestMapping("/api/seller/inquiries")
 @RequiredArgsConstructor
@@ -36,8 +36,8 @@ public class SellerInquiryController {
 
     @Operation(summary = "판매자 문의 목록", description = """
             인가: SELLER (X-Store-Id 의 스토어). 내 스토어 상품 문의(삭제 제외) 최신 등록순 — 비밀글도 내용을 보여 준다(secret 은 자물쇠 표시용).
-            tab: ALL(기본) · UNANSWERED(미답변) · ANSWERED(답변완료). page(0부터) · size(1~50, 기본 10).
-            에러: 400 INVALID_INPUT(tab · page · size) · 401 UNAUTHORIZED · 403 FORBIDDEN(스토어 정보 없음)""")
+            tab: ALL(기본), UNANSWERED(미답변), ANSWERED(답변완료). page(0부터), size(1~50, 기본 10).
+            에러: 400 INVALID_INPUT(tab, page, size), 401 UNAUTHORIZED, 403 FORBIDDEN(스토어 정보 없음)""")
     @GetMapping
     public ApiResponse<PageResponse<SellerInquiryResponse>> list(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @RequestParam(defaultValue = "ALL") SellerInquiryTab tab,
@@ -47,18 +47,18 @@ public class SellerInquiryController {
     }
 
     @Operation(summary = "판매자 문의 탭 숫자", description = """
-            인가: SELLER. 미답변 · 답변완료 · 전체(삭제 제외) — 문의 화면 탭, 판매자 메뉴 배지 · 대시보드 "미답변 문의".
-            에러: 401 UNAUTHORIZED · 403 FORBIDDEN(스토어 정보 없음)""")
+            인가: SELLER. 미답변, 답변완료, 전체(삭제 제외) — 문의 화면 탭, 판매자 메뉴 배지, 대시보드 "미답변 문의".
+            에러: 401 UNAUTHORIZED, 403 FORBIDDEN(스토어 정보 없음)""")
     @GetMapping("/summary")
     public ApiResponse<SellerInquirySummaryResponse> summarize(@Parameter(hidden = true) @CurrentUser AuthUser user) {
         return ApiResponse.success("문의 숫자를 조회했습니다.", inquiryService.summarizeForSeller(user.storeId()));
     }
 
-    @Operation(summary = "답변 작성 · 수정", description = """
+    @Operation(summary = "답변 작성, 수정", description = """
             인가: SELLER. 문의당 답변 1개 — 없으면 작성, 있으면 덮어쓴다(삭제 없음). 일반 텍스트 1,000자 이하, 태그는 지우고 저장.
             답변이 달리면 구매자는 그 문의를 수정할 수 없다(삭제는 가능).
-            에러: 400 INVALID_INPUT(형식 · 태그만 있음) · 401 UNAUTHORIZED · 403 FORBIDDEN(스토어 정보 없음) ·
-            404 INQUIRY_NOT_FOUND(없음 · 삭제됨 · 다른 스토어 문의)""")
+            에러: 400 INVALID_INPUT(형식, 태그만 있음), 401 UNAUTHORIZED, 403 FORBIDDEN(스토어 정보 없음), 
+            404 INQUIRY_NOT_FOUND(없음, 삭제됨, 다른 스토어 문의)""")
     @PutMapping("/{inquiryId}/answer")
     public ApiResponse<InquiryAnswerResponse> answer(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @PathVariable Long inquiryId, @Valid @RequestBody InquiryAnswerRequest request) {

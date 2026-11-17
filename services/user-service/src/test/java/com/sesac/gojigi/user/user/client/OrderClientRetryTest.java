@@ -24,7 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
-/** 서킷 · 재시도 AOP 를 실제로 거쳐 application.yml 설정("order")대로 동작하는지 — 장애는 한 번 더, 4xx 는 다시 부르지 않음 */
+/** 서킷, 재시도 AOP 를 실제로 거쳐 application.yml 설정("order")대로 동작하는지 — 장애는 한 번 더, 4xx 는 다시 부르지 않음 */
 @SpringBootTest(classes = OrderClientAdapter.class)
 @ImportAutoConfiguration({ AopAutoConfiguration.class, CircuitBreakerAutoConfiguration.class,
         RetryAutoConfiguration.class })

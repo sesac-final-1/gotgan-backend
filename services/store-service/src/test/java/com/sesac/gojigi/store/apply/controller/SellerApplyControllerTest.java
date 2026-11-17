@@ -108,13 +108,13 @@ class SellerApplyControllerTest {
     }
 
     @Test
-    @DisplayName("입점 신청 — 201, 봉투 data 에 applicationId · applicationNo · status · submittedAt")
+    @DisplayName("입점 신청 — 201, 봉투 data 에 applicationId, applicationNo, status, submittedAt")
     void apply_validRequest_returns201() throws Exception {
         // given
         given(sellerApplyService.apply(eq(4L), any(SellerApplyRequest.class)))
                 .willReturn(SellerApplyResponse.of(27L, ApplicationStatus.PENDING, LocalDateTime.of(2026, 10, 22, 14, 5, 11)));
 
-        // when · then
+        // when, then
         perform(VALID_BODY)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -163,13 +163,13 @@ class SellerApplyControllerTest {
     }
 
     @Test
-    @DisplayName("서비스가 던진 409 는 코드 · 메시지 그대로")
+    @DisplayName("서비스가 던진 409 는 코드, 메시지 그대로")
     void apply_serviceConflict_returns409() throws Exception {
         // given
         given(sellerApplyService.apply(eq(4L), any(SellerApplyRequest.class)))
                 .willThrow(new ApplyException(ApplyErrorCode.APPLY_REAPPLY_RESTRICTED, "2026-10-31 부터 신청할 수 있습니다."));
 
-        // when · then
+        // when, then
         perform(VALID_BODY)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("APPLY_REAPPLY_RESTRICTED"))
@@ -178,14 +178,14 @@ class SellerApplyControllerTest {
     }
 
     @Test
-    @DisplayName("서류 업로드 주소 발급 — 200, data 는 key · uploadUrl · expiresAt 목록")
+    @DisplayName("서류 업로드 주소 발급 — 200, data 는 key, uploadUrl, expiresAt 목록")
     void presignDocuments_validRequest_returns200() throws Exception {
         // given
         given(sellerDocumentPresignService.presign(eq(4L), any(DocumentPresignRequest.class)))
                 .willReturn(List.of(new DocumentPresignResponse("applications/4/a.pdf", "https://s3.example/put",
                         OffsetDateTime.parse("2026-10-26T15:10:00+09:00"))));
 
-        // when · then
+        // when, then
         performPresign(PRESIGN_BODY)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -243,7 +243,7 @@ class SellerApplyControllerTest {
     }
 
     @Test
-    @DisplayName("내 신청 상태 — 200, X-User-Id 본인 신청의 상태 · 사유 · 보완 기한 · 이력")
+    @DisplayName("내 신청 상태 — 200, X-User-Id 본인 신청의 상태, 사유, 보완 기한, 이력")
     void getMine_whenApplied_returns200() throws Exception {
         // given
         OffsetDateTime submitted = OffsetDateTime.parse("2026-10-22T14:05:11+09:00");
@@ -259,7 +259,7 @@ class SellerApplyControllerTest {
                         null, null, new SettlementAccount("국민", "000000-00-000000", "홍길동"), false,
                         List.of(new SubmittedDocument(DocType.ECOMMERCE_REG, "통신판매업신고증.pdf", submitted)))));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/seller/apply/me").header("X-User-Id", "4").header("X-User-Roles", "BUYER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.applicationNo").value("AP-2610-027"))
@@ -283,7 +283,7 @@ class SellerApplyControllerTest {
         // given
         given(applicationQueryService.getMine(6L)).willReturn(null);
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/seller/apply/me").header("X-User-Id", "6").header("X-User-Roles", "BUYER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -313,13 +313,13 @@ class SellerApplyControllerTest {
             """;
 
     @Test
-    @DisplayName("보완 재제출 — 200, 경로의 신청 ID · X-User-Id 로 서비스 호출, 봉투 data 에 PENDING · resubmittedAt")
+    @DisplayName("보완 재제출 — 200, 경로의 신청 ID, X-User-Id 로 서비스 호출, 봉투 data 에 PENDING, resubmittedAt")
     void resubmit_validRequest_returns200() throws Exception {
         // given
         given(sellerApplyService.resubmit(eq(4L), eq(27L), any(ApplicationResubmitRequest.class))).willReturn(
                 new ApplicationResubmitResponse(27L, ApplicationStatus.PENDING, OffsetDateTime.parse("2026-10-29T16:20:00+09:00")));
 
-        // when · then
+        // when, then
         performResubmit(RESUBMIT_BODY)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.applicationId").value(27))
@@ -334,7 +334,7 @@ class SellerApplyControllerTest {
         given(sellerApplyService.resubmit(eq(4L), eq(27L), any(ApplicationResubmitRequest.class))).willReturn(
                 new ApplicationResubmitResponse(27L, ApplicationStatus.PENDING, OffsetDateTime.parse("2026-10-29T16:20:00+09:00")));
 
-        // when · then
+        // when, then
         performResubmit("{}").andExpect(status().isOk());
         then(sellerApplyService).should().resubmit(eq(4L), eq(27L),
                 argThat(r -> r.companyName() == null && r.documentsOrEmpty().isEmpty() && r.settlementAccount() == null));
@@ -368,14 +368,14 @@ class SellerApplyControllerTest {
     }
 
     @Test
-    @DisplayName("보완 재제출 — 서비스의 404 · 409 를 그대로")
+    @DisplayName("보완 재제출 — 서비스의 404, 409 를 그대로")
     void resubmit_serviceErrors_passThrough() throws Exception {
         // given
         given(sellerApplyService.resubmit(eq(4L), eq(27L), any(ApplicationResubmitRequest.class)))
                 .willThrow(new ApplyException(ApplyErrorCode.APPLY_NOT_FOUND))
                 .willThrow(new ApplyException(ApplyErrorCode.APPLY_INVALID_STATUS, "보완 기한이 지나 다시 제출할 수 없습니다."));
 
-        // when · then
+        // when, then
         performResubmit("{}").andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("APPLY_NOT_FOUND"));
         performResubmit("{}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("APPLY_INVALID_STATUS"))
                 .andExpect(jsonPath("$.message").value("보완 기한이 지나 다시 제출할 수 없습니다."));

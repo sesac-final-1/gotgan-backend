@@ -11,12 +11,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
 
-/** store 가 보낼 봉투 JSON 을 그대로 읽는지 — payload 의 나머지 필드(스토어명 · 이메일 · 정산 계좌)는 무시 */
+/** store 가 보낼 봉투 JSON 을 그대로 읽는지 — payload 의 나머지 필드(스토어명, 이메일, 정산 계좌)는 무시 */
 class StoreApprovedListenerTest {
 
     /**
-     * store 입점 승인(ApplicationReviewService · #166)이 아웃박스로 보내는 봉투와 같은 모양 — eventId 는 "StoreApproved:{신청 ID}"
-     * 이름 기반 UUID(다시 보내도 같음), occurredAt 은 승인 시각(+09:00), payload 는 events.md 이름 그대로. 값은 시드 구매자3(user_id 6) · 스토어 3.
+     * store 입점 승인(ApplicationReviewService, #166)이 아웃박스로 보내는 봉투와 같은 모양 — eventId 는 "StoreApproved:{신청 ID}"
+     * 이름 기반 UUID(다시 보내도 같음), occurredAt 은 승인 시각(+09:00), payload 는 events.md 이름 그대로. 값은 시드 구매자3(user_id 6), 스토어 3.
      */
     static final String MOCK_STORE_APPROVED = """
             {"eventId":"6c1f0a6e-0b0e-4c5b-9a8b-2f3c8e7d1a10","eventType":"StoreApproved",
@@ -29,7 +29,7 @@ class StoreApprovedListenerTest {
     private final StoreApprovedListener listener = new StoreApprovedListener(JsonMapper.builder().build(), service);
 
     @Test
-    @DisplayName("StoreApproved 봉투를 읽어 eventId · storeId · userId 로 판매자 전환을 부른다")
+    @DisplayName("StoreApproved 봉투를 읽어 eventId, storeId, userId 로 판매자 전환을 부른다")
     @SuppressWarnings("unchecked")
     void onMessage_parsesEnvelope() {
         ArgumentCaptor<EventEnvelope<StoreApprovedPayload>> captor = ArgumentCaptor.forClass(EventEnvelope.class);

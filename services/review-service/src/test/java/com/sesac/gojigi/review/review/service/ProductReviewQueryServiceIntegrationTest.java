@@ -28,7 +28,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-/** 상품 상세 공개 리뷰 — 목록 필터 · 정렬 · 요약 (MySQL 8.4 + Flyway) */
+/** 상품 상세 공개 리뷰 — 목록 필터, 정렬, 요약 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, ProductReviewQueryService.class, ReviewImages.class })
@@ -68,7 +68,7 @@ class ProductReviewQueryServiceIntegrationTest {
         r3Small = saveReview(PRODUCT, 3, ReviewFit.SMALL);
         r5Replied = saveReview(PRODUCT, 5, null);
         r5Replied.reply("감사합니다", NOW);
-        saveReview(PRODUCT, 1, ReviewFit.LARGE).blind("욕설 · 비방", NOW);
+        saveReview(PRODUCT, 1, ReviewFit.LARGE).blind("욕설, 비방", NOW);
         saveReview(PRODUCT, 2, ReviewFit.LARGE).softDelete(NOW);
         saveReview(OTHER_PRODUCT, 4, ReviewFit.SMALL);
         reviewRepository.flush();
@@ -79,7 +79,7 @@ class ProductReviewQueryServiceIntegrationTest {
     class Listing {
 
         @Test
-        @DisplayName("최신순 — 이 상품만 · 블라인드 · 삭제 제외, 작성자 표시 이름 · 옵션명 · 답글")
+        @DisplayName("최신순 — 이 상품만, 블라인드, 삭제 제외, 작성자 표시 이름, 옵션명, 답글")
         void list_latest_excludesBlindedAndDeleted() {
             PageResponse<ProductReviewResponse> page = productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.LATEST, 0, 10, null);
 
@@ -93,7 +93,7 @@ class ProductReviewQueryServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("평점 높은순 · 낮은순 — 같은 별점이면 최신 먼저")
+        @DisplayName("평점 높은순, 낮은순 — 같은 별점이면 최신 먼저")
         void list_ratingSorts() {
             assertThat(productReviewQueryService.list(PRODUCT, null, false, ProductReviewSort.RATING_HIGH, 0, 10, null).content())
                     .extracting(ProductReviewResponse::reviewId)
@@ -104,7 +104,7 @@ class ProductReviewQueryServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("별점 하나만 · 페이지 나눔 · 없는 상품은 빈 목록")
+        @DisplayName("별점 하나만, 페이지 나눔, 없는 상품은 빈 목록")
         void list_ratingFilterPagingAndUnknownProduct() {
             assertThat(productReviewQueryService.list(PRODUCT, 5, false, ProductReviewSort.LATEST, 0, 10, null).content())
                     .extracting(ProductReviewResponse::reviewId).containsExactly(r5Replied.getId(), r5Fit.getId());
@@ -120,11 +120,11 @@ class ProductReviewQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("요약 — 평균 · 리뷰 수 · 별점 분포 · 사이즈 체감은 블라인드 · 삭제 제외")
+    @DisplayName("요약 — 평균, 리뷰 수, 별점 분포, 사이즈 체감은 블라인드, 삭제 제외")
     void summarize_excludesBlindedAndDeleted() {
         ProductReviewSummaryResponse summary = productReviewQueryService.summarize(PRODUCT);
 
-        // 보이는 리뷰 5 · 3 · 5 → 4.33
+        // 보이는 리뷰 5, 3, 5 → 4.33
         assertThat(summary.reviewCount()).isEqualTo(3);
         assertThat(summary.averageRating()).isEqualTo(4.33);
         assertThat(summary.distribution()).extracting(RatingCount::count).containsExactly(2L, 0L, 1L, 0L, 0L);
@@ -133,7 +133,7 @@ class ProductReviewQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("리뷰 없는 상품 — 평균 0 · 분포 · 체감 모두 0")
+    @DisplayName("리뷰 없는 상품 — 평균 0, 분포, 체감 모두 0")
     void summarize_noReviews_returnsZeros() {
         ProductReviewSummaryResponse summary = productReviewQueryService.summarize(9999L);
 

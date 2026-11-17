@@ -19,7 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.netty.http.client.PrematureCloseException;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 예외 → 봉투 매핑의 모든 분기 (실제 라우팅 · 타임아웃 흐름은 config.GatewayHardeningTest) */
+/** 예외 → 봉투 매핑의 모든 분기 (실제 라우팅, 타임아웃 흐름은 config.GatewayHardeningTest) */
 class GatewayErrorWebExceptionHandlerTest {
 
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
@@ -34,7 +34,7 @@ class GatewayErrorWebExceptionHandlerTest {
         return exchange;
     }
 
-    /** 처리 후 상태 · 봉투 code · message */
+    /** 처리 후 상태, 봉투 code, message */
     private Map<String, Object> handle(MockServerWebExchange exchange, Throwable ex) {
         handler.handle(exchange, ex).block();
         String body = exchange.getResponse().getBodyAsString().block();
@@ -45,7 +45,7 @@ class GatewayErrorWebExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("연결 실패(원인 사슬에 ConnectException · Netty 연결 타임아웃) → 502 EXTERNAL_API_ERROR")
+    @DisplayName("연결 실패(원인 사슬에 ConnectException, Netty 연결 타임아웃) → 502 EXTERNAL_API_ERROR")
     void connectFailure_502() {
         Map<String, Object> refused = handle(exchange(), new RuntimeException("감쌈", new ConnectException("Connection refused")));
         Map<String, Object> timedOut = handle(exchange(), new ConnectTimeoutException("connection timed out"));
@@ -56,7 +56,7 @@ class GatewayErrorWebExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("504 · 502 · 503 상태 예외 → 같은 상태 + EXTERNAL_API_ERROR (504 는 지연 문구)")
+    @DisplayName("504, 502, 503 상태 예외 → 같은 상태 + EXTERNAL_API_ERROR (504 는 지연 문구)")
     void upstreamStatuses_externalApiError() {
         assertThat(handle(exchange(), new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "Response took longer than timeout")))
                 .containsEntry("status", 504).containsEntry("code", "EXTERNAL_API_ERROR")
@@ -69,7 +69,7 @@ class GatewayErrorWebExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("404 → NOT_FOUND · 405 → METHOD_NOT_ALLOWED · 그 밖 4xx → INVALID_INPUT (상태 그대로)")
+    @DisplayName("404 → NOT_FOUND, 405 → METHOD_NOT_ALLOWED, 그 밖 4xx → INVALID_INPUT (상태 그대로)")
     void clientErrors() {
         assertThat(handle(exchange(), new ResponseStatusException(HttpStatus.NOT_FOUND)))
                 .containsEntry("status", 404).containsEntry("code", "NOT_FOUND")
@@ -83,7 +83,7 @@ class GatewayErrorWebExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("그 밖 5xx 상태 예외 · 모르는 상태 코드 · 일반 예외 → GLOBAL_ERROR")
+    @DisplayName("그 밖 5xx 상태 예외, 모르는 상태 코드, 일반 예외 → GLOBAL_ERROR")
     void serverErrors_globalError() {
         assertThat(handle(exchange(), new ResponseStatusException(HttpStatus.NOT_IMPLEMENTED)))
                 .containsEntry("status", 501).containsEntry("code", "GLOBAL_ERROR")

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 관리자 회원 관리 (USR-09 · 10) — user-service /internal/users 응답 · 오류를 그대로 전달 (docs: 시트 Api 명세서 admin 행).
+ * 관리자 회원 관리 (USR-09, 10) — user-service /internal/users 응답, 오류를 그대로 전달 (docs: 시트 Api 명세서 admin 행).
  * 역할(ADMIN)은 게이트웨이가 확인하고 X-User-Id 로 관리자를 알려 준다
  */
 @Tag(name = "관리자 회원", description = "user-service 내부 API 를 그대로 전달 — 인가: ADMIN")
@@ -31,7 +31,7 @@ public class AdminUserController {
     private final UserClientAdapter userClientAdapter;
     private final ReviewReader reviewReader;
 
-    @Operation(summary = "회원 목록", description = "q(이름 · 이메일) · status(ACTIVE/SUSPENDED) · page(0부터) · size(1~100) → PageResponse")
+    @Operation(summary = "회원 목록", description = "q(이름, 이메일), status(ACTIVE/SUSPENDED), page(0부터), size(1~100) → PageResponse")
     @GetMapping
     public ApiResponse<JsonNode> list(@Parameter(hidden = true) @CurrentUser AuthUser admin,
                                       @RequestParam(required = false) String q, @RequestParam(required = false) String status,
@@ -39,13 +39,13 @@ public class AdminUserController {
         return ApiResponse.success("회원 목록을 조회했습니다.", userClientAdapter.list(admin.userId(), q, status, page, size));
     }
 
-    @Operation(summary = "회원 상세", description = "목록 항목 + phone · statusReason · suspendedAt · suspendedUntil. 404 USER_NOT_FOUND")
+    @Operation(summary = "회원 상세", description = "목록 항목 + phone, statusReason, suspendedAt, suspendedUntil. 404 USER_NOT_FOUND")
     @GetMapping("/{userId}")
     public ApiResponse<JsonNode> detail(@Parameter(hidden = true) @CurrentUser AuthUser admin, @PathVariable Long userId) {
         return ApiResponse.success("회원 상세를 조회했습니다.", userClientAdapter.detail(admin.userId(), userId));
     }
 
-    @Operation(summary = "회원 포인트 잔액 · 이력", description = "page · size → {balance, history: PageResponse}")
+    @Operation(summary = "회원 포인트 잔액, 이력", description = "page, size → {balance, history: PageResponse}")
     @GetMapping("/{userId}/points")
     public ApiResponse<JsonNode> points(@Parameter(hidden = true) @CurrentUser AuthUser admin, @PathVariable Long userId,
                                         @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size) {
@@ -53,7 +53,7 @@ public class AdminUserController {
     }
 
     @Operation(summary = "회원 작성 리뷰", description = """
-            review GET /internal/reviews?userId= 그대로 (review.md 8-3) — 삭제 제외 · 블라인드 포함, 최신순. page(0부터) · size(1~50, 기본 10)
+            review GET /internal/reviews?userId= 그대로 (review.md 8-3) — 삭제 제외, 블라인드 포함, 최신순. page(0부터), size(1~50, 기본 10)
             → PageResponse [{reviewId, productId, productName, storeId, rating, content, blinded, blindReason, createdAt}]. 없는 회원은 빈 목록""")
     @GetMapping("/{userId}/reviews")
     public ApiResponse<JsonNode> reviews(@PathVariable Long userId,
@@ -61,9 +61,9 @@ public class AdminUserController {
         return ApiResponse.success("회원 리뷰를 조회했습니다.", reviewReader.listByUser(userId, page, size));
     }
 
-    @Operation(summary = "이용정지 · 해제", description = """
+    @Operation(summary = "이용정지, 해제", description = """
             {status: SUSPENDED/ACTIVE, reason(필수), days?(1~365, 생략 = 영구)} → 회원 상세(suspendedUntil 포함).
-            에러 그대로: 400 USER_STATUS_REASON_REQUIRED · INVALID_INPUT / 404 USER_NOT_FOUND / 409 USER_INVALID_STATUS_TRANSITION""")
+            에러 그대로: 400 USER_STATUS_REASON_REQUIRED, INVALID_INPUT / 404 USER_NOT_FOUND / 409 USER_INVALID_STATUS_TRANSITION""")
     @PatchMapping("/{userId}/status")
     public ApiResponse<JsonNode> changeStatus(@Parameter(hidden = true) @CurrentUser AuthUser admin, @PathVariable Long userId,
                                               @RequestBody JsonNode body) {

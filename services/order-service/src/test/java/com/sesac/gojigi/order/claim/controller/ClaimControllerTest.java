@@ -76,7 +76,7 @@ class ClaimControllerTest {
     }
 
     @Test
-    @DisplayName("반품 · 교환 — ClaimService 로 접수, 201 REQUESTED · 유형별 안내")
+    @DisplayName("반품, 교환 — ClaimService 로 접수, 201 REQUESTED, 유형별 안내")
     void create_returnAndExchange() throws Exception {
         given(claimService.requestReturnOrExchange(eq(4L), eq("20261023-000001"), any()))
                 .willReturn(new ClaimResponse(791L, 456L, ClaimType.RETURN, ClaimStatus.REQUESTED, 12_000L, 2_000L))
@@ -95,7 +95,7 @@ class ClaimControllerTest {
     }
 
     @Test
-    @DisplayName("환불 예정액 — 유형 · 사유로 계산, 신청할 수 없으면 신청과 같은 409")
+    @DisplayName("환불 예정액 — 유형, 사유로 계산, 신청할 수 없으면 신청과 같은 409")
     void preview() throws Exception {
         given(claimService.preview(4L, "20261023-000001", 456L, ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND))
                 .willReturn(new ClaimPreviewResponse(456L, ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND, 20_000L,
@@ -116,7 +116,7 @@ class ClaimControllerTest {
     }
 
     @Test
-    @DisplayName("형식 오류 — 상품주문 · 유형 · 사유 누락은 400, Saga 호출 없음")
+    @DisplayName("형식 오류 — 상품주문, 유형, 사유 누락은 400, Saga 호출 없음")
     void create_validation() throws Exception {
         for (String body : new String[] {
                 BODY.replace("\"orderItemId\":456,", ""),

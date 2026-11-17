@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 리뷰 사진 업로드 주소 발급 (REV-03, review.md 12절). 담당 이경석.
- * 키는 reviews/{userId}/{UUID}.{확장자} — 작성 · 수정은 이 모양의 내 키만 받는다(ReviewImageKeys).
+ * 키는 reviews/{userId}/{UUID}.{확장자} — 작성, 수정은 이 모양의 내 키만 받는다(ReviewImageKeys).
  */
 @Service
 @RequiredArgsConstructor
@@ -44,7 +44,7 @@ public class ReviewImagePresignService {
     /** 하나라도 틀리면 전체 거절 — 메시지에 몇 번째 파일인지 (요청에 파일 이름이 없음) */
     private static void check(int order, FileItem file) {
         if (!EXTENSIONS.containsKey(file.contentType())) {
-            throw invalidImage(order + "번째 파일: 사진은 JPG · PNG · WEBP 만 올릴 수 있습니다.");
+            throw invalidImage(order + "번째 파일: 사진은 JPG, PNG, WEBP 만 올릴 수 있습니다.");
         }
         if (file.size() <= 0 || file.size() > MAX_FILE_SIZE) {
             throw invalidImage(order + "번째 파일: 사진은 10MB 이하만 올릴 수 있습니다.");

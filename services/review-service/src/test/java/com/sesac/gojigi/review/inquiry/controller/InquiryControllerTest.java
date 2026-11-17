@@ -67,7 +67,7 @@ class InquiryControllerTest {
         // given
         given(inquiryService.write(eq(4L), any(InquiryCreateRequest.class))).willReturn(new InquiryCreateResponse(12L));
 
-        // when · then
+        // when, then
         perform(post("/api/inquiries"), VALID_BODY)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("SUCCESS"))
@@ -101,13 +101,13 @@ class InquiryControllerTest {
             "{ \"productId\": 101, \"content\": \"   \" }",
             "{ \"productId\": 101 }"
     })
-    @DisplayName("상품 누락 · 내용 공백 · 내용 누락 — 400 INVALID_INPUT")
+    @DisplayName("상품 누락, 내용 공백, 내용 누락 — 400 INVALID_INPUT")
     void write_invalidField_returns400(String body) throws Exception {
         assertInvalidInput(post("/api/inquiries"), body);
     }
 
     @Test
-    @DisplayName("내용 1,001자 — 400 INVALID_INPUT (등록 · 수정 모두)")
+    @DisplayName("내용 1,001자 — 400 INVALID_INPUT (등록, 수정 모두)")
     void tooLongContent_returns400() throws Exception {
         String content = "가".repeat(1001);
         assertInvalidInput(post("/api/inquiries"), "{ \"productId\": 101, \"content\": \"" + content + "\" }");
@@ -133,7 +133,7 @@ class InquiryControllerTest {
                 .willReturn(new InquiryResponse(12L, 101L, "린넨 오버핏 셔츠", null, "어깨가 넓은 편인데 L 이 나을까요?", true,
                         null, null, OffsetDateTime.parse("2026-10-29T10:00:00+09:00")));
 
-        // when · then
+        // when, then
         perform(put("/api/inquiries/12"), """
                 { "content": "어깨가 넓은 편인데 L 이 나을까요?", "secret": true }
                 """)
@@ -165,7 +165,7 @@ class InquiryControllerTest {
     }
 
     @Test
-    @DisplayName("없는 · 남의 문의 삭제 — 404 INQUIRY_NOT_FOUND")
+    @DisplayName("없는, 남의 문의 삭제 — 404 INQUIRY_NOT_FOUND")
     void delete_notFound_returns404() throws Exception {
         willThrow(new InquiryException(InquiryErrorCode.INQUIRY_NOT_FOUND)).given(inquiryService).delete(4L, 99L);
 
@@ -187,7 +187,7 @@ class InquiryControllerTest {
             given(inquiryService.listForProduct(101L, null, null, 0, 10)).willReturn(new PageResponse<>(List.of(
                     new ProductInquiryResponse(12L, "곳간러버", true, false, null, true, null, AT, AT)), 0, 10, 1, 1, false));
 
-            // when · then
+            // when, then
             mockMvc.perform(get("/api/inquiries?productId=101"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.totalElements").value(1))
@@ -198,7 +198,7 @@ class InquiryControllerTest {
         }
 
         @Test
-        @DisplayName("상품 문의 — 로그인 헤더(X-User-Id · X-Store-Id)를 viewer 로 넘긴다")
+        @DisplayName("상품 문의 — 로그인 헤더(X-User-Id, X-Store-Id)를 viewer 로 넘긴다")
         void listForProduct_withViewerHeaders() throws Exception {
             given(inquiryService.listForProduct(101L, 4L, 7L, 1, 20)).willReturn(new PageResponse<>(List.of(), 1, 20, 0, 0, false));
 
@@ -212,7 +212,7 @@ class InquiryControllerTest {
         @ParameterizedTest
         @ValueSource(strings = { "/api/inquiries", "/api/inquiries?productId=101&page=-1", "/api/inquiries?productId=101&size=51",
                 "/api/inquiries/me?size=0" })
-        @DisplayName("productId 없음 · page · size 범위 밖 — 400 INVALID_INPUT")
+        @DisplayName("productId 없음, page, size 범위 밖 — 400 INVALID_INPUT")
         void list_invalidParam_returns400(String url) throws Exception {
             mockMvc.perform(get(url).header("X-User-Id", "4").header("X-User-Roles", "SELLER").header("X-Store-Id", "7"))
                     .andExpect(status().isBadRequest())

@@ -51,7 +51,7 @@ import org.springframework.test.context.transaction.TestTransaction;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 실제 MySQL + Flyway 위에서 승인 저장 결과 · UNIQUE 위반 메시지(제약 이름) · 아웃박스 행 · 커밋 뒤에만 발행되는지 확인 */
+/** 실제 MySQL + Flyway 위에서 승인 저장 결과, UNIQUE 위반 메시지(제약 이름), 아웃박스 행, 커밋 뒤에만 발행되는지 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfiguration.class, ApplicationReviewService.class, EventOutboxService.class, SupplementDeadline.class,
@@ -96,7 +96,7 @@ class ApplicationReviewServiceIntegrationTest {
     private OutboxEventRepository outboxEventRepository;
 
     @Test
-    @DisplayName("승인하면 스토어 · 스토어 이력 · 신청 상태 · 신청 이력이 DB 에 저장되고, 매핑 안 한 컬럼은 DDL 기본값이 들어간다")
+    @DisplayName("승인하면 스토어, 스토어 이력, 신청 상태, 신청 이력이 DB 에 저장되고, 매핑 안 한 컬럼은 DDL 기본값이 들어간다")
     void approve_whenPending_persistsStoreAndHistories() {
         // given
         StoreApplication application = storeApplicationRepository.saveAndFlush(application(4L, "곳간상회", "gotgan"));
@@ -210,7 +210,7 @@ class ApplicationReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("반려하면 신청 상태 · 사유 · 이력이 저장되고, 30일 재신청 제한 조회가 이 신청을 가장 최근 반려로 찾는다")
+    @DisplayName("반려하면 신청 상태, 사유, 이력이 저장되고, 30일 재신청 제한 조회가 이 신청을 가장 최근 반려로 찾는다")
     void reject_whenPending_persistsStatusReasonAndHistory() {
         // given
         StoreApplication application = storeApplicationRepository.saveAndFlush(application(4L, "곳간상회", "gotgan"));
@@ -275,7 +275,7 @@ class ApplicationReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("보완요청이 커밋되면 신청 SUPPLEMENT · 이력이 저장되고 봉투를 한 번 보낸다 — 서류는 한글 이름, dueAt 은 +7일 +09:00 문자열")
+    @DisplayName("보완요청이 커밋되면 신청 SUPPLEMENT, 이력이 저장되고 봉투를 한 번 보낸다 — 서류는 한글 이름, dueAt 은 +7일 +09:00 문자열")
     void requestSupplement_whenCommitted_persistsAndPublishesEnvelope() {
         // given
         StoreApplication application = storeApplicationRepository.saveAndFlush(application(9L, "보완상회", "supplement-store"));

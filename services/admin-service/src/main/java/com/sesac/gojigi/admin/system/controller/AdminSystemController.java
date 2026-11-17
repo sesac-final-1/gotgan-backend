@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 장애 시연 대시보드 (F-1) — 게이트웨이가 ADMIN 을 확인하지만 파드를 지우는 API 라 여기서도 한 번 더 확인한다 */
-@Tag(name = "관리자 장애 시연", description = "서비스 · 사용자 기능 상태, 파드 내리기, 내리기 타임라인 — 인가: ADMIN")
+@Tag(name = "관리자 장애 시연", description = "서비스, 사용자 기능 상태, 파드 내리기, 내리기 타임라인 — 인가: ADMIN")
 @RestController
 @RequestMapping("/api/admin/system")
 @RequiredArgsConstructor
@@ -35,8 +35,8 @@ public class AdminSystemController {
 
     private final AdminSystemService adminSystemService;
 
-    @Operation(summary = "서비스 · 기능 상태 (2초 폴링)", description = """
-            services[] — desired · ready · state(UP/DEGRADED/DOWN/RECOVERING) · pods[], features[] — 의존 관계로 서버 계산.
+    @Operation(summary = "서비스, 기능 상태 (2초 폴링)", description = """
+            services[] — desired, ready, state(UP/DEGRADED/DOWN/RECOVERING), pods[], features[] — 의존 관계로 서버 계산.
             쿠버네티스 조회 실패 503 SYSTEM_CLUSTER_UNAVAILABLE""")
     @GetMapping("/status")
     public ApiResponse<SystemResponses.Status> status(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
@@ -44,8 +44,8 @@ public class AdminSystemController {
         return ApiResponse.success("시스템 상태를 조회했습니다.", adminSystemService.status());
     }
 
-    @Operation(summary = "서비스별 요청량 · 오류율 (15초 폴링)", description = """
-            services[] — requestsPerSecond · errorRate(5xx ÷ 전체, 0 ~ 1). gateway 라우트 지표(1분 rate)를 서비스로 묶음.
+    @Operation(summary = "서비스별 요청량, 오류율 (15초 폴링)", description = """
+            services[] — requestsPerSecond, errorRate(5xx ÷ 전체, 0 ~ 1). gateway 라우트 지표(1분 rate)를 서비스로 묶음.
             요청 0 이면 errorRate null, Prometheus 실패면 200 에 값 null""")
     @GetMapping("/metrics")
     public ApiResponse<SystemResponses.Metrics> metrics(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
@@ -55,8 +55,8 @@ public class AdminSystemController {
 
     @Operation(summary = "서비스 내리기", description = """
             {scope: ONE/ALL, reason?} → 202 {eventId, deletedPods}. 파드를 지우면 Deployment 가 새 파드를 띄운다.
-            403 SYSTEM_CHAOS_DISABLED · 400 SYSTEM_SERVICE_NOT_KILLABLE · 409 SYSTEM_KILL_COOLDOWN(서비스당 1분 · 복구 중) ·
-            409 SYSTEM_NO_READY_POD · 503 SYSTEM_CLUSTER_UNAVAILABLE""")
+            403 SYSTEM_CHAOS_DISABLED, 400 SYSTEM_SERVICE_NOT_KILLABLE, 409 SYSTEM_KILL_COOLDOWN(서비스당 1분, 복구 중), 
+            409 SYSTEM_NO_READY_POD, 503 SYSTEM_CLUSTER_UNAVAILABLE""")
     @PostMapping("/services/{name}/kill")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<SystemResponses.Killed> kill(@Parameter(hidden = true) @CurrentUser AuthUser admin, @PathVariable String name,
@@ -66,9 +66,9 @@ public class AdminSystemController {
     }
 
     @Operation(summary = "시나리오 — 레플리카 2 서비스 1개씩 한 번에 내리기", description = """
-            {reason?} (본문 생략 가능) → 202 {services[{service, eventId, deletedPods}]}. 대상 = 내릴 수 있고 레플리카 2 이상(지금 order · product · payment · store · user).
-            서비스마다 ONE 1행씩 기록. 대상이 하나라도 1분 제한 · 정상 아님이면 아무것도 지우지 않음.
-            403 SYSTEM_CHAOS_DISABLED · 409 SYSTEM_KILL_COOLDOWN · 409 SYSTEM_SCENARIO_NOT_READY · 409 SYSTEM_NO_READY_POD(대상 없음) · 503 SYSTEM_CLUSTER_UNAVAILABLE""")
+            {reason?} (본문 생략 가능) → 202 {services[{service, eventId, deletedPods}]}. 대상 = 내릴 수 있고 레플리카 2 이상(지금 order, product, payment, store, user).
+            서비스마다 ONE 1행씩 기록. 대상이 하나라도 1분 제한, 정상 아님이면 아무것도 지우지 않음.
+            403 SYSTEM_CHAOS_DISABLED, 409 SYSTEM_KILL_COOLDOWN, 409 SYSTEM_SCENARIO_NOT_READY, 409 SYSTEM_NO_READY_POD(대상 없음), 503 SYSTEM_CLUSTER_UNAVAILABLE""")
     @PostMapping("/scenarios/kill-one-each")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<SystemResponses.ScenarioKilled> killOneEach(@Parameter(hidden = true) @CurrentUser AuthUser admin,
@@ -77,7 +77,7 @@ public class AdminSystemController {
         return ApiResponse.success("레플리카 2 서비스를 1개씩 내렸습니다.", adminSystemService.killOneEach(request, admin.userId()));
     }
 
-    @Operation(summary = "내리기 타임라인", description = "최신순 20건 — 복구 전이면 recoveredAt · recoverySeconds null")
+    @Operation(summary = "내리기 타임라인", description = "최신순 20건 — 복구 전이면 recoveredAt, recoverySeconds null")
     @GetMapping("/events")
     public ApiResponse<List<SystemResponses.EventItem>> events(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
         requireAdmin(admin);

@@ -37,7 +37,7 @@ class InquirySnapshotReaderTest {
     }
 
     @Test
-    @DisplayName("상품의 스토어 · 이름 · 첫 사진과 회원 표시 이름을 모은다")
+    @DisplayName("상품의 스토어, 이름, 첫 사진과 회원 표시 이름을 모은다")
     void read_collectsProductAndWriter() {
         given(productClient.getProduct(101L))
                 .willReturn(new ProductSummaryResponse(101L, 7L, "린넨 오버핏 셔츠", List.of("https://cdn/p1.jpg", "https://cdn/p2.jpg")));

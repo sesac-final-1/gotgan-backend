@@ -39,14 +39,14 @@ class SellerDashboardControllerTest {
     }
 
     @Test
-    @DisplayName("대시보드 — 200, X-Store-Id 스토어 통계를 그대로 · 실패 영역은 null + unavailable")
+    @DisplayName("대시보드 — 200, X-Store-Id 스토어 통계를 그대로, 실패 영역은 null + unavailable")
     void dashboard_whenSeller_returns200WithPartial() throws Exception {
         // given
         ObjectNode order = JsonNodeFactory.instance.objectNode().put("toConfirmCount", 2).put("todaySalesAmt", 52000);
         ObjectNode product = JsonNodeFactory.instance.objectNode().put("onSaleCount", 5);
         given(sellerDashboardService.dashboard(1L)).willReturn(new Dashboard(order, null, product, null, List.of("orderDaily", "settlement")));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/seller/dashboard").header("X-User-Id", "2").header("X-User-Roles", "SELLER").header("X-Store-Id", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("대시보드를 조회했습니다."))

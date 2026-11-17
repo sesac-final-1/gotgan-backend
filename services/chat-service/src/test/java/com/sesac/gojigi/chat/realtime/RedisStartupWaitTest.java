@@ -48,7 +48,7 @@ class RedisStartupWaitTest {
     }
 
     @Test
-    @DisplayName("기다리는 중 인터럽트되면 바로 false · 인터럽트 상태는 남긴다")
+    @DisplayName("기다리는 중 인터럽트되면 바로 false, 인터럽트 상태는 남긴다")
     void stopsWhenInterrupted() {
         when(factory.getConnection()).thenThrow(new RedisConnectionFailureException("Unable to connect to Redis"));
         Thread.currentThread().interrupt();

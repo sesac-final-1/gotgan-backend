@@ -1,6 +1,6 @@
 spring:
   application:
-    name: settlement-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+    name: settlement-service                  # 지표, 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/settlementdb?connectionTimeZone=Asia/Seoul
@@ -11,7 +11,7 @@ spring:
     hibernate:
       ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
   flyway:
-    locations: classpath:db/migration       # 시드(db/seed) 는 local · k8s 프로필에서만 추가
+    locations: classpath:db/migration       # 시드(db/seed) 는 local, k8s 프로필에서만 추가
 
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
@@ -23,13 +23,13 @@ server:
 app:
   events:
     topic-arn: ${SETTLEMENT_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-settlement-events
-    outbox:                                  # 이벤트 아웃박스 (EventOutboxService · V7) — 커밋 후 바로 발행, 실패분은 발행기가 다시
+    outbox:                                  # 이벤트 아웃박스 (EventOutboxService, V7) — 커밋 후 바로 발행, 실패분은 발행기가 다시
       publish-interval: 30s
       initial-delay: 20s
       retry-after: 10s                       # 커밋 직후 발행과 겹치지 않게 이만큼 지난 PENDING 만
       max-attempts: 10                       # 닿으면 ERROR 로그 + 발행기 대상에서 빠짐 (수동 확인)
-  sqs:                                       # 구독 큐 2개 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
-    store-events-queue-url: ${SETTLEMENT_STORE_EVENTS_QUEUE_URL:}   # StoreApproved · StoreStatusChanged
+  sqs:                                       # 구독 큐 2개 — URL 이 비면(로컬, 테스트) 폴러를 띄우지 않는다
+    store-events-queue-url: ${SETTLEMENT_STORE_EVENTS_QUEUE_URL:}   # StoreApproved, StoreStatusChanged
     order-events-queue-url: ${SETTLEMENT_ORDER_EVENTS_QUEUE_URL:}   # OrderItemConfirmed
     wait-seconds: 20                         # 롱폴링 (비어 있어도 20초 기다렸다 돌아옴 — 빈 요청 비용 절감)
     max-messages: 10
@@ -51,7 +51,7 @@ management:
   endpoint:
     health:
       probes:
-        enabled: true                       # /actuator/health/liveness · readiness
+        enabled: true                       # /actuator/health/liveness, readiness
 
 springdoc:
   swagger-ui:

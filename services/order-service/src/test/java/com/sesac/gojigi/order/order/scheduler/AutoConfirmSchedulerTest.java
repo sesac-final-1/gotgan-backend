@@ -23,7 +23,7 @@ class AutoConfirmSchedulerTest {
     @Mock private DeliveryTxService deliveryTx;
 
     @Test
-    @DisplayName("now - auto-confirm-after 전에 배송완료된 상품주문을 구매확정, 하나가 실패(구매자가 먼저 확정 · 반품 신청)해도 다음 건 계속")
+    @DisplayName("now - auto-confirm-after 전에 배송완료된 상품주문을 구매확정, 하나가 실패(구매자가 먼저 확정, 반품 신청)해도 다음 건 계속")
     void confirmDelivered() {
         // given — 2026-10-26 12:00, 7일 기준
         Clock clock = Clock.fixed(Instant.parse("2026-10-26T03:00:00Z"), ZoneId.of("Asia/Seoul"));

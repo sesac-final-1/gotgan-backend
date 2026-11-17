@@ -19,7 +19,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 클레임 조회 — 내 클레임 내역(구매자) · 판매자 클레임 목록 · 상세 (CLM-05) */
+/** 클레임 조회 — 내 클레임 내역(구매자), 판매자 클레임 목록, 상세 (CLM-05) */
 @Service
 @RequiredArgsConstructor
 public class ClaimQueryService {
@@ -32,7 +32,7 @@ public class ClaimQueryService {
         return claimRepository.findMine(buyerId).stream().map(ClaimDetailResponse::from).toList();
     }
 
-    /** 판매자 클레임 목록 — 단계(처리대기 · 처리완료) · 유형(없으면 전체) · 서버 페이징 + 탭 숫자 */
+    /** 판매자 클레임 목록 — 단계(처리대기, 처리완료), 유형(없으면 전체), 서버 페이징 + 탭 숫자 */
     @Transactional(readOnly = true)
     public SellerClaimListResponse listSeller(Long storeId, ClaimStage stage, ClaimType type, int page, int size) {
         requireStore(storeId);

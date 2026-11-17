@@ -21,7 +21,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Prometheus HTTP API(/api/v1/query) — 지표는 보조 정보라 실패해도 오류를 던지지 않고 null(화면은 "-").
- * 연결 · 읽기 제한을 짧게(기본 2초) — 15초 폴링이 쌓이지 않게
+ * 연결, 읽기 제한을 짧게(기본 2초) — 15초 폴링이 쌓이지 않게
  */
 @Slf4j
 @Component
@@ -38,8 +38,8 @@ public class PrometheusClient {
     }
 
     /**
-     * 범위 쿼리(/api/v1/query_range) — 부하테스트 그래프. 시리즈 하나(sum · max 로 묶은 쿼리)의 [시각 ms, 값] 목록.
-     * 결과가 없으면 빈 목록, 실패 · 오류 응답이면 빈 Optional
+     * 범위 쿼리(/api/v1/query_range) — 부하테스트 그래프. 시리즈 하나(sum, max 로 묶은 쿼리)의 [시각 ms, 값] 목록.
+     * 결과가 없으면 빈 목록, 실패, 오류 응답이면 빈 Optional
      */
     public Optional<List<Sample>> range(String promql, Instant start, Instant end, Duration step) {
         JsonNode body;
@@ -87,12 +87,12 @@ public class PrometheusClient {
                 });
     }
 
-    /** 즉시 쿼리 — 시리즈마다 라벨 전체와 값(분석 TOP 5 · DB 연결 풀). NaN 은 뺀다. 실패면 빈 Optional */
+    /** 즉시 쿼리 — 시리즈마다 라벨 전체와 값(분석 TOP 5, DB 연결 풀). NaN 은 뺀다. 실패면 빈 Optional */
     public Optional<List<Series>> vector(String promql) {
         return toSeries(fetch(u -> u.path("/api/v1/query").queryParam("query", "{q}").build(promql)));
     }
 
-    /** 즉시 쿼리를 지난 시각 기준으로 — 장애 리포트(어제 밤 구간의 파드 · 배포 · 부하테스트). 실패면 빈 Optional */
+    /** 즉시 쿼리를 지난 시각 기준으로 — 장애 리포트(어제 밤 구간의 파드, 배포, 부하테스트). 실패면 빈 Optional */
     public Optional<List<Series>> vector(String promql, Instant at) {
         return toSeries(fetch(u -> u.path("/api/v1/query").queryParam("query", "{q}").queryParam("time", at.getEpochSecond()).build(promql)));
     }
@@ -145,7 +145,7 @@ public class PrometheusClient {
     public record Series(Map<String, String> labels, double value) {
     }
 
-    /** data.result 노드 — 실패 · 오류 응답이면 빈 Optional */
+    /** data.result 노드 — 실패, 오류 응답이면 빈 Optional */
     private Optional<JsonNode> fetch(Function<UriBuilder, URI> uri) {
         JsonNode body;
         try {
@@ -161,7 +161,7 @@ public class PrometheusClient {
         return Optional.of(body.path("data").path("result"));
     }
 
-    /** 즉시 쿼리 — 결과 vector 를 routeId 라벨 → 값으로. 실패 · 오류 응답이면 빈 Optional */
+    /** 즉시 쿼리 — 결과 vector 를 routeId 라벨 → 값으로. 실패, 오류 응답이면 빈 Optional */
     public Optional<Map<String, Double>> byRoute(String promql) {
         JsonNode body;
         try {

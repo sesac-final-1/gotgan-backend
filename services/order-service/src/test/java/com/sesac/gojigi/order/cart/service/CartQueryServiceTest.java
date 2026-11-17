@@ -59,7 +59,7 @@ class CartQueryServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 적중 — 스토어별 묶음 · 선택된 구매 가능 줄만 금액 · 배송비 · 무료배송까지 남은 금액, 없는 옵션은 unavailable, 없는 스토어는 이름 · 배송비 없이")
+    @DisplayName("캐시 적중 — 스토어별 묶음, 선택된 구매 가능 줄만 금액, 배송비, 무료배송까지 남은 금액, 없는 옵션은 unavailable, 없는 스토어는 이름, 배송비 없이")
     void groupsAndTotals() {
         // given — 스토어1: 선택 20,000 + 선택 해제 5,000 + 구매 불가 9,000 / 스토어2: 선택 60,000(무료) / 99: product 에 없음
         Map<Long, CachedLine> lines = new TreeMap<>(Map.of(11L, new CachedLine(2, true), 12L, new CachedLine(1, false),
@@ -91,7 +91,7 @@ class CartQueryServiceTest {
     }
 
     @Test
-    @DisplayName("스토어에서 아무것도 선택하지 않으면 배송비 0 · 남은 금액 0")
+    @DisplayName("스토어에서 아무것도 선택하지 않으면 배송비 0, 남은 금액 0")
     void nothingCheckedInStore() {
         given(cartRedisRepository.find(4L)).willReturn(Optional.of(new TreeMap<>(Map.of(11L, new CachedLine(1, false)))));
         given(productClient.getOptions(List.of(11L))).willReturn(List.of(option(11L, 1L, 10_000L, true)));
@@ -127,7 +127,7 @@ class CartQueryServiceTest {
     }
 
     @Test
-    @DisplayName("캐시 미스 · 장애 — MySQL 원본을 읽고 캐시를 다시 채운다, 빈 장바구니면 product 를 부르지 않는다")
+    @DisplayName("캐시 미스, 장애 — MySQL 원본을 읽고 캐시를 다시 채운다, 빈 장바구니면 product 를 부르지 않는다")
     void missReadsMysql() {
         // given
         given(cartRedisRepository.find(4L)).willReturn(Optional.empty());

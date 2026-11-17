@@ -66,13 +66,13 @@ class SellerStoreControllerTest {
     }
 
     @Test
-    @DisplayName("폐점 — 200, X-Store-Id 스토어를 폐점하고 상태 CLOSED · 폐점 시각 +09:00")
+    @DisplayName("폐점 — 200, X-Store-Id 스토어를 폐점하고 상태 CLOSED, 폐점 시각 +09:00")
     void close_whenSeller_returns200() throws Exception {
         // given
         given(storeStatusService.closeBySeller(1L))
                 .willReturn(new StoreCloseResponse(1L, StoreStatus.CLOSED, OffsetDateTime.parse("2026-10-29T15:00:00+09:00")));
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(patch("/api/seller/store/close")).header("X-Store-Id", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("스토어를 폐점했습니다."))
@@ -95,7 +95,7 @@ class SellerStoreControllerTest {
     }
 
     @Test
-    @DisplayName("진행 중 주문 409 · 미정산 409 는 코드와 서비스가 만든 안내 문구 그대로, order · settlement 장애는 502")
+    @DisplayName("진행 중 주문 409, 미정산 409 는 코드와 서비스가 만든 안내 문구 그대로, order, settlement 장애는 502")
     void close_whenRejected_returnsCodeAndMessage() throws Exception {
         // given
         given(storeStatusService.closeBySeller(1L)).willThrow(
@@ -104,7 +104,7 @@ class SellerStoreControllerTest {
                 new StoreException(StoreErrorCode.STORE_SETTLEMENT_OUTSTANDING, "미정산 90,000원 — 지급 완료(매주 목요일) 후 폐점할 수 있습니다."));
         given(storeStatusService.closeBySeller(3L)).willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR));
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(patch("/api/seller/store/close")).header("X-Store-Id", "1"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("STORE_ORDERS_IN_PROGRESS"))
@@ -123,7 +123,7 @@ class SellerStoreControllerTest {
     }
 
     @Test
-    @DisplayName("내 스토어 조회 — 200, X-Store-Id 스토어의 설정 값 · 이미지 URL · 개설 시각 +09:00")
+    @DisplayName("내 스토어 조회 — 200, X-Store-Id 스토어의 설정 값, 이미지 URL, 개설 시각 +09:00")
     void getMyStore_whenSeller_returns200() throws Exception {
         // given
         given(storeQueryService.getSellerStore(1L)).willReturn(new SellerStoreResponse(1L, "곳간상회", "gotgan", StoreStatus.ACTIVE, null,
@@ -131,7 +131,7 @@ class SellerStoreControllerTest {
                 "CJ대한통운", "평일 14시 이전 결제 시 당일 출고", StoreGrade.SPROUT, "홍길동", "000-00-00001",
                 OffsetDateTime.parse("2026-10-15T09:00:00+09:00")));
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(get("/api/seller/store")).header("X-Store-Id", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("내 스토어를 조회했습니다."))
@@ -144,12 +144,12 @@ class SellerStoreControllerTest {
     }
 
     @Test
-    @DisplayName("내 스토어 조회 — X-Store-Id 없음 403 · 없는 스토어 404")
+    @DisplayName("내 스토어 조회 — X-Store-Id 없음 403, 없는 스토어 404")
     void getMyStore_whenNoStoreOrMissing_rejects() throws Exception {
         // given
         given(storeQueryService.getSellerStore(99L)).willThrow(new StoreException(StoreErrorCode.STORE_NOT_FOUND));
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(get("/api/seller/store")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
@@ -170,7 +170,7 @@ class SellerStoreControllerTest {
                 "gotgan", StoreStatus.ACTIVE, null, "<p>소개</p>", null, null, "#5b6b4a", "02-0000-1234", 3000L, 50000L, "CJ대한통운",
                 "당일 출고", StoreGrade.SPROUT, "홍길동", "000-00-00001", OffsetDateTime.parse("2026-10-15T09:00:00+09:00")));
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(put("/api/seller/store")).header("X-Store-Id", "1").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("스토어 설정을 저장했습니다."))
@@ -187,13 +187,13 @@ class SellerStoreControllerTest {
             "\"freeShippingThreshold\":50000|\"freeShippingThreshold\":0",
             "\"courier\":\"CJ대한통운\"|\"courier\":\"가나다라마바사아자차카타파하가나다라마바사아자차카타파하가나다\""
     })
-    @DisplayName("설정 수정 형식 오류(색 · 연락처 · 배송비 음수 · 상한 · 없음 · 무료배송 기준 0 · 택배사 31자) — 400, 서비스를 부르지 않는다")
+    @DisplayName("설정 수정 형식 오류(색, 연락처, 배송비 음수, 상한, 없음, 무료배송 기준 0, 택배사 31자) — 400, 서비스를 부르지 않는다")
     void updateMyStore_whenInvalid_returns400(String replace) throws Exception {
         // given
         String[] fromTo = replace.split("\\|");
         String body = VALID_BODY.replace(fromTo[0], fromTo[1]);
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(put("/api/seller/store")).header("X-Store-Id", "1").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
@@ -201,12 +201,12 @@ class SellerStoreControllerTest {
     }
 
     @Test
-    @DisplayName("설정 수정 — 폐점 409 STORE_CLOSED · X-Store-Id 없음 403")
+    @DisplayName("설정 수정 — 폐점 409 STORE_CLOSED, X-Store-Id 없음 403")
     void updateMyStore_whenClosedOrNoStore_rejects() throws Exception {
         // given
         given(sellerStoreService.update(eq(2L), any(SellerStoreUpdateRequest.class))).willThrow(new StoreException(StoreErrorCode.STORE_CLOSED));
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(put("/api/seller/store")).header("X-Store-Id", "2").contentType(MediaType.APPLICATION_JSON).content(VALID_BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("STORE_CLOSED"));
@@ -215,13 +215,13 @@ class SellerStoreControllerTest {
     }
 
     @Test
-    @DisplayName("대표 이미지 업로드 주소 — 200, 형식 · 크기를 X-Store-Id 스토어로 넘기고 key · uploadUrl · 만료")
+    @DisplayName("대표 이미지 업로드 주소 — 200, 형식, 크기를 X-Store-Id 스토어로 넘기고 key, uploadUrl, 만료")
     void presignImage_whenValid_returns200() throws Exception {
         // given
         given(sellerStoreService.presignImage(eq(1L), any(StoreImagePresignRequest.class))).willReturn(new StoreImagePresignResponse(
                 "stores/1/3f2a0c5e-7d1b-4c1e-9a1f-0b2c3d4e5f60.jpg", "https://s3/upload", OffsetDateTime.parse("2026-10-29T15:10:00+09:00")));
 
-        // when · then
+        // when, then
         mockMvc.perform(seller(post("/api/seller/store/image/presign")).header("X-Store-Id", "1").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"contentType\":\"image/jpeg\",\"size\":834512}"))
                 .andExpect(status().isOk())
@@ -239,7 +239,7 @@ class SellerStoreControllerTest {
             "{\"size\":100}",
             "{\"contentType\":\"image/jpeg\"}"
     })
-    @DisplayName("대표 이미지 업로드 주소 형식 오류(gif · pdf · 0바이트 · 10MB 초과 · 형식 없음 · 크기 없음) — 400, 서비스를 부르지 않는다")
+    @DisplayName("대표 이미지 업로드 주소 형식 오류(gif, pdf, 0바이트, 10MB 초과, 형식 없음, 크기 없음) — 400, 서비스를 부르지 않는다")
     void presignImage_whenInvalid_returns400(String body) throws Exception {
         mockMvc.perform(seller(post("/api/seller/store/image/presign")).header("X-Store-Id", "1").contentType(MediaType.APPLICATION_JSON)
                         .content(body))

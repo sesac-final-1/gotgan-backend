@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 공개 상품 조회 (구매자 화면, product.md 9 · 10절) — 로그인 없음.
+ * 공개 상품 조회 (구매자 화면, product.md 9, 10절) — 로그인 없음.
  * 상세는 판매중지 등 구매할 수 없는 상품도 보여 주고(purchasable=false), 없거나 삭제된 상품만 404.
  */
 @Service
@@ -46,8 +46,8 @@ public class ProductQueryService {
     private final ImageUrls imageUrls;
 
     /**
-     * 상품 목록 · 검색 (9절) — 목록 · 검색 · 메인 화면 · 스토어 홈 공용, 쇼핑몰에 보이는 상품만.
-     * 조건에 맞는 상품이 없거나 없는 · 꺼진 카테고리 · 운영 안 하는 스토어면 빈 페이지. 카드의 대표 이미지 · 품절은 묶음 쿼리로 붙인다.
+     * 상품 목록, 검색 (9절) — 목록, 검색, 메인 화면, 스토어 홈 공용, 쇼핑몰에 보이는 상품만.
+     * 조건에 맞는 상품이 없거나 없는, 꺼진 카테고리, 운영 안 하는 스토어면 빈 페이지. 카드의 대표 이미지, 품절은 묶음 쿼리로 붙인다.
      */
     public PageResponse<ProductSummaryResponse> search(ProductSearchRequest request) {
         ProductSearchRepository.Condition condition = toCondition(request);
@@ -66,7 +66,7 @@ public class ProductQueryService {
         return PageResponse.from(new PageImpl<>(content, PageRequest.of(page, size), total));
     }
 
-    /** 형식 검사(@Valid) 뒤 남은 규칙 — q 는 앞뒤 공백 제거 후 비면 조건 없음 · 50자 초과 400, min ≤ max */
+    /** 형식 검사(@Valid) 뒤 남은 규칙 — q 는 앞뒤 공백 제거 후 비면 조건 없음, 50자 초과 400, min ≤ max */
     private static ProductSearchRepository.Condition toCondition(ProductSearchRequest r) {
         String keyword = r.q() == null || r.q().isBlank() ? null : r.q().strip();
         if (keyword != null && keyword.length() > MAX_KEYWORD) {
@@ -91,7 +91,7 @@ public class ProductQueryService {
         return rows.stream().collect(Collectors.toMap(row -> (Long) row[0], row -> ((Number) row[1]).longValue()));
     }
 
-    /** 상품 상세 (10절) — 옵션 · 이미지는 같은 트랜잭션에서 지연 로딩해 DTO 로 바꾼다(open-in-view 꺼짐) */
+    /** 상품 상세 (10절) — 옵션, 이미지는 같은 트랜잭션에서 지연 로딩해 DTO 로 바꾼다(open-in-view 꺼짐) */
     public ProductDetailResponse get(Long productId) {
         Product product = productRepository.findByIdAndDeletedAtIsNull(productId)
                 .orElseThrow(() -> new ProductException(ProductErrorCode.PRODUCT_NOT_FOUND));

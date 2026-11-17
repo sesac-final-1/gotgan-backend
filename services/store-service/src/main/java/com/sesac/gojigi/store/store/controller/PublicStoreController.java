@@ -29,7 +29,7 @@ public class PublicStoreController {
             description = """
             인가: 공개. 운영 중(ACTIVE) 스토어만 개설 최신순, 페이징 없이 전체 — 화면이 카테고리 탭으로 거른다.
             카테고리는 입점 신청 때 고른 상위 카테고리 ID(이름은 카테고리 API), 상품 미리보기는 상품 목록 API(storeId 필터).
-            정지 · 폐점 스토어는 빠진다. 에러: 없음(없으면 빈 배열)""")
+            정지, 폐점 스토어는 빠진다. 에러: 없음(없으면 빈 배열)""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 없으면 빈 배열")
     })
@@ -40,11 +40,11 @@ public class PublicStoreController {
 
     @Operation(summary = "스토어 홈",
             description = """
-            인가: 공개. 운영 중이면 홈 전체 — 목록 필드 + 판매자 정보(대표자 · 사업자등록번호는 원래 신청서, 고객 문의 연락처) · 배송 정책 ·
-            출고 안내. 정지 · 폐점이면 200 으로 storeId · storeName · status 만(나머지 null) — 화면은 "운영하지 않는 스토어" 안내.
-            상품은 상품 목록 API(storeId 필터). 에러: 400 INVALID_INPUT(숫자 아님) · 404 STORE_NOT_FOUND(없거나 삭제)""")
+            인가: 공개. 운영 중이면 홈 전체 — 목록 필드 + 판매자 정보(대표자, 사업자등록번호는 원래 신청서, 고객 문의 연락처), 배송 정책, 
+            출고 안내. 정지, 폐점이면 200 으로 storeId, storeName, status 만(나머지 null) — 화면은 "운영하지 않는 스토어" 안내.
+            상품은 상품 목록 API(storeId 필터). 에러: 400 INVALID_INPUT(숫자 아님), 404 STORE_NOT_FOUND(없거나 삭제)""")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 정지 · 폐점도 200(status 로 구분)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 정지, 폐점도 200(status 로 구분)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "STORE_NOT_FOUND")
     })
@@ -56,10 +56,10 @@ public class PublicStoreController {
 
     @Operation(summary = "스토어 홈 (주소로)",
             description = """
-            인가: 공개. 입점 신청 때 정한 스토어 주소(slug)로 조회 — 응답은 스토어 홈과 같다(정지 · 폐점이면 이름 · 상태만).
+            인가: 공개. 입점 신청 때 정한 스토어 주소(slug)로 조회 — 응답은 스토어 홈과 같다(정지, 폐점이면 이름, 상태만).
             에러: 404 STORE_NOT_FOUND(없거나 삭제)""")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 정지 · 폐점도 200(status 로 구분)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 정지, 폐점도 200(status 로 구분)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "STORE_NOT_FOUND")
     })
     @GetMapping("/slug/{slug}")

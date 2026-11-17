@@ -1,5 +1,5 @@
-# 서버리스 배포 — 바뀐 함수만 테스트 → serverless deploy --stage dev (OIDC 역할) — 담당 이경석 (가이드라인 11장 · 12장)
-# Secrets: AWS_ROLE_ARN · SERVERLESS_ACCESS_KEY(Serverless Framework v4 라이선스 키)  /  Variables: AWS_REGION
+# 서버리스 배포 — 바뀐 함수만 테스트 → serverless deploy --stage dev (OIDC 역할) — 담당 이경석 (가이드라인 11장, 12장)
+# Secrets: AWS_ROLE_ARN, SERVERLESS_ACCESS_KEY(Serverless Framework v4 라이선스 키)  /  Variables: AWS_REGION
 # 함수 폴더 1개 = Serverless 서비스 1개 (sesac-gojigi-{폴더명}, 컨벤션 5-5). workflow_dispatch 는 세 함수 모두 배포
 name: serverless
 

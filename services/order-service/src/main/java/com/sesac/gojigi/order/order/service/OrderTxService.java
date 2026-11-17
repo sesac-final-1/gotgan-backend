@@ -35,7 +35,7 @@ public class OrderTxService {
     private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
-    /** 주문 PENDING + 상품주문 · 스토어별 배송비 스냅샷 (Saga 1단계 ORDER_CREATED) */
+    /** 주문 PENDING + 상품주문, 스토어별 배송비 스냅샷 (Saga 1단계 ORDER_CREATED) */
     public record PendingOrder(Order order, List<OrderItem> items) {
     }
 
@@ -83,7 +83,7 @@ public class OrderTxService {
         getOrder(orderId).markFailed();
     }
 
-    /** 본인 주문 — 없는 주문번호 · 다른 회원의 주문은 같은 404 */
+    /** 본인 주문 — 없는 주문번호, 다른 회원의 주문은 같은 404 */
     @Transactional(readOnly = true)
     public Order getMine(Long buyerId, String orderNo) {
         return orderRepository.findByOrderNoAndBuyerId(orderNo, buyerId)

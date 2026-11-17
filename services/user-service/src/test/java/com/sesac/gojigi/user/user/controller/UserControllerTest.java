@@ -106,7 +106,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("내 정보 수정 — 본문을 그대로 서비스로, 휴대폰 형식 · 이름 공백은 400 INVALID_INPUT")
+    @DisplayName("내 정보 수정 — 본문을 그대로 서비스로, 휴대폰 형식, 이름 공백은 400 INVALID_INPUT")
     void updateMyInfo_validation() throws Exception {
         given(userService.updateMyInfo(eq(4L), any())).willReturn(new MyInfoResponse(4L, "buyer1@gotgan.com", "김곳간",
                 null, "010-1234-5678", Grade.NORMAL, SignupProvider.LOCAL, 0L, 0L, null));
@@ -144,7 +144,7 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("새 비밀번호 형식(8자 · 영문 · 특수문자) 위반은 서비스 호출 없이 400 INVALID_INPUT")
+    @DisplayName("새 비밀번호 형식(8자, 영문, 특수문자) 위반은 서비스 호출 없이 400 INVALID_INPUT")
     void changePassword_weakNewPassword() throws Exception {
         mockMvc.perform(patch("/api/users/me/password").header("X-User-Id", "4").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"currentPassword\":\"Old!pass1\",\"newPassword\":\"short\"}"))

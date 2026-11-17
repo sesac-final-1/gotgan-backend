@@ -12,10 +12,10 @@ import java.util.function.Function;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** 주문 금액 — 스토어별 묶음배송비 · 포인트 비율 배분 · 5% 적립 */
+/** 주문 금액 — 스토어별 묶음배송비, 포인트 비율 배분, 5% 적립 */
 class OrderPricingTest {
 
-    /** 기본 배송비 3,000원 · 50,000원 이상 무료 */
+    /** 기본 배송비 3,000원, 50,000원 이상 무료 */
     private static final Function<Long, ShippingPolicy> POLICY = storeId -> new ShippingPolicy(3_000L, 50_000L);
 
     static OrderPricing.Line line(long optionId, long storeId, long unitPrice, int quantity) {
@@ -55,7 +55,7 @@ class OrderPricingTest {
     @Test
     @DisplayName("사용 포인트는 상품주문 금액 비율로 내림 배분하고 남은 1P 는 앞에서부터 — 적립은 배분 후 금액의 5%")
     void calculate_allocatesPointsByAmount() {
-        // given — 10,000 : 20,000 에 1,001P → 333 · 667 + 나머지 1P
+        // given — 10,000 : 20,000 에 1,001P → 333, 667 + 나머지 1P
         List<OrderPricing.Line> lines = List.of(line(11L, 1L, 10_000L, 1), line(12L, 1L, 20_000L, 1));
 
         // when
@@ -90,7 +90,7 @@ class OrderPricingTest {
         // given
         List<OrderPricing.Line> lines = List.of(line(11L, 1L, 10_000L, 1));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> OrderPricing.calculate(lines, POLICY, 13_001L))
                 .isInstanceOf(OrderException.class)
                 .extracting(e -> ((OrderException) e).getErrorCode())

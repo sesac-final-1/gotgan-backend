@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 실제 MySQL — 기본 배송지 규칙(첫 배송지 · main=true 시 기존 해제)과 동시 등록에서 기본이 1개로 유지되는지.
+ * 실제 MySQL — 기본 배송지 규칙(첫 배송지, main=true 시 기존 해제)과 동시 등록에서 기본이 1개로 유지되는지.
  * 서비스 트랜잭션이 실제로 커밋돼야 해서 테스트 트랜잭션으로 감싸지 않는다 (끝나고 직접 정리).
  */
 @DataJpaTest
@@ -69,7 +69,7 @@ class AddressServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("첫 배송지는 main=false 여도 기본, 값은 다듬어 저장 (공백 제거 · 휴대폰 하이픈 · 빈 상세 주소 null)")
+    @DisplayName("첫 배송지는 main=false 여도 기본, 값은 다듬어 저장 (공백 제거, 휴대폰 하이픈, 빈 상세 주소 null)")
     void firstAddress_becomesDefault() {
         Long userId = member();
 
@@ -231,7 +231,7 @@ class AddressServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("수정 — 다른 회원 · 삭제된 · 없는 배송지는 ADDRESS_NOT_FOUND, 원래 값 그대로")
+    @DisplayName("수정 — 다른 회원, 삭제된, 없는 배송지는 ADDRESS_NOT_FOUND, 원래 값 그대로")
     void update_notOwned_notFound() {
         Long owner = member();
         Long stranger = member();
@@ -249,10 +249,10 @@ class AddressServiceIntegrationTest {
         assertThat(addressRepository.findById(id).orElseThrow().getLabel()).isEqualTo("집");
     }
 
-    // ── 목록 · 기본 지정
+    // ── 목록, 기본 지정
 
     @Test
-    @DisplayName("목록 — 기본 먼저 · 그다음 최근 등록순, 삭제된 배송지 · 다른 회원 배송지는 빠짐")
+    @DisplayName("목록 — 기본 먼저, 그다음 최근 등록순, 삭제된 배송지, 다른 회원 배송지는 빠짐")
     void list_defaultFirstThenLatest() {
         Long userId = member();
         Long other = member();
@@ -298,7 +298,7 @@ class AddressServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("기본 지정 — 다른 회원 · 없는 배송지는 ADDRESS_NOT_FOUND, 기본은 그대로")
+    @DisplayName("기본 지정 — 다른 회원, 없는 배송지는 ADDRESS_NOT_FOUND, 기본은 그대로")
     void markDefault_notOwned() {
         Long owner = member();
         Long stranger = member();
@@ -375,7 +375,7 @@ class AddressServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("삭제 — 다른 회원 · 이미 삭제된 · 없는 배송지는 ADDRESS_NOT_FOUND")
+    @DisplayName("삭제 — 다른 회원, 이미 삭제된, 없는 배송지는 ADDRESS_NOT_FOUND")
     void delete_notOwnedOrAlreadyDeleted() {
         Long owner = member();
         Long stranger = member();
@@ -409,7 +409,7 @@ class AddressServiceIntegrationTest {
                 try {
                     addressService.delete(userId, officeId);
                 } catch (AddressException ignored) {
-                    // 기본 지정이 먼저 끝나면 기본이라 삭제 불가 · 삭제가 먼저면 기본 지정이 404 — 둘 다 정상
+                    // 기본 지정이 먼저 끝나면 기본이라 삭제 불가, 삭제가 먼저면 기본 지정이 404 — 둘 다 정상
                 }
                 return null;
             });

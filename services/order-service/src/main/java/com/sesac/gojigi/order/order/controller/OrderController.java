@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 구매자 주문 — 게이트웨이가 JWT 를 검증하고 X-User-Id 로 본인을 알려 준다 */
-@Tag(name = "주문", description = "주문 생성 · 결제 · 내 주문 조회 — 인가: 로그인 회원 (X-User-Id)")
+@Tag(name = "주문", description = "주문 생성, 결제, 내 주문 조회 — 인가: 로그인 회원 (X-User-Id)")
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
@@ -38,9 +38,9 @@ public class OrderController {
     private final DeliveryTxService deliveryTxService;
 
     @Operation(summary = "구매확정 (상품주문)", description = """
-            DLV-05: 배송완료 상품주문을 구매확정 — 정산 · 리뷰 작성 자격 · 회원등급의 기준(OrderItemConfirmed). 확정 후에는 반품 · 교환 불가.
-            배송완료 + 7일(데모 2분)이 지나면 자동으로 확정된다(DLV-06). 진행 중 반품 · 교환이 있으면 확정할 수 없다.
-            에러: 404 ORDER_ITEM_NOT_FOUND(없음 · 다른 회원 · 다른 주문) / 409 ORDER_INVALID_STATUS(배송완료가 아님 · 이미 확정 · 클레임 진행 중)""")
+            DLV-05: 배송완료 상품주문을 구매확정 — 정산, 리뷰 작성 자격, 회원등급의 기준(OrderItemConfirmed). 확정 후에는 반품, 교환 불가.
+            배송완료 + 7일(데모 2분)이 지나면 자동으로 확정된다(DLV-06). 진행 중 반품, 교환이 있으면 확정할 수 없다.
+            에러: 404 ORDER_ITEM_NOT_FOUND(없음, 다른 회원, 다른 주문) / 409 ORDER_INVALID_STATUS(배송완료가 아님, 이미 확정, 클레임 진행 중)""")
     @PostMapping("/{orderNo}/items/{orderItemId}/confirm")
     public ApiResponse<OrderItemResponse> confirmPurchase(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                                           @PathVariable String orderNo, @PathVariable Long orderItemId) {
@@ -48,12 +48,12 @@ public class OrderController {
     }
 
     @Operation(summary = "주문 생성 (주문서 제출)", description = """
-            주문 Saga 1 ~ 4단계: 주문 PENDING · 상품주문 스냅샷 → 포인트 사용(user) → 재고 예약(product) → 결제 준비(payment).
-            가격 · 배송비 · 결제 금액은 서버가 다시 계산한다. 응답의 portonePaymentId · payAmt · orderName 으로 포트원 결제창을 띄운다.
+            주문 Saga 1 ~ 4단계: 주문 PENDING, 상품주문 스냅샷 → 포인트 사용(user) → 재고 예약(product) → 결제 준비(payment).
+            가격, 배송비, 결제 금액은 서버가 다시 계산한다. 응답의 portonePaymentId, payAmt, orderName 으로 포트원 결제창을 띄운다.
             전액 포인트(payAmt 0)는 결제창 없이 바로 PAID (portonePaymentId null).
             실패하면 앞 단계를 되돌리고 주문 FAILED — 결제창을 띄우지 않는다.
-            에러: 400 INVALID_INPUT · ORDER_POINT_EXCEEDS_AMOUNT / 404 ORDER_BUYER_NOT_FOUND /
-            409 ORDER_PRODUCT_NOT_PURCHASABLE · ORDER_OWN_STORE_PRODUCT(내 스토어 상품) · ORDER_OUT_OF_STOCK · ORDER_POINT_INSUFFICIENT · ORDER_NO_CONFLICT(잠시 후 다시 시도) / 502 EXTERNAL_API_ERROR""")
+            에러: 400 INVALID_INPUT, ORDER_POINT_EXCEEDS_AMOUNT / 404 ORDER_BUYER_NOT_FOUND /
+            409 ORDER_PRODUCT_NOT_PURCHASABLE, ORDER_OWN_STORE_PRODUCT(내 스토어 상품), ORDER_OUT_OF_STOCK, ORDER_POINT_INSUFFICIENT, ORDER_NO_CONFLICT(잠시 후 다시 시도) / 502 EXTERNAL_API_ERROR""")
     @PostMapping
     public ResponseEntity<ApiResponse<OrderCreateResponse>> create(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                                                   @Valid @RequestBody OrderCreateRequest request) {
@@ -63,11 +63,11 @@ public class OrderController {
     }
 
     @Operation(summary = "결제 확인 (결제창 종료 후)", description = """
-            주문 Saga 6 · 7단계: payment 가 포트원에 직접 조회해 결제 상태 · 금액(주문의 실결제금액)을 확인하면 주문 PAID · 상품주문 PAYMENT_DONE.
-            브라우저가 보내는 값은 주문번호뿐. 이미 PAID 면 같은 응답(새로고침 · 재전송 안전). 모바일 리다이렉트는 완료 페이지에서 호출.
-            409 ORDER_PAYMENT_NOT_COMPLETED(아직 미결제) · 502 EXTERNAL_API_ERROR(결과 모름)는 주문을 결제 대기로 둔다 — 15분 뒤 만료 스케줄러가 확정 · 보상.
-            에러: 404 ORDER_NOT_FOUND(없는 주문 · 다른 회원) / 409 ORDER_PAYMENT_NOT_COMPLETED · ORDER_PAYMENT_FAILED(금액 불일치 · 끝난 결제 —
-            재고 · 포인트 되돌리고 주문 FAILED) · ORDER_INVALID_STATUS(이미 실패 · 처리 중인 주문) / 502 EXTERNAL_API_ERROR""")
+            주문 Saga 6, 7단계: payment 가 포트원에 직접 조회해 결제 상태, 금액(주문의 실결제금액)을 확인하면 주문 PAID, 상품주문 PAYMENT_DONE.
+            브라우저가 보내는 값은 주문번호뿐. 이미 PAID 면 같은 응답(새로고침, 재전송 안전). 모바일 리다이렉트는 완료 페이지에서 호출.
+            409 ORDER_PAYMENT_NOT_COMPLETED(아직 미결제), 502 EXTERNAL_API_ERROR(결과 모름)는 주문을 결제 대기로 둔다 — 15분 뒤 만료 스케줄러가 확정, 보상.
+            에러: 404 ORDER_NOT_FOUND(없는 주문, 다른 회원) / 409 ORDER_PAYMENT_NOT_COMPLETED, ORDER_PAYMENT_FAILED(금액 불일치, 끝난 결제 —
+            재고, 포인트 되돌리고 주문 FAILED), ORDER_INVALID_STATUS(이미 실패, 처리 중인 주문) / 502 EXTERNAL_API_ERROR""")
     @PostMapping("/{orderNo}/payment/confirm")
     public ApiResponse<OrderPaymentConfirmResponse> confirmPayment(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                                                    @PathVariable String orderNo) {
@@ -75,8 +75,8 @@ public class OrderController {
     }
 
     @Operation(summary = "내 주문 목록", description = """
-            인가: 로그인 회원 본인. 최신 주문 먼저 · 페이징 없음(수백 건 이하라 전체 1회 — 기간 탭은 프론트가 거른다).
-            결제 대기(PENDING) · 실패(FAILED) 주문도 포함 — 그 상품주문은 ORDERED(주문완료). statusCounts 는 상품주문 상태별 개수.
+            인가: 로그인 회원 본인. 최신 주문 먼저, 페이징 없음(수백 건 이하라 전체 1회 — 기간 탭은 프론트가 거른다).
+            결제 대기(PENDING), 실패(FAILED) 주문도 포함 — 그 상품주문은 ORDERED(주문완료). statusCounts 는 상품주문 상태별 개수.
             에러: 401 UNAUTHORIZED""")
     @GetMapping
     public ApiResponse<OrderListResponse> list(@Parameter(hidden = true) @CurrentUser AuthUser user) {
@@ -84,9 +84,9 @@ public class OrderController {
     }
 
     @Operation(summary = "내 주문 상세", description = """
-            인가: 로그인 회원 본인. 상품주문별 상태 · 배송지 · 금액 · 사용/적립 포인트 · 결제수단(payment).
-            payment 장애 · 0원 주문이면 payment 는 null 이고 나머지는 그대로 응답한다.
-            에러: 401 UNAUTHORIZED · 404 ORDER_NOT_FOUND(없는 주문번호 · 다른 회원의 주문)""")
+            인가: 로그인 회원 본인. 상품주문별 상태, 배송지, 금액, 사용/적립 포인트, 결제수단(payment).
+            payment 장애, 0원 주문이면 payment 는 null 이고 나머지는 그대로 응답한다.
+            에러: 401 UNAUTHORIZED, 404 ORDER_NOT_FOUND(없는 주문번호, 다른 회원의 주문)""")
     @GetMapping("/{orderNo}")
     public ApiResponse<OrderDetailResponse> detail(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                                    @PathVariable String orderNo) {

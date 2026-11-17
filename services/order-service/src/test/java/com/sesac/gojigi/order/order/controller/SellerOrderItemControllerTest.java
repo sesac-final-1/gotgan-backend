@@ -59,7 +59,7 @@ class SellerOrderItemControllerTest {
     }
 
     @Test
-    @DisplayName("발주확인 · 배송완료 — X-Store-Id 스토어로 처리, 성공 · 실패를 함께 200")
+    @DisplayName("발주확인, 배송완료 — X-Store-Id 스토어로 처리, 성공, 실패를 함께 200")
     void confirmAndDeliver() throws Exception {
         given(sellerDeliveryService.prepare(eq(1L), eq(70L), eq(List.of(456L, 457L)))).willReturn(oneDoneOneFailed());
         given(sellerDeliveryService.deliver(eq(1L), eq(70L), eq(List.of(456L)))).willReturn(oneDoneOneFailed());
@@ -93,7 +93,7 @@ class SellerOrderItemControllerTest {
     }
 
     @Test
-    @DisplayName("형식 오류 — 빈 목록 · 택배사 누락은 400, 처리 없음")
+    @DisplayName("형식 오류 — 빈 목록, 택배사 누락은 400, 처리 없음")
     void validation() throws Exception {
         mockMvc.perform(patch(BASE + "/confirm").header("X-User-Id", "70").header("X-Store-Id", "1")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"orderItemIds\":[]}"))
@@ -105,7 +105,7 @@ class SellerOrderItemControllerTest {
     }
 
     @Test
-    @DisplayName("목록 · 상세 — X-Store-Id 스토어로 조회, 페이징 기본값 · 범위 밖은 400")
+    @DisplayName("목록, 상세 — X-Store-Id 스토어로 조회, 페이징 기본값, 범위 밖은 400")
     void listAndGet() throws Exception {
         SellerOrderItemResponse item = SellerOrderItemResponse.from(OrderFixtures.item(OrderFixtures.order()));
         given(sellerOrderQueryService.list(1L, null, null, 0, 20)).willReturn(new SellerOrderItemListResponse(

@@ -26,7 +26,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-/** 알림 대상 · 문구 · 건너뛰기 (chat.md 7절) — admin 은 가짜 서버, 실행기는 바로 실행 */
+/** 알림 대상, 문구, 건너뛰기 (chat.md 7절) — admin 은 가짜 서버, 실행기는 바로 실행 */
 class ChatNotifierTest {
 
     private MockRestServiceServer admin;
@@ -44,7 +44,7 @@ class ChatNotifierTest {
     }
 
     @Test
-    @DisplayName("구매자 → 스토어 톡: 스토어(STORE#)에게, 가린 구매자 이름 + 내용 40자 · 판매자 화면 링크 · sourceId chat-msg-{id}")
+    @DisplayName("구매자 → 스토어 톡: 스토어(STORE#)에게, 가린 구매자 이름 + 내용 40자, 판매자 화면 링크, sourceId chat-msg-{id}")
     void buyerToStore() {
         given(directory.userName(10L)).willReturn("김지연");
         admin.expect(requestTo("http://admin/internal/notifications")).andExpect(method(HttpMethod.POST))
@@ -59,7 +59,7 @@ class ChatNotifierTest {
     }
 
     @Test
-    @DisplayName("문구 — 이름이 있으면 이름, 없으면 번호 · 구매자 이름 못 받으면 구매자")
+    @DisplayName("문구 — 이름이 있으면 이름, 없으면 번호, 구매자 이름 못 받으면 구매자")
     void titlesWithNames() {
         given(directory.storeName(5L)).willReturn("리넨하우스");
         admin.expect(requestTo("http://admin/internal/notifications")).andExpect(content().json("""
@@ -95,7 +95,7 @@ class ChatNotifierTest {
     }
 
     @Test
-    @DisplayName("admin 오류 · 대기열 가득 참은 알림만 빠지고 예외가 나가지 않는다")
+    @DisplayName("admin 오류, 대기열 가득 참은 알림만 빠지고 예외가 나가지 않는다")
     void failuresAreSwallowed() {
         admin.expect(requestTo("http://admin/internal/notifications")).andRespond(withServerError());
         notifier.notifyCounterpart(room(ChatRoomType.BUYER_SUPPORT), message(SenderRole.BUYER, "도와주세요"));
@@ -109,7 +109,7 @@ class ChatNotifierTest {
     }
 
     @Test
-    @DisplayName("받는 쪽 표 — 구매자/판매자 → 상담방은 관리자, 관리자 → 판매자 상담은 스토어 · 고객 상담은 회원")
+    @DisplayName("받는 쪽 표 — 구매자/판매자 → 상담방은 관리자, 관리자 → 판매자 상담은 스토어, 고객 상담은 회원")
     void targets() {
         assertThat(ChatNotifier.target(room(ChatRoomType.STORE_INQUIRY), SenderRole.SELLER).readerKey()).isEqualTo("USER#10");
         assertThat(ChatNotifier.target(room(ChatRoomType.BUYER_SUPPORT), SenderRole.BUYER).readerKey()).isEqualTo("ADMIN");

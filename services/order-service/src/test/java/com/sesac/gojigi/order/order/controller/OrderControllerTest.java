@@ -64,7 +64,7 @@ class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("주문 생성 — 201, 결제창에 넣을 portonePaymentId · payAmt · orderName")
+    @DisplayName("주문 생성 — 201, 결제창에 넣을 portonePaymentId, payAmt, orderName")
     void create() throws Exception {
         given(placeOrderSaga.place(eq(4L), any(), any())).willReturn(new OrderCreateResponse("20261022-000123",
                 OrderStatus.PENDING, 62_000L, "pay-20261022-000123", "제철 사과 3kg"));
@@ -92,7 +92,7 @@ class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("형식 오류 — 상품 없음 · 수량 0 · 휴대폰 아님 · 음수 포인트는 400, Saga 호출 없음")
+    @DisplayName("형식 오류 — 상품 없음, 수량 0, 휴대폰 아님, 음수 포인트는 400, Saga 호출 없음")
     void create_validation() throws Exception {
         for (String body : new String[] {
                 BODY.replace("[{\"productOptionId\":11,\"quantity\":2}]", "[]"),
@@ -136,7 +136,7 @@ class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("내 주문 목록 — 200, 본인 userId 로 조회한 주문 · 상태별 개수")
+    @DisplayName("내 주문 목록 — 200, 본인 userId 로 조회한 주문, 상태별 개수")
     void list() throws Exception {
         Order order = OrderFixtures.order();
         given(orderQueryService.getMyOrders(4L)).willReturn(new OrderListResponse(
@@ -152,7 +152,7 @@ class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("내 주문 상세 — 200 결제수단 포함, 남의 주문 · 없는 주문은 404 ORDER_NOT_FOUND")
+    @DisplayName("내 주문 상세 — 200 결제수단 포함, 남의 주문, 없는 주문은 404 ORDER_NOT_FOUND")
     void detail() throws Exception {
         Order order = OrderFixtures.order();
         given(orderQueryService.getMyOrder(4L, "20261022-000123")).willReturn(OrderDetailResponse.of(order,
@@ -172,7 +172,7 @@ class OrderControllerTest {
     }
 
     @Test
-    @DisplayName("구매확정 — 본인 주문 상품주문을 확정, 200 '구매확정했습니다.' · 상태 전이 위반 409")
+    @DisplayName("구매확정 — 본인 주문 상품주문을 확정, 200 '구매확정했습니다.', 상태 전이 위반 409")
     void confirmPurchase() throws Exception {
         com.sesac.gojigi.order.order.entity.OrderItem item = com.sesac.gojigi.order.order.entity.OrderFixtures.item(
                 com.sesac.gojigi.order.order.entity.OrderFixtures.order());

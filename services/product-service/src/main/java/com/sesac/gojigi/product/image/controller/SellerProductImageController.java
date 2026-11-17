@@ -32,12 +32,12 @@ public class SellerProductImageController {
 
     @Operation(summary = "상품 이미지 업로드 주소 발급", description = """
             인가: SELLER (스토어 = X-Store-Id). 이미지마다 images 버킷 presigned PUT 주소를 발급한다(10분, 응답은 요청과 같은 순서).
-            1~5개 · image/jpeg · image/png · image/webp · 각 10MB 이하. 키는 products/{storeId}/{UUID}.{jpg|png|webp}.
-            브라우저가 uploadUrl 로 PUT(Content-Type · 크기를 요청과 같게 — 서명에 포함돼 다르면 S3 403) → 받은 key 를 등록 · 수정 imageKeys 로.
-            에러: 400 INVALID_INPUT · PRODUCT_IMAGE_INVALID("n번째 파일: …", 하나만 틀려도 전체 거절) / 403 FORBIDDEN(스토어 헤더 없음) / 502 EXTERNAL_API_ERROR""")
+            1~5개, image/jpeg, image/png, image/webp, 각 10MB 이하. 키는 products/{storeId}/{UUID}.{jpg|png|webp}.
+            브라우저가 uploadUrl 로 PUT(Content-Type, 크기를 요청과 같게 — 서명에 포함돼 다르면 S3 403) → 받은 key 를 등록, 수정 imageKeys 로.
+            에러: 400 INVALID_INPUT, PRODUCT_IMAGE_INVALID("n번째 파일: …", 하나만 틀려도 전체 거절) / 403 FORBIDDEN(스토어 헤더 없음) / 502 EXTERNAL_API_ERROR""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "발급"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT · PRODUCT_IMAGE_INVALID"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT, PRODUCT_IMAGE_INVALID"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "FORBIDDEN"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502", description = "EXTERNAL_API_ERROR")

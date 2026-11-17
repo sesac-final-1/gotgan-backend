@@ -14,7 +14,7 @@ class ImageUrlsTest {
         ImageUrls withSlash = new ImageUrls("https://images.example.com/");
         ImageUrls withoutSlash = new ImageUrls("https://images.example.com");
 
-        // when · then
+        // when, then
         assertThat(withSlash.of("stores/1/a.jpg")).isEqualTo("https://images.example.com/stores/1/a.jpg");
         assertThat(withoutSlash.of("stores/1/a.jpg")).isEqualTo("https://images.example.com/stores/1/a.jpg");
         assertThat(withoutSlash.of(null)).isNull();

@@ -11,8 +11,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * OrderPaid 발행 (ORD-09) — 결제 확정(OrderTxService#markPaid: 결제 확인 · 0원 주문 · Saga 복구 모두 이 경로) 트랜잭션 안에서 아웃박스에 남긴다.
- * 소비자: user(실결제 5% 포인트 적립 — items[].earnedPoint) · 알림 Lambda(주문 확인 메일). 커밋 후 SNS 로 나간다 (EventOutboxService).
+ * OrderPaid 발행 (ORD-09) — 결제 확정(OrderTxService#markPaid: 결제 확인, 0원 주문, Saga 복구 모두 이 경로) 트랜잭션 안에서 아웃박스에 남긴다.
+ * 소비자: user(실결제 5% 포인트 적립 — items[].earnedPoint), 알림 Lambda(주문 확인 메일). 커밋 후 SNS 로 나간다 (EventOutboxService).
  */
 @Component
 @RequiredArgsConstructor

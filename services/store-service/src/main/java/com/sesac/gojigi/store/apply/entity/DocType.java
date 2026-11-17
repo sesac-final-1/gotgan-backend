@@ -15,6 +15,6 @@ public enum DocType {
     BANK_COPY("통장 사본"),
     PRODUCT_PHOTO("상품 사진");
 
-    /** 보완요청 메일 · 화면 알림에 그대로 찍히는 이름 (store.md 7절 — 이벤트 requestedDocs) */
+    /** 보완요청 메일, 화면 알림에 그대로 찍히는 이름 (store.md 7절 — 이벤트 requestedDocs) */
     private final String label;
 }

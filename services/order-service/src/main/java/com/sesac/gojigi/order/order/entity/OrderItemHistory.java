@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
-/** 상품주문 상태 변경 이력 — INSERT 전용 (수정 · 삭제 없음, created_at 만). 상태 변경과 같은 트랜잭션에서 저장 */
+/** 상품주문 상태 변경 이력 — INSERT 전용 (수정, 삭제 없음, created_at 만). 상태 변경과 같은 트랜잭션에서 저장 */
 @Getter
 @Entity
 @Table(name = "order_item_history")

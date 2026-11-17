@@ -25,7 +25,7 @@ public class OrderNoIssuer {
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
-    /** LAST_INSERT_ID 는 연결별 값이라 올리기 · 읽기를 한 트랜잭션(같은 연결)에서 */
+    /** LAST_INSERT_ID 는 연결별 값이라 올리기, 읽기를 한 트랜잭션(같은 연결)에서 */
     @Transactional
     public String next() {
         LocalDate today = LocalDate.now(clock);

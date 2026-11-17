@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * 입점 서류 업로드 주소 발급 (docs/api/store.md 2-1절) — product 이미지 presign 과 같은 모양에 docType 만 더함.
- * 개수(1~13) · 형식 · 크기 위반은 서비스가 APPLY_DOCUMENT_INVALID 로 검사한다.
+ * 개수(1~13), 형식, 크기 위반은 서비스가 APPLY_DOCUMENT_INVALID 로 검사한다.
  */
 public record DocumentPresignRequest(
         @Schema(description = "올릴 파일 목록 (1~13개) — 응답은 같은 순서")

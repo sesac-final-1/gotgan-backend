@@ -21,7 +21,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     long countByStatus(OrderStatus status);
 
-    /** 클레임 접수 — 같은 주문의 취소가 동시에 와도 환불 금액(남은 결제 금액 · 스토어 마지막 여부)을 차례로 계산하도록 행 잠금 */
+    /** 클레임 접수 — 같은 주문의 취소가 동시에 와도 환불 금액(남은 결제 금액, 스토어 마지막 여부)을 차례로 계산하도록 행 잠금 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select o from Order o where o.orderNo = :orderNo and o.buyerId = :buyerId")
     Optional<Order> findMineForUpdate(@Param("orderNo") String orderNo, @Param("buyerId") Long buyerId);

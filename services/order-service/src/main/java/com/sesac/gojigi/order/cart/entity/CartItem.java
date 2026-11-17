@@ -13,9 +13,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 장바구니 항목 — 원본은 MySQL, Redis Hash {@code cart:{userId}} 는 캐시 (10/13 결정 4 · 가이드라인 09장).
- * 쓰기는 MySQL 먼저 커밋 → Redis 갱신(실패는 WARN), 읽기는 Redis → 미스 · 장애 시 MySQL (서킷 {@code redisCart}).
- * 회원 · 옵션당 1행 ({@code uk_cart_item_user_option}).
+ * 장바구니 항목 — 원본은 MySQL, Redis Hash {@code cart:{userId}} 는 캐시 (10/13 결정 4, 가이드라인 09장).
+ * 쓰기는 MySQL 먼저 커밋 → Redis 갱신(실패는 WARN), 읽기는 Redis → 미스, 장애 시 MySQL (서킷 {@code redisCart}).
+ * 회원, 옵션당 1행 ({@code uk_cart_item_user_option}).
  */
 @Getter
 @Entity
@@ -60,12 +60,12 @@ public class CartItem extends BaseTimeEntity {
         this.quantity += quantity;
     }
 
-    /** 장바구니에서 수량 변경 (+/− · 직접 입력) */
+    /** 장바구니에서 수량 변경 (+/−, 직접 입력) */
     public void changeQuantity(int quantity) {
         this.quantity = quantity;
     }
 
-    /** 주문할 상품으로 선택 · 해제 */
+    /** 주문할 상품으로 선택, 해제 */
     public void check(boolean checked) {
         this.checked = checked;
     }

@@ -17,8 +17,8 @@ import org.springframework.scheduling.annotation.Scheduled;
  * 누가 어느 방을 보고 있나 — 보고 있는 쪽에는 알림을 보내지 않는다 (chat.md 7절).
  * 이 파드의 구독은 메모리(세션 → 구독), 파드 간 확인은 Redis ZSET chat:presence:{roomId} (멤버 "{readerKey}|{sessionId}", 점수 = 만료 시각 ms).
  * <ul>
- *   <li>UNSUBSCRIBE · 연결 끊김(SessionDisconnectEvent)이면 바로 지운다</li>
- *   <li>파드가 죽어 지우지 못한 항목은 만료 시각이 지나면 무시 · 정리 — 살아 있는 구독은 {@value #REFRESH_MILLIS}ms 마다 연장</li>
+ *   <li>UNSUBSCRIBE, 연결 끊김(SessionDisconnectEvent)이면 바로 지운다</li>
+ *   <li>파드가 죽어 지우지 못한 항목은 만료 시각이 지나면 무시, 정리 — 살아 있는 구독은 {@value #REFRESH_MILLIS}ms 마다 연장</li>
  * </ul>
  * redis 가 null 이면(local 모드) 이 파드 메모리만 본다. Redis 오류면 "보고 있지 않음"으로 — 알림이 빠지는 것보다 한 번 더 가는 쪽
  */

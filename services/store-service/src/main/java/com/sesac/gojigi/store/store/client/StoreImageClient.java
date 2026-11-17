@@ -8,7 +8,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
  * images 버킷(공개 읽기) 스토어 대표 이미지 업로드 주소 — presigned PUT (store IRSA s3:PutObject images/stores/*).
- * 서명 · 실패 처리는 입점 서류와 같은 {@link PresignedPut}
+ * 서명, 실패 처리는 입점 서류와 같은 {@link PresignedPut}
  */
 @Component
 public class StoreImageClient {

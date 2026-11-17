@@ -45,7 +45,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 주문 PENDING 저장(스냅샷 · 배송비) · 상태 변경 · Saga 기록 — MySQL 8.4 + Flyway */
+/** 주문 PENDING 저장(스냅샷, 배송비), 상태 변경, Saga 기록 — MySQL 8.4 + Flyway */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderSagaTxService.class, SimpleMeterRegistry.class,
@@ -82,7 +82,7 @@ class OrderTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("주문 PENDING · 상품주문 스냅샷 · 스토어별 배송비를 받은 주문번호로 저장한다")
+    @DisplayName("주문 PENDING, 상품주문 스냅샷, 스토어별 배송비를 받은 주문번호로 저장한다")
     void createPending_savesSnapshot() {
         // when
         PendingOrder first = create(null);
@@ -106,7 +106,7 @@ class OrderTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("결제 완료 · 실패 처리와 Saga 진행 · 보상 · 재시도 기록이 각각 커밋된다")
+    @DisplayName("결제 완료, 실패 처리와 Saga 진행, 보상, 재시도 기록이 각각 커밋된다")
     void markPaidAndFailed_andSagaRecords() {
         // given
         Order paid = create(null).order();
@@ -187,10 +187,10 @@ class OrderTxServiceIntegrationTest {
         TransactionTemplate compensateTx = new TransactionTemplate(txManager);
         compensateTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> confirmTx.executeWithoutResult(status -> {
             Order stale = orderRepository.findById(created.getId()).orElseThrow();      // ① 결제 확인: PENDING 으로 읽음
-            compensateTx.executeWithoutResult(s ->                                       // ② 그 사이 보상이 선점 · 커밋
+            compensateTx.executeWithoutResult(s ->                                       // ② 그 사이 보상이 선점, 커밋
                     orderRepository.claimForCompensation(created.getId(), OrderStatus.PENDING, OrderStatus.FAILED));
             stale.markPaid(LocalDateTime.of(2026, 10, 22, 12, 0));                       // ③ 읽어 둔 PENDING 이라 통과
         }))                                                                              // ④ 커밋: WHERE version = 읽은 값 → 0행

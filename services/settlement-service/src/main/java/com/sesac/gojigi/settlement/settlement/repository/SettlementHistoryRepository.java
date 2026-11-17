@@ -9,6 +9,6 @@ public interface SettlementHistoryRepository extends JpaRepository<SettlementHis
 
     List<SettlementHistory> findBySettlementIdOrderByIdAsc(Long settlementId);
 
-    /** 가장 최근 이력 — 보류를 건 주체(SYSTEM · ADMIN) 판단 */
+    /** 가장 최근 이력 — 보류를 건 주체(SYSTEM, ADMIN) 판단 */
     Optional<SettlementHistory> findFirstBySettlementIdOrderByIdDesc(Long settlementId);
 }

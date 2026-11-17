@@ -22,9 +22,9 @@ import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
 /**
- * 포인트 적립 · 사용 · 환원 · 회수 이력 — INSERT 전용 (수정 · 삭제 없음, created_at 만).
+ * 포인트 적립, 사용, 환원, 회수 이력 — INSERT 전용 (수정, 삭제 없음, created_at 만).
  * 잔액 변경(users.point_balance 조건부 UPDATE)과 같은 트랜잭션에서 저장한다.
- * 멱등: (type, ref_key) 유니크 — USE · 보상 RESTORE: sagaId / 클레임 RESTORE · RECLAIM: claim-{claimId}-{orderItemId} / EARN: earn-{orderItemId}
+ * 멱등: (type, ref_key) 유니크 — USE, 보상 RESTORE: sagaId / 클레임 RESTORE, RECLAIM: claim-{claimId}-{orderItemId} / EARN: earn-{orderItemId}
  * (EARN 은 V2 컬럼 주석의 {eventId}-{orderItemId} 대신 상품주문 기준 — 다른 eventId 로 다시 발행돼도 한 번만 적립)
  */
 @Getter
@@ -100,7 +100,7 @@ public class PointHistory {
         return new PointHistory(user, null, orderNo, PointType.USE, amount, 0L, balanceAfter, refKey);
     }
 
-    /** 사용 환원 — Saga 보상(refKey sagaId) · 클레임(refKey claim-{claimId}-{orderItemId}) */
+    /** 사용 환원 — Saga 보상(refKey sagaId), 클레임(refKey claim-{claimId}-{orderItemId}) */
     public static PointHistory restore(User user, Long orderItemId, String orderNo, long amount, long balanceAfter, String refKey) {
         return new PointHistory(user, orderItemId, orderNo, PointType.RESTORE, amount, 0L, balanceAfter, refKey);
     }

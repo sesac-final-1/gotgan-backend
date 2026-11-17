@@ -35,7 +35,7 @@ public class AddressController {
 
     @Operation(summary = "내 배송지 목록", description = """
             인가: 로그인 회원 본인. 기본 배송지 먼저, 그다음 최근 등록순 — 최대 5개라 페이징 없음. 주문서 배송지 선택도 이 목록.
-            에러: 401 UNAUTHORIZED · 404 USER_NOT_FOUND(탈퇴)""")
+            에러: 401 UNAUTHORIZED, 404 USER_NOT_FOUND(탈퇴)""")
     @GetMapping
     public ApiResponse<List<AddressResponse>> list(@Parameter(hidden = true) @CurrentUser AuthUser user) {
         return ApiResponse.success("배송지 목록을 조회했습니다.", addressService.list(user.userId()));
@@ -44,7 +44,7 @@ public class AddressController {
     @Operation(summary = "배송지 등록", description = """
             인가: 로그인 회원 본인. main=true 면 기존 기본 배송지를 해제하고 기본으로, 첫 배송지는 main 과 관계없이 기본.
             연락처는 휴대폰(010-1234-5678 로 저장), 우편번호 5자리, 상세 주소는 선택. 회원당 최대 5개. 응답은 등록된 배송지(201).
-            에러: 400 INVALID_INPUT(형식) · 401 UNAUTHORIZED · 404 USER_NOT_FOUND(탈퇴) · 409 ADDRESS_LIMIT_EXCEEDED(5개 초과)""")
+            에러: 400 INVALID_INPUT(형식), 401 UNAUTHORIZED, 404 USER_NOT_FOUND(탈퇴), 409 ADDRESS_LIMIT_EXCEEDED(5개 초과)""")
     @PostMapping
     public ResponseEntity<ApiResponse<AddressResponse>> create(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @Valid @RequestBody AddressRequest request) {
@@ -53,9 +53,9 @@ public class AddressController {
     }
 
     @Operation(summary = "배송지 수정", description = """
-            인가: 로그인 회원 본인. 내용 전체를 바꾼다(등록과 같은 본문 · 검증). main=true 면 기존 기본을 해제하고 이 배송지를 기본으로,
+            인가: 로그인 회원 본인. 내용 전체를 바꾼다(등록과 같은 본문, 검증). main=true 면 기존 기본을 해제하고 이 배송지를 기본으로,
             main=false 로 와도 지금 기본이면 기본 유지(기본이 없는 상태를 만들지 않음). 응답은 수정된 배송지(200).
-            에러: 400 INVALID_INPUT(형식) · 401 UNAUTHORIZED · 404 ADDRESS_NOT_FOUND(없는 · 삭제된 · 다른 회원의 배송지) · 404 USER_NOT_FOUND(탈퇴)""")
+            에러: 400 INVALID_INPUT(형식), 401 UNAUTHORIZED, 404 ADDRESS_NOT_FOUND(없는, 삭제된, 다른 회원의 배송지), 404 USER_NOT_FOUND(탈퇴)""")
     @PutMapping("/{addressId}")
     public ApiResponse<AddressResponse> update(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @PathVariable Long addressId, @Valid @RequestBody AddressRequest request) {
@@ -64,7 +64,7 @@ public class AddressController {
 
     @Operation(summary = "기본 배송지 지정", description = """
             인가: 로그인 회원 본인. 기존 기본을 해제하고 이 배송지를 기본으로 (이미 기본이면 그대로 200). 응답은 기본이 된 배송지.
-            에러: 401 UNAUTHORIZED · 404 ADDRESS_NOT_FOUND(없는 · 삭제된 · 다른 회원의 배송지) · 404 USER_NOT_FOUND(탈퇴)""")
+            에러: 401 UNAUTHORIZED, 404 ADDRESS_NOT_FOUND(없는, 삭제된, 다른 회원의 배송지), 404 USER_NOT_FOUND(탈퇴)""")
     @PatchMapping("/{addressId}/main")
     public ApiResponse<AddressResponse> markDefault(@Parameter(hidden = true) @CurrentUser AuthUser user,
             @PathVariable Long addressId) {
@@ -74,8 +74,8 @@ public class AddressController {
     @Operation(summary = "배송지 삭제", description = """
             인가: 로그인 회원 본인. 소프트 삭제 — 목록에서 빠지고 최대 개수(5개)에서도 빠진다.
             기본 배송지는 삭제할 수 없다 — 다른 배송지를 기본으로 지정한 뒤 삭제 (화면도 기본 카드에 삭제 버튼 없음).
-            에러: 401 UNAUTHORIZED · 404 ADDRESS_NOT_FOUND(없는 · 이미 삭제된 · 다른 회원의 배송지) · 404 USER_NOT_FOUND(탈퇴)
-            · 409 ADDRESS_DEFAULT_DELETE_NOT_ALLOWED(기본 배송지)""")
+            에러: 401 UNAUTHORIZED, 404 ADDRESS_NOT_FOUND(없는, 이미 삭제된, 다른 회원의 배송지), 404 USER_NOT_FOUND(탈퇴)
+            - 409 ADDRESS_DEFAULT_DELETE_NOT_ALLOWED(기본 배송지)""")
     @DeleteMapping("/{addressId}")
     public ApiResponse<Void> delete(@Parameter(hidden = true) @CurrentUser AuthUser user, @PathVariable Long addressId) {
         addressService.delete(user.userId(), addressId);

@@ -20,7 +20,7 @@ import org.hibernate.generator.EventType;
 
 /**
  * 포트원 취소 1건 = 1행. 포트원을 부르기 전에 PENDING 으로 남기고(V2 선기록), 결과가 확정되면 SUCCEEDED / FAILED 로 바꾼다.
- * saga_id UNIQUE 가 같은 취소 재요청을 막는다. 금액 불일치 · 늦은 결제 자동 환불은 saga_id 없이(NULL) 기록한다.
+ * saga_id UNIQUE 가 같은 취소 재요청을 막는다. 금액 불일치, 늦은 결제 자동 환불은 saga_id 없이(NULL) 기록한다.
  * 상태 전이는 이 엔티티 메서드로만 한다 — PENDING 외 상태에서 확정 메서드를 부르면 무시하지 않고 예외 (잘못된 흐름을 숨기지 않음).
  */
 @Getter
@@ -104,7 +104,7 @@ public class PaymentCancel {
         return status == CancelStatus.SUCCEEDED;
     }
 
-    /** 포트원 요청 · 대조를 한 번 시도할 때마다 */
+    /** 포트원 요청, 대조를 한 번 시도할 때마다 */
     public void countAttempt() {
         this.attemptCount++;
     }

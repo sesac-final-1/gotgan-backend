@@ -7,9 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.client.HttpClientErrorException;
 
 /**
- * 다른 서비스 호출 실패를 review 예외로 바꾸는 공통 규칙 (store · order RemoteCalls 와 같은 규칙):
+ * 다른 서비스 호출 실패를 review 예외로 바꾸는 공통 규칙 (store, order RemoteCalls 와 같은 규칙):
  * - 4xx: 어댑터가 아는 코드(없는 상품 404)는 도메인 예외, 나머지는 호출 쪽 버그라 warn + 502 — 서킷 실패로 세지 않음(BusinessException)
- * - 연결 실패 · 타임아웃 · 5xx · 서킷 OPEN: 폴백에서 502 — 화면 문구는 어댑터가 넘긴 message
+ * - 연결 실패, 타임아웃, 5xx, 서킷 OPEN: 폴백에서 502 — 화면 문구는 어댑터가 넘긴 message
  */
 @Slf4j
 final class RemoteCalls {
@@ -30,7 +30,7 @@ final class RemoteCalls {
         if (t instanceof CallNotPermittedException) {
             log.warn("{} {} 차단(서킷 OPEN)", target, action);   // 원인 스택은 OPEN 직전 실패 로그에 있다
         } else {
-            log.error("{} {} 실패", target, action, t);           // 연결 실패 · 타임아웃 · 5xx — 스택트레이스 포함 (컨벤션 2-8)
+            log.error("{} {} 실패", target, action, t);           // 연결 실패, 타임아웃, 5xx — 스택트레이스 포함 (컨벤션 2-8)
         }
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, message);
     }

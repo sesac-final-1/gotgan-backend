@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 취소 · 반품 포인트 환원 · 회수 — 실제 MySQL. 적립된 만큼만 회수 · 잔액 0 까지만 · 클레임 멱등 · 동시 요청 한 번만 */
+/** 취소, 반품 포인트 환원, 회수 — 실제 MySQL. 적립된 만큼만 회수, 잔액 0 까지만, 클레임 멱등, 동시 요청 한 번만 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, PointService.class })
@@ -78,7 +78,7 @@ class PointReversalIntegrationTest {
     @Test
     @DisplayName("환원 후 회수 — 쓴 포인트를 돌려주고 적립된 포인트를 빼며, 같은 클레임 재요청은 처음 결과 그대로")
     void reverse_restoreThenReclaim_once() {
-        // given — 잔액 1,000 · 이 상품주문으로 300 적립됨
+        // given — 잔액 1,000, 이 상품주문으로 300 적립됨
         Long userId = member(1_000L, 300L);
 
         // when
@@ -108,9 +108,9 @@ class PointReversalIntegrationTest {
     }
 
     @Test
-    @DisplayName("잔액이 모자라면 0 까지만 회수하고 못 뺀 차액을 남긴다 · 요청보다 적게 적립됐으면 적립분까지만")
+    @DisplayName("잔액이 모자라면 0 까지만 회수하고 못 뺀 차액을 남긴다, 요청보다 적게 적립됐으면 적립분까지만")
     void reverse_shortfall() {
-        // given — 잔액 100 · 적립 250 (요청은 400)
+        // given — 잔액 100, 적립 250 (요청은 400)
         Long userId = member(100L, 250L);
 
         // when
@@ -122,7 +122,7 @@ class PointReversalIntegrationTest {
     }
 
     @Test
-    @DisplayName("한 일이 없으면(둘 다 0 · 잔액 0 이라 회수 못 함 · 탈퇴 회원) 모두 0")
+    @DisplayName("한 일이 없으면(둘 다 0, 잔액 0 이라 회수 못 함, 탈퇴 회원) 모두 0")
     void reverse_nothingToDo() {
         Long zero = member(0L, 0L);
         Long broke = member(0L, 200L);

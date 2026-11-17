@@ -41,7 +41,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * admin 중계 — 관리자 회원(user · 작성 리뷰 review) · 정산 · 수수료(settlement) · 상품(product). 다른 서비스 클라이언트는 가짜, 서킷 브레이커 · 재시도 · 오류 전달은 실제.
+ * admin 중계 — 관리자 회원(user, 작성 리뷰 review), 정산, 수수료(settlement), 상품(product). 다른 서비스 클라이언트는 가짜, 서킷 브레이커, 재시도, 오류 전달은 실제.
  * 트레이스 샘플링 0 — 같은 JVM 의 LogbackConfigTest 에 Zipkin 경고가 섞이지 않게 (product #90 과 같은 이유)
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -61,7 +61,7 @@ class AdminRelayApiTest {
     @MockitoBean ReviewClient reviewClient;
     @Autowired CircuitBreakerRegistry circuitBreakers;
 
-    /** 목 · 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
+    /** 목, 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
     @BeforeEach
     void resetMocks() {
         reset(userClient, settlementClient, adminProductClient, reviewClient);
@@ -78,7 +78,7 @@ class AdminRelayApiTest {
     }
 
     @Test
-    @DisplayName("회원 목록 — 검색 조건 · 관리자 X-User-Id 를 그대로 넘기고 응답 data 를 그대로 돌려준다")
+    @DisplayName("회원 목록 — 검색 조건, 관리자 X-User-Id 를 그대로 넘기고 응답 data 를 그대로 돌려준다")
     void users_list_relaysParamsAndData() throws Exception {
         when(userClient.list(ADMIN_ID, "kim", "SUSPENDED", 0, 20))
                 .thenReturn(ok("{\"content\":[{\"userId\":4,\"name\":\"김구매\"}],\"page\":0,\"totalElements\":1}"));
@@ -92,7 +92,7 @@ class AdminRelayApiTest {
     }
 
     @Test
-    @DisplayName("정지 · 해제 — 본문 그대로 전달, user 의 4xx 는 HTTP 상태 · code · message 그대로")
+    @DisplayName("정지, 해제 — 본문 그대로 전달, user 의 4xx 는 HTTP 상태, code, message 그대로")
     void users_changeStatus_relaysBodyAndError() throws Exception {
         when(userClient.changeStatus(eq(ADMIN_ID), eq(4L), any())).thenReturn(ok("{\"userId\":4,\"status\":\"SUSPENDED\",\"suspendedUntil\":null}"));
         String body = "{\"status\":\"SUSPENDED\",\"reason\":\"스팸\"}";
@@ -111,10 +111,10 @@ class AdminRelayApiTest {
     }
 
     @Test
-    @DisplayName("회원 작성 리뷰 — review 회원별 목록 그대로(page · size 전달), 400 그대로, 연결 실패는 한 번 더 시도 후 502")
+    @DisplayName("회원 작성 리뷰 — review 회원별 목록 그대로(page, size 전달), 400 그대로, 연결 실패는 한 번 더 시도 후 502")
     void users_reviews_relaysReviewList() throws Exception {
         when(reviewClient.listByUser(4L, 0, 5)).thenReturn(ok("""
-                {"content":[{"reviewId":31,"productName":"린넨 셔츠","rating":1,"blinded":true,"blindReason":"욕설 · 비방"}],
+                {"content":[{"reviewId":31,"productName":"린넨 셔츠","rating":1,"blinded":true,"blindReason":"욕설, 비방"}],
                 "page":0,"size":5,"totalElements":1,"totalPages":1,"hasNext":false}"""));
         mockMvc.perform(get("/api/admin/users/4/reviews").param("page", "0").param("size", "5").header("X-User-Id", ADMIN_ID))
                 .andExpect(status().isOk())
@@ -157,7 +157,7 @@ class AdminRelayApiTest {
     }
 
     @Test
-    @DisplayName("상품 — 스토어 상품 목록 그대로, 강제 판매중지 본문 그대로 · product 의 400 · 404 그대로, PATCH 는 재시도 없이 502")
+    @DisplayName("상품 — 스토어 상품 목록 그대로, 강제 판매중지 본문 그대로, product 의 400, 404 그대로, PATCH 는 재시도 없이 502")
     void products_relay() throws Exception {
         when(adminProductClient.products(7L)).thenReturn(ok("[{\"productId\":3,\"status\":\"ON_SALE\",\"hiddenReason\":null}]"));
         mockMvc.perform(get("/api/admin/stores/7/products"))
@@ -201,7 +201,7 @@ class AdminRelayApiTest {
     }
 
     @Test
-    @DisplayName("스토어 최근 정산서 — storeId · weeks 전달, 응답 그대로 · 범위 밖 400 그대로 · 연결 실패는 한 번 더 시도 후 502")
+    @DisplayName("스토어 최근 정산서 — storeId, weeks 전달, 응답 그대로, 범위 밖 400 그대로, 연결 실패는 한 번 더 시도 후 502")
     void settlements_storeRecent() throws Exception {
         when(settlementClient.recent(1L, null)).thenReturn(ok("{\"storeId\":1,\"weeks\":8,\"fromWeek\":\"2026-W37\",\"totals\":{\"count\":2},\"settlements\":[]}"));
         mockMvc.perform(get("/api/admin/stores/1/settlements").header("X-User-Id", ADMIN_ID))
@@ -219,7 +219,7 @@ class AdminRelayApiTest {
     }
 
     @Test
-    @DisplayName("정산 — 목록 조건 전달 · 본문 없는 집계 · 일괄 지급 결과 그대로 · 보류 사유 없음 400 그대로")
+    @DisplayName("정산 — 목록 조건 전달, 본문 없는 집계, 일괄 지급 결과 그대로, 보류 사유 없음 400 그대로")
     void settlements_relay() throws Exception {
         when(settlementClient.list("2026-W43", null, "HELD")).thenReturn(ok("{\"week\":\"2026-W43\",\"settlements\":[]}"));
         mockMvc.perform(get("/api/admin/settlements").param("week", "2026-W43").param("status", "HELD"))
@@ -243,7 +243,7 @@ class AdminRelayApiTest {
     }
 
     @Test
-    @DisplayName("수수료 — 조회 · 변경 그대로, 지난 날짜 400 그대로")
+    @DisplayName("수수료 — 조회, 변경 그대로, 지난 날짜 400 그대로")
     void commissions_relay() throws Exception {
         when(settlementClient.commissions()).thenReturn(ok("[{\"categoryId\":3,\"current\":{\"rate\":11.00}}]"));
         mockMvc.perform(get("/api/admin/commissions"))

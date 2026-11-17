@@ -9,8 +9,8 @@ import java.util.Set;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
- * STOMP 연결의 사용자 — CONNECT 때 검증한 Keycloak 토큰 클레임(user_id · roles · store_id, 게이트웨이 AuthenticatedUser 와 같은 규칙).
- * expiresAt: 토큰 만료 시각. 지나면 SEND · SUBSCRIBE 를 거절하고 ChatSessionRegistry 가 연결을 닫는다 → 화면이 새 토큰으로 다시 연결
+ * STOMP 연결의 사용자 — CONNECT 때 검증한 Keycloak 토큰 클레임(user_id, roles, store_id, 게이트웨이 AuthenticatedUser 와 같은 규칙).
+ * expiresAt: 토큰 만료 시각. 지나면 SEND, SUBSCRIBE 를 거절하고 ChatSessionRegistry 가 연결을 닫는다 → 화면이 새 토큰으로 다시 연결
  */
 public record ChatPrincipal(Long userId, List<String> roles, Long storeId, Instant expiresAt) implements Principal {
 

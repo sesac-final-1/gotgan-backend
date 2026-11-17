@@ -32,7 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * logback-base.xml 검증 — 10개 서비스가 include 하는 공통 설정의 상세 검증은 여기 한 벌 (관측성 담당 박지연).
  * 서비스와 같은 모양의 logback-module-test.xml(springProperty + include)을 Boot 의 LogbackLoggingSystem 으로 올려
- * include 안의 springProfile 이 동작하는지, 가짜 Loki 가 받은 push 본문이 대시보드 · Grafana 링크 계약과 맞는지 본다.
+ * include 안의 springProfile 이 동작하는지, 가짜 Loki 가 받은 push 본문이 대시보드, Grafana 링크 계약과 맞는지 본다.
  * loki4j 2.1.0 은 stop() 중 종료 경합으로 마지막 배치를 버릴 수 있다 → 배치 간격을 100ms 로 줄여 평소 전송으로 받은 뒤에 stop() 한다.
  * 같은 JVM 의 다른 로거 줄이 섞여도 깨지지 않게 이 테스트 로거(logger_name)의 줄만 본다.
  */
@@ -100,7 +100,7 @@ class LogbackBaseTest {
     }
 
     @Test
-    @DisplayName("k8s 프로필: Loki 라벨은 app · namespace · level 3개뿐, app 은 서비스의 spring.application.name (traceId 같은 값은 라벨 금지 — 카디널리티)")
+    @DisplayName("k8s 프로필: Loki 라벨은 app, namespace, level 3개뿐, app 은 서비스의 spring.application.name (traceId 같은 값은 라벨 금지 — 카디널리티)")
     void k8sProfile_anyLog_sendsOnlyThreeLabels() {
         // given
         initLogging("k8s");

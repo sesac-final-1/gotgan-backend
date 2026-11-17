@@ -60,7 +60,7 @@ class StoreQueryServiceTest {
     private StoreQueryService storeQueryService;
 
     @Test
-    @DisplayName("내부 상세는 기존 7필드(상태 · 배송 정책) 뒤에 신청서의 대표자 · 상호 · 사업자번호와 상태 이력(오래된 순, +09:00)을 붙인다")
+    @DisplayName("내부 상세는 기존 7필드(상태, 배송 정책) 뒤에 신청서의 대표자, 상호, 사업자번호와 상태 이력(오래된 순, +09:00)을 붙인다")
     void getInternal_whenStoreExists_returnsDetailWithApplicantAndHistory() {
         // given
         Store store = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
@@ -98,7 +98,7 @@ class StoreQueryServiceTest {
         // given
         given(storeRepository.findByIdAndDeletedAtIsNull(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> storeQueryService.getInternal(99L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -106,7 +106,7 @@ class StoreQueryServiceTest {
     }
 
     @Test
-    @DisplayName("관리자 목록 한 줄은 스토어 · 신청서 값을 담고 개설 시각을 +09:00 으로 바꾼다")
+    @DisplayName("관리자 목록 한 줄은 스토어, 신청서 값을 담고 개설 시각을 +09:00 으로 바꾼다")
     void getAdminList_withStatus_mapsSummary() {
         // given
         Store store = mock(Store.class);
@@ -136,12 +136,12 @@ class StoreQueryServiceTest {
         // given
         given(storeRepository.findAllForAdmin(null)).willReturn(List.of());
 
-        // when · then
+        // when, then
         assertThat(storeQueryService.getAdminList(null)).isEmpty();
     }
 
     @Test
-    @DisplayName("공개 스토어 목록 — 신청서 카테고리 · 이미지 URL(없으면 null) · 개설 시각 +09:00, 순서는 저장소 그대로")
+    @DisplayName("공개 스토어 목록 — 신청서 카테고리, 이미지 URL(없으면 null), 개설 시각 +09:00, 순서는 저장소 그대로")
     void getPublicList_mapsCategoryAndImageUrl() {
         // given
         Store withImage = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
@@ -171,7 +171,7 @@ class StoreQueryServiceTest {
     }
 
     @Test
-    @DisplayName("공개 스토어 홈 — 운영 중이면 신청서의 카테고리 · 대표자 · 사업자번호와 배송 정책 · 이미지 URL")
+    @DisplayName("공개 스토어 홈 — 운영 중이면 신청서의 카테고리, 대표자, 사업자번호와 배송 정책, 이미지 URL")
     void getPublic_whenActive_returnsHome() {
         // given
         Store store = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
@@ -195,7 +195,7 @@ class StoreQueryServiceTest {
     }
 
     @Test
-    @DisplayName("공개 스토어 주소 조회 — 운영 중은 홈 전체, 정지는 이름 · 상태만, 없으면 STORE_NOT_FOUND")
+    @DisplayName("공개 스토어 주소 조회 — 운영 중은 홈 전체, 정지는 이름, 상태만, 없으면 STORE_NOT_FOUND")
     void getPublicBySlug_followsSameRulesAsId() {
         // given
         Store active = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
@@ -225,7 +225,7 @@ class StoreQueryServiceTest {
     }
 
     @Test
-    @DisplayName("공개 스토어 홈 — 정지 · 폐점이면 이름 · 상태만, 신청서는 읽지 않는다 / 없으면 404")
+    @DisplayName("공개 스토어 홈 — 정지, 폐점이면 이름, 상태만, 신청서는 읽지 않는다 / 없으면 404")
     void getPublic_whenNotActive_returnsNameAndStatusOnly() {
         // given
         Store suspended = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
@@ -258,7 +258,7 @@ class StoreQueryServiceTest {
     }
 
     @Test
-    @DisplayName("판매자 내 스토어 — 이미지 키를 조회 URL 로 바꾸고 대표자 · 사업자번호는 신청서에서, 정지 사유까지")
+    @DisplayName("판매자 내 스토어 — 이미지 키를 조회 URL 로 바꾸고 대표자, 사업자번호는 신청서에서, 정지 사유까지")
     void getSellerStore_whenStoreExists_returnsSettingsWithImageUrl() {
         // given
         Store store = Store.open(27L, 2L, "곳간상회", "gotgan", "<p>소개</p>", "010-0000-1234");
@@ -296,7 +296,7 @@ class StoreQueryServiceTest {
         // given
         given(storeRepository.findByIdAndDeletedAtIsNull(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> storeQueryService.getSellerStore(99L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())

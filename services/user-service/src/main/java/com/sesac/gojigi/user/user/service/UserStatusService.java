@@ -18,14 +18,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 관리자 이용정지 · 해제, 기간 만료 자동 해제 (USR-10).
- * 정지 = ① users SUSPENDED (회원 행 잠금 · 상태 전이 검사) → ② Keycloak 계정 비활성 + 모든 세션 종료(Refresh Token 전부 무효)
+ * 관리자 이용정지, 해제, 기간 만료 자동 해제 (USR-10).
+ * 정지 = ① users SUSPENDED (회원 행 잠금, 상태 전이 검사) → ② Keycloak 계정 비활성 + 모든 세션 종료(Refresh Token 전부 무효)
  *        → ③ Redis 차단 목록(남은 Access Token 을 gateway 가 401).
  * 해제 = ① users ACTIVE → ② Keycloak 계정 다시 활성 → ③ 차단 목록 삭제 (남겨 두면 해제 후 새 토큰도 TTL 동안 401).
- * ① 이 끝나면 확정 — ② · ③ 은 실패해도 되돌리지 않고 로그만 남긴다 (탈퇴와 같은 방식):
- * - 정지 ② 실패: user-service 로그인 · 재발급은 users.status 로 이미 막힌다. Keycloak 관리 콘솔에서 수동 비활성 필요
+ * ① 이 끝나면 확정 — ②, ③ 은 실패해도 되돌리지 않고 로그만 남긴다 (탈퇴와 같은 방식):
+ * - 정지 ② 실패: user-service 로그인, 재발급은 users.status 로 이미 막힌다. Keycloak 관리 콘솔에서 수동 비활성 필요
  * - 해제 ② 실패: Keycloak 이 로그인을 거절한다 — 관리 콘솔에서 수동 활성 필요 (사람이 봐야 해서 error)
- * 외부 호출(Keycloak · Redis) 동안 DB 커넥션을 잡지 않도록 트랜잭션은 짧게 (TransactionTemplate).
+ * 외부 호출(Keycloak, Redis) 동안 DB 커넥션을 잡지 않도록 트랜잭션은 짧게 (TransactionTemplate).
  */
 @Slf4j
 @Service
@@ -99,10 +99,10 @@ public class UserStatusService {
         return AdminUserDetailResponse.from(user);
     }
 
-    /** 같은 회원을 동시에 정지 · 해제하면 하나만 전이에 성공하고 나머지는 USER_INVALID_STATUS_TRANSITION */
+    /** 같은 회원을 동시에 정지, 해제하면 하나만 전이에 성공하고 나머지는 USER_INVALID_STATUS_TRANSITION */
     private User findForUpdate(Long userId) {
         return userRepository.findByIdForUpdate(userId)
-                .orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));   // 없는 회원 · 탈퇴
+                .orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));   // 없는 회원, 탈퇴
     }
 
     private boolean suspendKeycloakAccount(User user) {
@@ -110,8 +110,8 @@ public class UserStatusService {
             authService.suspendAccount(user.getKeycloakId(), user.getEmail());
             return true;
         } catch (BusinessException e) {
-            log.error("이용정지 후 Keycloak 계정 비활성 · 세션 종료 실패 — 정지는 유지, user-service 로그인 · 재발급은 users.status 로 차단됨. "
-                    + "Keycloak 관리 콘솔에서 계정 비활성(Enabled off) · 세션 로그아웃 필요 userId={}, keycloakId={}, code={}",
+            log.error("이용정지 후 Keycloak 계정 비활성, 세션 종료 실패 — 정지는 유지, user-service 로그인, 재발급은 users.status 로 차단됨. "
+                    + "Keycloak 관리 콘솔에서 계정 비활성(Enabled off), 세션 로그아웃 필요 userId={}, keycloakId={}, code={}",
                     user.getId(), user.getKeycloakId(), e.getErrorCode().getCode(), e);
             return false;
         }

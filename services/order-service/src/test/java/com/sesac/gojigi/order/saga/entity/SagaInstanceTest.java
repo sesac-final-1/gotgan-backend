@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** Saga 진행 · 보상 · 재시도 기록 (V3 attempt_count · next_retry_at) */
+/** Saga 진행, 보상, 재시도 기록 (V3 attempt_count, next_retry_at) */
 class SagaInstanceTest {
 
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 22, 12, 0);
@@ -15,7 +15,7 @@ class SagaInstanceTest {
     private final SagaInstance saga = SagaInstance.placeOrder(OrderFixtures.order(), "saga-1");
 
     @Test
-    @DisplayName("단계를 마치면 재시도 기록을 지우고, 완료는 DONE · COMPLETED")
+    @DisplayName("단계를 마치면 재시도 기록을 지우고, 완료는 DONE, COMPLETED")
     void advance_resetsRetry_andComplete() {
         // given
         saga.scheduleRetry("timeout", NOW);
@@ -49,9 +49,9 @@ class SagaInstanceTest {
     }
 
     @Test
-    @DisplayName("재시도는 1 · 1 · 2분 후 5분 간격으로 8회, 그다음 실패는 FAILED (사람이 확인)")
+    @DisplayName("재시도는 1, 1, 2분 후 5분 간격으로 8회, 그다음 실패는 FAILED (사람이 확인)")
     void scheduleRetry_backoffThenFailed() {
-        // when · then
+        // when, then
         long[] minutes = { 1, 1, 2, 5, 5, 5, 5, 5 };
         for (int i = 0; i < minutes.length; i++) {
             saga.scheduleRetry("PAYMENT_CANCEL_PENDING", NOW);

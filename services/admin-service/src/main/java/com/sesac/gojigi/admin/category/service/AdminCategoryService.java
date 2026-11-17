@@ -19,10 +19,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 카테고리 관리 조합 (CAT-02 · 10/20 A안) — 수수료 없는 상위 카테고리가 켜지지 않게 product · settlement 를 엮는다.
+ * 카테고리 관리 조합 (CAT-02, 10/20 A안) — 수수료 없는 상위 카테고리가 켜지지 않게 product, settlement 를 엮는다.
  * product 는 다른 서비스를 부르지 않으므로(CAT-03) 수수료 확인은 여기서 한다.
  * - 상위 생성: product 생성(사용 중지) → settlement 수수료(적용 시작일 = 오늘) → product 사용으로. 중간 실패면 카테고리는 꺼진 채 남는다
- * - 수정: 이름 · 영문명 · 정렬은 PUT, 사용 여부가 바뀔 때만 PATCH — 상위를 켤 때는 settlement 현재 율(current)이 있어야 함
+ * - 수정: 이름, 영문명, 정렬은 PUT, 사용 여부가 바뀔 때만 PATCH — 상위를 켤 때는 settlement 현재 율(current)이 있어야 함
  */
 @Service
 @RequiredArgsConstructor

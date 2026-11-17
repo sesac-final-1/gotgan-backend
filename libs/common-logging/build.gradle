@@ -23,10 +23,10 @@ dependencyManagement {
 }
 
 dependencies {
-    // Loki 전송 appender — 서비스는 이 모듈만 의존하면 된다(서비스 build.gradle 의 loki4j 줄 · gradle.properties loki4jVersion 은 지움)
+    // Loki 전송 appender — 서비스는 이 모듈만 의존하면 된다(서비스 build.gradle 의 loki4j 줄, gradle.properties loki4jVersion 은 지움)
     api 'com.github.loki4j:loki-logback-appender:2.1.0'
 
-    // 테스트 — Spring 컨텍스트 없이 Boot 의 LogbackLoggingSystem 으로 실제 XML 을 올린다(springProfile · springProperty 포함)
+    // 테스트 — Spring 컨텍스트 없이 Boot 의 LogbackLoggingSystem 으로 실제 XML 을 올린다(springProfile, springProperty 포함)
     testImplementation 'org.springframework.boot:spring-boot-starter'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'tools.jackson.core:jackson-databind'

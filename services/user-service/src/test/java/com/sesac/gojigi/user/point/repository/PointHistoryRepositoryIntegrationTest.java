@@ -43,7 +43,7 @@ class PointHistoryRepositoryIntegrationTest {
         User user = saveUser("p1@gotgan.com");
         pointHistoryRepository.saveAndFlush(PointHistory.use(user, "20261015-0001", 1_000L, 0L, "saga-1"));
 
-        // when · then
+        // when, then
         assertThat(pointHistoryRepository.existsByTypeAndRefKey(PointType.USE, "saga-1")).isTrue();
         assertThat(pointHistoryRepository.existsByTypeAndRefKey(PointType.RESTORE, "saga-1")).isFalse();
         assertThatThrownBy(() -> pointHistoryRepository.saveAndFlush(
@@ -71,7 +71,7 @@ class PointHistoryRepositoryIntegrationTest {
     }
 
     @Test
-    @DisplayName("상품주문 단위로 적립 · 회수 이력을 찾는다")
+    @DisplayName("상품주문 단위로 적립, 회수 이력을 찾는다")
     void findByOrderItemIdAndTypeIn_filtersByOrderItemAndType() {
         // given
         User user = saveUser("p4@gotgan.com");

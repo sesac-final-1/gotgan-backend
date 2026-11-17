@@ -25,7 +25,7 @@ class PortOneWebhookVerifierTest {
     private final PortOneWebhookVerifier verifier = new PortOneWebhookVerifier(SECRET, Duration.ofMinutes(5),
             Clock.fixed(Instant.ofEpochSecond(NOW), ZoneOffset.UTC));
 
-    /** Standard Webhooks 서명 — 테스트 · 통합 테스트에서 포트원 대신 만든다 */
+    /** Standard Webhooks 서명 — 테스트, 통합 테스트에서 포트원 대신 만든다 */
     static String sign(byte[] key, String id, long timestamp, String body) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");
         mac.init(new SecretKeySpec(key, "HmacSHA256"));
@@ -34,7 +34,7 @@ class PortOneWebhookVerifierTest {
     }
 
     @Test
-    @DisplayName("올바른 서명 · 허용 시각 안이면 통과 (시크릿 교체 중 여러 서명이 와도 하나만 맞으면 됨)")
+    @DisplayName("올바른 서명, 허용 시각 안이면 통과 (시크릿 교체 중 여러 서명이 와도 하나만 맞으면 됨)")
     void verify_validSignature_passes() throws Exception {
         String signature = sign(KEY, "msg-1", NOW, BODY);
 
@@ -56,7 +56,7 @@ class PortOneWebhookVerifierTest {
     }
 
     @Test
-    @DisplayName("허용 시각(5분)을 넘긴 메시지 · 헤더 누락은 거절 (재전송 공격 방지)")
+    @DisplayName("허용 시각(5분)을 넘긴 메시지, 헤더 누락은 거절 (재전송 공격 방지)")
     void verify_expiredTimestampOrMissingHeader_rejected() throws Exception {
         long old = NOW - 301;
         String signature = sign(KEY, "msg-1", old, BODY);

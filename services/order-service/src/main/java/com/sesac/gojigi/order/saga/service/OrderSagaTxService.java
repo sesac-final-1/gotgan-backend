@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OrderSagaTxService {
 
-    /** 결제창을 띄운 뒤 — 결제 대기(PAYMENT_READY) · 검증 성공 뒤 PAID 마무리 전(PAYMENT_VERIFIED) */
+    /** 결제창을 띄운 뒤 — 결제 대기(PAYMENT_READY), 검증 성공 뒤 PAID 마무리 전(PAYMENT_VERIFIED) */
     private static final Set<SagaStep> PAYMENT_WAITING = Set.of(SagaStep.PAYMENT_READY, SagaStep.PAYMENT_VERIFIED);
     /** 결제창을 띄우기 전 — [요청 1] 처리 중에 멈춘 단계 */
     private static final Set<SagaStep> BEFORE_PAYMENT = Set.of(SagaStep.ORDER_CREATED, SagaStep.POINT_USED,
@@ -50,7 +50,7 @@ public class OrderSagaTxService {
 
     /**
      * 주문 PENDING + 주문 Saga 를 한 트랜잭션으로 (A-경-4) — 따로 커밋하면 사이에 파드가 죽었을 때
-     * Saga 없는 PENDING 주문이 남고, 결제 대기 만료 · 복구 스케줄러는 saga_instance 만 보므로 영원히 PENDING 이다.
+     * Saga 없는 PENDING 주문이 남고, 결제 대기 만료, 복구 스케줄러는 saga_instance 만 보므로 영원히 PENDING 이다.
      * 주문번호가 겹치면(DataIntegrityViolationException) 둘 다 롤백 — 호출 쪽이 새 번호로 다시 부른다.
      */
     @Transactional
@@ -92,11 +92,11 @@ public class OrderSagaTxService {
     public void scheduleRetry(Long sagaInstanceId, String reason) {
         SagaInstance saga = get(sagaInstanceId);
         saga.scheduleRetry(reason, LocalDateTime.now(clock));
-        // saga_failed_total = 재시도 한도를 넘어 사람이 확인해야 함 (알림 대상) · saga_retry_total = 재시도 예약
+        // saga_failed_total = 재시도 한도를 넘어 사람이 확인해야 함 (알림 대상), saga_retry_total = 재시도 예약
         count(saga.getStatus() == SagaStatus.FAILED ? "saga.failed" : "saga.retry", saga);
     }
 
-    /** 보상 · 복구 지표 (B-경-1) — 알림 규칙은 이 이름으로 건다 */
+    /** 보상, 복구 지표 (B-경-1) — 알림 규칙은 이 이름으로 건다 */
     private void count(String name, SagaInstance saga) {
         Counter.builder(name).tag("type", saga.getSagaType().name()).register(meterRegistry).increment();
     }
@@ -128,7 +128,7 @@ public class OrderSagaTxService {
         return sagas;
     }
 
-    /** 다시 진행할 취소 · 반품 Saga — 결제 취소 미확정 · 장애로 재시도 시각이 됐거나, 재시도 시각 없이 cutoff 전부터 멈춘 STARTED */
+    /** 다시 진행할 취소, 반품 Saga — 결제 취소 미확정, 장애로 재시도 시각이 됐거나, 재시도 시각 없이 cutoff 전부터 멈춘 STARTED */
     @Transactional(readOnly = true)
     public List<SagaInstance> findCancelRetryable(LocalDateTime cutoff, int limit) {
         List<SagaInstance> sagas = new ArrayList<>(sagaInstanceRepository.findRetryDue(SagaType.CANCEL_ITEM,

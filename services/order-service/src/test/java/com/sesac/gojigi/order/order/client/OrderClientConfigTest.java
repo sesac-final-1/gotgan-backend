@@ -10,7 +10,7 @@ import org.springframework.web.client.RestClient;
 class OrderClientConfigTest {
 
     @Test
-    @DisplayName("user · payment · store · product 클라이언트 프록시를 만든다")
+    @DisplayName("user, payment, store, product 클라이언트 프록시를 만든다")
     void clientConfig_createsProxies() {
         OrderClientConfig config = new OrderClientConfig();
         RestClient.Builder builder = RestClient.builder();

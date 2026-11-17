@@ -8,8 +8,8 @@ import jakarta.validation.constraints.Size;
 import java.util.Locale;
 
 /**
- * 회원가입 요청 — 이메일(= Keycloak username) · 비밀번호 · 이름 · 휴대폰.
- * 비밀번호 규칙은 realm 정책과 같게 먼저 검사한다 (8자 이상 · 영문 · 특수문자). "이메일과 다름" 은 서비스에서, 최종 판단은 Keycloak.
+ * 회원가입 요청 — 이메일(= Keycloak username), 비밀번호, 이름, 휴대폰.
+ * 비밀번호 규칙은 realm 정책과 같게 먼저 검사한다 (8자 이상, 영문, 특수문자). "이메일과 다름" 은 서비스에서, 최종 판단은 Keycloak.
  */
 public record SignupRequest(
         @Schema(description = "이메일 (로그인 ID)", example = "newbuyer@gotgan.com")
@@ -18,7 +18,7 @@ public record SignupRequest(
         @Size(max = 100, message = "이메일은 100자 이하로 입력해 주세요.")
         String email,
 
-        @Schema(description = "비밀번호 — 8자 이상, 영문 · 특수문자 포함, 이메일과 달라야 함")
+        @Schema(description = "비밀번호 — 8자 이상, 영문, 특수문자 포함, 이메일과 달라야 함")
         @NotBlank(message = "비밀번호를 입력해 주세요.")
         @Size(min = 8, max = 64, message = "비밀번호는 8자 이상 64자 이하로 입력해 주세요.")
         @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*[^A-Za-z0-9]).+$", message = "비밀번호는 영문과 특수문자를 포함해야 합니다.")

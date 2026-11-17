@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** 취소 · 반품 이벤트 payload — 환불액은 클레임, 환원 · 회수 포인트는 상품주문의 사용 · 적립 포인트 */
+/** 취소, 반품 이벤트 payload — 환불액은 클레임, 환원, 회수 포인트는 상품주문의 사용, 적립 포인트 */
 class ClaimEventPayloadTest {
 
     private OrderClaim claim(ClaimType type) {
@@ -22,7 +22,7 @@ class ClaimEventPayloadTest {
     }
 
     @Test
-    @DisplayName("OrderItemCancelled — 환불액 · 돌려준 사용 포인트 · 회수한 적립 포인트를 담는다")
+    @DisplayName("OrderItemCancelled — 환불액, 돌려준 사용 포인트, 회수한 적립 포인트를 담는다")
     void orderItemCancelled_from_mapsClaimAndItem() {
         // when
         OrderItemCancelledPayload payload = OrderItemCancelledPayload.from(claim(ClaimType.CANCEL));

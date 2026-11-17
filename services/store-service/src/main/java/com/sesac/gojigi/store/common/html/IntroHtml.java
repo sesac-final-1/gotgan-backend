@@ -5,7 +5,7 @@ import org.owasp.html.Sanitizers;
 
 /**
  * 스토어 소개 HTML 정화 — 입점 신청(2절)과 판매자 스토어 설정(13절)이 같은 정책을 쓴다.
- * 글자 서식 · 문단 · 링크만 남기고 script · style · on* 속성은 지운다. 화면은 safeHtml 로 한 번 더(프론트 규칙)
+ * 글자 서식, 문단, 링크만 남기고 script, style, on* 속성은 지운다. 화면은 safeHtml 로 한 번 더(프론트 규칙)
  */
 public final class IntroHtml {
 

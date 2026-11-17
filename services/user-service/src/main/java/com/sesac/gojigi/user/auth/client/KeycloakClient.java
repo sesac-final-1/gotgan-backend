@@ -15,7 +15,7 @@ import org.springframework.web.service.annotation.PostExchange;
 @HttpExchange("/protocol/openid-connect")
 public interface KeycloakClient {
 
-    /** 토큰 발급 — grant_type=password(로그인) · refresh_token(재발급) */
+    /** 토큰 발급 — grant_type=password(로그인), refresh_token(재발급) */
     @PostExchange(url = "/token", contentType = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     KeycloakTokenResponse token(@RequestBody MultiValueMap<String, String> form);
 

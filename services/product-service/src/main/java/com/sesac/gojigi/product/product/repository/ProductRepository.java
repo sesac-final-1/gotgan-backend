@@ -27,29 +27,29 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     int applyStoreStatus(@Param("storeId") Long storeId, @Param("active") boolean active,
             @Param("changedAt") LocalDateTime changedAt);
 
-    /** "없거나 삭제된 상품 → 404 PRODUCT_NOT_FOUND" 공통 조회 (6-2 · 13 · 15 · 16절). findById 는 삭제된 상품도 읽는다 — 재고 복원 · 지난 주문용 */
+    /** "없거나 삭제된 상품 → 404 PRODUCT_NOT_FOUND" 공통 조회 (6-2, 13, 15, 16절). findById 는 삭제된 상품도 읽는다 — 재고 복원, 지난 주문용 */
     Optional<Product> findByIdAndDeletedAtIsNull(Long id);
 
     /**
-     * 판매중지 · 재개(15절)의 첫 쿼리 — 상품 행을 ID 오름차순으로 잠근다(SELECT … FOR UPDATE).
+     * 판매중지, 재개(15절)의 첫 쿼리 — 상품 행을 ID 오름차순으로 잠근다(SELECT … FOR UPDATE).
      * 그 사이 관리자가 강제 판매중지해도 잠금 뒤 최신 상태(BLOCKED)를 보고 건너뛴다 — 같은 status 컬럼이라 @DynamicUpdate 로는 못 막음.
-     * 삭제 · 다른 스토어 여부는 서비스가 가려 PRODUCT_NOT_FOUND 로.
+     * 삭제, 다른 스토어 여부는 서비스가 가려 PRODUCT_NOT_FOUND 로.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from Product p where p.id in :ids order by p.id")
     List<Product> findAllByIdForUpdate(@Param("ids") Collection<Long> ids);
 
-    /** 스토어 상품 전체 (11절 · 6-1절) — 삭제만 빼고 상태 무관, 등록일 최신 순 */
+    /** 스토어 상품 전체 (11절, 6-1절) — 삭제만 빼고 상태 무관, 등록일 최신 순 */
     List<Product> findByStoreIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(Long storeId);
 
-    /** 상품별 재고 합계 — 삭제 안 된 옵션만. 결과 [productId, 합계] (옵션 · 이미지 컬렉션을 상품마다 따로 읽지 않으려고 묶어서) */
+    /** 상품별 재고 합계 — 삭제 안 된 옵션만. 결과 [productId, 합계] (옵션, 이미지 컬렉션을 상품마다 따로 읽지 않으려고 묶어서) */
     @Query("""
             select o.product.id, coalesce(sum(o.stock), 0) from ProductOption o
             where o.product.id in :productIds and o.deletedAt is null
             group by o.product.id""")
     List<Object[]> sumStockByProductIds(@Param("productIds") Collection<Long> productIds);
 
-    /** 요청 키 중 이 스토어의 삭제 안 된 상품에 이미 붙어 있는 것 — 등록(복사) · 수정 때 시드 이미지 등 발급 키 모양이 아닌 내 이미지를 다시 쓰려고 (13절) */
+    /** 요청 키 중 이 스토어의 삭제 안 된 상품에 이미 붙어 있는 것 — 등록(복사), 수정 때 시드 이미지 등 발급 키 모양이 아닌 내 이미지를 다시 쓰려고 (13절) */
     @Query("select distinct i.s3Key from ProductImage i where i.product.storeId = :storeId and i.product.deletedAt is null and i.s3Key in :keys")
     List<String> findAttachedImageKeys(@Param("storeId") Long storeId, @Param("keys") Collection<String> keys);
 
@@ -66,7 +66,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             group by p.id, p.name""")
     List<Object[]> findOnSaleStocks(@Param("storeId") Long storeId);
 
-    /** 하위 카테고리별 상품 수 — 삭제 안 된 것 전부(판매중 · 판매중지 · 강제 판매중지). 결과 [categoryId, 수] (7절 관리자 트리) */
+    /** 하위 카테고리별 상품 수 — 삭제 안 된 것 전부(판매중, 판매중지, 강제 판매중지). 결과 [categoryId, 수] (7절 관리자 트리) */
     @Query("select p.categoryId, count(p) from Product p where p.deletedAt is null group by p.categoryId")
     List<Object[]> countByCategory();
 

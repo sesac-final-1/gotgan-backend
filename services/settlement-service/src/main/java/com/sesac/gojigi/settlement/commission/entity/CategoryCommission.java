@@ -31,7 +31,7 @@ public class CategoryCommission extends BaseTimeEntity {
     @Column(name = "category_id", nullable = false)
     private Long categoryId;
 
-    /** % 값 — 11.00 = 11% (컨벤션 타입 관례: 비율은 % · DECIMAL(5,2)) */
+    /** % 값 — 11.00 = 11% (컨벤션 타입 관례: 비율은 %, DECIMAL(5,2)) */
     @Column(name = "commission_rate", nullable = false, precision = 5, scale = 2)
     private BigDecimal commissionRate;
 

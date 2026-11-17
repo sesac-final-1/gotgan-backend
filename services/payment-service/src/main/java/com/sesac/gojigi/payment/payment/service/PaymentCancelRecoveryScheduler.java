@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 /**
  * 취소 복구 스케줄러 — 결과를 모른 채 남은 취소를 포트원 조회로 끝까지 마무리한다 (docs/api/payment.md 8절).
  * ① PENDING 이 stale-after 동안 확정되지 않음 → 대조 → 포트원에 닿지 않았으면 다시 보냄 (PaymentCancelExecutor.resume)
- * ② 포트원이 거절한 자동 환불(sagaId 없음 — 금액 불일치 · 늦은 결제) → 최신 잔액으로 재시도, max-attempts 까지
+ * ② 포트원이 거절한 자동 환불(sagaId 없음 — 금액 불일치, 늦은 결제) → 최신 잔액으로 재시도, max-attempts 까지
  * 시도 횟수가 경보 기준을 넘으면 ERROR 로그 + payment_cancel_unresolved_total 지표 (사람이 확인할 대상).
  * ShedLock — 레플리카가 늘어도 한 파드만 실행.
  */
@@ -47,7 +47,7 @@ public class PaymentCancelRecoveryScheduler {
         this.batchSize = batchSize;
         this.maxAttempts = maxAttempts;
         this.unresolved = Counter.builder("payment.cancel.unresolved")
-                .description("복구 스케줄러가 시도 한도를 넘겨도 확정하지 못한 취소 · 환불 (수동 확인 대상)")
+                .description("복구 스케줄러가 시도 한도를 넘겨도 확정하지 못한 취소, 환불 (수동 확인 대상)")
                 .register(meterRegistry);
     }
 
@@ -97,7 +97,7 @@ public class PaymentCancelRecoveryScheduler {
     private void alertIfStuck(CancelRef cancel, Result result) {
         if (result.status() != CancelStatus.SUCCEEDED && cancel.attemptCount() + 1 >= maxAttempts) {
             unresolved.increment();
-            log.error("취소 · 환불이 {}회 시도에도 확정되지 않음 — 수동 확인 필요 cancelId={}, sagaId={}, amount={}, status={}, cause={}",
+            log.error("취소, 환불이 {}회 시도에도 확정되지 않음 — 수동 확인 필요 cancelId={}, sagaId={}, amount={}, status={}, cause={}",
                     maxAttempts, cancel.cancelId(), cancel.sagaId(), cancel.amount(), result.status(), result.error());
         }
     }

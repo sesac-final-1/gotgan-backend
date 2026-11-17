@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 알림 센터 — 받는 쪽 계산 · 멱등 저장 · 실시간 발행 · 목록 합치기 · 남의 알림 차단 */
+/** 알림 센터 — 받는 쪽 계산, 멱등 저장, 실시간 발행, 목록 합치기, 남의 알림 차단 */
 class NotificationServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-27T01:00:00Z");
@@ -70,7 +70,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    @DisplayName("내부 요청 — 회원 · 스토어 · 관리자로 각각 쌓고, 받는 쪽이 없으면 400")
+    @DisplayName("내부 요청 — 회원, 스토어, 관리자로 각각 쌓고, 받는 쪽이 없으면 400")
     void createInternal() {
         given(inbox.saveIfAbsent(any())).willReturn(true);
 
@@ -88,7 +88,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    @DisplayName("목록 — 판매자는 회원 · 스토어 알림을 합쳐 최신순, 더 있으면 nextCursor, 다음 페이지는 그 이전 것만")
+    @DisplayName("목록 — 판매자는 회원, 스토어 알림을 합쳐 최신순, 더 있으면 nextCursor, 다음 페이지는 그 이전 것만")
     void page_mergesRecipients() {
         given(inbox.latest(eq("USER#2"), isNull(), eq(3))).willReturn(List.of(item("USER#2", "0000000000300#a", false)));
         given(inbox.latest(eq("STORE#1"), isNull(), eq(3))).willReturn(List.of(item("STORE#1", "0000000000400#b", true), item("STORE#1", "0000000000100#c", false)));
@@ -120,7 +120,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    @DisplayName("읽음 — 남의 알림 id · 형식이 틀린 id · 없는 알림은 모두 404, 내 알림만 바꿈")
+    @DisplayName("읽음 — 남의 알림 id, 형식이 틀린 id, 없는 알림은 모두 404, 내 알림만 바꿈")
     void read_onlyMine() {
         given(inbox.markRead("USER#4", "sk")).willReturn(true);
 

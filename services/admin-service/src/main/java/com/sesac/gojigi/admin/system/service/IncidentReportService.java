@@ -39,11 +39,11 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
- * 장애 분석 리포트 (11/17 발표 피드백) — "언제 · 어디서 · 몇 건 · 왜" 를 운영팀이 읽을 수 있게.
- * 1) 기간을 구간(bucket)으로 나눠 구간마다 5xx · 요청 · 429 · 탐색 요청 · DB 오류 · 에러 로그 건수(Prometheus · Loki)
+ * 장애 분석 리포트 (11/17 발표 피드백) — "언제, 어디서, 몇 건, 왜" 를 운영팀이 읽을 수 있게.
+ * 1) 기간을 구간(bucket)으로 나눠 구간마다 5xx, 요청, 429, 탐색 요청, DB 오류, 에러 로그 건수(Prometheus, Loki)
  * 2) 이상 신호가 이어진 구간을 이슈 하나로 묶고
- * 3) 같은 시간대의 근거(장애 주입 기록 · 부하테스트 · 파드 재시작 · 종료 · 배포 · DB 오류 · 요청 급증 · 탐색 요청 · 차단기)로 원인을 고른다 — 규칙 기반
- * 데이터 보존: Prometheus · Loki 7일 → 조회 기간도 최근 7일 안. 지표 조회가 실패하면 그 항목만 0 으로(리포트는 나간다)
+ * 3) 같은 시간대의 근거(장애 주입 기록, 부하테스트, 파드 재시작, 종료, 배포, DB 오류, 요청 급증, 탐색 요청, 차단기)로 원인을 고른다 — 규칙 기반
+ * 데이터 보존: Prometheus, Loki 7일 → 조회 기간도 최근 7일 안. 지표 조회가 실패하면 그 항목만 0 으로(리포트는 나간다)
  */
 @Service
 public class IncidentReportService {
@@ -76,8 +76,8 @@ public class IncidentReportService {
             Map.entry("settlement-service", "정산"), Map.entry("chat-service", "채팅"), Map.entry("gateway-service", "게이트웨이"),
             Map.entry("admin-service", "관리자"), Map.entry("keycloak", "로그인(Keycloak)"), Map.entry("mysql", "DB"),
             Map.entry("redis", "Redis"));
-    private static final Map<String, String> SUSPICIOUS_TYPES = Map.of("secret-file", "설정 · 비밀 파일 탐색(/.env 등)",
-            "traversal", "경로 조작(../)", "cms-probe", "워드프레스 · 관리 도구 탐색", "script-probe", "스크립트 파일 탐색(.php 등)");
+    private static final Map<String, String> SUSPICIOUS_TYPES = Map.of("secret-file", "설정, 비밀 파일 탐색(/.env 등)",
+            "traversal", "경로 조작(../)", "cms-probe", "워드프레스, 관리 도구 탐색", "script-probe", "스크립트 파일 탐색(.php 등)");
 
     private final PrometheusClient prometheus;
     private final LokiClient loki;
@@ -144,7 +144,7 @@ public class IncidentReportService {
                 prom("sum by (httpStatusCode)(increase(" + GW_COUNT + w + "))", "httpStatusCode", first, stop, bucket),
                 prom("sum by (type)(increase(gateway_suspicious_requests_total" + w + "))", "type", first, stop, bucket),
                 prom("max by (app, name)(max_over_time(resilience4j_circuitbreaker_state{" + NS + ",state=\"open\"}" + w + "))",
-                        s -> s.get("app") + " · " + s.get("name"), first, stop, bucket),
+                        s -> s.get("app") + ", " + s.get("name"), first, stop, bucket),
                 prom("max by (app)(max_over_time(hikaricp_connections_pending{" + NS + "}" + w + "))", "app", first, stop, bucket),
                 prom("sum by (pod)(increase(kube_pod_container_status_restarts_total{" + NS + "}" + w + "))", "pod", first, stop, bucket),
                 loki.countBy("sum by (app)(count_over_time({" + NS + ",level=\"ERROR\"}" + w + "))", "app", first, stop, bucket),
@@ -196,7 +196,7 @@ public class IncidentReportService {
         return v == null ? 0 : Math.round(v);
     }
 
-    // ── 2) 근거 (파드 · 배포 · 부하테스트 · 장애 주입) ────────────────
+    // ── 2) 근거 (파드, 배포, 부하테스트, 장애 주입) ────────────────
 
     /** alive = 기간 끝에도 있는 파드. lastSeenMs = 마지막으로 보인 시각(1분 해상도) */
     record PodLife(String pod, String service, long createdMs, long lastSeenMs, boolean alive) {
@@ -208,14 +208,14 @@ public class IncidentReportService {
     record Rollout(String service, long t) {
     }
 
-    /** scaleDowns = 서비스 → 원하는 파드 수(replicas)가 줄어든 시각들(HPA 자동 축소 · 수동 축소) */
+    /** scaleDowns = 서비스 → 원하는 파드 수(replicas)가 줄어든 시각들(HPA 자동 축소, 수동 축소) */
     record Context(Metrics metrics, List<PodLife> pods, Set<String> oomPods, List<Rollout> rollouts, List<LoadTest> loadTests,
                    List<ChaosEvent> chaos, long medianRequests, Map<String, List<Long>> scaleDowns) {
     }
 
     private Context context(Instant start, Instant stop, Duration bucket, Metrics m) {
         String r = "[" + Duration.between(start, stop).toSeconds() + "s]";
-        // 사라진 시각은 1분 해상도로(구간 크기로 하면 5분 · 1시간 단위로 뭉개져 다른 사건과 섞인다)
+        // 사라진 시각은 1분 해상도로(구간 크기로 하면 5분, 1시간 단위로 뭉개져 다른 사건과 섞인다)
         String sub = "[" + Duration.between(start, stop).toSeconds() + "s:" + Math.min(bucket.toSeconds(), 60) + "s]";
         Map<String, Double> created = byLabel(prometheus.vector("last_over_time(kube_pod_created{" + NS + "}" + r + ")", stop), "pod");
         Map<String, Double> lastSeen = byLabel(prometheus.vector("max_over_time(timestamp(kube_pod_created{" + NS + "})" + sub + ")", stop), "pod");
@@ -271,7 +271,7 @@ public class IncidentReportService {
         return values;
     }
 
-    /** 파드 · 레플리카셋 이름 → 서비스(SystemCatalog 이름). product-service-757dd8467b-ms5nt → product-service, mysql-0 → mysql */
+    /** 파드, 레플리카셋 이름 → 서비스(SystemCatalog 이름). product-service-757dd8467b-ms5nt → product-service, mysql-0 → mysql */
     static String serviceOf(String pod) {
         for (String name : SERVICE_NAMES) {
             if (pod.startsWith(name + "-")) {
@@ -289,7 +289,7 @@ public class IncidentReportService {
         return values.isEmpty() ? 0 : values.get(values.size() / 2);
     }
 
-    // ── 3) 이슈 묶기 · 원인 분류 ──────────────────────────────────
+    // ── 3) 이슈 묶기, 원인 분류 ──────────────────────────────────
 
     private List<Issue> issues(List<Bucket> buckets, Context ctx, long b) {
         long surgeMin = SURGE_MIN_PER_MINUTE * b / 60_000;
@@ -416,7 +416,7 @@ public class IncidentReportService {
     }
 
     /**
-     * 파드가 사라진 이유 — 장애 주입(관리자가 지운 파드) · 배포 교체(같은 서비스 새 레플리카셋, 15분 안) ·
+     * 파드가 사라진 이유 — 장애 주입(관리자가 지운 파드), 배포 교체(같은 서비스 새 레플리카셋, 15분 안), 
      * 자동 축소(같은 서비스 replicas 감소, 앞뒤 3분 — 사라진 시각은 1분 해상도). 설명되지 않으면 null = 비정상 종료
      */
     static String stopReason(PodLife p, Context ctx, Set<String> chaosPods) {
@@ -467,7 +467,7 @@ public class IncidentReportService {
         }
         long rateLimited = in.stream().mapToLong(Bucket::rateLimited).sum();
         if (rateLimited > 0) {
-            causes.add(new Cause("RATE_LIMIT", "요청 제한 초과", "429 응답 " + rateLimited + "건 — 한 사용자 · IP 가 너무 자주 요청"));
+            causes.add(new Cause("RATE_LIMIT", "요청 제한 초과", "429 응답 " + rateLimited + "건 — 한 사용자, IP 가 너무 자주 요청"));
         }
         long suspicious = in.stream().mapToLong(Bucket::suspicious).sum();
         if (suspicious > 0) {
@@ -488,7 +488,7 @@ public class IncidentReportService {
         });
     }
 
-    // ── 4) 문장 · 요약 · 이벤트 ──────────────────────────────────
+    // ── 4) 문장, 요약, 이벤트 ──────────────────────────────────
 
     /** counts = [5xx, 탐색, 429, 구간 최대 요청] */
     private static String sentence(String kind, long s, long e, List<String> services, long[] counts, List<Cause> causes) {
@@ -552,7 +552,7 @@ public class IncidentReportService {
         });
         ctx.metrics().circuitOpen().forEach((key, points) -> points.entrySet().stream().filter(p -> round(p.getValue()) > 0)
                 .map(Map.Entry::getKey).min(Long::compare)
-                .ifPresent(t -> events.add(new Event(t, "CIRCUIT_OPEN", key.split(" · ")[0], key + " 차단기 열림"))));
+                .ifPresent(t -> events.add(new Event(t, "CIRCUIT_OPEN", key.split(", ")[0], key + " 차단기 열림"))));
         return events.stream().filter(ev -> ev.t() >= s && ev.t() <= e).sorted(Comparator.comparingLong(Event::t)).limit(MAX_EVENTS).toList();
     }
 

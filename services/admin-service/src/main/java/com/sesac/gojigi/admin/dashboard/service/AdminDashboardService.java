@@ -19,7 +19,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 관리자 대시보드 (ADM-02) — 서비스별 통계를 모아 한 번에. 한 곳이 실패해도 200 + 그 영역 null + unavailable[] (부분 응답, 컨벤션 공통 규칙).
- * 지금은 내부 통계 API 가 있는 settlement · order(전체 · 일별) · product 만 — store(입점 심사 대기) · user 통계는 그 API 가 생기면 추가
+ * 지금은 내부 통계 API 가 있는 settlement, order(전체, 일별), product 만 — store(입점 심사 대기), user 통계는 그 API 가 생기면 추가
  */
 @Slf4j
 @Service
@@ -33,7 +33,7 @@ public class AdminDashboardService {
     private final OrderClientAdapter orderClientAdapter;
     private final AdminProductClientAdapter adminProductClientAdapter;
 
-    /** 영역 호출 스레드 — 가상 스레드, 요청 스레드의 Observation(traceId · MDC)을 이어받는다 */
+    /** 영역 호출 스레드 — 가상 스레드, 요청 스레드의 Observation(traceId, MDC)을 이어받는다 */
     private static final ExecutorService SECTIONS = ContextExecutorService.wrap(
             Executors.newVirtualThreadPerTaskExecutor(), () -> ContextSnapshotFactory.builder().build().captureAll());
 

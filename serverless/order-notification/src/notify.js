@@ -1,12 +1,12 @@
-// SQS(order-events · store-events) → SES 알림 메일 + DynamoDB 발송 이력 (스펙 NTF-01~05) — 담당 jihoon-devstu
+// SQS(order-events, store-events) → SES 알림 메일 + DynamoDB 발송 이력 (스펙 NTF-01~05) — 담당 jihoon-devstu
 // 이벤트 봉투 형식: gotgan-config docs/events.md. 메일에 쓸 값은 이벤트 payload 에 있어야 한다(Lambda 는 클러스터 내부 API 를 부를 수 없음)
 //
 // 모든 단계가 실패할 수 있다고 보고 짠다 (settlement-report 와 같은 틀):
-//  ① DynamoDB 선점 — PK USER#{id} · SK {occurredAt}#{eventId}(NTF-05), 이미 SENT 면 건너뜀(재전달 · 재발행에도 메일 1번)
+//  ① DynamoDB 선점 — PK USER#{id}, SK {occurredAt}#{eventId}(NTF-05), 이미 SENT 면 건너뜀(재전달, 재발행에도 메일 1번)
 //  ② SES 메일
 //  ③ DynamoDB SENT 기록 (TTL 90일)
-// 실패한 메시지만 batchItemFailures → SQS 재전달 → 3회 실패 시 DLQ(CloudWatch 알람). ② 성공 · ③ 실패면 메일이 한 번 더 갈 수 있다(최소 1회)
-// 10/21 필드 추가 요청(ordererName · productName · 포인트 · userId 등) 전이라도 깨지지 않게, 없는 값은 메일에서 뺀다
+// 실패한 메시지만 batchItemFailures → SQS 재전달 → 3회 실패 시 DLQ(CloudWatch 알람). ② 성공, ③ 실패면 메일이 한 번 더 갈 수 있다(최소 1회)
+// 10/21 필드 추가 요청(ordererName, productName, 포인트, userId 등) 전이라도 깨지지 않게, 없는 값은 메일에서 뺀다
 // 11/02 모든 메일을 HTML(곳간 카드 — mailHtml) + 텍스트로 — 배송 완료 메일 틀에 맞춤
 import { DynamoDBClient, ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
@@ -14,7 +14,7 @@ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 
 const TTL_DAYS = 90;
 const REAPPLY_DAYS = 30;   // 반려 후 재신청 제한 (스펙 STR-05)
-const RETURN_WINDOW_DAYS = 7; // 배송완료 후 반품 · 교환 신청 기한 (order return-window)
+const RETURN_WINDOW_DAYS = 7; // 배송완료 후 반품, 교환 신청 기한 (order return-window)
 
 const won = (n) => `${Number(n ?? 0).toLocaleString('ko-KR')}원`;
 const point = (n) => `${Number(n ?? 0).toLocaleString('ko-KR')}P`;
@@ -35,20 +35,20 @@ function plusDays(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
-/** HTML 본문에 넣는 값은 모두 이스케이프 — 상품명 · 이름 · 사유는 판매자 · 구매자 · 관리자가 쓴 글자다 */
+/** HTML 본문에 넣는 값은 모두 이스케이프 — 상품명, 이름, 사유는 판매자, 구매자, 관리자가 쓴 글자다 */
 export function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
 const COLOR = { ink: '#141414', ink2: '#3b3b3b', mute: '#8a8780', line: '#e6e3dc', cream: '#f6f4ef', point: '#ff5a1f', moss: '#3f6b4f', mossSoft: '#e5eee7', rust: '#b4371f', rustSoft: '#f8e4de', pointSoft: '#ffe9df' };
-// 배지 색 — good: 완료 · 승인 · 출발 / info: 주문 · 보완요청 / bad: 취소 · 반품 · 반려
+// 배지 색 — good: 완료, 승인, 출발 / info: 주문, 보완요청 / bad: 취소, 반품, 반려
 const TONE = { good: [COLOR.mossSoft, COLOR.moss], info: [COLOR.pointSoft, COLOR.point], bad: [COLOR.rustSoft, COLOR.rust] };
 const FONT = "font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;";
 export const FOOTNOTE = { buyer: '문의는 곳간 마이페이지의 1:1 채팅을 이용해 주세요.', seller: '문의는 판매자 센터 채팅의 "운영팀에 문의"를 이용해 주세요.' };
 
 /**
- * 곳간 메일 공통 HTML — 메일 앱 호환을 위해 표(table) + 인라인 스타일만(외부 CSS · 이미지 · 웹폰트 없음). 색은 쇼핑몰 화면과 같은 값
- * 값은 전부 글자로 받아 여기서 이스케이프한다. rows: [[이름, 값, 강조?]] · notes: [[제목, 문장]] · cta: { label, url }
+ * 곳간 메일 공통 HTML — 메일 앱 호환을 위해 표(table) + 인라인 스타일만(외부 CSS, 이미지, 웹폰트 없음). 색은 쇼핑몰 화면과 같은 값
+ * 값은 전부 글자로 받아 여기서 이스케이프한다. rows: [[이름, 값, 강조?]], notes: [[제목, 문장]], cta: { label, url }
  */
 export function mailHtml({ badge, tone = 'good', title, intro = [], caption, rows = [], notes = [], cta, ctaHint, footnote = FOOTNOTE.buyer }) {
   const C = COLOR;
@@ -105,21 +105,21 @@ export function mailHtml({ badge, tone = 'good', title, intro = [], caption, row
 </html>`;
 }
 
-/** 주문 이벤트 공통 — 인사 · 주문 상세 링크 */
+/** 주문 이벤트 공통 — 인사, 주문 상세 링크 */
 const buyerName = (p) => (has(p.ordererName) ? p.ordererName : '고객');
 const hello = (p) => `${buyerName(p)}님,`;
 const orderUrl = (p, front) => `${front}/mypage/orders/${p.orderNo}`;
 const orderLink = (p, front) => `주문 상세: ${orderUrl(p, front)}`;
 const orderCta = (p, front) => ({ label: '주문 상세 보기', url: orderUrl(p, front) });
 const buyerOwner = (p) => (has(p.buyerId) ? `USER#${p.buyerId}` : `ORDER#${p.orderNo}`);
-// 상품주문 하나의 상품 · 택배 줄 (출발 · 배송완료 공용)
+// 상품주문 하나의 상품, 택배 줄 (출발, 배송완료 공용)
 const shipRows = (p) => [
   ...(has(p.productName) ? [['상품', productLabel(p)]] : []),
-  ...(has(p.courier) || has(p.trackingNo) ? [['택배', [p.courier, p.trackingNo].filter(has).join(' · ')]] : []),
+  ...(has(p.courier) || has(p.trackingNo) ? [['택배', [p.courier, p.trackingNo].filter(has).join(', ')]] : []),
 ];
 
 /**
- * 이벤트별 메일 — to: 받는 주소, owner: 발송 이력 키(PK), mail: 제목 · 텍스트 본문 · HTML 본문
+ * 이벤트별 메일 — to: 받는 주소, owner: 발송 이력 키(PK), mail: 제목, 텍스트 본문, HTML 본문
  * 텍스트는 HTML 을 못 여는 메일 앱용 — 같은 내용. 받는 주소가 없으면 보낼 수 없으므로 실패(재전달 → DLQ — 계약 누락을 알람으로 알게 됨)
  */
 export const TEMPLATES = {
@@ -131,8 +131,8 @@ export const TEMPLATES = {
       const named = items.filter((i) => has(i.productName));
       const itemText = (i) => `${productLabel(i)}${has(i.quantity) ? ` × ${i.quantity}` : ''}`;
       const lines = named.length
-        ? named.map((i) => `· ${itemText(i)}${has(i.itemAmt) ? ` — ${won(i.itemAmt)}` : ''}`)
-        : [`· 상품 ${items.length}건`];
+        ? named.map((i) => `, ${itemText(i)}${has(i.itemAmt) ? ` — ${won(i.itemAmt)}` : ''}`)
+        : [`, 상품 ${items.length}건`];
       const earned = items.reduce((sum, i) => sum + Number(i.earnedPoint ?? 0), 0);
       const used = Number(p.usedPoint ?? 0);
       return {
@@ -140,9 +140,9 @@ export const TEMPLATES = {
         text: [
           `${hello(p)} 주문이 완료되었습니다.`, '',
           `주문번호 ${p.orderNo}`, ...lines, '',
-          `· 결제 금액 ${won(p.payAmt)}`,
-          ...(used > 0 ? [`· 사용 포인트 ${point(p.usedPoint)}`] : []),
-          ...(earned > 0 ? [`· 적립 예정 포인트 ${point(earned)} (구매확정 시 적립)`] : []),
+          `, 결제 금액 ${won(p.payAmt)}`,
+          ...(used > 0 ? [`, 사용 포인트 ${point(p.usedPoint)}`] : []),
+          ...(earned > 0 ? [`, 적립 예정 포인트 ${point(earned)} (구매확정 시 적립)`] : []),
           '', orderLink(p, front),
         ].join('\n'),
         html: mailHtml({
@@ -150,7 +150,7 @@ export const TEMPLATES = {
           intro: [`${buyerName(p)}님, 곳간에서 주문해 주셔서 감사합니다.`, '판매자가 상품을 보내면 송장번호와 함께 알려 드릴게요.'],
           caption: `주문번호 ${p.orderNo}`,
           rows: [
-            ...(named.length ? named.map((i, k) => [k ? '' : '상품', `${itemText(i)}${has(i.itemAmt) ? ` · ${won(i.itemAmt)}` : ''}`]) : [['상품', `${items.length}건`]]),
+            ...(named.length ? named.map((i, k) => [k ? '' : '상품', `${itemText(i)}${has(i.itemAmt) ? `, ${won(i.itemAmt)}` : ''}`]) : [['상품', `${items.length}건`]]),
             ...(used > 0 ? [['사용 포인트', point(p.usedPoint)]] : []),
             ...(earned > 0 ? [['적립 예정', `${point(earned)} (구매확정 시)`]] : []),
             ['결제 금액', won(p.payAmt), true],
@@ -168,9 +168,9 @@ export const TEMPLATES = {
       subject: has(p.productName) ? `[곳간] 상품이 출발했습니다 — ${p.productName}` : `[곳간] 주문하신 상품이 출발했습니다 — ${p.orderNo}`,
       text: [
         `${hello(p)} 주문하신 상품이 출발했습니다.`, '',
-        ...(has(p.productName) ? [`· 상품 ${productLabel(p)}`] : []),
-        `· 택배사 ${p.courier}`,
-        `· 송장번호 ${p.trackingNo}`,
+        ...(has(p.productName) ? [`, 상품 ${productLabel(p)}`] : []),
+        `, 택배사 ${p.courier}`,
+        `, 송장번호 ${p.trackingNo}`,
         '', orderLink(p, front),
       ].join('\n'),
       html: mailHtml({
@@ -184,7 +184,7 @@ export const TEMPLATES = {
 };
 
 /**
- * 배송 완료 (DLV-04 · 11/02 이경석 요청) — 상품주문마다, 교환 재배송이 배송완료되면 같은 상품주문에 한 번 더(eventId 다름 → 메일도 한 번 더)
+ * 배송 완료 (DLV-04, 11/02 이경석 요청) — 상품주문마다, 교환 재배송이 배송완료되면 같은 상품주문에 한 번 더(eventId 다름 → 메일도 한 번 더)
  */
 TEMPLATES.OrderItemDelivered = {
   to: (p) => p.ordererEmail,
@@ -194,12 +194,12 @@ TEMPLATES.OrderItemDelivered = {
     const confirm = has(p.autoConfirmAt)
       ? `${displayDateTime(p.autoConfirmAt)}에 자동으로 구매확정됩니다. 그 전에 직접 구매확정할 수 있습니다.`
       : '배송완료 7일 뒤 자동으로 구매확정됩니다. 그 전에 직접 구매확정할 수 있습니다.';
-    const returns = `반품 · 교환은 배송완료 후 ${RETURN_WINDOW_DAYS}일 안에 신청할 수 있습니다.`;
+    const returns = `반품, 교환은 배송완료 후 ${RETURN_WINDOW_DAYS}일 안에 신청할 수 있습니다.`;
     return {
       subject: has(p.productName) ? `[곳간] 배송이 완료되었습니다 — ${p.productName}` : `[곳간] 주문하신 상품의 배송이 완료되었습니다 — ${p.orderNo}`,
       text: [
         `${hello(p)} 주문하신 상품이 도착했습니다.`, '',
-        ...rows.map(([k, v]) => `· ${k} ${v}`),
+        ...rows.map(([k, v]) => `, ${k} ${v}`),
         '', confirm, returns, '',
         orderLink(p, front),
       ].join('\n'),
@@ -207,14 +207,14 @@ TEMPLATES.OrderItemDelivered = {
         badge: '배송완료', tone: 'good', title: '배송이 완료되었습니다',
         intro: [`${buyerName(p)}님, 주문하신 상품이 도착했어요.`, '받아 보신 상품은 마음에 드셨나요?'],
         caption: `주문번호 ${p.orderNo}`, rows,
-        notes: [['구매확정 안내', confirm], ['반품 · 교환', returns]],
+        notes: [['구매확정 안내', confirm], ['반품, 교환', returns]],
         cta: orderCta(p, front), ctaHint: '구매확정하면 적립 예정 포인트가 바로 들어와요.',
       }),
     };
   },
 };
 
-/** 취소 · 반품 완료 (NTF-03) — 문구만 다르고 같은 틀. done: 조사까지 붙인 "취소가" · "반품이", badge: 배지 글자 */
+/** 취소, 반품 완료 (NTF-03) — 문구만 다르고 같은 틀. done: 조사까지 붙인 "취소가", "반품이", badge: 배지 글자 */
 function refundTemplate(done, badge) {
   return {
     to: (p) => p.ordererEmail,
@@ -231,10 +231,10 @@ function refundTemplate(done, badge) {
         subject: has(p.productName) ? `[곳간] ${done} 완료되었습니다 — ${p.productName}` : `[곳간] ${done} 완료되었습니다 — ${p.orderNo}`,
         text: [
           `${hello(p)} 요청하신 ${done} 완료되었습니다.`, '',
-          ...(has(p.productName) ? [`· 상품 ${productLabel(p)}`] : []),
-          `· 환불 금액 ${won(p.refundAmt)}`,
-          ...(Number(p.restoredPoint ?? 0) > 0 ? [`· 돌려드린 포인트 ${point(p.restoredPoint)}`] : []),
-          ...(Number(p.revokedPoint ?? 0) > 0 ? [`· 회수된 적립 포인트 ${point(p.revokedPoint)}`] : []),
+          ...(has(p.productName) ? [`, 상품 ${productLabel(p)}`] : []),
+          `, 환불 금액 ${won(p.refundAmt)}`,
+          ...(Number(p.restoredPoint ?? 0) > 0 ? [`, 돌려드린 포인트 ${point(p.restoredPoint)}`] : []),
+          ...(Number(p.revokedPoint ?? 0) > 0 ? [`, 회수된 적립 포인트 ${point(p.revokedPoint)}`] : []),
           '', refundNote,
           orderLink(p, front),
         ].join('\n'),
@@ -284,7 +284,7 @@ TEMPLATES.StoreApplicationRejected = {
       subject: `[곳간] 입점 신청 결과 안내 — ${p.storeName}`,
       text: [
         `${p.storeName} 입점 신청을 승인하지 못했습니다.`, '',
-        `· 사유 ${p.reason}`, '',
+        `, 사유 ${p.reason}`, '',
         reapplyText,
         `입점 신청: ${front}/seller/apply`,
       ].join('\n'),
@@ -309,8 +309,8 @@ TEMPLATES.StoreApplicationSupplementRequested = {
       subject: `[곳간] 입점 서류 보완을 요청드립니다 — ${p.storeName}`,
       text: [
         `${p.storeName} 입점 심사를 위해 서류 보완이 필요합니다.`, '',
-        ...(docs.length ? ['· 보완할 서류', ...docs.map((d) => `  - ${d}`)] : []),
-        ...(has(p.message) ? [`· 안내 ${p.message}`] : []),
+        ...(docs.length ? [', 보완할 서류', ...docs.map((d) => `  - ${d}`)] : []),
+        ...(has(p.message) ? [`, 안내 ${p.message}`] : []),
         '', due,
         `서류 제출: ${front}/seller/apply`,
       ].join('\n'),
@@ -328,7 +328,7 @@ TEMPLATES.StoreApplicationSupplementRequested = {
 /** 선점(PROCESSING)을 다른 실행 중으로 보는 시간 — Lambda 타임아웃(30초)보다 넉넉히 */
 const PROCESSING_STALE_MS = 2 * 60 * 1000;
 
-/** 의존성(클라이언트 · 설정)을 받아 핸들러를 만든다 — 테스트는 가짜 클라이언트를 넣는다 */
+/** 의존성(클라이언트, 설정)을 받아 핸들러를 만든다 — 테스트는 가짜 클라이언트를 넣는다 */
 export function createHandler({ ddb, ses, env, log = console, now = () => new Date() }) {
   async function processRecord(record) {
     const envelope = JSON.parse(record.body);
@@ -406,7 +406,7 @@ export function createHandler({ ddb, ses, env, log = console, now = () => new Da
       try {
         await processRecord(record);
       } catch (e) {
-        // 개인정보(이메일 · 이름)는 남기지 않는다 — messageId 로 SQS · DLQ 에서 찾는다
+        // 개인정보(이메일, 이름)는 남기지 않는다 — messageId 로 SQS, DLQ 에서 찾는다
         log.error(JSON.stringify({ msg: '알림 처리 실패 — 재전달', messageId: record.messageId, error: String(e?.name ?? e), detail: e?.message }));
         failures.push({ itemIdentifier: record.messageId });
       }

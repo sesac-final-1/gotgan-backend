@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 판매자 클레임 처리 (CLM-05) 로컬 트랜잭션 — 승인(수거 요청) · 거부 · 교환 수거 완료 · 교환 재배송 송장, 교환 재배송 배송완료.
+ * 판매자 클레임 처리 (CLM-05) 로컬 트랜잭션 — 승인(수거 요청), 거부, 교환 수거 완료, 교환 재배송 송장, 교환 재배송 배송완료.
  * 반품 수거 완료는 환불 Saga 라 CancelOrderItemSaga.collectReturn. 내 스토어 상품주문의 클레임만 — 아니면 같은 404.
  */
 @Service
@@ -35,7 +35,7 @@ public class SellerClaimTxService {
     private final OrderItemHistoryRepository historyRepository;
     private final Clock clock;
 
-    /** 승인 — 반품 · 교환 요청 → 수거 요청. 상품주문 상태는 반품요청 · 교환요청 그대로 */
+    /** 승인 — 반품, 교환 요청 → 수거 요청. 상품주문 상태는 반품요청, 교환요청 그대로 */
     @Transactional
     public ClaimDetailResponse approve(Long storeId, Long claimId) {
         OrderClaim claim = mine(storeId, claimId);
@@ -71,8 +71,8 @@ public class SellerClaimTxService {
     }
 
     /**
-     * 교환 재배송 송장 — 클레임 RESHIPPED, 상품주문의 택배사 · 송장 · 발송 시각을 재배송 것으로(송장번호를 비우면 mock).
-     * 재배송의 배송완료는 판매자 배송완료 버튼 · 자동 배송완료가 처리하고(DeliveryTxService), 그때 onExchangeRedelivered 로 완료.
+     * 교환 재배송 송장 — 클레임 RESHIPPED, 상품주문의 택배사, 송장, 발송 시각을 재배송 것으로(송장번호를 비우면 mock).
+     * 재배송의 배송완료는 판매자 배송완료 버튼, 자동 배송완료가 처리하고(DeliveryTxService), 그때 onExchangeRedelivered 로 완료.
      */
     @Transactional
     public ClaimDetailResponse reship(Long storeId, Long sellerId, Long claimId, String courier, String trackingNo) {

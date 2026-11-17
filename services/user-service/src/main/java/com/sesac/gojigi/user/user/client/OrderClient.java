@@ -10,7 +10,7 @@ import org.springframework.web.service.annotation.HttpExchange;
 @HttpExchange("/internal/stats/orders")
 public interface OrderClient {
 
-    /** 구매자 주문 통계 — 진행 중 상품주문 수 · 진행 중 클레임 수, 주문이 없어도 0 으로 200 */
+    /** 구매자 주문 통계 — 진행 중 상품주문 수, 진행 중 클레임 수, 주문이 없어도 0 으로 200 */
     @GetExchange
     ApiResponse<BuyerOrderStatsResponse> getBuyerStats(@RequestParam Long buyerId);
 }

@@ -15,12 +15,12 @@ import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PostExchange;
 
 /**
- * product-service 내부 API (docs/api/product.md 1 · 2 · 4절) — 직접 쓰지 않고 ProductClientAdapter(서킷 브레이커 "product")를 거친다.
+ * product-service 내부 API (docs/api/product.md 1, 2, 4절) — 직접 쓰지 않고 ProductClientAdapter(서킷 브레이커 "product")를 거친다.
  */
 @HttpExchange("/internal")
 public interface ProductClient {
 
-    /** 가격 · 구매 가능 조회 — 없는 ID 는 목록에서 빠진다 */
+    /** 가격, 구매 가능 조회 — 없는 ID 는 목록에서 빠진다 */
     @GetExchange("/product-options")
     ApiResponse<List<ProductOptionResponse>> getOptions(@RequestParam List<Long> ids);
 
@@ -32,7 +32,7 @@ public interface ProductClient {
     @PostExchange("/stock/reservations/{sagaId}/release")
     ApiResponse<StockReservationResponse> release(@PathVariable String sagaId, @RequestBody StockReleaseRequest request);
 
-    /** 재고 복원 (취소 · 반품 Saga) — claimId 멱등, 옵션이 판매중지 · 삭제돼도 복원 (product.md 3절) */
+    /** 재고 복원 (취소, 반품 Saga) — claimId 멱등, 옵션이 판매중지, 삭제돼도 복원 (product.md 3절) */
     @PostExchange("/stock/restorations")
     ApiResponse<Void> restore(@RequestBody StockRestoreRequest request);
 }

@@ -1,9 +1,9 @@
-// S3 업로드 검사 — images · seller-docs 에 새 객체가 생기면(EventBridge "Object Created") 앞 16바이트로 실제 형식을 확인한다.
-// 담당 jihoon-devstu · 스펙 SYS-24 (10/27 회의 추가 기능)
+// S3 업로드 검사 — images, seller-docs 에 새 객체가 생기면(EventBridge "Object Created") 앞 16바이트로 실제 형식을 확인한다.
+// 담당 jihoon-devstu, 스펙 SYS-24 (10/27 회의 추가 기능)
 //
-// presigned PUT 은 서버를 거치지 않고 브라우저가 S3 에 바로 올린다 — 확장자 · Content-Type 은 서명에 들어가지만 내용은 아무도 보지 않는다.
-// 그래서 확장자만 .jpg 로 바꾼 실행 파일 · HTML 같은 위장 파일을 여기서 지운다:
-//  ① 버킷 · 경로(prefix)마다 허용하는 확장자인지 (images: jpg · png · webp / seller-docs: pdf · jpg · png)
+// presigned PUT 은 서버를 거치지 않고 브라우저가 S3 에 바로 올린다 — 확장자, Content-Type 은 서명에 들어가지만 내용은 아무도 보지 않는다.
+// 그래서 확장자만 .jpg 로 바꾼 실행 파일, HTML 같은 위장 파일을 여기서 지운다:
+//  ① 버킷, 경로(prefix)마다 허용하는 확장자인지 (images: jpg, png, webp / seller-docs: pdf, jpg, png)
 //  ② 파일 앞부분(매직 바이트)이 그 확장자의 실제 형식인지
 //  둘 중 하나라도 아니면 객체를 지우고 알림 토픽(sesac-gojigi-alerts → 메일)에 알린다. 정상이면 아무것도 하지 않는다
 // 지운 키를 서비스가 저장해 두었으면 화면에는 깨진 이미지로 보인다(서비스는 S3 존재를 따로 확인하지 않음 — product.md 13절)
@@ -19,7 +19,7 @@ const SIGNATURES = {
 };
 const ascii = (b, from, to) => String.fromCharCode(...b.slice(from, to));
 
-/** 버킷 용도 → 경로별 허용 형식 (presign 발급 규칙과 같게 — product.md 17절 · store.md 2-1절) */
+/** 버킷 용도 → 경로별 허용 형식 (presign 발급 규칙과 같게 — product.md 17절, store.md 2-1절) */
 export const RULES = {
   images: { prefixes: ['products/', 'reviews/', 'stores/'], types: ['jpg', 'png', 'webp'] },
   'seller-docs': { prefixes: ['applications/'], types: ['pdf', 'jpg', 'png'] },
@@ -47,7 +47,7 @@ export function inspect(rule, key, bytes) {
   return { ok: true };
 }
 
-/** 버킷 이름 → 용도 (env.IMAGES_BUCKET · env.SELLER_DOCS_BUCKET) */
+/** 버킷 이름 → 용도 (env.IMAGES_BUCKET, env.SELLER_DOCS_BUCKET) */
 const ruleFor = (env, bucket) => (bucket === env.IMAGES_BUCKET ? RULES.images : bucket === env.SELLER_DOCS_BUCKET ? RULES['seller-docs'] : null);
 
 export function createHandler({ s3, sns, env, log = console }) {
@@ -80,7 +80,7 @@ export function createHandler({ s3, sns, env, log = console }) {
     await sns.send(new PublishCommand({
       TopicArn: env.ALERT_TOPIC_ARN,
       Subject: '[곳간] 업로드 파일 삭제 — 형식 불일치',
-      Message: `버킷: ${bucket}\n키: ${key}\n이유: ${result.reason}\n\n업로드한 쪽(화면 · presign 발급 기록)에서 같은 키를 쓰는 데이터가 있으면 깨진 파일로 보입니다.`,
+      Message: `버킷: ${bucket}\n키: ${key}\n이유: ${result.reason}\n\n업로드한 쪽(화면, presign 발급 기록)에서 같은 키를 쓰는 데이터가 있으면 깨진 파일로 보입니다.`,
     }));
     await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
     log.warn(JSON.stringify({ msg: '업로드 파일 삭제 — 형식 불일치', bucket, key, reason: result.reason }));

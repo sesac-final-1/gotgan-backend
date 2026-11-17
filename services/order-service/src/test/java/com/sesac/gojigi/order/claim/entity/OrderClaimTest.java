@@ -38,7 +38,7 @@ class OrderClaimTest {
     }
 
     @Test
-    @DisplayName("승인 전 완료 · 두 번 승인은 409 CLAIM_INVALID_STATUS")
+    @DisplayName("승인 전 완료, 두 번 승인은 409 CLAIM_INVALID_STATUS")
     void invalidTransition() {
         OrderClaim claim = claim();
 

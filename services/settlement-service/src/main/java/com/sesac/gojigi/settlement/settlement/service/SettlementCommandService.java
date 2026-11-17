@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 정산서 상태를 바꾸는 작업 — 주간 집계(STL-03) · 보류/해제(STL-09) · 지급(STL-06). 상태가 바뀔 때마다 settlement_history 1행.
+ * 정산서 상태를 바꾸는 작업 — 주간 집계(STL-03), 보류/해제(STL-09), 지급(STL-06). 상태가 바뀔 때마다 settlement_history 1행.
  * 지급은 정산서 1건 = 트랜잭션 1개 (일괄 지급에서 일부만 실패해도 나머지는 지급 — SettlementPayService).
  */
 @Slf4j
@@ -41,7 +41,7 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 public class SettlementCommandService {
 
-    static final String AUTO_HOLD_REASON = "스토어 정지 · 폐점 — 자동 보류";
+    static final String AUTO_HOLD_REASON = "스토어 정지, 폐점 — 자동 보류";
     static final String CLOSED_HOLD_REASON = "스토어 폐점 — 자동 보류";
     static final String AUTO_RELEASE_REASON = "스토어 운영 재개 — 자동 해제";
 
@@ -54,7 +54,7 @@ public class SettlementCommandService {
     private final Clock clock;
     private final JsonMapper jsonMapper;
 
-    /** carriedOver = 지난 주차(지급 완료 · 정산서 없음)에서 이번 주차 정산서로 이월한 상품주문 수 */
+    /** carriedOver = 지난 주차(지급 완료, 정산서 없음)에서 이번 주차 정산서로 이월한 상품주문 수 */
     public record AggregateResult(String week, int created, int updated, int autoHeld, int carriedOver) {
     }
 
@@ -122,7 +122,7 @@ public class SettlementCommandService {
         settlement.recalculate(settlementItemRepository.findBySettlementIdOrderByConfirmedAtAsc(settlement.getId()));
     }
 
-    /** 관리자 보류 · 해제 (STL-09) */
+    /** 관리자 보류, 해제 (STL-09) */
     @Transactional
     public Settlement hold(Long settlementId, boolean hold, String reason) {
         Settlement settlement = load(settlementId);
@@ -139,7 +139,7 @@ public class SettlementCommandService {
     }
 
     /**
-     * StoreStatusChanged 반영 직후 — 운영 중(ACTIVE)이 아니면(정지 · 폐점) 지급예정 정산서를 자동 보류, 운영 재개면 "자동 보류"만 자동 해제.
+     * StoreStatusChanged 반영 직후 — 운영 중(ACTIVE)이 아니면(정지, 폐점) 지급예정 정산서를 자동 보류, 운영 재개면 "자동 보류"만 자동 해제.
      * 관리자가 직접 건 보류는 관리자가 푼다 (마지막 이력이 SYSTEM 인 것만 해제). 폐점은 다시 ACTIVE 가 되지 않으므로 자동 해제도 없다.
      */
     @Transactional
@@ -159,12 +159,12 @@ public class SettlementCommandService {
                 });
     }
 
-    /** 자동 보류 사유 — 이력 · 관리자 화면에 그대로 보이므로 상태에 맞게 (폐점은 따로) */
+    /** 자동 보류 사유 — 이력, 관리자 화면에 그대로 보이므로 상태에 맞게 (폐점은 따로) */
     static String autoHoldReason(String storeStatus) {
         return SettlementStore.CLOSED.equals(storeStatus) ? CLOSED_HOLD_REASON : AUTO_HOLD_REASON;
     }
 
-    /** 정산서 1건 지급 — 지급예정 · 스토어 운영중 · 계좌 있음일 때만. SettlementPaid 는 아웃박스에 남기고 커밋 후 발행 */
+    /** 정산서 1건 지급 — 지급예정, 스토어 운영중, 계좌 있음일 때만. SettlementPaid 는 아웃박스에 남기고 커밋 후 발행 */
     @Transactional
     public Settlement payOne(Long settlementId) {
         Settlement settlement = load(settlementId);

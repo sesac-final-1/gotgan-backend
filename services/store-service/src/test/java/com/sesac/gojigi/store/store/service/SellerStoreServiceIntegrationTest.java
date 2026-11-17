@@ -23,7 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-/** 실제 MySQL + Flyway + 시연 시드 위에서 설정 수정이 컬럼에 저장되고 상태 · 등급 · 이름은 그대로인지 확인 */
+/** 실제 MySQL + Flyway + 시연 시드 위에서 설정 수정이 컬럼에 저장되고 상태, 등급, 이름은 그대로인지 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfiguration.class, SellerStoreService.class, StoreQueryService.class, ImageUrls.class})
@@ -42,7 +42,7 @@ class SellerStoreServiceIntegrationTest {
     private JdbcTemplate jdbc;
 
     @Test
-    @DisplayName("시드 정지 스토어 15 설정 수정 — 설정 컬럼만 바뀌고 상태 · 사유 · 등급 · 이름 · 주소는 그대로, 응답은 바뀐 값")
+    @DisplayName("시드 정지 스토어 15 설정 수정 — 설정 컬럼만 바뀌고 상태, 사유, 등급, 이름, 주소는 그대로, 응답은 바뀐 값")
     void update_seedSuspendedStore_persistsSettingsOnly() {
         // when
         SellerStoreResponse response = service.update(15L, new SellerStoreUpdateRequest("<p>새 소개</p>", "stores/15/new-cover.jpg",
@@ -69,7 +69,7 @@ class SellerStoreServiceIntegrationTest {
         // given
         jdbc.update("UPDATE store SET status = 'CLOSED' WHERE store_id = 2");
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.update(2L, new SellerStoreUpdateRequest(null, null, "#2b2b2b", "02-0000-1234", 0L, null, null, null)))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(StoreErrorCode.STORE_CLOSED);
         entityManager.clear();

@@ -13,7 +13,7 @@ public record ReviewReplyResponse(
         @Schema(description = "저장된 답글 (태그를 지운 값)", example = "소중한 후기 감사합니다!")
         String replyContent,
 
-        @Schema(description = "답글 작성 · 수정 시각", example = "2026-10-28T10:00:00+09:00")
+        @Schema(description = "답글 작성, 수정 시각", example = "2026-10-28T10:00:00+09:00")
         OffsetDateTime repliedAt) {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");

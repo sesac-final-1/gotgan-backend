@@ -49,7 +49,7 @@ class UserIdMdcFilterTest {
     }
 
     @Test
-    @DisplayName("헤더가 없거나(/internal · 공개 경로) 숫자가 아니면(줄바꿈 등) 넣지 않는다 — 로그 오염 방지")
+    @DisplayName("헤더가 없거나(/internal, 공개 경로) 숫자가 아니면(줄바꿈 등) 넣지 않는다 — 로그 오염 방지")
     void missingOrNonNumericHeader_notPut() throws Exception {
         filter.doFilter(request(null), new MockHttpServletResponse(), chain);
         assertThat(seen.get()).isNull();
@@ -79,7 +79,7 @@ class UserIdMdcFilterTest {
     }
 
     @Test
-    @DisplayName("추적 필터 다음 · 업무 필터 앞 순서")
+    @DisplayName("추적 필터 다음, 업무 필터 앞 순서")
     void order() {
         assertThat(filter.getOrder()).isEqualTo(UserIdMdcFilter.ORDER);
     }

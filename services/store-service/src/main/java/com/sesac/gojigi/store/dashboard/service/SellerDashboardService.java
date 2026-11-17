@@ -18,8 +18,8 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 판매자 대시보드 (STR-07, store.md 15절) — order · product · settlement 통계를 모아 한 번에. 한 곳이 실패해도 200 + 그 영역 null +
- * unavailable[] (부분 응답, admin 대시보드와 같은 규칙). 스토어 상태(정지 · 폐점)는 보지 않는다 — 남은 주문 · 정산을 처리해야 하고,
+ * 판매자 대시보드 (STR-07, store.md 15절) — order, product, settlement 통계를 모아 한 번에. 한 곳이 실패해도 200 + 그 영역 null +
+ * unavailable[] (부분 응답, admin 대시보드와 같은 규칙). 스토어 상태(정지, 폐점)는 보지 않는다 — 남은 주문, 정산을 처리해야 하고,
  * 상태 배너는 화면이 내 스토어 조회(13-1절)의 status 로 띄운다
  */
 @Slf4j
@@ -30,7 +30,7 @@ public class SellerDashboardService {
     /** 일별 결제금액 차트 기간 (최근 30일) */
     static final int DAILY_DAYS = 30;
 
-    /** 영역 호출 스레드 — 가상 스레드, 요청 스레드의 Observation(traceId · MDC)을 이어받는다 */
+    /** 영역 호출 스레드 — 가상 스레드, 요청 스레드의 Observation(traceId, MDC)을 이어받는다 */
     private static final ExecutorService STATS_CALLS = ContextExecutorService.wrap(
             Executors.newVirtualThreadPerTaskExecutor(), () -> ContextSnapshotFactory.builder().build().captureAll());
 
@@ -65,7 +65,7 @@ public class SellerDashboardService {
 
     /**
      * order = /internal/stats/orders?storeId=, orderDaily = /internal/stats/orders/daily(최근 30일),
-     * product · settlement = 각 /internal/stats/**?storeId= 의 store — 모두 그대로
+     * product, settlement = 각 /internal/stats/**?storeId= 의 store — 모두 그대로
      */
     public record Dashboard(JsonNode order, JsonNode orderDaily, JsonNode product, JsonNode settlement, List<String> unavailable) {
     }

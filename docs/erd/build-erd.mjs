@@ -1,8 +1,8 @@
 // 서비스별 Flyway 마이그레이션(db/migration/V*.sql)을 모아 ERD Cloud 가져오기용 SQL 1개를 만든다.
 // 사용: node docs/erd/build-erd.mjs  → docs/erd/gotgan-erdcloud.sql
 // ERD Cloud 가져오기는 MySQL 문법 일부만 읽으므로 ERD Cloud 내보내기와 같은 모양으로 단순화한다:
-//   컬럼(타입 · NULL · 단순 DEFAULT · COMMENT)만 남기고, PK · FK 는 ALTER TABLE 로 뒤에 붙인다.
-//   AUTO_INCREMENT · ON UPDATE · UNIQUE · INDEX · ENGINE 옵션은 뺀다 (원본은 각 서비스 Flyway 파일).
+//   컬럼(타입, NULL, 단순 DEFAULT, COMMENT)만 남기고, PK, FK 는 ALTER TABLE 로 뒤에 붙인다.
+//   AUTO_INCREMENT, ON UPDATE, UNIQUE, INDEX, ENGINE 옵션은 뺀다 (원본은 각 서비스 Flyway 파일).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(ROOT, 'docs/erd/gotgan-erdcloud.sql');
 
-// 서비스 → DB · 담당 (컨벤션 3장 서비스별 스키마)
+// 서비스 → DB, 담당 (컨벤션 3장 서비스별 스키마)
 const SERVICES = [
   ['user', 'userdb', '이경석'],
   ['store', 'storedb', '박지연'],
@@ -36,7 +36,7 @@ function parseTable(name, body, tail) {
     } else if ((m = /^CONSTRAINT\s+(\S+)\s+FOREIGN KEY\s*\(([^)]+)\)\s*REFERENCES\s+(\w+)\s*\(([^)]+)\)/i.exec(line))) {
       table.fks.push({ name: m[1], cols: m[2].trim(), refTable: m[3], refCols: m[4].trim() });
     } else if (/^(CONSTRAINT|INDEX|KEY|UNIQUE|PRIMARY)\b/i.test(line)) {
-      continue; // UNIQUE · INDEX — ERD 표시 대상 아님
+      continue; // UNIQUE, INDEX — ERD 표시 대상 아님
     } else if ((m = /^(\w+)\s+((?:INT|BIGINT|TINYINT|SMALLINT)\s+UNSIGNED|[A-Z]+(?:\(\d+(?:,\d+)?\))?)(.*)$/i.exec(line))) {
       const [, col, type, rest] = m;
       const notNull = /\bNOT NULL\b/i.test(rest);
@@ -60,8 +60,8 @@ for (const [svc, db, owner] of SERVICES) {
     for (const m of sql.matchAll(/CREATE TABLE\s+(\w+)\s*\(\n([\s\S]*?)\n\)([^;]*);/g)) {
       if (!SKIP_TABLES.has(m[1])) tables.push(parseTable(m[1], m[2], m[3]));
     }
-    // 이후 버전의 ALTER TABLE — 머지된 마이그레이션은 수정하지 않으므로 ADD COLUMN([AFTER x]) · MODIFY COLUMN 을 절 단위로 반영.
-    // 한 문장에 여러 절(ADD · MODIFY · ADD INDEX …)이 섞일 수 있어 줄 주석을 지우고 "쉼표 + 줄바꿈 + 다음 절 키워드"로 나눈다. 인덱스 · 제약은 그리지 않음
+    // 이후 버전의 ALTER TABLE — 머지된 마이그레이션은 수정하지 않으므로 ADD COLUMN([AFTER x]), MODIFY COLUMN 을 절 단위로 반영.
+    // 한 문장에 여러 절(ADD, MODIFY, ADD INDEX …)이 섞일 수 있어 줄 주석을 지우고 "쉼표 + 줄바꿈 + 다음 절 키워드"로 나눈다. 인덱스, 제약은 그리지 않음
     for (const m of sql.matchAll(/ALTER TABLE\s+(\w+)\s+([^;]+);/g)) {
       const table = tables.find((t) => t.name === m[1]);
       if (!table) continue;
@@ -94,15 +94,15 @@ const rename = (s, n) => (count[n] > 1 ? `${s.db}_${n}` : n);
 const q = (s) => s.replace(/'/g, "''");
 const out = [];
 out.push('-- 곳간(GOTGAN) 전체 ERD — ERD Cloud 가져오기용 (자동 생성: node docs/erd/build-erd.mjs, 직접 수정 금지)');
-out.push(`-- 생성: ${new Date().toISOString().slice(0, 10)} · 원본: services/*-service/src/main/resources/db/migration (Flyway)`);
-out.push('-- 서비스마다 DB 가 따로라 서비스 사이 참조(user_id · order_item_id 등 "논리 참조")는 FK 로 그리지 않는다 — 컬럼 COMMENT 참고');
-out.push(`-- 제외: ${[...SKIP_TABLES].join(' · ')} (스케줄러 잠금). 여러 DB 에 있는 같은 이름 테이블은 {db}_ 접두어`);
+out.push(`-- 생성: ${new Date().toISOString().slice(0, 10)}, 원본: services/*-service/src/main/resources/db/migration (Flyway)`);
+out.push('-- 서비스마다 DB 가 따로라 서비스 사이 참조(user_id, order_item_id 등 "논리 참조")는 FK 로 그리지 않는다 — 컬럼 COMMENT 참고');
+out.push(`-- 제외: ${[...SKIP_TABLES].join(', ')} (스케줄러 잠금). 여러 DB 에 있는 같은 이름 테이블은 {db}_ 접두어`);
 out.push('');
 const alters = [];
 for (const s of schemas) {
   if (!s.tables.length) continue;
-  out.push(`-- ============================================================ ${s.db} (${s.svc}-service · 담당 ${s.owner})`);
-  out.push(`-- 원본: ${s.files.join(' · ')}`);
+  out.push(`-- ============================================================ ${s.db} (${s.svc}-service, 담당 ${s.owner})`);
+  out.push(`-- 원본: ${s.files.join(', ')}`);
   out.push('');
   for (const t of s.tables) {
     const name = rename(s, t.name);
@@ -127,4 +127,4 @@ const fks = alters.filter((a) => a.includes('FOREIGN KEY'));
 out.push('-- ============================================================ PK', ...pks, '');
 out.push('-- ============================================================ FK (같은 DB 안의 관계만)', ...fks, '');
 fs.writeFileSync(OUT, out.join('\n'));
-console.log(`${path.relative(ROOT, OUT)} — ${schemas.reduce((n, s) => n + s.tables.length, 0)} tables · ${fks.length} FK`);
+console.log(`${path.relative(ROOT, OUT)} — ${schemas.reduce((n, s) => n + s.tables.length, 0)} tables, ${fks.length} FK`);

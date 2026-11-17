@@ -23,7 +23,7 @@ public record MyReviewResponse(
         @Schema(description = "구매확정 시점 상품명", example = "린넨 오버핏 셔츠")
         String productName,
 
-        @Schema(description = "산 옵션 — 옵션 없는 상품 · 스냅샷 전 자격은 null", example = "오트밀 / M")
+        @Schema(description = "산 옵션 — 옵션 없는 상품, 스냅샷 전 자격은 null", example = "오트밀 / M")
         String optionName,
 
         @Schema(description = "상품 대표 사진 — 스냅샷 전 자격은 null", example = "https://cdn.gotgan.click/products/1/a1b2.jpg")

@@ -23,8 +23,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 취소 · 반품 · 교환 요청 — claim → order 단방향 (컨벤션 2-1). 상품주문 status 와 한 트랜잭션으로 바꾼다.
- * refundAmt 는 교환이면 NULL (OrderItemCancelled · Returned.refundAmt). 클레임 1건 = 상품주문 1건.
+ * 취소, 반품, 교환 요청 — claim → order 단방향 (컨벤션 2-1). 상품주문 status 와 한 트랜잭션으로 바꾼다.
+ * refundAmt 는 교환이면 NULL (OrderItemCancelled, Returned.refundAmt). 클레임 1건 = 상품주문 1건.
  */
 @Getter
 @Entity
@@ -73,7 +73,7 @@ public class OrderClaim extends BaseTimeEntity {
     @Column(name = "requested_at", nullable = false, columnDefinition = "DATETIME(6)")
     private LocalDateTime requestedAt;
 
-    /** 승인 · 거부 · 완료 처리 시각 */
+    /** 승인, 거부, 완료 처리 시각 */
     @Column(name = "processed_at", columnDefinition = "DATETIME(6)")
     private LocalDateTime processedAt;
 
@@ -102,13 +102,13 @@ public class OrderClaim extends BaseTimeEntity {
         this.rejectReason = reason;
     }
 
-    /** 구매자 철회 — 반품 · 교환을 판매자 승인 전에만 (승인 뒤에는 회수가 시작됨). 취소는 즉시 처리라 철회 없음 */
+    /** 구매자 철회 — 반품, 교환을 판매자 승인 전에만 (승인 뒤에는 회수가 시작됨). 취소는 즉시 처리라 철회 없음 */
     public void withdraw(LocalDateTime now) {
         requireType(ClaimType.RETURN, ClaimType.EXCHANGE);
         transition(ClaimStatus.REQUESTED, ClaimStatus.WITHDRAWN, now);
     }
 
-    /** 수거 완료 (반품 · 교환) — 반품은 이어서 환불 Saga */
+    /** 수거 완료 (반품, 교환) — 반품은 이어서 환불 Saga */
     public void collect(LocalDateTime now) {
         requireType(ClaimType.RETURN, ClaimType.EXCHANGE);
         transition(ClaimStatus.APPROVED, ClaimStatus.COLLECTED, now);

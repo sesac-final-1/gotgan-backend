@@ -22,11 +22,11 @@ public class InternalProductOptionController {
 
     private final ProductOptionQueryService productOptionQueryService;
 
-    @Operation(summary = "가격 · 구매 가능 조회", description = """
-            장바구니 표시 · 주문서 · 주문 Saga 1단계(상품주문 스냅샷). DB 조회만 하므로 재시도 가능(GET).
-            요청 순서대로(중복은 한 번), 없는 ID 는 목록에서 빠짐(order 가 구매 불가로 처리). 삭제된 상품 · 옵션은 purchasable=false 로 포함.
-            purchasable = 판매중 · 하위/상위 카테고리 사용 중 · 스토어 운영 중 · 상품/옵션 삭제 안 됨. 품절(stock 0)은 따로 — 예약에서 거절.
-            에러: 400 INVALID_INPUT(ids 없음 · 비었음 · 100개 초과 · 숫자 아님)""")
+    @Operation(summary = "가격, 구매 가능 조회", description = """
+            장바구니 표시, 주문서, 주문 Saga 1단계(상품주문 스냅샷). DB 조회만 하므로 재시도 가능(GET).
+            요청 순서대로(중복은 한 번), 없는 ID 는 목록에서 빠짐(order 가 구매 불가로 처리). 삭제된 상품, 옵션은 purchasable=false 로 포함.
+            purchasable = 판매중, 하위/상위 카테고리 사용 중, 스토어 운영 중, 상품/옵션 삭제 안 됨. 품절(stock 0)은 따로 — 예약에서 거절.
+            에러: 400 INVALID_INPUT(ids 없음, 비었음, 100개 초과, 숫자 아님)""")
     @GetMapping
     public ApiResponse<List<ProductOptionResponse>> findOptions(
             @Parameter(description = "옵션 ID 1~100개 — ids=11,25 또는 ids=11&ids=25", example = "11,25") @RequestParam List<Long> ids) {

@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * 리뷰 사진 업로드 주소 발급 (review.md 12절) — product 상품 이미지 presign 과 같은 모양.
- * 개수(1~3) · 형식 · 크기 위반은 서비스가 REVIEW_IMAGE_INVALID 로 검사한다.
+ * 개수(1~3), 형식, 크기 위반은 서비스가 REVIEW_IMAGE_INVALID 로 검사한다.
  */
 public record ReviewImagePresignRequest(
         @Schema(description = "올릴 사진 목록 (1~3개) — 응답은 같은 순서")

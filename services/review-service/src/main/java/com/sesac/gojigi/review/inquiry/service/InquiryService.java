@@ -30,8 +30,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 상품 문의 등록 · 수정 · 삭제 · 조회 · 판매자 답변 (REV-07 ~ 09, docs/api/review.md 13 ~ 20절). 담당 이경석.
- * 등록 때 product · user 를 동기 조회해 스토어 · 상품명 · 작성자 이름을 저장한다 — 트랜잭션 밖에서 부른다(DB 커넥션을 잡고 기다리지 않게).
+ * 상품 문의 등록, 수정, 삭제, 조회, 판매자 답변 (REV-07 ~ 09, docs/api/review.md 13 ~ 20절). 담당 이경석.
+ * 등록 때 product, user 를 동기 조회해 스토어, 상품명, 작성자 이름을 저장한다 — 트랜잭션 밖에서 부른다(DB 커넥션을 잡고 기다리지 않게).
  * 조회는 저장한 스냅샷만 읽는다 — 다른 서비스를 부르지 않는다.
  */
 @Slf4j
@@ -60,7 +60,7 @@ public class InquiryService {
         return new InquiryCreateResponse(inquiry.getId());
     }
 
-    /** 내 문의 수정 — 판매자가 답변한 뒤에는 막는다(답변과 질문이 어긋나지 않게). 없음 · 삭제됨 · 남의 문의는 같은 404 */
+    /** 내 문의 수정 — 판매자가 답변한 뒤에는 막는다(답변과 질문이 어긋나지 않게). 없음, 삭제됨, 남의 문의는 같은 404 */
     @Transactional
     public InquiryResponse edit(Long userId, Long inquiryId, InquiryUpdateRequest request) {
         ProductInquiry inquiry = findOwnInquiry(userId, inquiryId);
@@ -80,7 +80,7 @@ public class InquiryService {
         log.info("상품 문의 삭제 inquiryId={} userId={} answered={}", inquiry.getId(), userId, inquiry.isAnswered());
     }
 
-    /** 상품 상세 Q&A (공개) — 비밀글은 작성자 · 그 스토어 판매자가 아니면 내용 · 답변을 비운다. viewer 는 비로그인이면 null */
+    /** 상품 상세 Q&A (공개) — 비밀글은 작성자, 그 스토어 판매자가 아니면 내용, 답변을 비운다. viewer 는 비로그인이면 null */
     @Transactional(readOnly = true)
     public PageResponse<ProductInquiryResponse> listForProduct(Long productId, Long viewerUserId, Long viewerStoreId,
             int page, int size) {
@@ -88,7 +88,7 @@ public class InquiryService {
                 .map(i -> ProductInquiryResponse.of(i, viewerUserId, viewerStoreId)));
     }
 
-    /** 마이페이지 내 문의 — 비밀글 · 답변 포함 전부 */
+    /** 마이페이지 내 문의 — 비밀글, 답변 포함 전부 */
     @Transactional(readOnly = true)
     public PageResponse<InquiryResponse> listMine(Long userId, int page, int size) {
         return PageResponse.from(inquiryRepository.findByUserIdAndDeletedAtIsNull(userId, PageRequest.of(page, size, NEWEST))
@@ -104,7 +104,7 @@ public class InquiryService {
                 .map(SellerInquiryResponse::from));
     }
 
-    /** 판매자 탭 숫자 — 미답변 · 답변완료 · 전체 (삭제 제외) */
+    /** 판매자 탭 숫자 — 미답변, 답변완료, 전체 (삭제 제외) */
     @Transactional(readOnly = true)
     public SellerInquirySummaryResponse summarizeForSeller(Long storeId) {
         requireStore(storeId);
@@ -114,7 +114,7 @@ public class InquiryService {
     }
 
     /**
-     * 판매자 답변 작성 · 수정 (REV-09) — 문의당 1개, 있으면 덮어쓴다. 없음 · 삭제됨 · 다른 스토어 문의는 같은 404.
+     * 판매자 답변 작성, 수정 (REV-09) — 문의당 1개, 있으면 덮어쓴다. 없음, 삭제됨, 다른 스토어 문의는 같은 404.
      * 답변이 달리면 구매자 수정이 막힌다(edit 의 INQUIRY_ALREADY_ANSWERED).
      */
     @Transactional
@@ -134,14 +134,14 @@ public class InquiryService {
         return InquiryAnswerResponse.from(inquiry);
     }
 
-    /** 없음 · 삭제됨 · 남의 문의는 같은 404 — 다른 회원 문의의 존재를 드러내지 않는다 */
+    /** 없음, 삭제됨, 남의 문의는 같은 404 — 다른 회원 문의의 존재를 드러내지 않는다 */
     private ProductInquiry findOwnInquiry(Long userId, Long inquiryId) {
         return inquiryRepository.findById(inquiryId)
                 .filter(i -> !i.isDeleted() && i.isOwnedBy(userId))
                 .orElseThrow(() -> new InquiryException(InquiryErrorCode.INQUIRY_NOT_FOUND));
     }
 
-    /** 판매자인데 스토어 정보(X-Store-Id)가 없음 — 승인 전 · 토큰 갱신 전 */
+    /** 판매자인데 스토어 정보(X-Store-Id)가 없음 — 승인 전, 토큰 갱신 전 */
     private static void requireStore(Long storeId) {
         if (storeId == null) {
             throw new BusinessException(CommonErrorCode.FORBIDDEN, "스토어 정보가 없습니다.");

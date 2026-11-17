@@ -8,7 +8,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 /**
- * 정산서 1건 요약 — 관리자 목록 · 판매자 목록 · 상세 머리. week = ISO 주차(2026-W43).
+ * 정산서 1건 요약 — 관리자 목록, 판매자 목록, 상세 머리. week = ISO 주차(2026-W43).
  * 지급액 = 매출 − 판매수수료 − 결제수수료 (원 단위 내림 합계). bank 는 지급 계좌(스토어 스냅샷)
  * carriedOverCount = itemCount 중 지난 주차에서 이월된 건수 (화면에 "이월 n건")
  */

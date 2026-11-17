@@ -46,7 +46,7 @@ class SellerDocumentPresignServiceTest {
     }
 
     @Test
-    @DisplayName("파일마다 내 경로 키 · 형식별 확장자로 발급하고, 요청 순서대로 돌려준다")
+    @DisplayName("파일마다 내 경로 키, 형식별 확장자로 발급하고, 요청 순서대로 돌려준다")
     void presign_validFiles_returnsKeysInOrder() {
         // given
         given(sellerDocumentClient.presignUpload(anyString(), anyString(), anyLong()))
@@ -70,19 +70,19 @@ class SellerDocumentPresignServiceTest {
     }
 
     @Test
-    @DisplayName("발급 요청의 형식 · 크기를 그대로 서명에 넘긴다")
+    @DisplayName("발급 요청의 형식, 크기를 그대로 서명에 넘긴다")
     void presign_validFile_passesTypeAndSizeToClient() {
         // given
         given(sellerDocumentClient.presignUpload(startsWith("applications/4/"), eq("application/pdf"), eq(482113L)))
                 .willReturn(new PresignedUpload("https://s3.example/put", EXPIRES));
 
-        // when · then
+        // when, then
         assertThat(service.presign(4L, request(new FileItem(DocType.ECOMMERCE_REG, "application/pdf", 482113L))))
                 .hasSize(1);
     }
 
     @Test
-    @DisplayName("0개 · 14개는 400 APPLY_DOCUMENT_INVALID, S3 서명 안 함")
+    @DisplayName("0개, 14개는 400 APPLY_DOCUMENT_INVALID, S3 서명 안 함")
     void presign_fileCountOutOfRange_throwsInvalid() {
         FileItem photo = new FileItem(DocType.PRODUCT_PHOTO, "image/png", 1L);
 
@@ -92,13 +92,13 @@ class SellerDocumentPresignServiceTest {
 
     @ParameterizedTest(name = "{0}")
     @CsvSource(delimiter = '|', value = {
-            "상품 사진 PDF        | PRODUCT_PHOTO | application/pdf | 1          | 대표 상품 사진은 JPG · PNG 만",
-            "서류 webp            | BUSINESS_REG  | image/webp      | 1          | 사업자등록증은 PDF · JPG · PNG 만",
-            "서류 gif             | BANK_COPY     | image/gif       | 1          | 통장 사본은 PDF · JPG · PNG 만",
+            "상품 사진 PDF        | PRODUCT_PHOTO | application/pdf | 1          | 대표 상품 사진은 JPG, PNG 만",
+            "서류 webp            | BUSINESS_REG  | image/webp      | 1          | 사업자등록증은 PDF, JPG, PNG 만",
+            "서류 gif             | BANK_COPY     | image/gif       | 1          | 통장 사본은 PDF, JPG, PNG 만",
             "10MB 초과            | BUSINESS_REG  | application/pdf | 10485761   | 10MB 이하",
             "0 바이트             | PRODUCT_PHOTO | image/jpeg      | 0          | 10MB 이하"
     })
-    @DisplayName("형식 · 크기 위반은 400 APPLY_DOCUMENT_INVALID, S3 서명 안 함")
+    @DisplayName("형식, 크기 위반은 400 APPLY_DOCUMENT_INVALID, S3 서명 안 함")
     void presign_invalidFile_throwsInvalid(String caseName, DocType docType, String contentType, long size, String message) {
         assertInvalid(request(new FileItem(docType, contentType, size)), message);
     }

@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 리뷰 작성 자격 — OrderItemConfirmed 수신 시 상품주문당 1개 저장 (REV-01).
- * review 는 order · user · product 를 호출하지 않으므로 표시에 필요한 값(구매자 표시 이름 · 상품명 · 옵션명 · 대표 사진)을 여기에 스냅샷한다.
+ * review 는 order, user, product 를 호출하지 않으므로 표시에 필요한 값(구매자 표시 이름, 상품명, 옵션명, 대표 사진)을 여기에 스냅샷한다.
  */
 @Getter
 @Entity

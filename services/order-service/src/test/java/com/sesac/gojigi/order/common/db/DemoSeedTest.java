@@ -14,8 +14,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 /**
- * 시연 시드(db/seed/R__demo_seed.sql — scripts/seed-gen 생성 파일) 검증 — local · k8s 프로필처럼 마이그레이션 다음에 시드까지 실행.
- * 시드는 INSERT IGNORE 라 NOT NULL 누락 · UNIQUE 중복이 오류 없이 경고로 끝나고 행이 빠진다. 그래서 들어간 행을 직접 센다 (store DemoSeedTest 와 같은 방식).
+ * 시연 시드(db/seed/R__demo_seed.sql — scripts/seed-gen 생성 파일) 검증 — local, k8s 프로필처럼 마이그레이션 다음에 시드까지 실행.
+ * 시드는 INSERT IGNORE 라 NOT NULL 누락, UNIQUE 중복이 오류 없이 경고로 끝나고 행이 빠진다. 그래서 들어간 행을 직접 센다 (store DemoSeedTest 와 같은 방식).
  * 숫자는 scripts/seed-gen/scenario.mjs 기준 — 시나리오를 바꾸면 함께 고칠 것
  */
 @JdbcTest
@@ -29,7 +29,7 @@ class DemoSeedTest {
     private JdbcTemplate jdbc;
 
     @Test
-    @DisplayName("주문 14(구매확정 8 · 진행 중 6), 금액 · 상품주문번호 규칙과 시각 순서(결제 < 발송 < 배송완료 < 구매확정)")
+    @DisplayName("주문 14(구매확정 8, 진행 중 6), 금액, 상품주문번호 규칙과 시각 순서(결제 < 발송 < 배송완료 < 구매확정)")
     void seed_insertsConsistentRows() {
         assertThat(count("COUNT(*) FROM orders")).as("orders").isEqualTo(14);
         assertThat(count("COUNT(*) FROM order_item")).as("order_item").isEqualTo(14);

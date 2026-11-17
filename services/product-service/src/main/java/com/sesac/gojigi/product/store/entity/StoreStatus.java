@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 스토어 운영 상태 스냅샷 (productdb store_status, V3) — StoreStatusChanged 로만 바뀐다.
- * 상품이 없을 때 온 이벤트도 기억해, 그 뒤 등록하는 상품의 is_store_active 초기값이 된다 (product.md "노출 · 구매 가능").
+ * 상품이 없을 때 온 이벤트도 기억해, 그 뒤 등록하는 상품의 is_store_active 초기값이 된다 (product.md "노출, 구매 가능").
  */
 @Getter
 @Entity

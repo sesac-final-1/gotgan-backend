@@ -19,13 +19,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 
-/** 연결 목록 정리 규칙 — 미인증 30초 · 토큰 만료 · 사용자당 상한 (시계를 바꿔 가며) */
+/** 연결 목록 정리 규칙 — 미인증 30초, 토큰 만료, 사용자당 상한 (시계를 바꿔 가며) */
 class ChatSessionRegistryTest {
 
     private static final Instant T0 = Instant.parse("2026-10-27T05:00:00Z");
 
     @Test
-    @DisplayName("CONNECT 없이 30초 넘은 연결 · 토큰이 만료된 연결을 닫고, 정상 연결은 둔다 — 연결 수 지표도 함께")
+    @DisplayName("CONNECT 없이 30초 넘은 연결, 토큰이 만료된 연결을 닫고, 정상 연결은 둔다 — 연결 수 지표도 함께")
     void sweepClosesUnauthenticatedAndExpired() throws Exception {
         SimpleMeterRegistry meters = new SimpleMeterRegistry();
         MutableClock clock = new MutableClock(T0);
@@ -40,7 +40,7 @@ class ChatSessionRegistryTest {
         early.authenticated("healthy", principal(2L, T0.plusSeconds(3600)));
         assertThat(meters.get("chat.ws.sessions").gauge().value()).isEqualTo(3);
 
-        early.sweep();   // 아직 30초 전 · 만료 전
+        early.sweep();   // 아직 30초 전, 만료 전
         verify(idle, never()).close(any(CloseStatus.class));
 
         clock.now = T0.plusSeconds(61);

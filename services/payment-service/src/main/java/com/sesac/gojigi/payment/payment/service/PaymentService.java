@@ -27,10 +27,10 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 /**
- * 결제 흐름 — DB 쓰기는 PaymentTxService(짧은 트랜잭션), 포트원 취소 · 확정은 PaymentCancelExecutor.
- * 모든 포트원 호출 · DB 쓰기가 실패할 수 있다고 보고, 어느 지점에서 끊겨도 "돈과 기록이 어긋난 채 끝나는" 경로가 없게 한다:
- * - 취소 · 환불은 포트원 호출 전에 PENDING 선기록 → 결과 미확정이면 대조 → 그래도 모르면 복구 스케줄러가 마무리
- * - 성립하면 안 되는 결제(금액 불일치 · 늦은 결제)는 FAILED 확정과 환불 선기록을 한 트랜잭션에 — 환불이 끊겨도 스케줄러가 끝까지 돌려준다
+ * 결제 흐름 — DB 쓰기는 PaymentTxService(짧은 트랜잭션), 포트원 취소, 확정은 PaymentCancelExecutor.
+ * 모든 포트원 호출, DB 쓰기가 실패할 수 있다고 보고, 어느 지점에서 끊겨도 "돈과 기록이 어긋난 채 끝나는" 경로가 없게 한다:
+ * - 취소, 환불은 포트원 호출 전에 PENDING 선기록 → 결과 미확정이면 대조 → 그래도 모르면 복구 스케줄러가 마무리
+ * - 성립하면 안 되는 결제(금액 불일치, 늦은 결제)는 FAILED 확정과 환불 선기록을 한 트랜잭션에 — 환불이 끊겨도 스케줄러가 끝까지 돌려준다
  */
 @Slf4j
 @Service
@@ -110,7 +110,7 @@ public class PaymentService {
 
     /**
      * 5. 웹훅 — 포트원을 다시 조회해 반영. 웹훅은 재전송되므로 예외 없이 끝나는 경우가 대부분이다.
-     * 먼저 이 결제의 미확정 취소를 마무리하고(취소 완료 · 실패 알림), 그다음
+     * 먼저 이 결제의 미확정 취소를 마무리하고(취소 완료, 실패 알림), 그다음
      * READY + 포트원 PAID → 검증과 같은 비교 / FAILED + 포트원 PAID(만료 후 늦은 결제) → 환불
      */
     public void reconcile(String portonePaymentId) {
@@ -123,11 +123,11 @@ public class PaymentService {
         PaymentLogContext.put(payment.getOrderNo(), null);
         paymentTx.pendingCancelsOf(payment.getId()).forEach(cancelExecutor::reconcileOnly);
         if (payment.getStatus() != PaymentStatus.READY && payment.getStatus() != PaymentStatus.FAILED) {
-            return;   // 이미 반영됨 · 우리가 요청한 취소의 알림 (위에서 미확정 취소는 정리)
+            return;   // 이미 반영됨, 우리가 요청한 취소의 알림 (위에서 미확정 취소는 정리)
         }
         Optional<PortOnePayment> portOnePayment = portOne.getPayment(portonePaymentId).filter(PortOnePayment::isPaid);
         if (portOnePayment.isEmpty()) {
-            return;   // 결제창 열림 · 실패 알림 — 확정은 결제 대기 만료(order)
+            return;   // 결제창 열림, 실패 알림 — 확정은 결제 대기 만료(order)
         }
         PortOnePayment paid = portOnePayment.get();
         if (payment.getStatus() == PaymentStatus.FAILED) {
@@ -140,7 +140,7 @@ public class PaymentService {
         }
     }
 
-    /** 이미 선기록된 취소(같은 sagaId 재요청 · 동시 요청 경합)를 이어서 처리 */
+    /** 이미 선기록된 취소(같은 sagaId 재요청, 동시 요청 경합)를 이어서 처리 */
     private PaymentCancelResponse continueCancel(CancelRef cancel) {
         return switch (cancel.status()) {
             case SUCCEEDED -> paymentTx.cancelResponse(cancel.cancelId());
@@ -213,12 +213,12 @@ public class PaymentService {
 
     /**
      * 성립하면 안 되는 결제 환불 — FAILED 확정 + 선기록은 반드시 남기고(실패하면 예외로 호출자에게), 포트원 환불 결과는 기다리지 않는다.
-     * 환불이 미확정 · 거절이어도 PENDING / FAILED 기록이 남아 복구 스케줄러 · 경보로 이어진다.
+     * 환불이 미확정, 거절이어도 PENDING / FAILED 기록이 남아 복구 스케줄러, 경보로 이어진다.
      */
     private void refundInBackground(Payment payment, PortOnePayment portOnePayment, String reason) {
         Begun begun = paymentTx.beginRefund(payment.getId(), null, portOnePayment.cancellableAmount(), reason);
         if (!begun.created()) {
-            return;   // 이미 진행 중인 환불 — 웹훅 · 확인 요청 중복
+            return;   // 이미 진행 중인 환불 — 웹훅, 확인 요청 중복
         }
         Result result = cancelExecutor.execute(begun.cancel());
         if (result.status() != CancelStatus.SUCCEEDED) {

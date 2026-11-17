@@ -59,14 +59,14 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그인 성공 — Access Token 은 body, Refresh Token 은 HttpOnly · Secure · SameSite=Strict 쿠키")
+    @DisplayName("로그인 성공 — Access Token 은 body, Refresh Token 은 HttpOnly, Secure, SameSite=Strict 쿠키")
     void login_success_returnsTokenAndRefreshCookie() throws Exception {
         // given
         LoginResponse response = new LoginResponse("access", 1800,
                 new LoginResponse.LoginUser(2L, "판매자1", List.of("BUYER", "SELLER"), 1L));
         given(authService.login(any())).willReturn(new LoginResult(response, "refresh", 1209600));
 
-        // when · then
+        // when, then
         mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"seller1@gotgan.com\",\"password\":\"Dem0!pass\"}"))
                 .andExpect(status().isOk())
@@ -96,7 +96,7 @@ class AuthControllerTest {
         // given
         given(authService.login(any())).willThrow(new AuthException(AuthErrorCode.AUTH_INVALID_CREDENTIALS));
 
-        // when · then
+        // when, then
         mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"buyer1@gotgan.com\",\"password\":\"wrong!pass1\"}"))
                 .andExpect(status().isUnauthorized())
@@ -115,7 +115,7 @@ class AuthControllerTest {
                 new LoginResponse.LoginUser(7L, "새회원", List.of("BUYER"), null));
         given(authService.signup(any())).willReturn(SignupResult.loggedIn(7L, new LoginResult(login, "refresh", 1209600)));
 
-        // when · then
+        // when, then
         mockMvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON).content(SIGNUP_BODY))
                 .andExpect(status().isCreated())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(
@@ -132,7 +132,7 @@ class AuthControllerTest {
         // given
         given(authService.signup(any())).willReturn(SignupResult.withoutLogin(7L));
 
-        // when · then
+        // when, then
         mockMvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON).content(SIGNUP_BODY))
                 .andExpect(status().isCreated())
                 .andExpect(header().doesNotExist(HttpHeaders.SET_COOKIE))
@@ -158,7 +158,7 @@ class AuthControllerTest {
         // given
         given(authService.signup(any())).willThrow(new AuthException(AuthErrorCode.AUTH_EMAIL_DUPLICATE));
 
-        // when · then
+        // when, then
         mockMvc.perform(post("/api/auth/signup").contentType(MediaType.APPLICATION_JSON).content(SIGNUP_BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("AUTH_EMAIL_DUPLICATE"));
@@ -171,7 +171,7 @@ class AuthControllerTest {
         given(authService.isEmailAvailable("new1@gotgan.com")).willReturn(true);
         given(authService.isEmailAvailable("seller1@gotgan.com")).willReturn(false);
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/auth/email-availability").param("email", "New1@Gotgan.com"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("사용할 수 있는 이메일입니다."))
@@ -192,7 +192,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("로그아웃 — Refresh 쿠키 값으로 세션을 끝내고, 같은 이름 · 경로로 Max-Age=0 쿠키를 내려 지운다")
+    @DisplayName("로그아웃 — Refresh 쿠키 값으로 세션을 끝내고, 같은 이름, 경로로 Max-Age=0 쿠키를 내려 지운다")
     void logout_withCookie_endsSessionAndClearsCookie() throws Exception {
         mockMvc.perform(post("/api/auth/logout").cookie(new Cookie("refresh_token", "rt-1")))
                 .andExpect(status().isOk())
@@ -213,13 +213,13 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("재발급 — Refresh 쿠키로 새 Access Token(body) · 새 Refresh 쿠키")
+    @DisplayName("재발급 — Refresh 쿠키로 새 Access Token(body), 새 Refresh 쿠키")
     void refresh_withCookie_returnsTokenAndRotatesCookie() throws Exception {
         // given
         LoginResponse response = new LoginResponse("access-2", 1800, new LoginResponse.LoginUser(7L, "카카오회원", List.of("BUYER"), null));
         given(authService.refresh("rt-1")).willReturn(new LoginResult(response, "rt-2", 1209600));
 
-        // when · then
+        // when, then
         mockMvc.perform(post("/api/auth/refresh").cookie(new Cookie("refresh_token", "rt-1")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, allOf(containsString("refresh_token=rt-2"), containsString("HttpOnly"))))
@@ -228,7 +228,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("재발급 — 쿠키 없음 · 만료는 401 AUTH_SESSION_EXPIRED")
+    @DisplayName("재발급 — 쿠키 없음, 만료는 401 AUTH_SESSION_EXPIRED")
     void refresh_expired_returns401() throws Exception {
         given(authService.refresh(null)).willThrow(new AuthException(AuthErrorCode.AUTH_SESSION_EXPIRED));
 
@@ -238,7 +238,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("소셜 시작 — Keycloak 로 302, state 쿠키는 HttpOnly · SameSite=Lax · Path=/api/auth/social · 10분")
+    @DisplayName("소셜 시작 — Keycloak 로 302, state 쿠키는 HttpOnly, SameSite=Lax, Path=/api/auth/social, 10분")
     void startSocialLogin_redirectsWithStateCookie() throws Exception {
         given(authService.startSocialLogin("kakao")).willReturn(new SocialLoginStart("https://api.example/realms/gotgan/auth?x", "kakao.s.v"));
 
@@ -251,7 +251,7 @@ class AuthControllerTest {
     }
 
     @Test
-    @DisplayName("소셜 콜백 성공 — state 쿠키 삭제 · Refresh 쿠키 발급 · 결과 페이지로 302")
+    @DisplayName("소셜 콜백 성공 — state 쿠키 삭제, Refresh 쿠키 발급, 결과 페이지로 302")
     void completeSocialLogin_success_setsRefreshCookieAndRedirects() throws Exception {
         LoginResponse response = new LoginResponse("access", 1800, new LoginResponse.LoginUser(7L, "카카오회원", List.of("BUYER"), null));
         given(authService.completeSocialLogin("kakao.s.v", "c-1", "s", null))

@@ -49,7 +49,7 @@ import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 반품 · 교환 신청 — 배송완료 7일 이내 · 환불 예정액 · 상품주문 상태 · 이력 · 거절 (MySQL 8.4 + Flyway) */
+/** 반품, 교환 신청 — 배송완료 7일 이내, 환불 예정액, 상품주문 상태, 이력, 거절 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, ClaimTxService.class,
@@ -76,7 +76,7 @@ class ClaimTxServiceIntegrationTest {
     @Autowired private OrderClaimRepository claimRepository;
     @Autowired private JdbcTemplate jdbc;
 
-    /** 결제 완료 주문 — 상품주문 20,000원 1건(스토어 951) · 포인트 2,000 사용 */
+    /** 결제 완료 주문 — 상품주문 20,000원 1건(스토어 951), 포인트 2,000 사용 */
     private OrderItem paidItem(long buyerId) {
         OrderCreateRequest request = new OrderCreateRequest(List.of(new OrderCreateRequest.Item(95L, 1)), "김구매",
                 "010-1234-5678", "06236", "서울 강남구 테헤란로 1", null, null, 2_000L);
@@ -110,7 +110,7 @@ class ClaimTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("반품 신청 — 클레임 REQUESTED · 환불 예정액(실결제 배분액 - 반품 배송비) · 상품주문 RETURN_REQUESTED · 이력")
+    @DisplayName("반품 신청 — 클레임 REQUESTED, 환불 예정액(실결제 배분액 - 반품 배송비), 상품주문 RETURN_REQUESTED, 이력")
     void openReturn() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -136,7 +136,7 @@ class ClaimTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("교환 신청 — 금액 없음 · 상품주문 EXCHANGE_REQUESTED")
+    @DisplayName("교환 신청 — 금액 없음, 상품주문 EXCHANGE_REQUESTED")
     void openExchange() {
         long buyer = BUYERS.getAndIncrement();
         OrderItem item = paidItem(buyer);
@@ -151,7 +151,7 @@ class ClaimTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("거절 — 배송완료 전 · 7일 지남은 CLAIM_NOT_RETURNABLE, 진행 중이면 CLAIM_IN_PROGRESS, 결제완료 상품주문 반품도 거절")
+    @DisplayName("거절 — 배송완료 전, 7일 지남은 CLAIM_NOT_RETURNABLE, 진행 중이면 CLAIM_IN_PROGRESS, 결제완료 상품주문 반품도 거절")
     void rejects() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -162,7 +162,7 @@ class ClaimTxServiceIntegrationTest {
         delivered(requested, NOW.minusDays(1));
         open(buyer, requested, ClaimType.RETURN, ClaimReasonCode.DEFECTIVE, 0L);
 
-        // when · then
+        // when, then
         assertCode(() -> open(buyer, notDelivered, ClaimType.RETURN, ClaimReasonCode.DEFECTIVE, 0L),
                 ClaimErrorCode.CLAIM_NOT_RETURNABLE);
         assertCode(() -> claimTx.find(buyer, orderNo(expired), expired.getId(), ClaimType.EXCHANGE),

@@ -4,9 +4,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * 포트원 V2 결제 조회 응답 중 쓰는 필드만 (나머지는 무시). status 별로 필드가 다르다 — PAID 일 때 paidAt · pgTxId 가 있다.
+ * 포트원 V2 결제 조회 응답 중 쓰는 필드만 (나머지는 무시). status 별로 필드가 다르다 — PAID 일 때 paidAt, pgTxId 가 있다.
  * status: READY / PAY_PENDING / VIRTUAL_ACCOUNT_ISSUED / PAID / FAILED / PARTIAL_CANCELLED / CANCELLED
- * cancellations: 취소 내역(PaidPayment · PartialCancelledPayment · CancelledPayment) — 취소 결과를 모를 때 대조 근거
+ * cancellations: 취소 내역(PaidPayment, PartialCancelledPayment, CancelledPayment) — 취소 결과를 모를 때 대조 근거
  */
 public record PortOnePayment(String status, String id, Amount amount, Method method, String pgTxId, OffsetDateTime paidAt,
         List<Cancellation> cancellations) {
@@ -18,7 +18,7 @@ public record PortOnePayment(String status, String id, Amount amount, Method met
     public record Amount(long total, long paid, long cancelled) {
     }
 
-    /** type 예: PaymentMethodCard · PaymentMethodEasyPay */
+    /** type 예: PaymentMethodCard, PaymentMethodEasyPay */
     public record Method(String type) {
     }
 

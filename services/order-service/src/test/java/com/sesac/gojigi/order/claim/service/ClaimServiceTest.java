@@ -24,7 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 환불 예정액 · 반품 · 교환 신청 — 유형 · 사유별 금액, 판매자 귀책이면 store 를 부르지 않음 */
+/** 환불 예정액, 반품, 교환 신청 — 유형, 사유별 금액, 판매자 귀책이면 store 를 부르지 않음 */
 @ExtendWith(MockitoExtension.class)
 class ClaimServiceTest {
 
@@ -38,7 +38,7 @@ class ClaimServiceTest {
     @InjectMocks
     private ClaimService claimService;
 
-    /** 상품주문 64,000 · 사용 포인트 2,000 · 적립 3,100 · 스토어 1 (OrderFixtures) */
+    /** 상품주문 64,000, 사용 포인트 2,000, 적립 3,100, 스토어 1 (OrderFixtures) */
     private ClaimTarget target;
 
     @BeforeEach
@@ -76,7 +76,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    @DisplayName("반품 불량 — 판매자 부담이라 차감 없음 · store 를 부르지 않음")
+    @DisplayName("반품 불량 — 판매자 부담이라 차감 없음, store 를 부르지 않음")
     void preview_returnDefective() {
         ClaimPreviewResponse result = preview(ClaimType.RETURN, ClaimReasonCode.DEFECTIVE);
 
@@ -87,7 +87,7 @@ class ClaimServiceTest {
     }
 
     @Test
-    @DisplayName("교환 — 결제 · 포인트 변동 없음")
+    @DisplayName("교환 — 결제, 포인트 변동 없음")
     void preview_exchange() {
         ClaimPreviewResponse result = preview(ClaimType.EXCHANGE, ClaimReasonCode.WRONG_DELIVERY);
 

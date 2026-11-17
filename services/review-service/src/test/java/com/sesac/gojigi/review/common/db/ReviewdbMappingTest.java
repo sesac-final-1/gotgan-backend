@@ -28,7 +28,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * reviewdb 마이그레이션(V2 ~ V5) ↔ 엔티티 매핑 검증 — 실제 MySQL 8.4(Testcontainers) + Flyway, ddl-auto: validate 로 컨텍스트가 뜨면 컬럼 · 타입 일치.
+ * reviewdb 마이그레이션(V2 ~ V5) ↔ 엔티티 매핑 검증 — 실제 MySQL 8.4(Testcontainers) + Flyway, ddl-auto: validate 로 컨텍스트가 뜨면 컬럼, 타입 일치.
  * 마이그레이션을 추가하면 버전 기대값을 함께 고칠 것.
  */
 @DataJpaTest
@@ -62,7 +62,7 @@ class ReviewdbMappingTest {
     }
 
     @Test
-    @DisplayName("V6 까지 적용되고 helpful_count · review_image.file_size 는 없다, 문의 스냅샷 칼럼은 있다")
+    @DisplayName("V6 까지 적용되고 helpful_count, review_image.file_size 는 없다, 문의 스냅샷 칼럼은 있다")
     void migrate_upToV6_dropsUnusedColumns() {
         assertThat(jdbc.queryForObject(
                 "SELECT MAX(CAST(version AS UNSIGNED)) FROM flyway_schema_history WHERE success = 1", Integer.class))
@@ -80,13 +80,13 @@ class ReviewdbMappingTest {
     }
 
     @Test
-    @DisplayName("리뷰 · 사진을 저장하고 다시 읽으면 값과 DB 기본값(시각 · 블라인드)이 들어 있다")
+    @DisplayName("리뷰, 사진을 저장하고 다시 읽으면 값과 DB 기본값(시각, 블라인드)이 들어 있다")
     void saveReviewWithImage_roundTrip() {
         // given
         Review review = Review.write(saveEligibility(11L), 5, "핏이 예뻐요", "<p>오버핏</p>", ReviewFit.TRUE_TO_SIZE);
         reviewRepository.save(review);
         reviewImageRepository.save(new ReviewImage(review, "reviews/11/a.jpg", 0));
-        review.blind("욕설 · 비방", NOW);
+        review.blind("욕설, 비방", NOW);
         review.reply("감사합니다", NOW);
         em.flush();
         em.clear();
@@ -101,7 +101,7 @@ class ReviewdbMappingTest {
         assertThat(found.getWriterDisplayName()).isEqualTo("홍*동");
         assertThat(found.getEligibility().getOrderItemId()).isEqualTo(11L);
         assertThat(found.isBlinded()).isTrue();
-        assertThat(found.getBlindReason()).isEqualTo("욕설 · 비방");
+        assertThat(found.getBlindReason()).isEqualTo("욕설, 비방");
         assertThat(found.getReplyContent()).isEqualTo("감사합니다");
         assertThat(found.getCreatedAt()).isNotNull();
         assertThat(found.getUpdatedAt()).isNotNull();
@@ -117,7 +117,7 @@ class ReviewdbMappingTest {
         ReviewEligibility eligibility = saveEligibility(12L);
         reviewRepository.saveAndFlush(Review.write(eligibility, 5, null, "좋아요", null));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> reviewRepository.saveAndFlush(Review.write(eligibility, 4, null, "또 써요", null)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
@@ -128,13 +128,13 @@ class ReviewdbMappingTest {
         // given
         ReviewEligibility eligibility = saveEligibility(13L);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> reviewRepository.saveAndFlush(Review.write(eligibility, 6, null, "최고", null)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
-    @DisplayName("상품문의를 저장하고 다시 읽으면 비밀글 · 답변이 들어 있다")
+    @DisplayName("상품문의를 저장하고 다시 읽으면 비밀글, 답변이 들어 있다")
     void saveInquiry_roundTrip() {
         // given
         ProductInquiry inquiry = inquiryRepository.save(ProductInquiry.builder()
@@ -165,7 +165,7 @@ class ReviewdbMappingTest {
         String eventId = "6f1c2a3b-0000-4000-8000-000000000001";
         processedEventRepository.saveAndFlush(new ProcessedEvent(eventId, "OrderItemConfirmed"));
 
-        // when · then
+        // when, then
         assertThat(processedEventRepository.existsByEventId(eventId)).isTrue();
         assertThat(processedEventRepository.existsByEventId("other")).isFalse();
         assertThatThrownBy(() -> processedEventRepository.saveAndFlush(new ProcessedEvent(eventId, "OrderItemConfirmed")))

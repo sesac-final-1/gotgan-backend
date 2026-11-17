@@ -17,11 +17,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 
 /**
- * 포트원 호출 규칙 (가이드라인 06장 · docs/api/payment.md):
- * - 서킷 브레이커 "portone" — 연결 실패 · 타임아웃 · 5xx 만 장애로 센다. OPEN 이면 바로 EXTERNAL_API_ERROR(502)
+ * 포트원 호출 규칙 (가이드라인 06장, docs/api/payment.md):
+ * - 서킷 브레이커 "portone" — 연결 실패, 타임아웃, 5xx 만 장애로 센다. OPEN 이면 바로 EXTERNAL_API_ERROR(502)
  * - 재시도는 조회(GET)만 1회. 취소(POST)는 재시도하지 않는다 (이중 환불 위험)
  * - 포트원의 4xx 거절은 PortOneRejectedException(EXTERNAL_API_ERROR + 포트원 오류 type)으로 바꿔 던지고 서킷 실패로 세지 않는다
- * - 취소 결과를 모를 때(타임아웃 · 5xx · 일부 409)의 대조는 PaymentCancelExecutor 가 한다
+ * - 취소 결과를 모를 때(타임아웃, 5xx, 일부 409)의 대조는 PaymentCancelExecutor 가 한다
  */
 @Slf4j
 @Component
@@ -88,7 +88,7 @@ public class PortOneClientAdapter {
             // 서킷 OPEN 동안 호출마다 스택이 쌓이지 않게 한 줄 — 원인 스택은 OPEN 직전 실패 로그에 있다
             log.warn("포트원 {} 차단(서킷 OPEN) - paymentId={}", action, portonePaymentId);
         } else {
-            log.error("포트원 {} 실패 - paymentId={}", action, portonePaymentId, t);   // 연결 실패 · 타임아웃 · 5xx — 스택트레이스 포함 (컨벤션 2-8)
+            log.error("포트원 {} 실패 - paymentId={}", action, portonePaymentId, t);   // 연결 실패, 타임아웃, 5xx — 스택트레이스 포함 (컨벤션 2-8)
         }
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "포트원 " + action + "에 실패했습니다.");
     }

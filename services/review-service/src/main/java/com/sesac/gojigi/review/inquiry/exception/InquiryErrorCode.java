@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
-/** 상품문의 오류 코드 (접두어 INQUIRY — docs/api/error-codes.md · review.md) */
+/** 상품문의 오류 코드 (접두어 INQUIRY — docs/api/error-codes.md, review.md) */
 @Getter
 @RequiredArgsConstructor
 public enum InquiryErrorCode implements ErrorCode {

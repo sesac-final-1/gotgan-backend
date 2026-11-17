@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** 알림 센터 (NTF-08) — 로그인한 누구나 자기 알림만. 게이트웨이 /api/notifications/** → admin-service */
-@Tag(name = "알림 센터", description = "알림함 · 실시간(SSE) — 인가: 로그인 (BUYER · SELLER · ADMIN, 자기 알림만)")
+@Tag(name = "알림 센터", description = "알림함, 실시간(SSE) — 인가: 로그인 (BUYER, SELLER, ADMIN, 자기 알림만)")
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor

@@ -19,7 +19,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-/** 실시간 전달 — 파드 안 연결 관리 · 로컬 전달 · Redis 발행 · 구독 → 연결 */
+/** 실시간 전달 — 파드 안 연결 관리, 로컬 전달, Redis 발행, 구독 → 연결 */
 class NotificationRealtimeTest {
 
     /** 보낸 이벤트 수를 세는 연결 */
@@ -33,7 +33,7 @@ class NotificationRealtimeTest {
     }
 
     @Test
-    @DisplayName("연결 · 전달 · 연결 수 — 받는 쪽마다 그 연결에만, 한 연결이 여러 받는 쪽을 들어도 연결 수는 1")
+    @DisplayName("연결, 전달, 연결 수 — 받는 쪽마다 그 연결에만, 한 연결이 여러 받는 쪽을 들어도 연결 수는 1")
     void streams_deliver() {
         NotificationStreams streams = new NotificationStreams(Duration.ofHours(1));
         SseEmitter seller = streams.open(List.of("USER#2", "STORE#1"));

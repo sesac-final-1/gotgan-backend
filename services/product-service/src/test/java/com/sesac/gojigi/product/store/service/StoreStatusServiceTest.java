@@ -115,7 +115,7 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    @DisplayName("occurredAt 은 Asia/Seoul 로 바꿔 비교 · 저장한다 — UTC 로 온 봉투도 같은 시각")
+    @DisplayName("occurredAt 은 Asia/Seoul 로 바꿔 비교, 저장한다 — UTC 로 온 봉투도 같은 시각")
     void applyStatusChanged_whenUtcOffset_convertsToKst() {
         // given
         given(storeStatusRepository.findForUpdate(1L)).willReturn(Optional.empty());

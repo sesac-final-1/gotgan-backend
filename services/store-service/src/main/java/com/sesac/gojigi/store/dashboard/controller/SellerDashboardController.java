@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 판매자 대시보드 (STR-07, docs/api/store.md 15절) — 역할 확인은 게이트웨이(/api/seller/** = SELLER), X-Store-Id 스토어 통계만 */
-@Tag(name = "판매자 대시보드", description = "order · product · settlement 통계 조합 — 인가: SELLER")
+@Tag(name = "판매자 대시보드", description = "order, product, settlement 통계 조합 — 인가: SELLER")
 @RestController
 @RequiredArgsConstructor
 public class SellerDashboardController {
@@ -31,8 +31,8 @@ public class SellerDashboardController {
             orderDaily: [{date, tradeAmt, orderCount}](오늘 포함 최근 30일, 오래된 날부터) | null,
             product: {onSaleCount, lowStockCount, soldOutCount, stoppedCount, lowStockProducts[]} | null,
             settlement: {pendingItemCount, pendingPayoutAmt, nextPayout, recentPaid[]} | null, unavailable: [실패한 영역].
-            일부 서비스가 실패해도 200 — 그 영역만 null. 정지 · 폐점 스토어도 그대로 조회된다.
-            에러: 401 UNAUTHORIZED · 403 FORBIDDEN(스토어 없음)""")
+            일부 서비스가 실패해도 200 — 그 영역만 null. 정지, 폐점 스토어도 그대로 조회된다.
+            에러: 401 UNAUTHORIZED, 403 FORBIDDEN(스토어 없음)""")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "조회 성공 — 일부 영역 실패 포함"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "UNAUTHORIZED"),

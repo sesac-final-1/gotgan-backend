@@ -34,7 +34,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-/** 관리자 화면 부하테스트 — 쿠버네티스 · Prometheus · k6 는 가짜. Job 본문 · 상태 계산 · 그래프 쿼리 · 실행 중 제한 */
+/** 관리자 화면 부하테스트 — 쿠버네티스, Prometheus, k6 는 가짜. Job 본문, 상태 계산, 그래프 쿼리, 실행 중 제한 */
 class LoadTestServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-11-16T06:00:00Z");
@@ -59,7 +59,7 @@ class LoadTestServiceTest {
     }
 
     @Test
-    @DisplayName("시작 — Job 이름 · 라벨(app 없음, tier=backend) · 시나리오 환경 변수 · k6 인자 · Secret · 자동 정리")
+    @DisplayName("시작 — Job 이름, 라벨(app 없음, tier=backend), 시나리오 환경 변수, k6 인자, Secret, 자동 정리")
     @SuppressWarnings("unchecked")
     void start_createsJob() {
         LoadTestResponses.Started started = service(true).start(new LoadTestRequests.Start(LoadTestScenario.REVIEWS, 20, 120));
@@ -89,7 +89,7 @@ class LoadTestServiceTest {
     }
 
     @Test
-    @DisplayName("계정 준비 — accounts.js · COUNT 300 · kind accounts")
+    @DisplayName("계정 준비 — accounts.js, COUNT 300, kind accounts")
     @SuppressWarnings("unchecked")
     void prepareAccounts_createsJob() {
         service(true).prepareAccounts();
@@ -107,7 +107,7 @@ class LoadTestServiceTest {
     }
 
     @Test
-    @DisplayName("꺼져 있으면 시작 · 계정 준비 · 사용자 수 변경 403, 중지는 된다")
+    @DisplayName("꺼져 있으면 시작, 계정 준비, 사용자 수 변경 403, 중지는 된다")
     void disabled() {
         LoadTestService service = service(false);
         assertCode(() -> service.start(new LoadTestRequests.Start(LoadTestScenario.BROWSE, 10, 60)), SystemErrorCode.SYSTEM_LOADTEST_DISABLED);
@@ -118,7 +118,7 @@ class LoadTestServiceTest {
     }
 
     @Test
-    @DisplayName("이미 실행 중(부하든 계정 준비든)이면 시작 · 계정 준비 409")
+    @DisplayName("이미 실행 중(부하든 계정 준비든)이면 시작, 계정 준비 409")
     void running_conflict() {
         when(kubernetes.loadJobs()).thenReturn(List.of(job("lt-1", "accounts", NOW.minusSeconds(10), 1, 0, 0)));
         LoadTestService service = service(true);
@@ -140,7 +140,7 @@ class LoadTestServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 수 변경 — 실행 중인 부하 없음 · 파드 아직 없음 409")
+    @DisplayName("사용자 수 변경 — 실행 중인 부하 없음, 파드 아직 없음 409")
     void scale_notRunning() {
         LoadTestService service = service(true);
         assertCode(() -> service.scale(new LoadTestRequests.Scale(10)), SystemErrorCode.SYSTEM_LOADTEST_NOT_RUNNING);
@@ -175,7 +175,7 @@ class LoadTestServiceTest {
     }
 
     @Test
-    @DisplayName("상태 — 최신 부하 · 계정 준비, 상태 계산(실행 중 · 실패 · 완료), 그래프는 testid 쿼리 · p95 초 → ms")
+    @DisplayName("상태 — 최신 부하, 계정 준비, 상태 계산(실행 중, 실패, 완료), 그래프는 testid 쿼리, p95 초 → ms")
     void status() {
         when(kubernetes.loadJobs()).thenReturn(List.of(job("lt-1", "load", NOW.minusSeconds(900), 0, 1, 0),
                 job("lt-2", "load", NOW.minusSeconds(60), 1, 0, 0), job("lt-0", "accounts", NOW.minusSeconds(1200), 0, 0, 1)));

@@ -1,15 +1,15 @@
-// 시연 데이터 시나리오 — 서비스별 시드(R__demo_seed.sql)가 같은 번호 · 금액 · 날짜를 가리키게 하는 단일 원본. 담당 구지훈
-// 원본: 프론트 목업(gotgan-frontend src/mocks/fixtures) — 화면 모습은 살리고 DDL · 서비스 간 정합성에 맞춘다
+// 시연 데이터 시나리오 — 서비스별 시드(R__demo_seed.sql)가 같은 번호, 금액, 날짜를 가리키게 하는 단일 원본. 담당 구지훈
+// 원본: 프론트 목업(gotgan-frontend src/mocks/fixtures) — 화면 모습은 살리고 DDL, 서비스 간 정합성에 맞춘다
 // 날짜는 시드 실행일 기준 상대값(daysAgo) — 클러스터가 매일 새 DB 라 "지난주"가 항상 실제 지난주
 
-// 상위 카테고리 — product 시드 · settlement 수수료 시드와 같은 번호 (product.md 확정표)
+// 상위 카테고리 — product 시드, settlement 수수료 시드와 같은 번호 (product.md 확정표)
 export const CATEGORY = { food: 1, living: 2, fashion: 3, 'shoes-bags': 4, beauty: 5, digital: 6 };
 
 export const GRADE = { 새싹: 'SPROUT', 파워: 'POWER', 빅파워: 'BIG_POWER' };
 
-// 스토어 번호 규칙: 목업 sN → store_id 10 + N. 단 시연 판매자 로그인 스토어 1 · 2 는 Keycloak 시드 · settlement 시드와 번호가 같아야 해서
-// (user 2 · 3, 카테고리 식품 · 리빙 그대로) 같은 카테고리의 목업 스토어 s6 · s4 를 1 · 2 로 쓴다 (10/21 답변 J2 — 이름 · slug 만 바뀜)
-// 대표자(판매자) 회원: 1 · 2 는 user 2 · 3(Keycloak 로그인 가능), 나머지는 user 200 + N (조회용, 로그인 불가 — 답변 K1)
+// 스토어 번호 규칙: 목업 sN → store_id 10 + N. 단 시연 판매자 로그인 스토어 1, 2 는 Keycloak 시드, settlement 시드와 번호가 같아야 해서
+// (user 2, 3, 카테고리 식품, 리빙 그대로) 같은 카테고리의 목업 스토어 s6, s4 를 1, 2 로 쓴다 (10/21 답변 J2 — 이름, slug 만 바뀜)
+// 대표자(판매자) 회원: 1, 2 는 user 2, 3(Keycloak 로그인 가능), 나머지는 user 200 + N (조회용, 로그인 불가 — 답변 K1)
 export const STORES = [
   { storeId: 1, userId: 2, mock: 's6', name: '산골농부 박씨네', slug: 'park-farm', cat: 'food', owner: '박영철', bizNo: '000-00-00006', phone: '064-0000-0006',
     email: 'wlsgksvheh+seller1@gmail.com', intro: '제주 서귀포에서 3대째 귤 농사를 짓습니다. 따는 날 바로 보내드려요.', since: 980, grade: '빅파워', color: '#d0701f',
@@ -29,9 +29,9 @@ export const STORES = [
   { storeId: 15, userId: 205, mock: 's5', name: '볕드는집', slug: 'byeot-house', cat: 'living', owner: '정다은', bizNo: '000-00-00005', phone: '031-0000-0005',
     email: 'house@byeot.example.com', intro: '햇볕 잘 드는 방을 위한 조명과 패브릭.', since: 301, grade: '새싹', color: '#c08a2e',
     courier: '한진택배', shipFee: 3000, freeOver: 40000, dispatch: '평일 13시 이전 결제 시 당일 출고',
-    status: 'SUSPENDED', statusReason: '고객 문의 · 배송 지연 반복 — 개선 계획 제출 후 해제', suspendedW1Day: 3 },   // 지난주 목 — 1008 확정(화) 뒤 · 집계 전
+    status: 'SUSPENDED', statusReason: '고객 문의 · 배송 지연 반복 — 개선 계획 제출 후 해제', suspendedW1Day: 3 },   // 지난주 목 — 1008 확정(화) 뒤, 집계 전
   { storeId: 17, userId: 207, mock: 's7', name: '로스터리 하루', slug: 'haru-roastery', cat: 'food', owner: '윤하루', bizNo: '000-00-00007', phone: '02-0000-0007',
-    email: 'roast@haru.example.com', intro: '월·목 로스팅, 화·금 발송. 볶은 지 3일 이내 원두만 보냅니다.', since: 540, grade: '파워', color: '#3d2b22',
+    email: 'roast@haru.example.com', intro: '월, 목 로스팅, 화 · 금 발송. 볶은 지 3일 이내 원두만 보냅니다.', since: 540, grade: '파워', color: '#3d2b22',
     courier: 'CJ대한통운', shipFee: 3000, freeOver: 30000, dispatch: '화 · 금 발송', status: 'ACTIVE' },
   { storeId: 18, userId: 208, mock: 's8', name: '피부정원', slug: 'skin-garden', cat: 'beauty', owner: '강예린', bizNo: '000-00-00008', phone: '02-0000-0008',
     email: 'garden@skingarden.example.com', intro: '성분은 줄이고 효과는 그대로. 민감 피부를 위한 저자극 스킨케어.', since: 720, grade: '파워', color: '#6f8f7a',
@@ -51,7 +51,7 @@ export const REPRESENTATIVE = {
   digital: [{ name: '무접점 키보드', subCategory: '키보드', price: 219000 }, { name: '원목 모니터 받침대', subCategory: '데스크', price: 89000 }],
 };
 
-// 회원 — 1 관리자 · 2 · 3 판매자 · 4~6 구매자는 Keycloak 시드 계정(로그인 가능, 이메일 고정). 4~6 은 목업 u1~u3 프로필로
+// 회원 — 1 관리자, 2, 3 판매자, 4~6 구매자는 Keycloak 시드 계정(로그인 가능, 이메일 고정). 4~6 은 목업 u1~u3 프로필로
 //   목업 u4~u14 → user 100 + N (조회용, 로그인 불가 — 답변 K1). 휴면 없음(K2), u11 은 이용정지(관리자 회원 화면 시연)
 //   로그인 계정의 포인트 = 시드 구매확정분 적립(서버 규칙 — 구매확정 때 5%), 누적 구매확정 = baseSpent(시드 주문 이전 누적) + 시드 구매확정분
 //   등급은 손으로 적지 않고 누적 금액으로 계산(GRADE_RULE — 프론트 user/constants.js 와 같은 기준). 조회용 회원도 같은 규칙으로 검증
@@ -62,7 +62,7 @@ export const LOGIN_BUYERS = [
   { userId: 5, mock: 'u2', email: 'wlsgksvheh+buyer2@gmail.com', name: '이도현', nick: '도현', phone: '010-0000-0011', baseSpent: 750000, joined: 1400, login: 0 },    // GOLD
   { userId: 6, mock: 'u3', email: 'wlsgksvheh+buyer3@gmail.com', name: '박지민', nick: '지민찡', phone: '010-0000-0012', baseSpent: 150000, joined: 400, login: 2 },  // SILVER
 ];
-// 입점 심사 시연용 신청 (10/29) — 관리자가 승인 · 반려 · 보완요청을 눌러 볼 수 있게. 신청자는 Keycloak 에 있는 구매자(승인되면 user 가 SELLER 를 넣음)
+// 입점 심사 시연용 신청 (10/29) — 관리자가 승인, 반려, 보완요청을 눌러 볼 수 있게. 신청자는 Keycloak 에 있는 구매자(승인되면 user 가 SELLER 를 넣음)
 //   buyer1(4)은 메인 시연 구매자라 쓰지 않는다. 서류는 승인 신청서까지 모두 같은 샘플(SAMPLE_DOCS — seller-docs applications/seed/, 11/3 QA Q-구-13)
 //   102 보완요청은 다시 낼 서류(requestedDocs)를 지정해 재제출 화면이 서류 칸을 보여 준다(Q-구-17)
 export const APPLICATIONS = [
@@ -74,7 +74,7 @@ export const APPLICATIONS = [
     products: [{ name: '월넛 원목 도마', subCategory: '식기', price: 48000 }, { name: '오크 서빙 트레이', subCategory: '수납', price: 36000 }],
     supplement: { daysAgo: 2, reason: '통신판매업 신고증 사본이 흐려 확인이 어렵습니다. 다시 올려 주세요.', docs: ['ECOMMERCE_REG'] } },
 ];
-// 입점 서류 샘플 — 시연용 가짜 서류(scripts/seed-gen/sample-docs) · 상품 사진은 시드 상품 이미지 복사. 신청서마다 같은 객체를 가리킨다
+// 입점 서류 샘플 — 시연용 가짜 서류(scripts/seed-gen/sample-docs), 상품 사진은 시드 상품 이미지 복사. 신청서마다 같은 객체를 가리킨다
 export const SAMPLE_DOCS = [
   { docType: 'BUSINESS_REG', key: 'applications/seed/business-reg.pdf', name: '사업자등록증_샘플.pdf', type: 'application/pdf', size: 840 },
   { docType: 'ECOMMERCE_REG', key: 'applications/seed/ecommerce-reg.pdf', name: '통신판매업신고증_샘플.pdf', type: 'application/pdf', size: 845 },
@@ -112,7 +112,7 @@ export const CATEGORY_TREE = [
 const SUB_ID = Object.fromEntries(CATEGORY_TREE.flatMap((c) => c.subs.map((s, i) => [s, c.id * 100 + i + 1])));
 
 // 상품 — 프론트 목업 products(catalog.js) 39개. product_id = 스토어 id × 100 + 스토어 안 순번(목업 순서), 옵션 = 상품 × 100 + 조합 순번(1부터),
-//   이미지 = 상품 × 10 + 순번(0이 대표) · S3 키 products/seed/{mock}-{1..3}.jpg (프론트 public/images/p 와 같은 파일).
+//   이미지 = 상품 × 10 + 순번(0이 대표), S3 키 products/seed/{mock}-{1..3}.jpg (프론트 public/images/p 와 같은 파일).
 //   discount = 즉시할인율 %, stock = 상품 전체 재고(조합에 고르게 나눔 — 나머지는 앞 조합), created = 등록 며칠 전, status 생략 = ON_SALE
 export const CATALOG = [
   {id: 1101, mock: "p101", name: "프렌치 리넨 오버핏 셔츠", sub: "셔츠", price: 89000, discount: 15, stock: 142, created: 160, options: [["컬러",["오트밀","화이트","세이지"]],["사이즈",["S","M","L","XL"]]], material: "리넨 100% (프랑스산 원사)", origin: "대한민국"},
@@ -168,10 +168,10 @@ export const PRODUCTS = Object.fromEntries(CATALOG.map((p) => [p.id, {
 }]));
 export const subCategoryId = (p) => SUB_ID[p.sub];
 
-// 주문 시나리오 — 주문 1건 = 스토어 1곳 · 상품 1개(정합성 확인을 단순하게). 포인트 사용 없음
+// 주문 시나리오 — 주문 1건 = 스토어 1곳, 상품 1개(정합성 확인을 단순하게). 포인트 사용 없음
 //   week: 구매확정된 주(1 = 지난주 → 정산 지급예정, 2 = 지지난주 → 지급 완료), day: 그 주 월요일 + day 에 구매확정
-//   recent: 진행 중 상태 — 판매자 주문 화면 시연(발주확인 · 송장 버튼). 결제완료 · 배송준비까지만 — 배송중 · 배송완료는
-//   자동 배송완료 · 구매확정 스케줄러가 시각으로 넘기므로 시드하지 않고 QA · 시연에서 송장 등록으로 만든다(11/3)
+//   recent: 진행 중 상태 — 판매자 주문 화면 시연(발주확인, 송장 버튼). 결제완료, 배송준비까지만 — 배송중, 배송완료는
+//   자동 배송완료, 구매확정 스케줄러가 시각으로 넘기므로 시드하지 않고 QA, 시연에서 송장 등록으로 만든다(11/3)
 export const ORDERS = [
   { buyer: 4, product: 101, qty: 2, week: 2, day: 1 },
   { buyer: 5, product: 201, qty: 2, week: 2, day: 2 },
@@ -194,8 +194,8 @@ export const PAYMENT_FEE_RATE = 2.2;
 export const EARN_RATE = 5;
 
 // 리뷰 — 구매확정 상품주문(ORDERS 중 week 가 있는 것) 일부에 작성. orderItemId = 1001 + ORDERS 순번(order 시드와 같은 번호)
-//   buyer1(4)은 1001 만 쓰고 1006 · 1007 을 남겨 둔다(마이페이지 '작성 가능한 리뷰' 시연). fit = 패션 · 신발가방만
-//   reply = 판매자 답글, blind = 관리자 블라인드 사유(신고 처리 시연). 시각은 구매확정 + afterDays (답글 · 블라인드는 그 뒤)
+//   buyer1(4)은 1001 만 쓰고 1006, 1007 을 남겨 둔다(마이페이지 '작성 가능한 리뷰' 시연). fit = 패션, 신발가방만
+//   reply = 판매자 답글, blind = 관리자 블라인드 사유(신고 처리 시연). 시각은 구매확정 + afterDays (답글, 블라인드는 그 뒤)
 export const REVIEWS = [
   { orderItemId: 1001, rating: 5, afterDays: 1, title: '선물용으로도 손색없어요',
     content: '껍질이 얇고 새콤달콤해서 앉은자리에서 다섯 개는 먹었어요. 박스 안에 무른 것 하나 없이 크기도 고르게 왔습니다. 부모님 댁에도 한 박스 보내드렸어요.',
@@ -215,7 +215,7 @@ export const REVIEWS = [
     content: '전구색으로 켜 두면 방 분위기가 확 따뜻해져요. 오크 베이스가 묵직해서 흔들림이 없고 갓 패브릭도 고급스럽습니다. 스위치가 선 중간에 있는 게 조금 아쉬워요.' },
 ];
 
-// 신고 · 조치 — 블라인드 리뷰 · 정지 회원의 근거(admindb). 조치 1번이 그 대상의 열린 신고를 한꺼번에 닫는다(RESOLVED)
+// 신고, 조치 — 블라인드 리뷰, 정지 회원의 근거(admindb). 조치 1번이 그 대상의 열린 신고를 한꺼번에 닫는다(RESOLVED)
 //   reviewId = 상품주문 id(review 시드와 같음). reporter = 신고한 회원, role = BUYER / SELLER. 시각은 대상 시각 기준
 export const MODERATIONS = [
   { targetType: 'REVIEW', targetId: 1004, action: 'BLIND', reason: '상품과 무관한 외부 판매처 홍보 · 광고 (신고 3건 확인)',
@@ -224,7 +224,7 @@ export const MODERATIONS = [
     reports: [{ reporter: 2, role: 'SELLER', code: 'ABUSE' }, { reporter: 3, role: 'SELLER', code: 'ABUSE' }] },
 ];
 
-// 상품 문의 — 스토어 1 · 2 상품 위주, 작성자는 로그인 구매자(4~6) 위주. answer 가 있으면 답변완료(answerAfterDays 뒤), secret = 비밀글
+// 상품 문의 — 스토어 1, 2 상품 위주, 작성자는 로그인 구매자(4~6) 위주. answer 가 있으면 답변완료(answerAfterDays 뒤), secret = 비밀글
 //   daysAgo = 등록 며칠 전. product_inquiry_id = 순번(1부터)
 export const INQUIRIES = [
   { userId: 4, product: 101, daysAgo: 6, secret: false, content: '로얄과랑 대과는 당도 차이가 있나요? 아이들 간식용으로 사려고 해요.',

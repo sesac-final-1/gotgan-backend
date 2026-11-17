@@ -7,7 +7,7 @@ import com.sesac.gojigi.order.claim.service.ClaimRefundPolicy.Refund;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** 클레임 환불 금액 — 취소(스토어 마지막 배송비) · 반품(사유별 반품 배송비) · 남은 결제 금액 상한 */
+/** 클레임 환불 금액 — 취소(스토어 마지막 배송비), 반품(사유별 반품 배송비), 남은 결제 금액 상한 */
 class ClaimRefundPolicyTest {
 
     @Test
@@ -19,7 +19,7 @@ class ClaimRefundPolicyTest {
     }
 
     @Test
-    @DisplayName("반품 — 단순변심은 스토어 기본 배송비 × 2 차감(0 아래로는 안 감), 불량 · 오배송은 차감 없음")
+    @DisplayName("반품 — 단순변심은 스토어 기본 배송비 × 2 차감(0 아래로는 안 감), 불량, 오배송은 차감 없음")
     void ret() {
         long changeOfMind = ClaimRefundPolicy.returnShippingFee(ClaimReasonCode.CHANGE_OF_MIND, 3_000L);
         assertThat(changeOfMind).isEqualTo(6_000L);

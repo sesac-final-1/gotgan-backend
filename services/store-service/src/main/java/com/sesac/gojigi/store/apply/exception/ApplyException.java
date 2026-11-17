@@ -8,7 +8,7 @@ public class ApplyException extends BusinessException {
         super(errorCode);
     }
 
-    /** 화면에 구체적인 이유를 보여 줄 때 (서류 · 재신청 가능일) */
+    /** 화면에 구체적인 이유를 보여 줄 때 (서류, 재신청 가능일) */
     public ApplyException(ApplyErrorCode errorCode, String message) {
         super(errorCode, message);
     }

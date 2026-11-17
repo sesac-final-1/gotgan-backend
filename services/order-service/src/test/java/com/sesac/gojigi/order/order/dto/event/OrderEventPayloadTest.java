@@ -19,7 +19,7 @@ class OrderEventPayloadTest {
     private final OrderItem item = OrderFixtures.item(order);
 
     @Test
-    @DisplayName("OrderPaid — 주문 금액 · 주문자와 상품주문별 스토어 · 상품명 · 옵션 · 수량 · 금액 · 적립 포인트를 담는다")
+    @DisplayName("OrderPaid — 주문 금액, 주문자와 상품주문별 스토어, 상품명, 옵션, 수량, 금액, 적립 포인트를 담는다")
     void orderPaid_of_mapsOrderAndItems() {
         // when
         OrderPaidPayload payload = OrderPaidPayload.of(order, List.of(item));
@@ -36,7 +36,7 @@ class OrderEventPayloadTest {
     }
 
     @Test
-    @DisplayName("OrderItemShipped — 주문자 · 상품 스냅샷과 송장 정보를 담는다")
+    @DisplayName("OrderItemShipped — 주문자, 상품 스냅샷과 송장 정보를 담는다")
     void orderItemShipped_from_mapsItemAndOrder() {
         // given
         ReflectionTestUtils.setField(item, "courier", "CJ대한통운");
@@ -51,7 +51,7 @@ class OrderEventPayloadTest {
     }
 
     @Test
-    @DisplayName("OrderItemConfirmed — 정산용 스냅샷 · 적립 포인트 · 구매확정 시각(+09:00)과 review 자격용 주문자 표시 이름 · 옵션 · 대표 사진을 담는다")
+    @DisplayName("OrderItemConfirmed — 정산용 스냅샷, 적립 포인트, 구매확정 시각(+09:00)과 review 자격용 주문자 표시 이름, 옵션, 대표 사진을 담는다")
     void orderItemConfirmed_from_convertsConfirmedAtToKst() {
         // given
         ReflectionTestUtils.setField(item, "confirmedAt", LocalDateTime.of(2026, 10, 29, 9, 0));
@@ -68,7 +68,7 @@ class OrderEventPayloadTest {
     @Test
     @DisplayName("OrderItemConfirmed — 구매확정 시각이 아직 없으면 null")
     void orderItemConfirmed_from_nullConfirmedAt() {
-        // when · then
+        // when, then
         assertThat(OrderItemConfirmedPayload.from(item).confirmedAt()).isNull();
     }
 }

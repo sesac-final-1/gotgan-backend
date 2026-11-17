@@ -29,7 +29,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 주문번호 채번(부하 테스트 경-1) — 실제 MySQL 8.4 에서 동시 발급 · 날짜 전환 · 기존 주문 이어 받기 */
+/** 주문번호 채번(부하 테스트 경-1) — 실제 MySQL 8.4 에서 동시 발급, 날짜 전환, 기존 주문 이어 받기 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderNoIssuer.class })
@@ -88,7 +88,7 @@ class OrderNoIssuerIntegrationTest {
         assertThat(issuer.next()).isEqualTo("20261106-000001");
         assertThat(issuer.next()).isEqualTo("20261106-000002");
 
-        // when · then
+        // when, then
         today(LocalDate.of(2026, 11, 7));
         assertThat(issuer.next()).isEqualTo("20261107-000001");
     }

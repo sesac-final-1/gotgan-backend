@@ -1,4 +1,4 @@
-// common-web — 서비스 공통 응답 봉투 · 예외 처리 · 게이트웨이 사용자 헤더 (결정 5번 B-1, 10/20)
+// common-web — 서비스 공통 응답 봉투, 예외 처리, 게이트웨이 사용자 헤더 (결정 5번 B-1, 10/20)
 // 각 서비스 settings.gradle 의 includeBuild('../../libs/common-web') 로 연결되는 composite build — 따로 배포하지 않는다
 // Spring 의존은 compileOnly — 서비스가 이미 가진 Spring Boot 버전을 그대로 쓴다 (버전 충돌 방지)
 plugins {

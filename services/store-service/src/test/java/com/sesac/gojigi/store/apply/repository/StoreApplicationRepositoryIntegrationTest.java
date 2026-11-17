@@ -23,7 +23,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
-/** 실제 MySQL + Flyway V1 · V2 + 시연 시드(스토어 1 · 2 와 승인 신청서) 위에서 매핑 · 중복 검사 쿼리 확인 */
+/** 실제 MySQL + Flyway V1, V2 + 시연 시드(스토어 1, 2 와 승인 신청서) 위에서 매핑, 중복 검사 쿼리 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(TestcontainersConfiguration.class)
@@ -43,7 +43,7 @@ class StoreApplicationRepositoryIntegrationTest {
     private EntityManager entityManager;
 
     @Test
-    @DisplayName("신청서를 저장하면 대표 상품 JSON · 상태 · 시각이 그대로 다시 읽힌다")
+    @DisplayName("신청서를 저장하면 대표 상품 JSON, 상태, 시각이 그대로 다시 읽힌다")
     void save_newApplication_roundTripsJsonAndStatus() {
         // given
         LocalDateTime submittedAt = LocalDateTime.of(2026, 10, 22, 14, 5, 11);
@@ -65,14 +65,14 @@ class StoreApplicationRepositoryIntegrationTest {
     }
 
     @Test
-    @DisplayName("진행 중 신청 · slug · 스토어명 검사는 심사대기 · 보완요청 신청만 본다")
+    @DisplayName("진행 중 신청, slug, 스토어명 검사는 심사대기, 보완요청 신청만 본다")
     void exists_inProgressApplication_matchesOnlyPendingOrSupplement() {
         // given
         storeApplicationRepository.saveAndFlush(application(4L, "Linen Lab", "linen-lab", LocalDateTime.now()));
 
-        // when · then
+        // when, then
         assertThat(storeApplicationRepository.existsByUserIdAndStatusIn(4L, IN_PROGRESS)).isTrue();
-        assertThat(storeApplicationRepository.existsByUserIdAndStatusIn(7L, IN_PROGRESS)).isFalse();   // 5 · 6 은 시드의 심사 시연 신청자
+        assertThat(storeApplicationRepository.existsByUserIdAndStatusIn(7L, IN_PROGRESS)).isFalse();   // 5, 6 은 시드의 심사 시연 신청자
         assertThat(storeApplicationRepository.existsBySlugAndStatusIn("linen-lab", IN_PROGRESS)).isTrue();
         assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusIn("linenlab", IN_PROGRESS)).isTrue();
         // 시드의 승인된 신청서(산골농부 박씨네)는 진행 중이 아니라 신청서 쪽 검사에는 걸리지 않는다 — 스토어 쪽 검사가 막음
@@ -80,7 +80,7 @@ class StoreApplicationRepositoryIntegrationTest {
     }
 
     @Test
-    @DisplayName("자동 반려 대상 — 보완요청 시각이 기준 이전(포함)인 SUPPLEMENT 만, 오래된 순 · 개수 제한")
+    @DisplayName("자동 반려 대상 — 보완요청 시각이 기준 이전(포함)인 SUPPLEMENT 만, 오래된 순, 개수 제한")
     void findExpiredSupplementIds_returnsOnlyExpiredSupplements() {
         // given — 기준 10/22 10:00
         LocalDateTime before = LocalDateTime.of(2026, 10, 22, 10, 0);
@@ -89,7 +89,7 @@ class StoreApplicationRepositoryIntegrationTest {
         saveWithStatus(43L, "기한전상회", "not-due-store", "SUPPLEMENT", before.plusSeconds(1));
         saveWithStatus(44L, "재제출상회", "pending-store", "PENDING", before.minusDays(3));
 
-        // when · then — 시드 102(보완요청 중)는 최근이라 대상 아님
+        // when, then — 시드 102(보완요청 중)는 최근이라 대상 아님
         assertThat(storeApplicationRepository.findExpiredSupplementIds(before, Limit.of(10))).containsExactly(older, onBoundary);
         assertThat(storeApplicationRepository.findExpiredSupplementIds(before, Limit.of(1))).containsExactly(older);
     }
@@ -102,13 +102,13 @@ class StoreApplicationRepositoryIntegrationTest {
     }
 
     @Test
-    @DisplayName("재제출 주소 · 스토어명 중복 — 자기 신청은 빼고 다른 진행 중 신청과만 비교")
+    @DisplayName("재제출 주소, 스토어명 중복 — 자기 신청은 빼고 다른 진행 중 신청과만 비교")
     void existsByStoreIdentityAndIdNot_excludesOwnApplication() {
         // given
         Long own = storeApplicationRepository.saveAndFlush(application(4L, "Linen Lab", "linen-lab", LocalDateTime.of(2026, 10, 22, 10, 0))).getId();
         Long other = storeApplicationRepository.saveAndFlush(application(7L, "토리 상점", "tori-shop", LocalDateTime.of(2026, 10, 23, 10, 0))).getId();
 
-        // when · then — 자기 값은 겹침이 아니고, 다른 신청 값은 겹침
+        // when, then — 자기 값은 겹침이 아니고, 다른 신청 값은 겹침
         assertThat(storeApplicationRepository.existsBySlugAndStatusInAndIdNot("linen-lab", IN_PROGRESS, own)).isFalse();
         assertThat(storeApplicationRepository.existsByNormalizedStoreNameAndStatusInAndIdNot("linenlab", IN_PROGRESS, own)).isFalse();
         assertThat(storeApplicationRepository.existsBySlugAndStatusInAndIdNot("tori-shop", IN_PROGRESS, own)).isTrue();
@@ -124,7 +124,7 @@ class StoreApplicationRepositoryIntegrationTest {
         Long latest = storeApplicationRepository.saveAndFlush(application(5L, "새 스토어", "new-store", LocalDateTime.of(2026, 10, 1, 10, 0))).getId();
         update("UPDATE store_application SET status = 'REJECTED' WHERE store_application_id IN (" + older + ", " + latest + ")");
 
-        // when · then
+        // when, then
         assertThat(storeApplicationRepository.findFirstByUserIdAndStatusOrderByStatusChangedAtDesc(5L, ApplicationStatus.REJECTED))
                 .get().extracting(StoreApplication::getId).isEqualTo(latest);
     }
@@ -165,7 +165,7 @@ class StoreApplicationRepositoryIntegrationTest {
     @Test
     @DisplayName("같은 사업자번호 조회는 이 신청을 빼고, 그 신청으로 만든 스토어는 소프트 삭제만 뺀다")
     void sameBizRegNo_excludesSelfAndSoftDeletedStore() {
-        // given — 시드 신청 1(000-00-00006, 스토어 1) · 2(000-00-00004, 스토어 2) 와 같은 번호로 새 신청
+        // given — 시드 신청 1(000-00-00006, 스토어 1), 2(000-00-00004, 스토어 2) 와 같은 번호로 새 신청
         Long mine = storeApplicationRepository.saveAndFlush(application(4L, "새 스토어", "new-store", LocalDateTime.now())).getId();
         update("UPDATE store_application SET biz_reg_no = '000-00-00006' WHERE store_application_id IN (" + mine + ", 2)");
         update("UPDATE store SET status = 'CLOSED' WHERE store_id = 1");
@@ -189,7 +189,7 @@ class StoreApplicationRepositoryIntegrationTest {
         // given — 시드 스토어 2(user 3, 토담공방)를 폐점
         update("UPDATE store SET status = 'CLOSED' WHERE store_id = 2");
 
-        // when · then
+        // when, then
         assertThat(storeRepository.existsByUserId(3L)).isTrue();
         assertThat(storeRepository.existsByUserId(4L)).isFalse();
         assertThat(storeRepository.existsBySlug(slugOfStore(2L))).isTrue();
@@ -197,12 +197,12 @@ class StoreApplicationRepositoryIntegrationTest {
     }
 
     @Test
-    @DisplayName("스토어명은 공백 · 대소문자를 무시하고 비교한다")
+    @DisplayName("스토어명은 공백, 대소문자를 무시하고 비교한다")
     void existsByNormalizedStoreName_spacesAndCase_ignored() {
         // given
         update("UPDATE store SET store_name = 'Gotgan Living' WHERE store_id = 2");
 
-        // when · then
+        // when, then
         assertThat(storeRepository.existsByNormalizedStoreName("gotganliving")).isTrue();
         assertThat(storeRepository.existsByNormalizedStoreName("gotganlivings")).isFalse();
     }
@@ -234,7 +234,7 @@ class StoreApplicationRepositoryIntegrationTest {
         update("UPDATE store_application SET status = 'REJECTED' WHERE store_application_id = " + old);
         Long latest = storeApplicationRepository.saveAndFlush(application(7L, "새 스토어", "new-one", LocalDateTime.of(2026, 10, 1, 10, 0))).getId();
 
-        // when · then
+        // when, then
         assertThat(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(7L))
                 .get().extracting(StoreApplication::getId).isEqualTo(latest);
         assertThat(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(999L)).isEmpty();

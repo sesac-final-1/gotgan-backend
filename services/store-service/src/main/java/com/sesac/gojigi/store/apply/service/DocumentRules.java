@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 입점 서류 형식 · 크기 기준 — presign 발급(1차)과 신청 때 S3 확인(2차)이 같은 기준을 쓴다 (docs/api/store.md 2절 · 2-1절).
- * 서류 3종은 PDF · JPG · PNG, 상품 사진은 JPG · PNG, 파일마다 10MB 이하.
+ * 입점 서류 형식, 크기 기준 — presign 발급(1차)과 신청 때 S3 확인(2차)이 같은 기준을 쓴다 (docs/api/store.md 2절, 2-1절).
+ * 서류 3종은 PDF, JPG, PNG, 상품 사진은 JPG, PNG, 파일마다 10MB 이하.
  */
 final class DocumentRules {
 
@@ -34,8 +34,8 @@ final class DocumentRules {
 
     static String typeMessage(DocType docType) {
         return docType == DocType.PRODUCT_PHOTO
-                ? "대표 상품 사진은 JPG · PNG 만 올릴 수 있습니다."
-                : label(docType) + "은 PDF · JPG · PNG 만 올릴 수 있습니다.";
+                ? "대표 상품 사진은 JPG, PNG 만 올릴 수 있습니다."
+                : label(docType) + "은 PDF, JPG, PNG 만 올릴 수 있습니다.";
     }
 
     static String label(DocType docType) {

@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-/** 정산서 상세 — 건별 상품주문 · 수수료(율은 여기에만) + 상태 이력. 관리자(STL-05) · 판매자(STL-07) 공용 */
+/** 정산서 상세 — 건별 상품주문, 수수료(율은 여기에만) + 상태 이력. 관리자(STL-05), 판매자(STL-07) 공용 */
 public record SettlementDetailResponse(SettlementSummaryResponse settlement, List<Item> items, List<History> history) {
 
     public record Item(Long orderItemId, String orderNo, String productName, OffsetDateTime confirmedAt, long itemAmt,

@@ -21,7 +21,7 @@ class PaymentLogContextTest {
     }
 
     @Test
-    @DisplayName("orderNo · sagaId 를 MDC 에 넣고 clear 로 둘 다 지운다")
+    @DisplayName("orderNo, sagaId 를 MDC 에 넣고 clear 로 둘 다 지운다")
     void putAndClear() {
         PaymentLogContext.put("20261022-000001", "6c1f0a6e-0000-0000-0000-000000000001");
 
@@ -34,7 +34,7 @@ class PaymentLogContextTest {
     }
 
     @Test
-    @DisplayName("값이 없거나 빈 문자열이면 넣지 않는다 (웹훅 · 상태 조회는 sagaId 없음)")
+    @DisplayName("값이 없거나 빈 문자열이면 넣지 않는다 (웹훅, 상태 조회는 sagaId 없음)")
     void skipsBlank() {
         PaymentLogContext.put("20261022-000001", null);
         PaymentLogContext.put(" ", "");

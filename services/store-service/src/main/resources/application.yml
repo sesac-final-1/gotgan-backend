@@ -1,6 +1,6 @@
 spring:
   application:
-    name: store-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+    name: store-service                  # 지표, 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/storedb?connectionTimeZone=Asia/Seoul
@@ -11,7 +11,7 @@ spring:
     hibernate:
       ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
   flyway:
-    locations: classpath:db/migration       # 시드(db/seed) 는 local · k8s 프로필에서만 추가
+    locations: classpath:db/migration       # 시드(db/seed) 는 local, k8s 프로필에서만 추가
 
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
@@ -29,7 +29,7 @@ app:
     settlement-url: ${SETTLEMENT_SERVICE_URI:http://localhost:8085}
   events:
     topic-arn: ${STORE_EVENTS_TOPIC_ARN:}   # SNS sesac-gojigi-store-events
-    outbox:                                  # 이벤트 아웃박스 (EventOutboxService · V4) — 커밋 후 바로 발행, 실패분은 발행기가 다시
+    outbox:                                  # 이벤트 아웃박스 (EventOutboxService, V4) — 커밋 후 바로 발행, 실패분은 발행기가 다시
       publish-interval: 30s
       initial-delay: 20s
       retry-after: 10s                       # 커밋 직후 발행과 겹치지 않게 이만큼 지난 NEW 만
@@ -40,7 +40,7 @@ app:
     base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{key} (ConfigMap, product 와 같은 규칙)
     bucket: ${IMAGES_BUCKET:}                 # 대표 이미지 presigned PUT 대상 (ConfigMap) — stores/{storeId}/… 만 IRSA PutObject
   apply:
-    supplement-due: ${APPLY_SUPPLEMENT_DUE:7d}   # 보완 기한(STR-09) — 지나면 재제출 막힘 · 자동 반려. 시연 때만 짧게(예: 3m)
+    supplement-due: ${APPLY_SUPPLEMENT_DUE:7d}   # 보완 기한(STR-09) — 지나면 재제출 막힘, 자동 반려. 시연 때만 짧게(예: 3m)
   scheduler:
     zone: Asia/Seoul
     supplement-expiry:                         # 보완 기한 지난 신청 자동 반려 (SupplementExpiryScheduler, ShedLock)
@@ -49,7 +49,7 @@ app:
 
 resilience4j:
   circuitbreaker:
-    circuit-breaker-aspect-order: 1         # 서킷이 바깥 · 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 502 로 바꿔 재시도가 안 걸린다
+    circuit-breaker-aspect-order: 1         # 서킷이 바깥, 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 502 로 바꿔 재시도가 안 걸린다
     configs:
       default:
         sliding-window-size: 10
@@ -59,15 +59,15 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
       remote:                               # 다른 서비스 호출 (store/client/*ClientAdapter)
         base-config: default
-        record-exceptions:                  # 장애로 세는 것: 연결 실패 · 타임아웃 · 5xx
+        record-exceptions:                  # 장애로 세는 것: 연결 실패, 타임아웃, 5xx
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
         ignore-exceptions:                  # 4xx 변환(BusinessException)은 세지 않음
           - com.sesac.gojigi.common.web.exception.BusinessException
-    instances:                              # 이름 = 대상 서비스 (컨벤션 · 스펙 STR-13)
-      order: { base-config: remote }        # OrderClientAdapter — 폐점 전 진행 중 주문 · DashboardClientAdapter — 주문 통계
+    instances:                              # 이름 = 대상 서비스 (컨벤션, 스펙 STR-13)
+      order: { base-config: remote }        # OrderClientAdapter — 폐점 전 진행 중 주문, DashboardClientAdapter — 주문 통계
       product: { base-config: remote }      # DashboardClientAdapter — 상품 통계
-      settlement: { base-config: remote }   # SettlementClientAdapter — 폐점 전 미정산 · DashboardClientAdapter — 정산 통계
+      settlement: { base-config: remote }   # SettlementClientAdapter — 폐점 전 미정산, DashboardClientAdapter — 정산 통계
   retry:
     retry-aspect-order: 2
     configs:
@@ -96,7 +96,7 @@ management:
   endpoint:
     health:
       probes:
-        enabled: true                       # /actuator/health/liveness · readiness
+        enabled: true                       # /actuator/health/liveness, readiness
   health:
     circuitbreakers:
       enabled: false                        # 서킷이 열려도 내 파드는 건강함 — 다른 서비스 장애로 재시작되지 않게

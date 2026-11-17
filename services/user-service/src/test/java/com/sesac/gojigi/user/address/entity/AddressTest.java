@@ -47,7 +47,7 @@ class AddressTest {
         // given
         Address address = address(userWithId(1L), false);
 
-        // when · then
+        // when, then
         address.markDefault();
         assertThat(address.isDefault()).isTrue();
 
@@ -77,7 +77,7 @@ class AddressTest {
         // given
         Address address = address(userWithId(1L), false);
 
-        // when · then
+        // when, then
         assertThat(address.isOwnedBy(1L)).isTrue();
         assertThat(address.isOwnedBy(2L)).isFalse();
         assertThat(address.isOwnedBy(null)).isFalse();

@@ -6,8 +6,8 @@ import com.sesac.gojigi.order.order.entity.OrderItemStatus;
 import java.time.LocalDateTime;
 
 /**
- * 판매자 주문 관리의 상품주문 1건 (ORD-12 · DLV) — 주문 때 남긴 스냅샷이라 다른 서비스를 부르지 않는다.
- * buyerName 은 공개용 이름(닉네임 또는 가운데 마스킹 실명), 배송에 필요한 수령인 · 연락처 · 주소는 그대로.
+ * 판매자 주문 관리의 상품주문 1건 (ORD-12, DLV) — 주문 때 남긴 스냅샷이라 다른 서비스를 부르지 않는다.
+ * buyerName 은 공개용 이름(닉네임 또는 가운데 마스킹 실명), 배송에 필요한 수령인, 연락처, 주소는 그대로.
  */
 public record SellerOrderItemResponse(Long orderItemId, String itemNo, String orderNo, LocalDateTime orderedAt,
                                       LocalDateTime paidAt, OrderItemStatus status, Long productId, String productName,

@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 실시간 모니터링 — Prometheus · Zipkin · Loki 는 가짜. 라우트 → 서비스 합산 · 평균 · 에러율 · 호출 해석 · 장애 합치기 · 트레이스 · 분석 */
+/** 실시간 모니터링 — Prometheus, Zipkin, Loki 는 가짜. 라우트 → 서비스 합산, 평균, 에러율, 호출 해석, 장애 합치기, 트레이스, 분석 */
 class MonitorServiceTest {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -56,7 +56,7 @@ class MonitorServiceTest {
     }
 
     @Test
-    @DisplayName("현황 — 라우트를 서비스로 합치고(user-auth + user-service), 평균 ms · 5xx 건수 계산, 총합, DB 연결 풀")
+    @DisplayName("현황 — 라우트를 서비스로 합치고(user-auth + user-service), 평균 ms, 5xx 건수 계산, 총합, DB 연결 풀")
     void overview() {
         when(prometheus.rangeBy(eq(MonitorService.COUNT_BY_ROUTE), any(), any(), any(), any())).thenReturn(Optional.of(Map.of(
                 "user-auth", List.of(new Sample(1000, 2), new Sample(6000, 0)),
@@ -102,7 +102,7 @@ class MonitorServiceTest {
     }
 
     @Test
-    @DisplayName("호출 — 게이트웨이 첫 구간으로 한 줄(경로 · 상태 · ms · 라우트 → 서비스), 최신순, 관리자 시스템 폴링 · 액추에이터는 뺀다")
+    @DisplayName("호출 — 게이트웨이 첫 구간으로 한 줄(경로, 상태, ms, 라우트 → 서비스), 최신순, 관리자 시스템 폴링, 액추에이터는 뺀다")
     void calls() {
         when(zipkin.recentTraces(isNull(), anyLong(), anyLong(), anyInt())).thenReturn(traces("[" + String.join(",",
                 trace("t1", 1_000_000, "/api/products/101", "200", "product-service"),
@@ -119,7 +119,7 @@ class MonitorServiceTest {
     }
 
     @Test
-    @DisplayName("장애 — 게이트웨이 5xx 응답과 WARN · ERROR 로그를 최신순으로 합친다")
+    @DisplayName("장애 — 게이트웨이 5xx 응답과 WARN, ERROR 로그를 최신순으로 합친다")
     void errors() {
         when(zipkin.recentTraces(eq("outcome=SERVER_ERROR"), anyLong(), anyLong(), anyInt()))
                 .thenReturn(traces("[" + trace("t9", 5_000_000, "/api/reviews", "502", "review-service") + "]"));
@@ -136,7 +136,7 @@ class MonitorServiceTest {
     }
 
     @Test
-    @DisplayName("트레이스 — 시작 시각순, 시작 오프셋 · ms, 경로 붙인 이름, 5xx · error 태그는 장애, 없으면 빈 구간")
+    @DisplayName("트레이스 — 시작 시각순, 시작 오프셋, ms, 경로 붙인 이름, 5xx, error 태그는 장애, 없으면 빈 구간")
     void trace() {
         when(zipkin.trace("t2")).thenReturn(traces("""
                 [{"id":"c","parentId":"r","kind":"CLIENT","timestamp":1002000,"duration":4000,"name":"http get",
@@ -156,7 +156,7 @@ class MonitorServiceTest {
     }
 
     @Test
-    @DisplayName("분석 — 게이트웨이 · 서비스 5xx 를 합쳐 TOP 5, 느린 API(ms), 상태 코드 분포(0 건 제외)")
+    @DisplayName("분석 — 게이트웨이, 서비스 5xx 를 합쳐 TOP 5, 느린 API(ms), 상태 코드 분포(0 건 제외)")
     void summary() {
         when(prometheus.vector(MonitorService.TOP_GATEWAY_ERRORS)).thenReturn(Optional.of(List.of(
                 new Series(Map.of("routeId", "review-service", "httpStatusCode", "502"), 40.4))));

@@ -38,7 +38,7 @@ public class StockFastRejectService {
         Map<Long, ProductOption> options = productOptionRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(ProductOption::getId, Function.identity()));
         if (ids.size() != items.size() || options.size() != ids.size()) {
-            return;   // 같은 옵션 중복 400 · 없는 옵션 404 는 예약이 판단
+            return;   // 같은 옵션 중복 400, 없는 옵션 404 는 예약이 판단
         }
         StockItem shortage = items.stream()
                 .filter(item -> options.get(item.productOptionId()).getStock() < item.quantity())
@@ -49,7 +49,7 @@ public class StockFastRejectService {
         String sagaId = request.sagaId();
         if (stockHistoryRepository.existsByTypeAndRefKey(StockType.RESERVE, sagaId)
                 || stockHistoryRepository.existsByTypeAndRefKey(StockType.RELEASE, sagaId)) {
-            return;   // 같은 sagaId 재요청은 처음 응답 · 해제 표식은 409 RELEASED — 재고가 0 이어도 예약이 판단
+            return;   // 같은 sagaId 재요청은 처음 응답, 해제 표식은 409 RELEASED — 재고가 0 이어도 예약이 판단
         }
         Map<Long, Category> categories = categoryRepository.findAll().stream()
                 .collect(Collectors.toMap(Category::getId, Function.identity()));

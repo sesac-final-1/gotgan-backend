@@ -67,7 +67,7 @@ public record SettlementWeek(LocalDate start) {
     }
 
     public String isoWeek() {
-        // 로캘 무관한 ISO 주차 (DateTimeFormatter 의 YYYY · ww 는 로캘마다 주 시작 요일이 달라 쓰지 않음)
+        // 로캘 무관한 ISO 주차 (DateTimeFormatter 의 YYYY, ww 는 로캘마다 주 시작 요일이 달라 쓰지 않음)
         return String.format("%d-W%02d", start.get(IsoFields.WEEK_BASED_YEAR), start.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
     }
 }

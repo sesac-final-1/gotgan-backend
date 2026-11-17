@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 관리자 화면 부하테스트 (11/16) — 클러스터에 Job 을 만드는 API 라 게이트웨이 ADMIN 확인에 더해 여기서도 확인한다 */
-@Tag(name = "관리자 부하테스트", description = "k6 부하 시작 · 사용자 수 변경 · 중지 · 그래프, 부하용 계정 준비 — 인가: ADMIN")
+@Tag(name = "관리자 부하테스트", description = "k6 부하 시작, 사용자 수 변경, 중지, 그래프, 부하용 계정 준비 — 인가: ADMIN")
 @RestController
 @RequestMapping("/api/admin/system/loadtest")
 @RequiredArgsConstructor
@@ -34,9 +34,9 @@ public class AdminLoadTestController {
 
     private final LoadTestService loadTestService;
 
-    @Operation(summary = "상태 · 그래프 (실행 중 1초 폴링)", description = """
-            load · accounts = 가장 최근 실행(state RUNNING/DONE/FAILED, 없으면 null). series = load 의 최근 5분 1초 간격
-            vus · rps · p95Ms · errorRate([t ms, v]). Prometheus 실패면 빈 목록, 쿠버네티스 조회 실패 503 SYSTEM_CLUSTER_UNAVAILABLE""")
+    @Operation(summary = "상태, 그래프 (실행 중 1초 폴링)", description = """
+            load, accounts = 가장 최근 실행(state RUNNING/DONE/FAILED, 없으면 null). series = load 의 최근 5분 1초 간격
+            vus, rps, p95Ms, errorRate([t ms, v]). Prometheus 실패면 빈 목록, 쿠버네티스 조회 실패 503 SYSTEM_CLUSTER_UNAVAILABLE""")
     @GetMapping
     public ApiResponse<LoadTestResponses.Status> status(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
         requireAdmin(admin);
@@ -44,8 +44,8 @@ public class AdminLoadTestController {
     }
 
     @Operation(summary = "부하 시작", description = """
-            {scenario: BROWSE/REVIEWS/CART/MIXED, vus 1 ~ 300, durationSec 30 ~ 600} → 202 {id}. CART · MIXED 는 「계정 준비」 뒤에.
-            403 SYSTEM_LOADTEST_DISABLED · 409 SYSTEM_LOADTEST_RUNNING · 503 SYSTEM_CLUSTER_UNAVAILABLE""")
+            {scenario: BROWSE/REVIEWS/CART/MIXED, vus 1 ~ 300, durationSec 30 ~ 600} → 202 {id}. CART, MIXED 는 「계정 준비」 뒤에.
+            403 SYSTEM_LOADTEST_DISABLED, 409 SYSTEM_LOADTEST_RUNNING, 503 SYSTEM_CLUSTER_UNAVAILABLE""")
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<LoadTestResponses.Started> start(@Parameter(hidden = true) @CurrentUser AuthUser admin,
@@ -55,7 +55,7 @@ public class AdminLoadTestController {
     }
 
     @Operation(summary = "실행 중 사용자 수 변경", description = """
-            {vus 0 ~ 300} — 0 이면 요청을 멈추고 대기. 409 SYSTEM_LOADTEST_NOT_RUNNING(없음 · 파드 준비 중) · 503 SYSTEM_LOADTEST_CONTROL_FAILED""")
+            {vus 0 ~ 300} — 0 이면 요청을 멈추고 대기. 409 SYSTEM_LOADTEST_NOT_RUNNING(없음, 파드 준비 중), 503 SYSTEM_LOADTEST_CONTROL_FAILED""")
     @PatchMapping
     public ApiResponse<Void> scale(@Parameter(hidden = true) @CurrentUser AuthUser admin, @Valid @RequestBody LoadTestRequests.Scale request) {
         requireAdmin(admin);
@@ -63,7 +63,7 @@ public class AdminLoadTestController {
         return ApiResponse.success("사용자 수를 바꿨습니다.", null);
     }
 
-    @Operation(summary = "중지", description = "실행 중인 Job(부하 · 계정 준비) 삭제. 없으면 그대로 200")
+    @Operation(summary = "중지", description = "실행 중인 Job(부하, 계정 준비) 삭제. 없으면 그대로 200")
     @DeleteMapping
     public ApiResponse<Void> stop(@Parameter(hidden = true) @CurrentUser AuthUser admin) {
         requireAdmin(admin);
@@ -73,7 +73,7 @@ public class AdminLoadTestController {
 
     @Operation(summary = "부하용 계정 준비", description = """
             loadtest+1 ~ 300@gotgan.test 가입(이미 있으면 그대로, 약 1분) → 202 {id}. 매일 08:00 DB 가 새로 만들어져 시연 날 아침 한 번.
-            403 SYSTEM_LOADTEST_DISABLED · 409 SYSTEM_LOADTEST_RUNNING""")
+            403 SYSTEM_LOADTEST_DISABLED, 409 SYSTEM_LOADTEST_RUNNING""")
     @PostMapping("/accounts")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<LoadTestResponses.Started> prepareAccounts(@Parameter(hidden = true) @CurrentUser AuthUser admin) {

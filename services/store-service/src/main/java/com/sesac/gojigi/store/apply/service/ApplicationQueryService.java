@@ -36,7 +36,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 입점 신청 조회 (담당 박지연) — 관리자 심사 목록 · 상세 (docs/api/store.md 3 · 4절) · 신청자 내 신청 상태 (2-2절) */
+/** 입점 신청 조회 (담당 박지연) — 관리자 심사 목록, 상세 (docs/api/store.md 3, 4절), 신청자 내 신청 상태 (2-2절) */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -51,7 +51,7 @@ public class ApplicationQueryService {
     private final SellerDocumentClient sellerDocumentClient;
     private final SupplementDeadline supplementDeadline;
 
-    /** 페이징 없이 전체 — 관리자 화면이 전체를 받아 탭 건수 · 검색 · 정렬을 한다 (컨벤션 4-7). status 가 null 이면 전체 */
+    /** 페이징 없이 전체 — 관리자 화면이 전체를 받아 탭 건수, 검색, 정렬을 한다 (컨벤션 4-7). status 가 null 이면 전체 */
     public List<InternalApplicationSummaryResponse> getList(ApplicationStatus status) {
         List<StoreApplication> applications = status == null
                 ? storeApplicationRepository.findAllByOrderByTermsAgreedAtDescIdDesc()
@@ -61,7 +61,7 @@ public class ApplicationQueryService {
 
     /**
      * 내 입점 신청 상태 (2-2절, STR-08) — 가장 최근 신청 1건, 신청한 적이 없으면 null(오류 아님 — 화면은 신청 폼).
-     * 보완 기한 · 재신청 가능 시각은 상태 변경 시각에서 계산(보완 +7일 · 반려 +30일, 신청 검사 · 자동 반려와 같은 기준)
+     * 보완 기한, 재신청 가능 시각은 상태 변경 시각에서 계산(보완 +7일, 반려 +30일, 신청 검사, 자동 반려와 같은 기준)
      */
     public MyApplicationResponse getMine(Long userId) {
         return storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(userId)
@@ -91,7 +91,7 @@ public class ApplicationQueryService {
                 submitted(application));
     }
 
-    /** 재제출 화면이 채울 지금 값 — 서류는 지금 것만(current), 종류별 · 올린 순서. 열람 주소는 만들지 않는다(S3 서명 없음) */
+    /** 재제출 화면이 채울 지금 값 — 서류는 지금 것만(current), 종류별, 올린 순서. 열람 주소는 만들지 않는다(S3 서명 없음) */
     private Submitted submitted(StoreApplication application) {
         List<SubmittedDocument> documents = applicationDocumentRepository.findAllByStoreApplicationId(application.getId()).stream()
                 .filter(ApplicationDocument::isCurrent)
@@ -150,7 +150,7 @@ public class ApplicationQueryService {
                 sameBizRegNo(application));
     }
 
-    /** 종류별 · 올린 순서. 서명 실패 원인은 자격 증명뿐이라 한 번 실패하면 나머지도 실패 → 첫 실패에서 멈춰 경고를 한 줄만 남긴다 */
+    /** 종류별, 올린 순서. 서명 실패 원인은 자격 증명뿐이라 한 번 실패하면 나머지도 실패 → 첫 실패에서 멈춰 경고를 한 줄만 남긴다 */
     private List<Document> documents(Long applicationId) {
         List<ApplicationDocument> documents = new ArrayList<>(applicationDocumentRepository.findAllByStoreApplicationId(applicationId));
         documents.sort(Comparator.comparing(ApplicationDocument::getDocType).thenComparing(ApplicationDocument::getId));

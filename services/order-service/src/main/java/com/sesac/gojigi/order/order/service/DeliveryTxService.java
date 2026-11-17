@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 배송 상태 변경 (DLV) — 상품주문 1건 = 짧은 트랜잭션 1개. 상태 변경 · 이력 · 이벤트(아웃박스)를 같은 트랜잭션에.
+ * 배송 상태 변경 (DLV) — 상품주문 1건 = 짧은 트랜잭션 1개. 상태 변경, 이력, 이벤트(아웃박스)를 같은 트랜잭션에.
  * 판매자 버튼과 자동 배송완료가 같은 상품주문을 동시에 바꾸면 @Version 충돌로 한쪽만 반영된다.
  */
 @Service
@@ -95,8 +95,8 @@ public class DeliveryTxService {
     }
 
     /**
-     * 구매확정 (DLV-05 · 구매자) — 본인 주문의 배송완료 상품주문만. 커밋 후 OrderItemConfirmed (정산 적재 · 리뷰 자격 · 회원등급).
-     * 없는 상품주문 · 다른 회원 · 다른 주문이면 같은 404
+     * 구매확정 (DLV-05, 구매자) — 본인 주문의 배송완료 상품주문만. 커밋 후 OrderItemConfirmed (정산 적재, 리뷰 자격, 회원등급).
+     * 없는 상품주문, 다른 회원, 다른 주문이면 같은 404
      */
     @Transactional
     public OrderItemResponse confirm(Long buyerId, String orderNo, Long orderItemId) {
@@ -106,7 +106,7 @@ public class DeliveryTxService {
         return confirm(item, ActorType.BUYER, buyerId, "구매자 구매확정");
     }
 
-    /** 자동 구매확정 (DLV-06 · 스케줄러) — 그 사이 구매자가 먼저 확정했거나 반품 · 교환을 신청했으면 ORDER_INVALID_STATUS */
+    /** 자동 구매확정 (DLV-06, 스케줄러) — 그 사이 구매자가 먼저 확정했거나 반품, 교환을 신청했으면 ORDER_INVALID_STATUS */
     @Transactional
     public void confirmBySystem(Long orderItemId) {
         OrderItem item = orderItemRepository.findById(orderItemId)
@@ -114,7 +114,7 @@ public class DeliveryTxService {
         confirm(item, ActorType.SYSTEM, null, "자동 구매확정");
     }
 
-    /** 자동 구매확정 대상 — before 이전부터 배송완료인 상품주문 (진행 중 반품 · 교환은 상태가 달라 빠진다) */
+    /** 자동 구매확정 대상 — before 이전부터 배송완료인 상품주문 (진행 중 반품, 교환은 상태가 달라 빠진다) */
     @Transactional(readOnly = true)
     public List<Long> findDeliveredBefore(LocalDateTime before, int limit) {
         return orderItemRepository.findIdsByStatusAndDeliveredAtBefore(OrderItemStatus.DELIVERED, before, Limit.of(limit));

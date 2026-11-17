@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 관리자 대시보드 (ADM-02) — 서비스 통계 조합, 일부 실패는 부분 응답 */
-@Tag(name = "관리자 대시보드", description = "settlement · order · product 통계 조합 — 인가: ADMIN")
+@Tag(name = "관리자 대시보드", description = "settlement, order, product 통계 조합 — 인가: ADMIN")
 @RestController
 @RequiredArgsConstructor
 public class AdminDashboardController {

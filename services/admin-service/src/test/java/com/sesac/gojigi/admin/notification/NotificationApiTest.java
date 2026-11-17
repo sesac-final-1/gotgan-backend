@@ -47,10 +47,10 @@ class NotificationApiTest {
     @MockitoBean InboxRepository inbox;
 
     @Test
-    @DisplayName("목록 — 구매자 헤더로 자기 알림 · 안 읽은 수, 로그인 헤더 없으면 401")
+    @DisplayName("목록 — 구매자 헤더로 자기 알림, 안 읽은 수, 로그인 헤더 없으면 401")
     void list() throws Exception {
         given(inbox.latest(anyString(), isNull(), anyInt())).willReturn(List.of(
-                new Item("USER#4", "0000000000001#e-1", "ORDER_PAID", "결제가 완료됐어요", "머그 · 28,000원", "/mypage/orders/N1", false,
+                new Item("USER#4", "0000000000001#e-1", "ORDER_PAID", "결제가 완료됐어요", "머그, 28,000원", "/mypage/orders/N1", false,
                         Instant.parse("2026-10-27T01:00:00Z"))));
         given(inbox.countUnread("USER#4")).willReturn(1L);
 
@@ -85,7 +85,7 @@ class NotificationApiTest {
     }
 
     @Test
-    @DisplayName("안 읽은 수 · 읽음(남의 알림이면 404) · 모두 읽음 — 판매자는 회원 + 스토어")
+    @DisplayName("안 읽은 수, 읽음(남의 알림이면 404), 모두 읽음 — 판매자는 회원 + 스토어")
     void unreadAndRead() throws Exception {
         given(inbox.countUnread("USER#2")).willReturn(1L);
         given(inbox.countUnread("STORE#1")).willReturn(2L);

@@ -22,10 +22,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * Saga 진행 상태 (오케스트레이터의 기억) — saga → order · claim 단방향.
- * sagaId(UUID)는 참여자 API(user · product · payment) 멱등 키라, 참여자를 부르기 전에 이 행을 먼저 커밋한다.
- * 결과를 모르는 호출(409 PAYMENT_CANCEL_PENDING · 타임아웃 · 5xx)은 같은 sagaId 로 재시도 —
- * attemptCount · nextRetryAt (V3, 1 · 1 · 2분 후 5분 상한, 최대 8회 ≈ 30분).
+ * Saga 진행 상태 (오케스트레이터의 기억) — saga → order, claim 단방향.
+ * sagaId(UUID)는 참여자 API(user, product, payment) 멱등 키라, 참여자를 부르기 전에 이 행을 먼저 커밋한다.
+ * 결과를 모르는 호출(409 PAYMENT_CANCEL_PENDING, 타임아웃, 5xx)은 같은 sagaId 로 재시도 —
+ * attemptCount, nextRetryAt (V3, 1, 1, 2분 후 5분 상한, 최대 8회 ≈ 30분).
  */
 @Getter
 @Entity
@@ -36,7 +36,7 @@ public class SagaInstance extends BaseTimeEntity {
     /** last_error VARCHAR(500) */
     private static final int ERROR_MAX = 500;
 
-    /** 재시도 간격 — 1 · 2 · 4 · 9 · 14 · 19 · 24 · 29분, 최대 8회 ≈ 30분 (payment 복구 주기 60초보다 짧게 다시 부르지 않음) */
+    /** 재시도 간격 — 1, 2, 4, 9, 14, 19, 24, 29분, 최대 8회 ≈ 30분 (payment 복구 주기 60초보다 짧게 다시 부르지 않음) */
     static final List<Duration> RETRY_DELAYS = List.of(Duration.ofMinutes(1), Duration.ofMinutes(1),
             Duration.ofMinutes(2), Duration.ofMinutes(5), Duration.ofMinutes(5), Duration.ofMinutes(5),
             Duration.ofMinutes(5), Duration.ofMinutes(5));
@@ -50,7 +50,7 @@ public class SagaInstance extends BaseTimeEntity {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
-    /** 취소 · 반품 Saga 일 때만 */
+    /** 취소, 반품 Saga 일 때만 */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_claim_id")
     private OrderClaim orderClaim;
@@ -95,7 +95,7 @@ public class SagaInstance extends BaseTimeEntity {
         return new SagaInstance(order, null, sagaId, SagaType.PLACE_ORDER, SagaStep.ORDER_CREATED);
     }
 
-    /** 취소 · 반품 Saga — 클레임 승인 직후, 결제 취소 요청 전 */
+    /** 취소, 반품 Saga — 클레임 승인 직후, 결제 취소 요청 전 */
     public static SagaInstance forClaim(OrderClaim claim, String sagaId, SagaType sagaType) {
         return new SagaInstance(claim.getOrderItem().getOrder(), claim, sagaId, sagaType,
                 SagaStep.PAYMENT_CANCEL_REQUESTED);
@@ -125,8 +125,8 @@ public class SagaInstance extends BaseTimeEntity {
     }
 
     /**
-     * 결과를 모르는 호출(409 PAYMENT_CANCEL_PENDING · 타임아웃 · 5xx)이나 실패한 보상 — 같은 sagaId 로 나중에 다시 시도한다.
-     * 간격 1 · 1 · 2분 후 5분 상한, 8회를 넘기면 FAILED(사람이 확인). 재시도는 Saga 복구 스케줄러가 nextRetryAt 으로 고른다.
+     * 결과를 모르는 호출(409 PAYMENT_CANCEL_PENDING, 타임아웃, 5xx)이나 실패한 보상 — 같은 sagaId 로 나중에 다시 시도한다.
+     * 간격 1, 1, 2분 후 5분 상한, 8회를 넘기면 FAILED(사람이 확인). 재시도는 Saga 복구 스케줄러가 nextRetryAt 으로 고른다.
      */
     public void scheduleRetry(String reason, LocalDateTime now) {
         this.lastError = truncate(reason);

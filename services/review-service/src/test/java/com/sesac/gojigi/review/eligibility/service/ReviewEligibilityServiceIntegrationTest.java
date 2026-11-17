@@ -29,8 +29,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 리뷰 작성 자격 저장 — 스냅샷 · 기한 · 재전달 · 재발행 · 동시 수신 (MySQL 8.4 + Flyway).
- * 서비스가 TransactionTemplate 으로 직접 커밋해서 테스트 트랜잭션으로 감싸지 않는다 (상품주문 · eventId 는 테스트마다 새로).
+ * 리뷰 작성 자격 저장 — 스냅샷, 기한, 재전달, 재발행, 동시 수신 (MySQL 8.4 + Flyway).
+ * 서비스가 TransactionTemplate 으로 직접 커밋해서 테스트 트랜잭션으로 감싸지 않는다 (상품주문, eventId 는 테스트마다 새로).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -63,7 +63,7 @@ class ReviewEligibilityServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("자격을 저장한다 — 구매자 · 상품 스냅샷, 구매확정 시각(KST) + 30일 기한, 처리 이벤트도 함께")
+    @DisplayName("자격을 저장한다 — 구매자, 상품 스냅샷, 구매확정 시각(KST) + 30일 기한, 처리 이벤트도 함께")
     void grant_savesSnapshotAndExpiry() {
         // given
         long orderItemId = ORDER_ITEM_SEQ.incrementAndGet();
@@ -88,7 +88,7 @@ class ReviewEligibilityServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("같은 eventId 재전달 · 다른 eventId 재발행 모두 자격은 한 번 — 처음 값 그대로")
+    @DisplayName("같은 eventId 재전달, 다른 eventId 재발행 모두 자격은 한 번 — 처음 값 그대로")
     void grant_redeliveredOrRepublished_savesOnce() {
         // given
         long orderItemId = ORDER_ITEM_SEQ.incrementAndGet();
@@ -132,7 +132,7 @@ class ReviewEligibilityServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("같은 이벤트를 동시에 5번 받으면 자격 · 처리 이벤트는 1건, 나머지는 예외 없이 건너뜀")
+    @DisplayName("같은 이벤트를 동시에 5번 받으면 자격, 처리 이벤트는 1건, 나머지는 예외 없이 건너뜀")
     void grant_concurrentSameEvent_savesOnce() throws Exception {
         // given
         long orderItemId = ORDER_ITEM_SEQ.incrementAndGet();

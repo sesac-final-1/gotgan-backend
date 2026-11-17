@@ -1,4 +1,4 @@
-// order-service — 장바구니 · 주문 · 배송(status) · 취소/반품/교환 · Saga 오케스트레이터
+// order-service — 장바구니, 주문, 배송(status), 취소/반품/교환, Saga 오케스트레이터
 // 의존성 선택 기준: 가이드라인 15장 4절 "의존성 매트릭스". 버전 변수는 gradle.properties (전 서비스 동일)
 plugins {
     id 'java'
@@ -24,9 +24,9 @@ dependencyManagement {
 }
 
 dependencies {
-    // 공통 응답 봉투 · 예외 처리 · @CurrentUser (libs/common-web)
+    // 공통 응답 봉투, 예외 처리, @CurrentUser (libs/common-web)
     implementation 'com.sesac.gojigi:common-web:0.0.1'
-    // 웹 · 검증 · API 문서
+    // 웹, 검증, API 문서
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
@@ -37,7 +37,7 @@ dependencies {
     runtimeOnly    'com.mysql:mysql-connector-j'
     // Redis — 장바구니 cart:{userId} (가이드라인 09장)
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    // 복원력 — 모든 동기 호출의 표준: 타임아웃 · 서킷 브레이커 · 폴백 (가이드라인 06장 · 13장)
+    // 복원력 — 모든 동기 호출의 표준: 타임아웃, 서킷 브레이커, 폴백 (가이드라인 06장, 13장)
     implementation "io.github.resilience4j:resilience4j-spring-boot4:${resilience4jVersion}"
     implementation 'org.springframework.boot:spring-boot-starter-aspectj'
     // AWS SDK v2 — sns (버전은 BOM)
@@ -51,7 +51,7 @@ dependencies {
     runtimeOnly    'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-zipkin'
     implementation 'com.sesac.gojigi:common-logging:0.0.1'   // logback 공통 설정 + loki4j (libs/common-logging)
-    // Lombok — 생성자 주입(@RequiredArgsConstructor) · @Getter · @Slf4j (컨벤션 2-3)
+    // Lombok — 생성자 주입(@RequiredArgsConstructor), @Getter, @Slf4j (컨벤션 2-3)
     compileOnly         'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
     // 테스트 (Boot 4는 기술별 테스트 스타터)

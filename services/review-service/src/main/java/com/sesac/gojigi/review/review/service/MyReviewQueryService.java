@@ -14,7 +14,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 마이페이지 리뷰 관리 조회 (REV-05, review.md 4 · 5절) — 내가 쓴 리뷰 · 작성 가능한 리뷰. 담당 이경석 */
+/** 마이페이지 리뷰 관리 조회 (REV-05, review.md 4, 5절) — 내가 쓴 리뷰, 작성 가능한 리뷰. 담당 이경석 */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)

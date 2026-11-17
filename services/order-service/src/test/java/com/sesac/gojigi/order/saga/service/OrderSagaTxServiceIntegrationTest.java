@@ -44,7 +44,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 결제 대기 만료 · Saga 복구 대상 고르기 · 결제 확인용 조회 — MySQL 8.4 + Flyway */
+/** 결제 대기 만료, Saga 복구 대상 고르기, 결제 확인용 조회 — MySQL 8.4 + Flyway */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, OrderTxService.class, OrderSagaTxService.class, SimpleMeterRegistry.class,
@@ -92,7 +92,7 @@ class OrderSagaTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("보상 · 복구 지표 (B-경-1) — 보상 완료 · 재시도 예약 · 한도 초과 FAILED 를 type 별로 센다")
+    @DisplayName("보상, 복구 지표 (B-경-1) — 보상 완료, 재시도 예약, 한도 초과 FAILED 를 type 별로 센다")
     void counters() {
         // given
         double compensated = count("saga.compensated");
@@ -134,7 +134,7 @@ class OrderSagaTxServiceIntegrationTest {
         long before = orderCount();
         willThrow(new IllegalStateException("Saga 저장 실패")).given(sagaInstanceRepository).save(any());
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sagaTx.startPlaceOrder(OrderFixtures.nextOrderNo(), BUYER_SUMMARY, REQUEST, priced(), STORE_NAMES))
                 .isInstanceOf(IllegalStateException.class);
         assertThat(orderCount()).isEqualTo(before);
@@ -158,7 +158,7 @@ class OrderSagaTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("결제 대기 만료 대상 — 기준보다 오래된 PAYMENT_READY · PAYMENT_VERIFIED 만, 주문을 함께 읽는다")
+    @DisplayName("결제 대기 만료 대상 — 기준보다 오래된 PAYMENT_READY, PAYMENT_VERIFIED 만, 주문을 함께 읽는다")
     void findPaymentWaiting() {
         // given
         SagaInstance waiting = saga(SagaStep.PAYMENT_READY);
@@ -212,13 +212,13 @@ class OrderSagaTxServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("결제 확인용 조회 — 본인 주문 · 주문 Saga · 상품주문, 다른 회원의 주문번호는 404")
+    @DisplayName("결제 확인용 조회 — 본인 주문, 주문 Saga, 상품주문, 다른 회원의 주문번호는 404")
     void getMineAndSaga() {
         // given
         SagaInstance saga = saga(SagaStep.PAYMENT_READY);
         Order order = orderTx.getMine(BUYER, saga.getOrder().getOrderNo());
 
-        // when · then
+        // when, then
         assertThat(sagaTx.getPlaceOrder(order.getId()).getSagaId()).isEqualTo(saga.getSagaId());
         assertThat(orderTx.getItems(order.getId())).singleElement()
                 .satisfies(item -> assertThat(item.getProductOptionId()).isEqualTo(81L));

@@ -40,7 +40,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 이용정지 · 해제 후속 처리 순서와 실패 시 정책 (DB 동작은 UserStatusServiceIntegrationTest) */
+/** 이용정지, 해제 후속 처리 순서와 실패 시 정책 (DB 동작은 UserStatusServiceIntegrationTest) */
 @ExtendWith(MockitoExtension.class)
 class UserStatusServiceTest {
 
@@ -83,7 +83,7 @@ class UserStatusServiceTest {
     }
 
     @Test
-    @DisplayName("7일 정지 — users SUSPENDED(종료 시각 = 지금 + 7일) → Keycloak 비활성 · 세션 종료 → 차단 목록 순서")
+    @DisplayName("7일 정지 — users SUSPENDED(종료 시각 = 지금 + 7일) → Keycloak 비활성, 세션 종료 → 차단 목록 순서")
     void suspend_withDays_suspendsThenDisablesAccountThenBlocks() {
         User user = member(7L);
         given(userRepository.findByIdForUpdate(7L)).willReturn(Optional.of(user));
@@ -115,7 +115,7 @@ class UserStatusServiceTest {
     }
 
     @Test
-    @DisplayName("정지 — Keycloak · Redis 가 실패해도 정지는 유지되고 나머지 단계는 계속한다")
+    @DisplayName("정지 — Keycloak, Redis 가 실패해도 정지는 유지되고 나머지 단계는 계속한다")
     void suspend_whenKeycloakAndRedisFail_keepsSuspension() {
         User user = member(7L);
         given(userRepository.findByIdForUpdate(7L)).willReturn(Optional.of(user));
@@ -130,7 +130,7 @@ class UserStatusServiceTest {
     }
 
     @Test
-    @DisplayName("정지 — 사유 없음 · 이미 정지 · 없는 회원은 Keycloak · Redis 를 건드리지 않는다")
+    @DisplayName("정지 — 사유 없음, 이미 정지, 없는 회원은 Keycloak, Redis 를 건드리지 않는다")
     void suspend_invalid_doesNothingElse() {
         given(userRepository.findByIdForUpdate(7L)).willReturn(Optional.of(member(7L)));
         given(userRepository.findByIdForUpdate(8L)).willReturn(Optional.of(suspendedMember(8L, null)));
@@ -150,7 +150,7 @@ class UserStatusServiceTest {
     }
 
     @Test
-    @DisplayName("해제 — users ACTIVE(정지 시각 · 종료 시각 지움) → Keycloak 활성 → 차단 목록 삭제, Keycloak 실패해도 해제 유지")
+    @DisplayName("해제 — users ACTIVE(정지 시각, 종료 시각 지움) → Keycloak 활성 → 차단 목록 삭제, Keycloak 실패해도 해제 유지")
     void activate_restoresAccountAndUnblocks() {
         User user = suspendedMember(7L, NOW.plusDays(3));
         given(userRepository.findByIdForUpdate(7L)).willReturn(Optional.of(user));
@@ -168,7 +168,7 @@ class UserStatusServiceTest {
     }
 
     @Test
-    @DisplayName("기간 만료 해제 — 종료 시각이 지났으면 자동 해제 사유로 해제 · Keycloak 활성 · 차단 목록 삭제")
+    @DisplayName("기간 만료 해제 — 종료 시각이 지났으면 자동 해제 사유로 해제, Keycloak 활성, 차단 목록 삭제")
     void expireSuspension_whenExpired_activates() {
         User user = suspendedMember(7L, NOW.minusMinutes(1));
         given(userRepository.findByIdForUpdate(7L)).willReturn(Optional.of(user));
@@ -183,7 +183,7 @@ class UserStatusServiceTest {
     }
 
     @Test
-    @DisplayName("기간 만료 해제 — 잠근 뒤 보니 기간이 남았거나 영구 · 이미 해제 · 없는 회원이면 건너뛴다")
+    @DisplayName("기간 만료 해제 — 잠근 뒤 보니 기간이 남았거나 영구, 이미 해제, 없는 회원이면 건너뛴다")
     void expireSuspension_whenNotExpired_skips() {
         given(userRepository.findByIdForUpdate(7L)).willReturn(Optional.of(suspendedMember(7L, NOW.plusMinutes(1))));
         given(userRepository.findByIdForUpdate(8L)).willReturn(Optional.of(suspendedMember(8L, null)));

@@ -7,13 +7,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 
-/** 인증 쿠키 — 이름 · 경로 · SameSite · 수명 (설정값은 생성자로) */
+/** 인증 쿠키 — 이름, 경로, SameSite, 수명 (설정값은 생성자로) */
 class AuthCookiesTest {
 
     private final AuthCookies cookies = new AuthCookies("social_login", "refresh_token", "/api/auth", true);
 
     @Test
-    @DisplayName("Refresh 쿠키 — HttpOnly · Secure · SameSite=Strict · Path=/api/auth, 수명은 Keycloak refresh_expires_in")
+    @DisplayName("Refresh 쿠키 — HttpOnly, Secure, SameSite=Strict, Path=/api/auth, 수명은 Keycloak refresh_expires_in")
     void refresh() {
         assertThat(cookies.refresh("rt", 1209600))
                 .startsWith("refresh_token=rt; Path=/api/auth; Max-Age=1209600;")
@@ -22,7 +22,7 @@ class AuthCookiesTest {
     }
 
     @Test
-    @DisplayName("소셜 state 쿠키 — SameSite=Lax · Path=/api/auth/social · 10분, 콜백에서 Max-Age=0 으로 삭제")
+    @DisplayName("소셜 state 쿠키 — SameSite=Lax, Path=/api/auth/social, 10분, 콜백에서 Max-Age=0 으로 삭제")
     void social() {
         assertThat(cookies.social("state-value"))
                 .startsWith("social_login=state-value; Path=/api/auth/social; Max-Age=600;")

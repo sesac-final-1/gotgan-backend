@@ -20,7 +20,7 @@ public record SellerReviewResponse(
         @Schema(description = "구매확정 시점 상품명", example = "린넨 오버핏 셔츠")
         String productName,
 
-        @Schema(description = "산 옵션 — 옵션 없는 상품 · 스냅샷 전 자격은 null", example = "오트밀 / M")
+        @Schema(description = "산 옵션 — 옵션 없는 상품, 스냅샷 전 자격은 null", example = "오트밀 / M")
         String optionName,
 
         @Schema(description = "작성자 공개 표시 이름 (닉네임, 없으면 마스킹 실명)", example = "곳간러버")
@@ -44,7 +44,7 @@ public record SellerReviewResponse(
         @Schema(description = "내 답글", example = "불편을 드려 죄송합니다.")
         String replyContent,
 
-        @Schema(description = "답글 작성 · 수정 시각", example = "2026-10-21T09:30:00+09:00")
+        @Schema(description = "답글 작성, 수정 시각", example = "2026-10-21T09:30:00+09:00")
         OffsetDateTime repliedAt,
 
         @Schema(description = "작성 시각", example = "2026-10-20T14:00:00+09:00")

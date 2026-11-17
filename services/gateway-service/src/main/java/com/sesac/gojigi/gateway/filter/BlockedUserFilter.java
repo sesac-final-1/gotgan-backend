@@ -20,13 +20,13 @@ import reactor.core.publisher.Mono;
  * 차단 목록 — 탈퇴한 회원의 남은 Access Token(최대 수명 30분)을 막는다.
  * user-service 가 탈퇴 때 Redis blocked:user:{userId} 를 토큰 수명만큼 저장하고, 여기서 서명 검증을 통과한 토큰의 user_id 로 확인한다.
  * Redis 장애면 확인 없이 통과(fail-open) — 보조 방어선이 전체 장애가 되지 않게.
- * 1차 방어선은 그대로: Keycloak 계정 삭제(새 로그인 · Refresh 불가) · user-service 의 deleted_at 확인.
+ * 1차 방어선은 그대로: Keycloak 계정 삭제(새 로그인, Refresh 불가), user-service 의 deleted_at 확인.
  */
 @Slf4j
 @Component
 public class BlockedUserFilter implements GlobalFilter, Ordered {
 
-    static final String KEY_PREFIX = "blocked:user:";   // 컨벤션 2-2 Redis 키 · user-service BlockedUserRedisRepository 와 같은 키
+    static final String KEY_PREFIX = "blocked:user:";   // 컨벤션 2-2 Redis 키, user-service BlockedUserRedisRepository 와 같은 키
     static final String CIRCUIT = "redisBlocklist";
 
     private final ReactiveStringRedisTemplate redis;
@@ -47,7 +47,7 @@ public class BlockedUserFilter implements GlobalFilter, Ordered {
                 .map(user -> Optional.of(user.userId()))
                 .defaultIfEmpty(Optional.empty())
                 .flatMap(userId -> userId.isEmpty()
-                        ? chain.filter(exchange)   // 공개 경로 · 토큰 없음 · user_id 없는 토큰 — 확인할 대상 없음
+                        ? chain.filter(exchange)   // 공개 경로, 토큰 없음, user_id 없는 토큰 — 확인할 대상 없음
                         : isBlocked(userId.get()).flatMap(blocked -> blocked
                                 ? reject(exchange, userId.get())
                                 : chain.filter(exchange)));
@@ -77,6 +77,6 @@ public class BlockedUserFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return -2;   // 헤더 주입(UserHeaderFilter, -1) · 라우팅보다 먼저 — 차단된 요청은 업무 서비스로 보내지 않는다
+        return -2;   // 헤더 주입(UserHeaderFilter, -1), 라우팅보다 먼저 — 차단된 요청은 업무 서비스로 보내지 않는다
     }
 }

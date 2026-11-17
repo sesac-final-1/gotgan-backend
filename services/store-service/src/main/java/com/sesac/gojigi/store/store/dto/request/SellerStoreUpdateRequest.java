@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * 판매자 스토어 설정 수정 (docs/api/store.md 13절) — PUT 이라 설정 전체를 보낸다(조회 응답 값을 고쳐 그대로).
- * 대표 이미지 키는 서비스가 검사(없음 · 지금 키 · 내 stores/{storeId}/ 키만), 스토어명 · 주소는 바꾸지 않음
+ * 대표 이미지 키는 서비스가 검사(없음, 지금 키, 내 stores/{storeId}/ 키만), 스토어명, 주소는 바꾸지 않음
  */
 public record SellerStoreUpdateRequest(
         @Schema(description = "스토어 소개 HTML (선택, 5000자 이하) — 저장 전 정화", example = "<p>리넨 의류를 만듭니다.</p>")
@@ -28,9 +28,9 @@ public record SellerStoreUpdateRequest(
         @Pattern(regexp = "^#[0-9a-fA-F]{6}$", message = "표시 색은 #RRGGBB 형식입니다.")
         String color,
 
-        @Schema(description = "고객 문의 연락처 — 휴대 · 지역 · 070 번호", example = "02-0000-1234")
+        @Schema(description = "고객 문의 연락처 — 휴대, 지역, 070 번호", example = "02-0000-1234")
         @NotBlank(message = "고객 문의 연락처를 입력해 주세요.")
-        @Pattern(regexp = "^0\\d{1,2}-\\d{3,4}-\\d{4}$", message = "연락처는 02-0000-0000 · 010-0000-0000 형식입니다.")
+        @Pattern(regexp = "^0\\d{1,2}-\\d{3,4}-\\d{4}$", message = "연락처는 02-0000-0000, 010-0000-0000 형식입니다.")
         String csPhone,
 
         @Schema(description = "기본 배송비 (원, 0 이면 무료)", example = "3000")

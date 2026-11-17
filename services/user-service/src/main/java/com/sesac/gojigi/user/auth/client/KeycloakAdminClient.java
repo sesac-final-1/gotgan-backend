@@ -19,7 +19,7 @@ import org.springframework.web.service.annotation.PutExchange;
 
 /**
  * Keycloak Admin REST API ({base-url}/admin/realms/gotgan). gotgan-backend 서비스 계정 토큰(Bearer)으로 호출한다
- * — 권한은 realm-management 의 manage-users · view-realm (keycloak README).
+ * — 권한은 realm-management 의 manage-users, view-realm (keycloak README).
  * 직접 쓰지 않고 KeycloakClientAdapter(서킷 브레이커 "keycloak")를 거친다.
  */
 @HttpExchange("/users")
@@ -65,12 +65,12 @@ public interface KeycloakAdminClient {
     List<Map<String, Object>> getAvailableRealmRoles(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable("keycloakId") String keycloakId);
 
-    /** realm 역할 부여 — 204. body 는 역할 표현 목록 (id · name) */
+    /** realm 역할 부여 — 204. body 는 역할 표현 목록 (id, name) */
     @PostExchange(url = "/{keycloakId}/role-mappings/realm", contentType = MediaType.APPLICATION_JSON_VALUE)
     void addRealmRoles(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable("keycloakId") String keycloakId, @RequestBody List<Map<String, Object>> roles);
 
-    /** 계정 삭제 — 204. 세션 · Refresh Token 도 함께 무효. 없으면 404 */
+    /** 계정 삭제 — 204. 세션, Refresh Token 도 함께 무효. 없으면 404 */
     @DeleteExchange("/{keycloakId}")
     void deleteUser(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorization,
             @PathVariable("keycloakId") String keycloakId);

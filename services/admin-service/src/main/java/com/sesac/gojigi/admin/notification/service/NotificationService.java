@@ -27,7 +27,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 알림 센터 (NTF-08) — 쌓기(이벤트 · 내부 요청) → 알림함 저장 → 새 알림이면 실시간 발행. 화면은 자기 받는 쪽(회원 · 스토어 · 관리자)만 본다.
+ * 알림 센터 (NTF-08) — 쌓기(이벤트, 내부 요청) → 알림함 저장 → 새 알림이면 실시간 발행. 화면은 자기 받는 쪽(회원, 스토어, 관리자)만 본다.
  */
 @Slf4j
 @Service
@@ -49,7 +49,7 @@ public class NotificationService {
         mapper.map(jsonMapper.readTree(envelopeJson)).forEach(this::deliver);
     }
 
-    /** 다른 서비스 요청 (채팅 · 신고 처리 · 시스템 알림) — sourceId 가 같으면 한 번만 쌓임. 받는 쪽 수를 돌려준다 */
+    /** 다른 서비스 요청 (채팅, 신고 처리, 시스템 알림) — sourceId 가 같으면 한 번만 쌓임. 받는 쪽 수를 돌려준다 */
     public int createInternal(InternalNotificationRequest r) {
         List<String> recipients = Stream.of(
                         r.userIds() == null ? Stream.<String>empty() : r.userIds().stream().map(id -> "USER#" + id),
@@ -130,7 +130,7 @@ public class NotificationService {
                 i.createdAt().atZone(KST).toOffsetDateTime());
     }
 
-    /** 알림 id · cursor = base64url("받는 쪽|정렬 키") */
+    /** 알림 id, cursor = base64url("받는 쪽|정렬 키") */
     static String encode(String recipient, String sortKey) {
         return Base64.getUrlEncoder().withoutPadding().encodeToString((recipient + "|" + sortKey).getBytes(StandardCharsets.UTF_8));
     }

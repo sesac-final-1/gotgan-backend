@@ -1,6 +1,6 @@
 spring:
   application:
-    name: product-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+    name: product-service                  # 지표, 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/productdb?connectionTimeZone=Asia/Seoul
@@ -11,7 +11,7 @@ spring:
     hibernate:
       ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
   flyway:
-    locations: classpath:db/migration       # 시드(db/seed) 는 local · k8s 프로필에서만 추가
+    locations: classpath:db/migration       # 시드(db/seed) 는 local, k8s 프로필에서만 추가
 
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
@@ -27,7 +27,7 @@ app:
   images:
     base-url: ${IMAGES_BASE_URL:https://sesac-gojigi-images-4380.s3.ap-northeast-2.amazonaws.com}   # 조회 URL = base-url/{s3Key} (ConfigMap)
     bucket: ${IMAGES_BUCKET:}                 # 업로드 presigned PUT 대상 (ConfigMap) — products/{storeId}/… 만 IRSA PutObject
-  sqs:                                       # 구독 큐 1개 — URL 이 비면(로컬 · 테스트) 폴러를 띄우지 않는다
+  sqs:                                       # 구독 큐 1개 — URL 이 비면(로컬, 테스트) 폴러를 띄우지 않는다
     store-events-queue-url: ${PRODUCT_STORE_EVENTS_QUEUE_URL:}   # StoreStatusChanged (ConfigMap app-config)
     wait-seconds: 20                         # 롱폴링 (비어 있어도 20초 기다렸다 돌아옴 — 빈 요청 비용 절감)
     max-messages: 10
@@ -44,7 +44,7 @@ management:
   endpoint:
     health:
       probes:
-        enabled: true                       # /actuator/health/liveness · readiness
+        enabled: true                       # /actuator/health/liveness, readiness
 
 springdoc:
   swagger-ui:

@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 상품 이미지 업로드 주소 발급 (PRD-03, product.md 17절). 담당 박지연.
- * 키는 products/{storeId}/{UUID}.{확장자} — 등록 · 수정은 이 모양의 내 스토어 키만 받는다(SellerProductService.checkImageKeys).
+ * 키는 products/{storeId}/{UUID}.{확장자} — 등록, 수정은 이 모양의 내 스토어 키만 받는다(SellerProductService.checkImageKeys).
  */
 @Service
 @RequiredArgsConstructor
@@ -45,7 +45,7 @@ public class ProductImagePresignService {
     /** 하나라도 틀리면 전체 거절 — 메시지에 몇 번째 파일인지 (요청에 파일 이름이 없음) */
     private static void check(int order, FileItem file) {
         if (!EXTENSIONS.containsKey(file.contentType())) {
-            throw invalidImage(order + "번째 파일: 이미지는 JPG · PNG · WEBP 만 올릴 수 있습니다.");
+            throw invalidImage(order + "번째 파일: 이미지는 JPG, PNG, WEBP 만 올릴 수 있습니다.");
         }
         if (file.size() <= 0 || file.size() > MAX_FILE_SIZE) {
             throw invalidImage(order + "번째 파일: 이미지는 10MB 이하만 올릴 수 있습니다.");

@@ -29,7 +29,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * 실제 @HttpExchange 클라이언트(AdminClientConfig) → 가짜 user · settlement · product · order · store 서버(JDK HttpServer) 까지 — 경로 · 쿼리 · 헤더 · 본문이
+ * 실제 @HttpExchange 클라이언트(AdminClientConfig) → 가짜 user, settlement, product, order, store 서버(JDK HttpServer) 까지 — 경로, 쿼리, 헤더, 본문이
  * 내부 API 계약과 맞는지 확인한다. 가짜 서버는 받은 요청을 기록하고 받은 경로를 data 로 돌려준다.
  * 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
  */
@@ -92,7 +92,7 @@ class AdminClientWiringTest {
     }
 
     @Test
-    @DisplayName("회원 — 목록 · 상세 · 포인트 · 정지 경로와 관리자 X-User-Id 를 user 내부 API 그대로")
+    @DisplayName("회원 — 목록, 상세, 포인트, 정지 경로와 관리자 X-User-Id 를 user 내부 API 그대로")
     void user_paths() throws Exception {
         mockMvc.perform(get("/api/admin/users").header("X-User-Id", 1).param("q", "kim").param("size", "20"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.path").value("/internal/users?q=kim&size=20"));
@@ -116,7 +116,7 @@ class AdminClientWiringTest {
     }
 
     @Test
-    @DisplayName("정산 · 수수료 — 목록 · 상세 · 집계 · 지급 · 보류 · 수수료 경로 · 메서드 · 본문을 settlement 내부 API 그대로")
+    @DisplayName("정산, 수수료 — 목록, 상세, 집계, 지급, 보류, 수수료 경로, 메서드, 본문을 settlement 내부 API 그대로")
     void settlement_paths() throws Exception {
         mockMvc.perform(get("/api/admin/settlements").param("week", "2026-W43").param("storeId", "1"))
                 .andExpect(jsonPath("$.data.path").value("/internal/settlements?week=2026-W43&storeId=1"));
@@ -141,7 +141,7 @@ class AdminClientWiringTest {
         assertThat(last()).extracting(Received::method, Received::uri).containsExactly("PUT", "/internal/commissions");
     }
     @Test
-    @DisplayName("카테고리 · 대시보드 — product 카테고리 경로 · 메서드, order 전체 통계 · settlement 통계 경로")
+    @DisplayName("카테고리, 대시보드 — product 카테고리 경로, 메서드, order 전체 통계, settlement 통계 경로")
     void category_dashboard_paths() throws Exception {
         mockMvc.perform(get("/api/admin/categories")).andExpect(jsonPath("$.data.path").value("/internal/categories"));
 
@@ -160,7 +160,7 @@ class AdminClientWiringTest {
     }
 
     @Test
-    @DisplayName("상품 — 스토어 상품 목록 · 강제 판매중지 경로 · 메서드 · 본문을 product 내부 API 그대로 (product.md 6절)")
+    @DisplayName("상품 — 스토어 상품 목록, 강제 판매중지 경로, 메서드, 본문을 product 내부 API 그대로 (product.md 6절)")
     void product_paths() throws Exception {
         mockMvc.perform(get("/api/admin/stores/7/products")).andExpect(jsonPath("$.data.path").value("/internal/products?storeId=7"));
 
@@ -170,7 +170,7 @@ class AdminClientWiringTest {
                 .containsExactly("PATCH", "/internal/products/3/block", "{\"blocked\":false}");
     }
     @Test
-    @DisplayName("입점 심사 · 스토어 — store.md 3~9절 경로 · 메서드 · 본문 그대로 (#97 계약)")
+    @DisplayName("입점 심사, 스토어 — store.md 3~9절 경로, 메서드, 본문 그대로 (#97 계약)")
     void store_paths() throws Exception {
         mockMvc.perform(get("/api/admin/applications").param("status", "PENDING"))
                 .andExpect(jsonPath("$.data.path").value("/internal/applications?status=PENDING"));

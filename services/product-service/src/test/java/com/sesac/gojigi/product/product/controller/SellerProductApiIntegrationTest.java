@@ -59,8 +59,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 판매자 상품 목록 (GET /api/seller/products, 11절) · 상세 (GET /api/seller/products/{id}, 12절) · 등록 (POST, 13절) · 수정 (PUT, 13절) · 재고 수정 (PATCH /stocks, 14절) · 판매중지/재개 (PATCH /status, 15절) · 삭제 (DELETE, 16절) — 실제 MySQL · Flyway V1~V2.
- * 게이트웨이가 넣는 X-User-* · X-Store-Id 헤더를 직접 붙인다. 상품 → 카테고리 순으로 비워 FK 에 걸리지 않게 한다.
+ * 판매자 상품 목록 (GET /api/seller/products, 11절), 상세 (GET /api/seller/products/{id}, 12절), 등록 (POST, 13절), 수정 (PUT, 13절), 재고 수정 (PATCH /stocks, 14절), 판매중지/재개 (PATCH /status, 15절), 삭제 (DELETE, 16절) — 실제 MySQL, Flyway V1~V2.
+ * 게이트웨이가 넣는 X-User-*, X-Store-Id 헤더를 직접 붙인다. 상품 → 카테고리 순으로 비워 FK 에 걸리지 않게 한다.
  * 트레이스 샘플링 0 — Zipkin 전송 실패 WARN 이 LogbackConfigTest 가짜 Loki 에 섞이지 않게 (CategoryApiIntegrationTest 와 같음).
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -94,14 +94,14 @@ class SellerProductApiIntegrationTest {
 
     @AfterEach
     void clean() {
-        jdbc.update("DELETE FROM stock_history"); // 재고 수정 · 예약 테스트가 남긴 원장 — 옵션 FK 보다 먼저
+        jdbc.update("DELETE FROM stock_history"); // 재고 수정, 예약 테스트가 남긴 원장 — 옵션 FK 보다 먼저
         jdbc.update("DELETE FROM store_status WHERE store_id = ?", STORE_ID);
-        productRepository.deleteAll(); // 옵션 · 이미지는 cascade 로 함께
+        productRepository.deleteAll(); // 옵션, 이미지는 cascade 로 함께
         categoryRepository.deleteAll(categoryRepository.findAll().stream().filter(c -> !c.isTop()).toList());
         categoryRepository.deleteAll();
     }
 
-    /** 옵션 그룹 2개 · 조합 2개 · 이미지 2장인 정상 요청. 테스트마다 한 곳만 바꿔 쓴다 */
+    /** 옵션 그룹 2개, 조합 2개, 이미지 2장인 정상 요청. 테스트마다 한 곳만 바꿔 쓴다 */
     private Map<String, Object> validRequest() {
         Map<String, Object> body = new HashMap<>();
         body.put("categoryId", shirts.getId());
@@ -215,7 +215,7 @@ class SellerProductApiIntegrationTest {
     class Success {
 
         @Test
-        @DisplayName("옵션 그룹 2개 — 201, 판매가 서버 계산 · 이미지 URL · 옵션 재고 · 기본 ON_SALE, 옵션 · 이미지가 DB 에 순서대로 저장")
+        @DisplayName("옵션 그룹 2개 — 201, 판매가 서버 계산, 이미지 URL, 옵션 재고, 기본 ON_SALE, 옵션, 이미지가 DB 에 순서대로 저장")
         void create_twoOptionGroups_returnsSellerDetail() throws Exception {
             // when
             register(validRequest())
@@ -254,7 +254,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("옵션 없는 상품 — 그룹 이름 null · 값이 null 인 조합 1개")
+        @DisplayName("옵션 없는 상품 — 그룹 이름 null, 값이 null 인 조합 1개")
         void create_noOptionGroup_savesSingleNullOption() throws Exception {
             // when
             register(body -> {
@@ -271,7 +271,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("STOPPED 로 등록 — 미노출 이유 STOPPED · 구매 불가, 상세 설명의 script · on* 속성은 지워서 저장")
+        @DisplayName("STOPPED 로 등록 — 미노출 이유 STOPPED, 구매 불가, 상세 설명의 script, on* 속성은 지워서 저장")
         void create_stoppedWithScript_hiddenAndSanitized() throws Exception {
             // when
             register(body -> {
@@ -305,7 +305,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("없는 · 상위 · 꺼진 하위 · 상위가 꺼진 카테고리 — 400 PRODUCT_CATEGORY_INVALID")
+        @DisplayName("없는, 상위, 꺼진 하위, 상위가 꺼진 카테고리 — 400 PRODUCT_CATEGORY_INVALID")
         void create_unusableCategory_categoryInvalid() throws Exception {
             // given
             Category offChild = Category.child(top.getId(), "팬츠", null, 2);
@@ -314,7 +314,7 @@ class SellerProductApiIntegrationTest {
             Category offTop = categoryRepository.save(Category.top("뷰티", null, 2));
             Category childOfOffTop = categoryRepository.save(Category.child(offTop.getId(), "스킨케어", null, 1));
 
-            // when · then
+            // when, then
             for (long categoryId : List.of(999999L, top.getId(), offChild.getId(), childOfOffTop.getId())) {
                 register(body -> body.put("categoryId", categoryId))
                         .andExpect(status().isBadRequest())
@@ -402,7 +402,7 @@ class SellerProductApiIntegrationTest {
     class Detail {
 
         @Test
-        @DisplayName("내 스토어 상품 — 200, 등록한 내용 그대로 (옵션 등록 순서 · 이미지 순서 · 할인율 15.00 · 옵션별 재고)")
+        @DisplayName("내 스토어 상품 — 200, 등록한 내용 그대로 (옵션 등록 순서, 이미지 순서, 할인율 15.00, 옵션별 재고)")
         void get_ownProduct_returnsDetail() throws Exception {
             // given
             long productId = registerOk();
@@ -428,7 +428,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("등록 뒤 상위 카테고리를 끔 — 200, 상태는 ON_SALE 그대로 · 미노출 이유 CATEGORY_INACTIVE · 구매 불가")
+        @DisplayName("등록 뒤 상위 카테고리를 끔 — 200, 상태는 ON_SALE 그대로, 미노출 이유 CATEGORY_INACTIVE, 구매 불가")
         void get_topCategoryTurnedOff_hiddenByCategory() throws Exception {
             // given
             long productId = registerOk();
@@ -445,7 +445,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("다른 스토어 상품 · 삭제된 상품 · 없는 상품 — 모두 404 PRODUCT_NOT_FOUND (구분하지 않음)")
+        @DisplayName("다른 스토어 상품, 삭제된 상품, 없는 상품 — 모두 404 PRODUCT_NOT_FOUND (구분하지 않음)")
         void get_notMine_notFound() throws Exception {
             // given
             long productId = registerOk();
@@ -453,7 +453,7 @@ class SellerProductApiIntegrationTest {
             transactionTemplate.executeWithoutResult(tx ->
                     productRepository.findById(deletedId).orElseThrow().delete(java.time.LocalDateTime.now()));
 
-            // when · then
+            // when, then
             detail(productId, "2").andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PRODUCT_NOT_FOUND"));
             detail(deletedId, String.valueOf(STORE_ID)).andExpect(status().isNotFound());
             detail(999999L, String.valueOf(STORE_ID)).andExpect(status().isNotFound());
@@ -465,7 +465,7 @@ class SellerProductApiIntegrationTest {
             // given
             long productId = registerOk();
 
-            // when · then
+            // when, then
             detail(productId, null).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FORBIDDEN"));
         }
     }
@@ -475,9 +475,9 @@ class SellerProductApiIntegrationTest {
     class SellerList {
 
         @Test
-        @DisplayName("내 스토어 상품만 · 삭제 제외 · 최신 순 — 재고 합계 · 대표 이미지 URL · 품절 · 미노출 이유")
+        @DisplayName("내 스토어 상품만, 삭제 제외, 최신 순 — 재고 합계, 대표 이미지 URL, 품절, 미노출 이유")
         void list_ownStore_returnsNewestFirst() throws Exception {
-            // given — 1: 재고 30 + 0, 2: STOPPED · 옵션 없이 재고 0, 3: 삭제, 4: 다른 스토어
+            // given — 1: 재고 30 + 0, 2: STOPPED, 옵션 없이 재고 0, 3: 삭제, 4: 다른 스토어
             long first = registerOk();
             String second = register(body -> {
                 body.put("name", "판매중지 품절 상품");
@@ -545,9 +545,9 @@ class SellerProductApiIntegrationTest {
     class Update {
 
         @Test
-        @DisplayName("기존 조합은 추가금만 · 새 조합 추가 · 빠진 조합 소프트 삭제, 판매가 재계산 · 이미지 다시 저장, 상태 · 기존 재고 그대로")
+        @DisplayName("기존 조합은 추가금만, 새 조합 추가, 빠진 조합 소프트 삭제, 판매가 재계산, 이미지 다시 저장, 상태, 기존 재고 그대로")
         void update_keepAddDrop_appliesOptionsAndKeepsStockStatus() throws Exception {
-            // given — 오트밀 M(30) · L(0), STOPPED 로 등록
+            // given — 오트밀 M(30), L(0), STOPPED 로 등록
             Map<String, Object> created = validRequest();
             created.put("status", "STOPPED");
             String body = register(created).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
@@ -611,7 +611,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("강제 판매중지 상품도 수정 가능 — 상태는 BLOCKED · 사유 그대로")
+        @DisplayName("강제 판매중지 상품도 수정 가능 — 상태는 BLOCKED, 사유 그대로")
         void update_blockedProduct_staysBlocked() throws Exception {
             long productId = registerOk();
             jdbc.update("UPDATE product SET status = 'BLOCKED', status_reason = '허위 표시' WHERE product_id = ?", productId);
@@ -658,14 +658,14 @@ class SellerProductApiIntegrationTest {
             request.put("options", List.of(keptOption(ids.get(0), "오트밀", "M", 0, 30), keptOption(ids.get(1), "오트밀", "L", 2000, 0)));
             request.put("imageKeys", List.of("products/seed/p101-1.jpg"));
 
-            // when · then
+            // when, then
             update(productId, String.valueOf(STORE_ID), request)
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.images[0].key").value("products/seed/p101-1.jpg"));
         }
 
         @Test
-        @DisplayName("기존 조합 값 변경 · 남의 상품 옵션 ID · 삭제된 옵션 ID — 400 PRODUCT_OPTION_INVALID, 아무것도 안 바뀜")
+        @DisplayName("기존 조합 값 변경, 남의 상품 옵션 ID, 삭제된 옵션 ID — 400 PRODUCT_OPTION_INVALID, 아무것도 안 바뀜")
         void update_invalidOptionIds_rejected() throws Exception {
             // given
             long productId = registerOk();
@@ -674,7 +674,7 @@ class SellerProductApiIntegrationTest {
             long otherOption = optionIds(otherProductId).getFirst();
             jdbc.update("UPDATE product_option SET deleted_at = NOW(6) WHERE product_option_id = ?", ids.get(1));
 
-            // when · then
+            // when, then
             for (Map<String, Object> bad : List.of(
                     keptOption(ids.get(0), "차콜", "M", 0, 1),     // 값 변경
                     keptOption(otherOption, "오트밀", "M", 0, 1),  // 다른 상품 옵션
@@ -691,7 +691,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("다른 스토어 상품 · 삭제된 상품 · 없는 상품 404, 스토어 헤더 없음 403")
+        @DisplayName("다른 스토어 상품, 삭제된 상품, 없는 상품 404, 스토어 헤더 없음 403")
         void update_notMineOrMissing_rejected() throws Exception {
             long productId = registerOk();
             long deletedId = registerOk();
@@ -704,7 +704,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("수정 중에 주문이 재고를 빼고 관리자가 강제 판매중지해도 — 수정 저장이 재고 · 상태를 덮어쓰지 않음 (@DynamicUpdate)")
+        @DisplayName("수정 중에 주문이 재고를 빼고 관리자가 강제 판매중지해도 — 수정 저장이 재고, 상태를 덮어쓰지 않음 (@DynamicUpdate)")
         void update_concurrentStockAndBlock_notOverwritten() throws Exception {
             // given — 오트밀 M 재고 30, ON_SALE
             long productId = registerOk();
@@ -715,7 +715,7 @@ class SellerProductApiIntegrationTest {
             request.put("options", List.of(keptOption(m, "오트밀", "M", 500, 30), keptOption(ids.get(1), "오트밀", "L", 2000, 0)));
             ProductCreateRequest updateRequest = jsonMapper.convertValue(request, ProductCreateRequest.class);
 
-            // 다른 트랜잭션이 재고 30 → 28 · 상태 BLOCKED 로 바꾸고 커밋하지 않은 채 1초 붙잡는다 (행 잠금)
+            // 다른 트랜잭션이 재고 30 → 28, 상태 BLOCKED 로 바꾸고 커밋하지 않은 채 1초 붙잡는다 (행 잠금)
             CountDownLatch locked = new CountDownLatch(1);
             Thread other = new Thread(() -> transactionTemplate.executeWithoutResult(tx -> {
                 jdbc.update("UPDATE product_option SET stock = stock - 2 WHERE product_option_id = ?", m);
@@ -730,11 +730,11 @@ class SellerProductApiIntegrationTest {
             other.start();
             locked.await();
 
-            // when — 수정은 커밋 전 값(재고 30 · ON_SALE)을 읽고, 저장은 잠금이 풀린 뒤에 된다
+            // when — 수정은 커밋 전 값(재고 30, ON_SALE)을 읽고, 저장은 잠금이 풀린 뒤에 된다
             sellerProductService.update(STORE_ID, productId, updateRequest);
             other.join();
 
-            // then — 수정한 컬럼만 반영, 재고 · 상태는 다른 트랜잭션 값 그대로
+            // then — 수정한 컬럼만 반영, 재고, 상태는 다른 트랜잭션 값 그대로
             assertThat(jdbc.queryForObject("SELECT stock FROM product_option WHERE product_option_id = ?", Integer.class, m)).isEqualTo(28);
             assertThat(jdbc.queryForObject("SELECT extra_price FROM product_option WHERE product_option_id = ?", Long.class, m)).isEqualTo(500L);
             assertThat(jdbc.queryForObject("SELECT status FROM product WHERE product_id = ?", String.class, productId)).isEqualTo("BLOCKED");
@@ -747,7 +747,7 @@ class SellerProductApiIntegrationTest {
     class Delete {
 
         @Test
-        @DisplayName("내 상품 — 200, 상품만 소프트 삭제(옵션 · 이미지 행은 남음) → 목록에서 빠지고 상세 · 재삭제 404, 옵션은 구매 불가 · 예약 409")
+        @DisplayName("내 상품 — 200, 상품만 소프트 삭제(옵션, 이미지 행은 남음) → 목록에서 빠지고 상세, 재삭제 404, 옵션은 구매 불가, 예약 409")
         void delete_ownProduct_softDeletesAndHides() throws Exception {
             // given
             long productId = registerOk();
@@ -783,7 +783,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("강제 판매중지 · 판매중지 상품도 삭제 가능")
+        @DisplayName("강제 판매중지, 판매중지 상품도 삭제 가능")
         void delete_blockedOrStopped_allowed() throws Exception {
             long blocked = registerOk();
             jdbc.update("UPDATE product SET status = 'BLOCKED', status_reason = '허위 표시' WHERE product_id = ?", blocked);
@@ -796,7 +796,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("다른 스토어 상품 · 없는 상품 404 (삭제 안 됨), 스토어 헤더 없음 403")
+        @DisplayName("다른 스토어 상품, 없는 상품 404 (삭제 안 됨), 스토어 헤더 없음 403")
         void delete_notMineOrMissing_rejected() throws Exception {
             long productId = registerOk();
 
@@ -808,11 +808,11 @@ class SellerProductApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("판매중지 · 재개 (일괄)")
+    @DisplayName("판매중지, 재개 (일괄)")
     class ChangeStatus {
 
         @Test
-        @DisplayName("섞인 요청 — 판매중 · 이미 판매중지는 success, 강제 판매중지 · 남의 · 없는 · 삭제된 상품은 failed, 같은 ID 는 한 번")
+        @DisplayName("섞인 요청 — 판매중, 이미 판매중지는 success, 강제 판매중지, 남의, 없는, 삭제된 상품은 failed, 같은 ID 는 한 번")
         void changeStatus_mixed_splitsSuccessAndFailed() throws Exception {
             // given
             long onSale = registerOk();
@@ -861,7 +861,7 @@ class SellerProductApiIntegrationTest {
             }).andReturn().getResponse().getContentAsString();
             long soldOut = jsonMapper.readTree(body).path("data").path("productId").asLong();
 
-            // when · then
+            // when, then
             changeStatus(String.valueOf(STORE_ID), "{\"productIds\":[" + soldOut + "],\"status\":\"ON_SALE\"}")
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.success[0]").value(soldOut))
@@ -872,7 +872,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("BLOCKED 로 바꾸기 · 없는 상태 · status 없음 · productIds 비었음 · 101개 — 400, 아무것도 안 바뀜 / 헤더 없음 403")
+        @DisplayName("BLOCKED 로 바꾸기, 없는 상태, status 없음, productIds 비었음, 101개 — 400, 아무것도 안 바뀜 / 헤더 없음 403")
         void changeStatus_invalidInput_rejectsAll() throws Exception {
             long id = registerOk();
             String hundredOne = LongStream.rangeClosed(1, 101).mapToObj(String::valueOf).collect(Collectors.joining(","));
@@ -928,9 +928,9 @@ class SellerProductApiIntegrationTest {
     class UpdateStocks {
 
         @Test
-        @DisplayName("본 재고가 그대로면 — 200, 두 옵션 모두 바뀜, 응답은 바꾼 옵션만 ID 오름차순, 상태 · 재고 이력 그대로")
+        @DisplayName("본 재고가 그대로면 — 200, 두 옵션 모두 바뀜, 응답은 바꾼 옵션만 ID 오름차순, 상태, 재고 이력 그대로")
         void updateStocks_unchanged_updatesAll() throws Exception {
-            // given — M 30 · L 0
+            // given — M 30, L 0
             long productId = registerOk();
             List<Long> ids = optionIds(productId);
 
@@ -957,7 +957,7 @@ class SellerProductApiIntegrationTest {
         @Test
         @DisplayName("본 뒤 주문이 재고를 뺌 — 409 STOCK_CHANGED, 앞 옵션까지 전체 롤백 (예약이 뺀 재고는 그대로)")
         void updateStocks_changedByOrder_rollsBackAll() throws Exception {
-            // given — 판매자가 화면에서 M 30 · L 0 을 봄 → 그 사이 주문이 M 2개 예약
+            // given — 판매자가 화면에서 M 30, L 0 을 봄 → 그 사이 주문이 M 2개 예약
             long productId = registerOk();
             List<Long> ids = optionIds(productId);
             stockReservationService.reserve(new StockReserveRequest("saga-seen", List.of(new StockItem(ids.get(0), 2))));
@@ -984,7 +984,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("다른 상품의 옵션 · 삭제된 옵션 — 404 PRODUCT_OPTION_NOT_FOUND, 아무것도 안 바뀜")
+        @DisplayName("다른 상품의 옵션, 삭제된 옵션 — 404 PRODUCT_OPTION_NOT_FOUND, 아무것도 안 바뀜")
         void updateStocks_notThisProductsOption_notFound() throws Exception {
             // given
             long productId = registerOk();
@@ -992,7 +992,7 @@ class SellerProductApiIntegrationTest {
             long otherOption = optionIds(registerOk()).getFirst();
             jdbc.update("UPDATE product_option SET deleted_at = NOW(6) WHERE product_option_id = ?", ids.get(1));
 
-            // when · then
+            // when, then
             for (long bad : List.of(otherOption, ids.get(1))) {
                 updateStocks(productId, String.valueOf(STORE_ID), stockItems(ids.get(0), 50, 30, bad, 5, 0))
                         .andExpect(status().isNotFound())
@@ -1002,7 +1002,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("다른 스토어 · 삭제된 · 없는 상품 404 PRODUCT_NOT_FOUND, 헤더 없음 403")
+        @DisplayName("다른 스토어, 삭제된, 없는 상품 404 PRODUCT_NOT_FOUND, 헤더 없음 403")
         void updateStocks_notMineOrMissing_rejected() throws Exception {
             long productId = registerOk();
             long m = optionIds(productId).getFirst();
@@ -1017,7 +1017,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("items 비었음 · 재고 음수 · seenStock 없음 · 같은 옵션 중복 — 400 INVALID_INPUT")
+        @DisplayName("items 비었음, 재고 음수, seenStock 없음, 같은 옵션 중복 — 400 INVALID_INPUT")
         void updateStocks_invalidInput_badRequest() throws Exception {
             long productId = registerOk();
             long m = optionIds(productId).getFirst();
@@ -1081,12 +1081,12 @@ class SellerProductApiIntegrationTest {
                 assertThat(stockOf(l)).as("시도 %d L", i).isEqualTo(seenL + expectedDelta);
                 outcomes.add(updateResult);
             }
-            assertThat(outcomes).as("수정 먼저 · 예약 먼저 두 경우가 모두 시험됐는지").contains("updated", "STOCK_CHANGED");
+            assertThat(outcomes).as("수정 먼저, 예약 먼저 두 경우가 모두 시험됐는지").contains("updated", "STOCK_CHANGED");
         }
     }
 
     @Test
-    @DisplayName("정지된 스토어도 등록은 되지만 숨김으로 시작한다 — store_status 스냅샷의 상태 · 시각을 그대로")
+    @DisplayName("정지된 스토어도 등록은 되지만 숨김으로 시작한다 — store_status 스냅샷의 상태, 시각을 그대로")
     void register_whenStoreSuspended_startsHidden() throws Exception {
         // given
         jdbc.update("INSERT INTO store_status (store_id, status, status_changed_at) VALUES (?, 'SUSPENDED', '2026-10-28 14:30:00')", STORE_ID);
@@ -1113,17 +1113,17 @@ class SellerProductApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("상품 복사 — 등록 때 내 스토어 상품에 붙은 이미지 키 다시 쓰기 (12 · 13절)")
+    @DisplayName("상품 복사 — 등록 때 내 스토어 상품에 붙은 이미지 키 다시 쓰기 (12, 13절)")
     class CopyImageKeys {
 
         @Test
-        @DisplayName("내 상품의 시드 이미지 키로 등록 — 201, 같은 키 · 같은 URL")
+        @DisplayName("내 상품의 시드 이미지 키로 등록 — 201, 같은 키, 같은 URL")
         void create_keyAttachedToOwnProduct_created() throws Exception {
             // given — 시드 상품처럼 이미지가 products/seed/… 인 내 상품
             long seedProductId = registerOk();
             jdbc.update("UPDATE product_image SET s3_key = 'products/seed/p101-1.jpg' WHERE product_id = ? AND sort_order = 0", seedProductId);
 
-            // when · then
+            // when, then
             register(body -> {
                 body.put("status", "STOPPED");
                 body.put("imageKeys", List.of("products/seed/p101-1.jpg", "products/1/new-2.webp"));
@@ -1136,7 +1136,7 @@ class SellerProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("남의 스토어 상품 · 삭제된 내 상품에 붙은 키 — 400 PRODUCT_IMAGE_INVALID")
+        @DisplayName("남의 스토어 상품, 삭제된 내 상품에 붙은 키 — 400 PRODUCT_IMAGE_INVALID")
         void create_keyAttachedToForeignOrDeletedProduct_imageInvalid() throws Exception {
             // given — store 2 상품과 삭제된 내 상품에 각각 시드 이미지
             long foreignProductId = registerOk();
@@ -1146,7 +1146,7 @@ class SellerProductApiIntegrationTest {
             jdbc.update("UPDATE product_image SET s3_key = 'products/seed/p102-1.jpg' WHERE product_id = ? AND sort_order = 0", deletedProductId);
             jdbc.update("UPDATE product SET deleted_at = NOW(6) WHERE product_id = ?", deletedProductId);
 
-            // when · then
+            // when, then
             for (String key : List.of("products/seed/p201-1.jpg", "products/seed/p102-1.jpg")) {
                 register(body -> body.put("imageKeys", List.of(key)))
                         .andExpect(status().isBadRequest())

@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** 장바구니 원본 — 회원 · 옵션당 1행 (uk_cart_item_user_option) */
+/** 장바구니 원본 — 회원, 옵션당 1행 (uk_cart_item_user_option) */
 public interface CartItemRepository extends JpaRepository<CartItem, Long> {
 
     List<CartItem> findByUserIdOrderByIdAsc(Long userId);

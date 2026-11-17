@@ -96,12 +96,12 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("없는 회원 · 이미 탈퇴한 회원은 USER_NOT_FOUND — Keycloak 은 건드리지 않는다")
+    @DisplayName("없는 회원, 이미 탈퇴한 회원은 USER_NOT_FOUND — Keycloak 은 건드리지 않는다")
     void withdraw_notFound_throws() {
         // given
         given(userRepository.findByIdAndDeletedAtIsNull(7L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> userService.withdraw(7L, null))
                 .isInstanceOf(UserException.class)
                 .extracting("errorCode").isEqualTo(UserErrorCode.USER_NOT_FOUND);
@@ -138,12 +138,12 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("판매자 — 스토어가 폐점(CLOSED)이 아니면 USER_SELLER_STORE_NOT_CLOSED, 회원 · 계정은 그대로")
+    @DisplayName("판매자 — 스토어가 폐점(CLOSED)이 아니면 USER_SELLER_STORE_NOT_CLOSED, 회원, 계정은 그대로")
     void withdraw_sellerWithOpenStore_throws() {
         // given
         given(storeClient.getStoreStatus(1L)).willReturn(StoreStatus.ACTIVE);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> userService.withdraw(2L, 1L))
                 .isInstanceOf(UserException.class)
                 .extracting("errorCode").isEqualTo(UserErrorCode.USER_SELLER_STORE_NOT_CLOSED);
@@ -157,7 +157,7 @@ class UserServiceTest {
         // given
         given(storeClient.getStoreStatus(2L)).willReturn(StoreStatus.SUSPENDED);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> userService.withdraw(3L, 2L)).isInstanceOf(UserException.class);
     }
 
@@ -211,15 +211,15 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("진행 중인 주문 · 교환 · 반품이 있으면 USER_ORDERS_IN_PROGRESS(건수 포함), 회원 · 계정은 그대로")
+    @DisplayName("진행 중인 주문, 교환, 반품이 있으면 USER_ORDERS_IN_PROGRESS(건수 포함), 회원, 계정은 그대로")
     void withdraw_ordersInProgress_throws() {
         // given
         given(orderClient.countInProgress(7L)).willReturn(2L);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> userService.withdraw(7L, null))
                 .isInstanceOf(UserException.class)
-                .hasMessage("진행 중인 주문 · 교환 · 반품이 2건 있어 탈퇴할 수 없습니다.")
+                .hasMessage("진행 중인 주문, 교환, 반품이 2건 있어 탈퇴할 수 없습니다.")
                 .extracting("errorCode").isEqualTo(UserErrorCode.USER_ORDERS_IN_PROGRESS);
         verify(userRepository, never()).findByIdAndDeletedAtIsNull(any());
         verify(authService, never()).deleteAccount(any(), anyString());
@@ -231,7 +231,7 @@ class UserServiceTest {
         // given
         given(orderClient.countInProgress(7L)).willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> userService.withdraw(7L, null))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
@@ -244,7 +244,7 @@ class UserServiceTest {
         // given
         given(storeClient.getStoreStatus(1L)).willReturn(StoreStatus.ACTIVE);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> userService.withdraw(2L, 1L)).isInstanceOf(UserException.class);
         verifyNoInteractions(orderClient);
     }

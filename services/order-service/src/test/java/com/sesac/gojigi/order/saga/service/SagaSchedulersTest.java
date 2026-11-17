@@ -34,7 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.MDC;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 결제 대기 만료 · Saga 복구 스케줄러 — 기준 시각 계산 · 건마다 MDC · 한 건이 실패해도 다음 건 계속 */
+/** 결제 대기 만료, Saga 복구 스케줄러 — 기준 시각 계산, 건마다 MDC, 한 건이 실패해도 다음 건 계속 */
 @ExtendWith(MockitoExtension.class)
 class SagaSchedulersTest {
 

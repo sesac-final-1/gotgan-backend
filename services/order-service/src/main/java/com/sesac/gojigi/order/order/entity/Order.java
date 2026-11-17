@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 주문 = 결제 단위 — 한 번 결제에 여러 스토어 상품이 섞일 수 있다. 테이블 orders (MySQL 키워드 order 회피).
- * 주문자 · 배송지는 주문 시점 스냅샷. ordererName(실명)은 알림 메일용이고 화면에는 ordererDisplayName 만 쓴다.
+ * 주문자, 배송지는 주문 시점 스냅샷. ordererName(실명)은 알림 메일용이고 화면에는 ordererDisplayName 만 쓴다.
  * payAmt = totalProductAmt + totalShippingFee - usedPoint (포트원 결제창 금액).
  */
 @Getter
@@ -121,7 +121,7 @@ public class Order extends BaseTimeEntity {
         this.paidAt = paidAt;
     }
 
-    /** Saga 보상을 마친 주문 — 재고 부족 · 포인트 부족 · 결제 준비 실패 · 결제 실패 · 결제 대기 만료 */
+    /** Saga 보상을 마친 주문 — 재고 부족, 포인트 부족, 결제 준비 실패, 결제 실패, 결제 대기 만료 */
     public void markFailed() {
         requirePending();
         this.status = OrderStatus.FAILED;

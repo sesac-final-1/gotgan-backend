@@ -33,7 +33,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * 관리자 화면 실시간 모니터링(11/16 피드백) — 부하테스트와 상관없이 실제 트래픽을 항상 보여 준다.
- * 그래프 = 게이트웨이 라우트 지표(Prometheus, 5초 수집), 호출 · 트레이스 = Zipkin(샘플링 1.0), 에러 로그 = Loki.
+ * 그래프 = 게이트웨이 라우트 지표(Prometheus, 5초 수집), 호출, 트레이스 = Zipkin(샘플링 1.0), 에러 로그 = Loki.
  * 조회는 전부 보조 정보라 실패해도 빈 값으로 응답한다(화면은 "-")
  */
 @Service
@@ -44,7 +44,7 @@ public class MonitorService {
     static final int LIST_LIMIT = 40;
     /** 관리자 시스템 화면이 1 ~ 2초마다 부르는 요청 — 호출 목록을 덮지 않게 뺀다 */
     static final String SELF_PATH = "/api/admin/system";
-    /** Prometheus 수집(5초) · 상태 확인 요청 — 게이트웨이 파드를 직접 부르므로 업무 요청이 아니다 */
+    /** Prometheus 수집(5초), 상태 확인 요청 — 게이트웨이 파드를 직접 부르므로 업무 요청이 아니다 */
     static final String ACTUATOR_PATH = "/actuator";
     static final String ROUTE_TAG = "spring.cloud.gateway.route.id";
 
@@ -54,7 +54,7 @@ public class MonitorService {
     /** 5xx 건수 — 점마다 최근 1분 동안 몇 건(11/17 피드백: 퍼센트 대신 건수) */
     static final String ERRORS_BY_ROUTE = "sum by (routeId)(increase(" + GW + "_count{httpStatusCode=~\"5..\"}[1m]))";
 
-    /** 분석 대상 — 액추에이터 · 스트림 · WebSocket 과 이 화면 자체 폴링(/api/admin/system/**, 1 ~ 2초)은 뺀다(느린 API 순위를 자기 조회가 차지했음, 11/17) */
+    /** 분석 대상 — 액추에이터, 스트림, WebSocket 과 이 화면 자체 폴링(/api/admin/system/**, 1 ~ 2초)은 뺀다(느린 API 순위를 자기 조회가 차지했음, 11/17) */
     static final String APP_FILTER = "namespace=\"sesac-gojigi\",app!=\"gateway-service\",uri!~\"/actuator.*|UNKNOWN|.*stream.*|/ws.*|/api/admin/system.*\"";
     static final String TOP_GATEWAY_ERRORS = "topk(5, sum by (routeId, httpStatusCode)(increase(" + GW + "_count{httpStatusCode=~\"5..\"}[5m])))";
     static final String TOP_APP_ERRORS = "topk(5, sum by (app, method, uri, status)(increase(http_server_requests_seconds_count{"
@@ -75,7 +75,7 @@ public class MonitorService {
         this.clock = clock;
     }
 
-    // ── 총 현황 · 서비스별 그래프
+    // ── 총 현황, 서비스별 그래프
 
     public MonitorResponses.Overview overview() {
         Instant end = clock.instant();
@@ -147,7 +147,7 @@ public class MonitorService {
         return values;
     }
 
-    // ── 호출 · 장애 목록
+    // ── 호출, 장애 목록
 
     /** service 가 있으면 그 서비스로 간 요청만(게이트웨이 라우트 태그로 Zipkin 에서 바로 조회) — 트래픽이 적은 서비스도 묻히지 않게 */
     public List<Call> calls(String service) {
@@ -175,7 +175,7 @@ public class MonitorService {
                 .toList();
     }
 
-    /** 서비스 필터가 있으면 그 서비스의 게이트웨이 라우트마다 조회해 합친다(user 는 user-auth · user-auth-strict · user-service) */
+    /** 서비스 필터가 있으면 그 서비스의 게이트웨이 라우트마다 조회해 합친다(user 는 user-auth, user-auth-strict, user-service) */
     private List<JsonNode> traces(String service, String condition, long endTsMs, long lookbackMs, int limit) {
         if (service == null) {
             return zipkin.recentTraces(condition, endTsMs, lookbackMs, limit);
@@ -196,7 +196,7 @@ public class MonitorService {
         return service == null || SystemCatalog.ROUTE_SERVICES.containsValue(service);
     }
 
-    /** 트레이스 하나 → 게이트웨이 첫 구간(SERVER, 부모 없음)으로 요청 한 줄. 관리자 시스템 화면 폴링 · 액추에이터 · 경로 없는 것은 null */
+    /** 트레이스 하나 → 게이트웨이 첫 구간(SERVER, 부모 없음)으로 요청 한 줄. 관리자 시스템 화면 폴링, 액추에이터, 경로 없는 것은 null */
     static Call call(JsonNode trace) {
         JsonNode root = null;
         String route = null;

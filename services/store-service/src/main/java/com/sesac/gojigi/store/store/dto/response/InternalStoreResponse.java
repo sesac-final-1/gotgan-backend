@@ -13,7 +13,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 /**
- * 내부 스토어 상세 (docs/api/store.md 1절) — user-service(판매자 탈퇴 전 폐점 확인) · order-service(배송비 계산) · chat-service · admin-service(관리자 상세)가 호출.
+ * 내부 스토어 상세 (docs/api/store.md 1절) — user-service(판매자 탈퇴 전 폐점 확인), order-service(배송비 계산), chat-service, admin-service(관리자 상세)가 호출.
  * userId 로 호출자가 "이 스토어가 그 판매자 것인지" 확인할 수 있다. 필드는 추가만 한다 — 앞 7개 뒤로 관리자 상세용 필드(1절 확장)를 붙였다.
  * 배송비는 order 가 스토어별 상품 합계 >= freeShippingThreshold 이면 0원, 아니면 shippingFee (threshold null = 무료배송 없음).
  */
@@ -39,7 +39,7 @@ public record InternalStoreResponse(
         @Schema(description = "기본 택배사 — 승인 직후 null", example = "우체국택배")
         String courier,
 
-        // ── 1절 확장 (관리자 스토어 상세) — user · order · chat 은 위 필드만 읽으면 된다
+        // ── 1절 확장 (관리자 스토어 상세) — user, order, chat 은 위 필드만 읽으면 된다
 
         @Schema(description = "스토어 주소", example = "gotgan-store")
         String slug,
@@ -62,7 +62,7 @@ public record InternalStoreResponse(
         @Schema(description = "출고 안내 문구 — 없으면 null", example = "평일 14시 이전 결제 시 당일 출고")
         String dispatchNote,
 
-        @Schema(description = "가장 최근 정지 · 해제 · 폐점 사유 — 없으면 null", example = "허위 광고 신고 3건 확인")
+        @Schema(description = "가장 최근 정지, 해제, 폐점 사유 — 없으면 null", example = "허위 광고 신고 3건 확인")
         String statusReason,
 
         @Schema(description = "원래 입점 신청 ID", example = "27")

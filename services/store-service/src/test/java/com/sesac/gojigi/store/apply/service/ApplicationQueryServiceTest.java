@@ -81,7 +81,7 @@ class ApplicationQueryServiceTest {
     private ApplicationQueryService applicationQueryService;
 
     @Test
-    @DisplayName("목록 한 줄은 접수번호를 계산하고 제출 · 상태 변경 시각을 +09:00 으로 바꾼다")
+    @DisplayName("목록 한 줄은 접수번호를 계산하고 제출, 상태 변경 시각을 +09:00 으로 바꾼다")
     void getList_withStatus_mapsSummary() {
         // given
         StoreApplication application = mock(StoreApplication.class);
@@ -122,13 +122,13 @@ class ApplicationQueryServiceTest {
     }
 
     @Test
-    @DisplayName("상세는 신청서 · 계좌 · 서류(종류별 · 올린 순서, 열람 주소) · 이력 · 같은 사업자번호의 신청 · 스토어를 담는다")
+    @DisplayName("상세는 신청서, 계좌, 서류(종류별, 올린 순서, 열람 주소), 이력, 같은 사업자번호의 신청, 스토어를 담는다")
     void getDetail_whenApplicationExists_assemblesAll() {
         // given
         StoreApplication application = application(27L, "000-00-00001", SUBMITTED_AT);
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
         given(storeRepository.findByStoreApplicationId(27L)).willReturn(Optional.empty());
-        // 저장 순서와 다르게 — 통신판매업(2) 이전본 · 사업자등록증(1) · 통신판매업 지금 것
+        // 저장 순서와 다르게 — 통신판매업(2) 이전본, 사업자등록증(1), 통신판매업 지금 것
         ApplicationDocument oldEcommerce = document(103L, DocType.ECOMMERCE_REG, "old.pdf", false);
         ApplicationDocument business = document(101L, DocType.BUSINESS_REG, "biz.pdf", true);
         ApplicationDocument newEcommerce = document(105L, DocType.ECOMMERCE_REG, "new.pdf", true);
@@ -236,7 +236,7 @@ class ApplicationQueryServiceTest {
         // given
         given(storeApplicationRepository.findById(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> applicationQueryService.getDetail(99L))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -276,7 +276,7 @@ class ApplicationQueryServiceTest {
     }
 
     @Test
-    @DisplayName("내 신청 — 보완요청이면 사유 · 보완 기한(+7일) · 이력, 반려 · 승인 값은 null")
+    @DisplayName("내 신청 — 보완요청이면 사유, 보완 기한(+7일), 이력, 반려, 승인 값은 null")
     void getMine_whenSupplement_returnsDueAtAndHistory() {
         // given
         StoreApplication application = application(27L, "000-00-00001", SUBMITTED_AT);
@@ -370,7 +370,7 @@ class ApplicationQueryServiceTest {
         // given
         given(storeApplicationRepository.findFirstByUserIdOrderByTermsAgreedAtDescIdDesc(6L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThat(applicationQueryService.getMine(6L)).isNull();
     }
 }

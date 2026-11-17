@@ -48,7 +48,7 @@ public class StoreStatusService {
                     storeId, event.payload().status(), event.occurredAt(), event.eventId());
             return Result.STALE_IGNORED;
         }
-        // 최신 상태로 반영됐을 때만 정산서 자동 보류 · 해제 (옛 이벤트로 되돌리지 않음)
+        // 최신 상태로 반영됐을 때만 정산서 자동 보류, 해제 (옛 이벤트로 되돌리지 않음)
         settlementCommandService.applyStoreStatus(storeId, event.payload().status());
         return Result.APPLIED;
     }

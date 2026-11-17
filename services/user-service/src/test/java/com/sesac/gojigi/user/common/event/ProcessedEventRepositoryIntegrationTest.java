@@ -29,7 +29,7 @@ class ProcessedEventRepositoryIntegrationTest {
         ProcessedEvent saved = processedEventRepository.saveAndFlush(
                 new ProcessedEvent("0b6f3c1e-1111-4a2b-9c3d-000000000001", "OrderPaid"));
 
-        // when · then
+        // when, then
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getEventType()).isEqualTo("OrderPaid");
         assertThat(processedEventRepository.existsByEventId(saved.getEventId())).isTrue();

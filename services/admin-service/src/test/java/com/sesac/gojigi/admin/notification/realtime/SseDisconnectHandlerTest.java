@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
-/** SSE 연결 끊김 — 공통 처리(ERROR · 500 ApiResponse)보다 먼저 받아 응답을 쓰지 않는다 (Q-구-7) */
+/** SSE 연결 끊김 — 공통 처리(ERROR, 500 ApiResponse)보다 먼저 받아 응답을 쓰지 않는다 (Q-구-7) */
 class SseDisconnectHandlerTest {
 
     @RestController

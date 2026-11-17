@@ -39,8 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 실제 MySQL — 정지 종료 시각 저장(V3), 동시 정지에서 한 건만 성공하는지(회원 행 잠금), 기간 만료 자동 해제(스케줄러 쿼리 · 재확인).
- * Keycloak · Redis 는 목. 서비스가 TransactionTemplate 으로 직접 커밋해야 해서 테스트 트랜잭션으로 감싸지 않는다 (끝나고 직접 정리).
+ * 실제 MySQL — 정지 종료 시각 저장(V3), 동시 정지에서 한 건만 성공하는지(회원 행 잠금), 기간 만료 자동 해제(스케줄러 쿼리, 재확인).
+ * Keycloak, Redis 는 목. 서비스가 TransactionTemplate 으로 직접 커밋해야 해서 테스트 트랜잭션으로 감싸지 않는다 (끝나고 직접 정리).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -76,7 +76,7 @@ class UserStatusServiceIntegrationTest {
         return id;
     }
 
-    /** 이미 시작된 정지 — 종료 시각을 과거 · 미래로 직접 */
+    /** 이미 시작된 정지 — 종료 시각을 과거, 미래로 직접 */
     private Long suspendedMember(LocalDateTime until) {
         Long id = member();
         transactionTemplate.executeWithoutResult(status ->
@@ -89,7 +89,7 @@ class UserStatusServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("7일 정지 → suspended_until 저장, 해제하면 정지 시각 · 종료 시각 · 차단 목록 정리")
+    @DisplayName("7일 정지 → suspended_until 저장, 해제하면 정지 시각, 종료 시각, 차단 목록 정리")
     void suspendThenActivate_persists() {
         Long id = member();
 
@@ -142,7 +142,7 @@ class UserStatusServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("스케줄러 — 종료 시각이 지난 기간 정지만 자동 해제, 기간이 남은 정지 · 영구 정지는 그대로")
+    @DisplayName("스케줄러 — 종료 시각이 지난 기간 정지만 자동 해제, 기간이 남은 정지, 영구 정지는 그대로")
     void scheduler_releasesOnlyExpired() {
         Long expired = suspendedMember(LocalDateTime.now().minusMinutes(1));
         Long remaining = suspendedMember(LocalDateTime.now().plusDays(3));

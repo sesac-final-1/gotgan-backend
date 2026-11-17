@@ -37,7 +37,7 @@ public class StockHistory {
     @Column(name = "type", nullable = false, length = 20, updatable = false)
     private StockType type;
 
-    /** RESERVE · RELEASE: sagaId / RESTORE: claim-{claimId} */
+    /** RESERVE, RELEASE: sagaId / RESTORE: claim-{claimId} */
     @Column(name = "ref_key", nullable = false, length = 64, updatable = false)
     private String refKey;
 

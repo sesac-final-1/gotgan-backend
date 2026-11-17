@@ -25,7 +25,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
-/** 실제 MySQL + Flyway + 시연 시드 위에서 1절 확장 응답(신청서 값 · 출고 안내 · 등급 · 상태 이력)이 채워지는지 확인 */
+/** 실제 MySQL + Flyway + 시연 시드 위에서 1절 확장 응답(신청서 값, 출고 안내, 등급, 상태 이력)이 채워지는지 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfiguration.class, StoreQueryService.class, ImageUrls.class})
@@ -40,7 +40,7 @@ class StoreQueryServiceIntegrationTest {
     private EntityManager entityManager;
 
     @Test
-    @DisplayName("시드 정지 스토어 15 — 신청서의 대표자 · 사업자번호, 등급 · 사유, 이력 개설 → 정지 (오래된 순)")
+    @DisplayName("시드 정지 스토어 15 — 신청서의 대표자, 사업자번호, 등급, 사유, 이력 개설 → 정지 (오래된 순)")
     void getInternal_seedSuspendedStore_returnsAdminFieldsAndHistory() {
         // when
         InternalStoreResponse detail = storeQueryService.getInternal(15L);
@@ -84,7 +84,7 @@ class StoreQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("내부 상세는 신청서 엔티티를 불러오지 않고 대표자 · 상호 · 사업자번호만 읽는다 (k6 지-2)")
+    @DisplayName("내부 상세는 신청서 엔티티를 불러오지 않고 대표자, 상호, 사업자번호만 읽는다 (k6 지-2)")
     void getInternal_doesNotLoadApplicationEntity() {
         // given
         Statistics statistics = entityManager.getEntityManagerFactory().unwrap(SessionFactory.class).getStatistics();
@@ -113,7 +113,7 @@ class StoreQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("공개 스토어 홈 — 시드 스토어 1 은 홈 전체(신청서 카테고리 · 대표자), 정지 15 는 이름 · 상태만")
+    @DisplayName("공개 스토어 홈 — 시드 스토어 1 은 홈 전체(신청서 카테고리, 대표자), 정지 15 는 이름, 상태만")
     void getPublic_seedStores_returnsHomeOrNameOnly() {
         // when
         PublicStoreResponse park = storeQueryService.getPublic(1L);
@@ -136,7 +136,7 @@ class StoreQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("판매자 내 스토어 — 시드 스토어 1 의 색 · 연락처 · 배송 정책 · 출고 안내 · 대표자, 이미지 없음은 null")
+    @DisplayName("판매자 내 스토어 — 시드 스토어 1 의 색, 연락처, 배송 정책, 출고 안내, 대표자, 이미지 없음은 null")
     void getSellerStore_seedStore_returnsSettings() {
         // when
         SellerStoreResponse mine = storeQueryService.getSellerStore(1L);

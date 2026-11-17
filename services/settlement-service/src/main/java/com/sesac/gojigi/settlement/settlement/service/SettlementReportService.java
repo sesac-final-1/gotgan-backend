@@ -22,7 +22,7 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
  * 정산 명세서 다운로드 링크 (STL-10) — Lambda settlement-report 가 SettlementPaid 를 받아 만든 CSV 의 presigned GET.
  * 키는 결정론적 reports/{storeId}/{week}.csv 라 DynamoDB 조회 없이 만든다 (API 명세).
  *
- * 유효 기간 10분 · 클릭할 때마다 발급: 클러스터에서는 IRSA 임시 자격 증명으로 서명하는데, 이런 URL 은 서명에 쓴 세션이 끝나면
+ * 유효 기간 10분, 클릭할 때마다 발급: 클러스터에서는 IRSA 임시 자격 증명으로 서명하는데, 이런 URL 은 서명에 쓴 세션이 끝나면
  * 함께 만료된다(최대 1시간). "7일 유효"로 내주면 실제로는 금방 403 이 되므로 짧게 내주고 프론트가 버튼을 누를 때마다 받는다.
  * 발급 전에 파일이 있는지(HeadObject) 확인 — Lambda 가 아직 만들지 않았으면 S3 오류 화면 대신 409 SETTLE_REPORT_NOT_READY.
  */

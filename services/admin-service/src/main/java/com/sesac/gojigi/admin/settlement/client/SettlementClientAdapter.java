@@ -11,7 +11,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * settlement-service 호출 — 서킷 브레이커 "settlement", 재시도는 GET 만(집계 · 지급 · 보류 · 수수료 변경은 재시도 없음 —
+ * settlement-service 호출 — 서킷 브레이커 "settlement", 재시도는 GET 만(집계, 지급, 보류, 수수료 변경은 재시도 없음 —
  * 지급은 같은 ids 를 다시 보내도 이중 지급이 없지만 관리자가 결과를 보고 다시 누르게 둔다). 오류는 RemoteCalls 규칙으로 그대로 전달
  */
 @Component

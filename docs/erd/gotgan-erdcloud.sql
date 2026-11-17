@@ -1,25 +1,25 @@
 -- 곳간(GOTGAN) 전체 ERD — ERD Cloud 가져오기용 (자동 생성: node docs/erd/build-erd.mjs, 직접 수정 금지)
--- 생성: 2026-10-29 · 원본: services/*-service/src/main/resources/db/migration (Flyway)
--- 서비스마다 DB 가 따로라 서비스 사이 참조(user_id · order_item_id 등 "논리 참조")는 FK 로 그리지 않는다 — 컬럼 COMMENT 참고
+-- 생성: 2026-10-29, 원본: services/*-service/src/main/resources/db/migration (Flyway)
+-- 서비스마다 DB 가 따로라 서비스 사이 참조(user_id, order_item_id 등 "논리 참조")는 FK 로 그리지 않는다 — 컬럼 COMMENT 참고
 -- 제외: shedlock (스케줄러 잠금). 여러 DB 에 있는 같은 이름 테이블은 {db}_ 접두어
 
--- ============================================================ userdb (user-service · 담당 이경석)
--- 원본: V1__init.sql · V2__init_userdb.sql · V3__user_suspension.sql · V4__point_use_saga.sql
+-- ============================================================ userdb (user-service, 담당 이경석)
+-- 원본: V1__init.sql, V2__init_userdb.sql, V3__user_suspension.sql, V4__point_use_saga.sql
 
--- 회원 프로필 · 포인트 잔액 · 등급 (계정은 Keycloak)
+-- 회원 프로필, 포인트 잔액, 등급 (계정은 Keycloak)
 CREATE TABLE `users` (
 	`user_id`	BIGINT	NOT NULL,
 	`keycloak_id`	VARCHAR(36)	NULL	COMMENT 'Keycloak 사용자 ID(UUID). 자체 가입: 가입 트랜잭션에서 Keycloak 생성 직후 채움(실패 시 행 삭제) / 소셜: 첫 로그인 시 이 값으로 행 생성',
-	`email`	VARCHAR(100)	NOT NULL	COMMENT '로그인 ID = Keycloak username. 관리자 검색 · 표시용 사본 (소셜은 Keycloak First Broker Login에서 필수 입력)',
+	`email`	VARCHAR(100)	NOT NULL	COMMENT '로그인 ID = Keycloak username. 관리자 검색, 표시용 사본 (소셜은 Keycloak First Broker Login에서 필수 입력)',
 	`name`	VARCHAR(50)	NOT NULL	COMMENT '이름',
 	`nick`	VARCHAR(30)	NULL	COMMENT '닉네임 (선택)',
 	`phone`	VARCHAR(20)	NULL	COMMENT '휴대폰 번호 예: 010-1234-5678 — 소셜 가입은 비어 있을 수 있음, 주문 전 입력 받음',
-	`signup_provider`	VARCHAR(20)	NOT NULL	DEFAULT 'LOCAL'	COMMENT 'LOCAL / KAKAO / GOOGLE / NAVER — 가입 경로 (표시 · 통계용, 인증 판단에는 쓰지 않음). 소셜 계정 연결은 Keycloak이 관리',
+	`signup_provider`	VARCHAR(20)	NOT NULL	DEFAULT 'LOCAL'	COMMENT 'LOCAL / KAKAO / GOOGLE / NAVER — 가입 경로 (표시, 통계용, 인증 판단에는 쓰지 않음). 소셜 계정 연결은 Keycloak이 관리',
 	`point_balance`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '포인트 잔액 (원). 차감은 조건부 UPDATE (point_balance >= :p) — 음수 금지',
 	`total_confirmed_amt`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '누적 구매확정 금액 (원) — OrderItemConfirmed 수신 시 가산, 등급 산정 기준',
 	`grade`	VARCHAR(20)	NOT NULL	DEFAULT 'NORMAL'	COMMENT 'NORMAL / SILVER / GOLD — 혜택은 표시만 (적립률 5% 고정)',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT 'ACTIVE / SUSPENDED — 정지 시 Keycloak 계정 enabled=false 동기화',
-	`status_reason`	VARCHAR(255)	NULL	COMMENT '이용정지 · 해제 사유 (관리자 입력 필수)',
+	`status_reason`	VARCHAR(255)	NULL	COMMENT '이용정지, 해제 사유 (관리자 입력 필수)',
 	`suspended_at`	DATETIME(6)	NULL	COMMENT '이용정지 시각 (애플리케이션이 기록)',
 	`suspended_until`	DATETIME(6)	NULL	COMMENT '이용정지 종료 시각 — NULL 이면 영구 정지(관리자가 해제). 지나면 스케줄러가 자동 해제',
 	`last_login_at`	DATETIME(6)	NULL	COMMENT '마지막 로그인 시각 (애플리케이션이 기록) — 관리자 회원 상세',
@@ -44,17 +44,17 @@ CREATE TABLE `address` (
 	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각'
 );
 
--- 포인트 적립 · 사용 · 환원 · 회수 이력
+-- 포인트 적립, 사용, 환원, 회수 이력
 CREATE TABLE `point_history` (
 	`point_history_id`	BIGINT	NOT NULL,
 	`user_id`	BIGINT	NOT NULL,
-	`order_item_id`	BIGINT	NULL	COMMENT 'order-service order_item.order_item_id (논리 참조) — 상품주문별 배분 · 환원 · 회수 단위. USE는 NULL',
+	`order_item_id`	BIGINT	NULL	COMMENT 'order-service order_item.order_item_id (논리 참조) — 상품주문별 배분, 환원, 회수 단위. USE는 NULL',
 	`order_no`	VARCHAR(20)	NULL	COMMENT 'order-service orders.order_no (논리 참조) — 이력 화면 표시용',
 	`type`	VARCHAR(20)	NOT NULL	COMMENT 'EARN(적립) / USE(사용) / RESTORE(사용 환원) / RECLAIM(적립 회수)',
 	`amount`	BIGINT	NOT NULL	COMMENT '변동 포인트 (원, 항상 양수) — 증감 방향은 type으로 판단',
 	`shortfall_amt`	BIGINT	NOT NULL	DEFAULT 0	COMMENT 'RECLAIM에서 잔액 부족으로 회수하지 못한 차액 (원) — 잔액은 0까지만 회수',
 	`balance_after`	BIGINT	NOT NULL	COMMENT '변동 후 잔액 (원)',
-	`ref_key`	VARCHAR(64)	NOT NULL	COMMENT '멱등 키 — USE · 보상 RESTORE: sagaId / 클레임 RESTORE · RECLAIM: claim-{claimId}-{orderItemId} / EARN: {eventId}-{orderItemId}',
+	`ref_key`	VARCHAR(64)	NOT NULL	COMMENT '멱등 키 — USE, 보상 RESTORE: sagaId / 클레임 RESTORE, RECLAIM: claim-{claimId}-{orderItemId} / EARN: {eventId}-{orderItemId}',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
@@ -69,13 +69,13 @@ CREATE TABLE `userdb_processed_event` (
 -- 포인트 사용 sagaId 표식 (늦게 도착한 사용 차단)
 CREATE TABLE `point_use_saga` (
 	`point_use_saga_id`	BIGINT	NOT NULL,
-	`saga_id`	VARCHAR(64)	NOT NULL	COMMENT 'order 주문 Saga ID — point_history.ref_key(USE · 보상 RESTORE)와 같은 값',
+	`saga_id`	VARCHAR(64)	NOT NULL	COMMENT 'order 주문 Saga ID — point_history.ref_key(USE, 보상 RESTORE)와 같은 값',
 	`status`	VARCHAR(20)	NOT NULL	COMMENT 'USED(사용 처리됨) / RELEASED(사용 전에 취소됨 — 이후 사용 거절)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
--- ============================================================ storedb (store-service · 담당 박지연)
--- 원본: V1__init_store_ddl.sql · V2__store_display_columns.sql · V3__store_comment_cleanup.sql · V4__event_outbox.sql · V5__application_requested_docs.sql
+-- ============================================================ storedb (store-service, 담당 박지연)
+-- 원본: V1__init_store_ddl.sql, V2__store_display_columns.sql, V3__store_comment_cleanup.sql, V4__event_outbox.sql, V5__application_requested_docs.sql
 
 -- 입점 신청서 (진행 중 신청 1건은 서비스 검증)
 CREATE TABLE `store_application` (
@@ -88,23 +88,23 @@ CREATE TABLE `store_application` (
 	`biz_reg_no`	VARCHAR(12)	NOT NULL	COMMENT '사업자등록번호 000-00-00000 — 스토어 홈 판매자 정보로 노출. 바뀌면 새 사업자(재심사)',
 	`ecommerce_reg_no`	VARCHAR(50)	NOT NULL	COMMENT '통신판매업 신고번호',
 	`manager_phone`	VARCHAR(20)	NOT NULL	COMMENT '담당자 휴대폰 — 승인 시 store.cs_phone 으로 복사',
-	`manager_email`	VARCHAR(100)	NOT NULL	COMMENT '심사 결과(승인 · 반려 · 보완요청) 메일 수신 주소 — 이벤트 payload 에 포함',
+	`manager_email`	VARCHAR(100)	NOT NULL	COMMENT '심사 결과(승인, 반려, 보완요청) 메일 수신 주소 — 이벤트 payload 에 포함',
 	`business_address`	VARCHAR(255)	NOT NULL	COMMENT '사업장 주소',
 	`store_name`	VARCHAR(50)	NOT NULL	COMMENT '신청 당시 스토어명 — 승인 시 store.store_name 으로 복사',
-	`slug`	VARCHAR(50)	NOT NULL	COMMENT '신청한 스토어 주소 gotgan.kr/store/{slug} — 승인 시 store.slug 로 복사. 형식(영소문자 · 숫자 · -)과 중복은 서비스 검증',
+	`slug`	VARCHAR(50)	NOT NULL	COMMENT '신청한 스토어 주소 gotgan.kr/store/{slug} — 승인 시 store.slug 로 복사. 형식(영소문자, 숫자, -)과 중복은 서비스 검증',
 	`intro`	TEXT	NULL	COMMENT '스토어 소개 (sanitizer 정화 HTML) — 승인 시 store.intro 초기값',
-	`representative_products`	JSON	NOT NULL	COMMENT '대표 상품 2~10개 [{name, subCategory, price}] — 심사 화면 표시용 (검색 · 집계 없음)',
+	`representative_products`	JSON	NOT NULL	COMMENT '대표 상품 2~10개 [{name, subCategory, price}] — 심사 화면 표시용 (검색, 집계 없음)',
 	`expected_monthly_sales`	VARCHAR(20)	NULL	COMMENT '월 예상 매출 UNDER_5M / FROM_5M_TO_20M / FROM_20M_TO_100M / OVER_100M — 심사 화면 표시용',
-	`sales_channel`	VARCHAR(255)	NULL	COMMENT '운영 중인 채널 (자사몰 · 인스타그램 등 URL) — 선택 입력, 심사 참고용',
+	`sales_channel`	VARCHAR(255)	NULL	COMMENT '운영 중인 채널 (자사몰, 인스타그램 등 URL) — 선택 입력, 심사 참고용',
 	`bank_name`	VARCHAR(30)	NOT NULL	COMMENT '정산 은행',
 	`account_no`	VARCHAR(30)	NOT NULL	COMMENT '정산 계좌번호',
 	`account_holder`	VARCHAR(50)	NOT NULL	COMMENT '예금주',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT 'PENDING / SUPPLEMENT / APPROVED / REJECTED',
-	`status_reason`	VARCHAR(255)	NULL	COMMENT '가장 최근 반려 · 보완 사유 (전체는 application_history)',
-	`requested_docs`	JSON	NULL	COMMENT '보완요청 서류 종류 ["BUSINESS_REG", ...] — SUPPLEMENT 일 때만, 재제출 · 승인 · 반려 때 NULL',
+	`status_reason`	VARCHAR(255)	NULL	COMMENT '가장 최근 반려, 보완 사유 (전체는 application_history)',
+	`requested_docs`	JSON	NULL	COMMENT '보완요청 서류 종류 ["BUSINESS_REG", ...] — SUPPLEMENT 일 때만, 재제출, 승인, 반려 때 NULL',
 	`marketing_agreed`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '마케팅 수신 동의 (선택 약관)',
 	`terms_agreed_at`	DATETIME(6)	NOT NULL	COMMENT '필수 약관 동의 시각 (애플리케이션이 기록)',
-	`status_changed_at`	DATETIME(6)	NOT NULL	COMMENT '마지막 상태 변경 시각 — 7일 자동 반려(SUPPLEMENT) · 30일 재신청 제한(REJECTED) 기준',
+	`status_changed_at`	DATETIME(6)	NOT NULL	COMMENT '마지막 상태 변경 시각 — 7일 자동 반려(SUPPLEMENT), 30일 재신청 제한(REJECTED) 기준',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '제출 시각',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '낙관적 락(@Version) — 재제출과 자동 반려가 동시에 저장되는 것 방지'
@@ -117,7 +117,7 @@ CREATE TABLE `application_document` (
 	`doc_type`	VARCHAR(30)	NOT NULL	COMMENT 'BUSINESS_REG / ECOMMERCE_REG / BANK_COPY / PRODUCT_PHOTO / CATEGORY_CERT',
 	`s3_key`	VARCHAR(255)	NOT NULL	COMMENT 'S3 seller-docs 객체 키 (비공개 — 볼 때마다 presigned GET 발급)',
 	`original_name`	VARCHAR(255)	NOT NULL	COMMENT '원본 파일명 (관리자 화면 표시)',
-	`content_type`	VARCHAR(50)	NOT NULL	COMMENT 'application/pdf · image/jpeg · image/png',
+	`content_type`	VARCHAR(50)	NOT NULL	COMMENT 'application/pdf, image/jpeg, image/png',
 	`file_size`	INT UNSIGNED	NOT NULL	COMMENT '파일 크기 (바이트, 10MB 이하)',
 	`is_current`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '현재 유효한 서류 여부 — 재제출되면 FALSE',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
@@ -131,14 +131,14 @@ CREATE TABLE `application_history` (
 	`from_status`	VARCHAR(20)	NULL	COMMENT '변경 전 상태 — 최초 신청은 NULL',
 	`to_status`	VARCHAR(20)	NOT NULL	COMMENT '변경 후 상태',
 	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'APPLICANT / ADMIN / SYSTEM(7일 자동 반려) — 관리자 ID는 남기지 않음',
-	`reason`	VARCHAR(255)	NULL	COMMENT '반려 · 보완 사유',
+	`reason`	VARCHAR(255)	NULL	COMMENT '반려, 보완 사유',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '상태가 바뀐 시각'
 );
 
--- 스토어 · 배송 정책
+-- 스토어, 배송 정책
 CREATE TABLE `store` (
 	`store_id`	BIGINT	NOT NULL,
-	`store_application_id`	BIGINT	NOT NULL	COMMENT '원래 입점 신청 — 대표자 · 사업자번호는 이 신청서를 조인해 노출',
+	`store_application_id`	BIGINT	NOT NULL	COMMENT '원래 입점 신청 — 대표자, 사업자번호는 이 신청서를 조인해 노출',
 	`user_id`	BIGINT	NOT NULL	COMMENT 'user-service users.user_id (논리 참조) — 판매자',
 	`store_name`	VARCHAR(50)	NOT NULL	COMMENT '스토어명',
 	`slug`	VARCHAR(50)	NOT NULL	COMMENT '스토어 주소 gotgan.kr/store/{slug} — 승인 시 신청서에서 복사, 판매자는 수정 불가',
@@ -148,11 +148,11 @@ CREATE TABLE `store` (
 	`cs_phone`	VARCHAR(20)	NOT NULL	COMMENT '고객 문의 연락처 — 승인 시 신청서 담당자 휴대폰 복사, 이후 판매자 수정',
 	`shipping_fee`	BIGINT	NOT NULL	DEFAULT 3000	COMMENT '스토어 묶음 기본 배송비 (원) — 승인 직후 3,000원',
 	`free_shipping_threshold`	BIGINT	NULL	COMMENT '무료배송 기준 금액 (원) — NULL 이면 무료배송 없음',
-	`courier`	VARCHAR(30)	NULL	COMMENT '기본 택배사 이름 예: CJ대한통운 — 상품 상세 배송 안내 · 송장 입력 기본값 (order_item.courier 와 같은 형식). 승인 직후 NULL',
+	`courier`	VARCHAR(30)	NULL	COMMENT '기본 택배사 이름 예: CJ대한통운 — 상품 상세 배송 안내, 송장 입력 기본값 (order_item.courier 와 같은 형식). 승인 직후 NULL',
 	`dispatch_note`	VARCHAR(100)	NULL	COMMENT '출고 안내 문구 예: 평일 14시 이전 결제 시 당일 출고',
 	`grade`	VARCHAR(20)	NOT NULL	DEFAULT 'SPROUT'	COMMENT '판매자 등급 SPROUT(새싹) / POWER(파워) / BIG_POWER(빅파워) — 승인 시 SPROUT, 승급 기준은 미정',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ACTIVE'	COMMENT 'ACTIVE / SUSPENDED(관리자 정지) / CLOSED(판매자 폐점 — 되돌릴 수 없음)',
-	`status_reason`	VARCHAR(255)	NULL	COMMENT '가장 최근 정지 · 해제 사유 (전체는 store_status_history)',
+	`status_reason`	VARCHAR(255)	NULL	COMMENT '가장 최근 정지, 해제 사유 (전체는 store_status_history)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (물리 DELETE 금지)'
@@ -164,8 +164,8 @@ CREATE TABLE `store_status_history` (
 	`store_id`	BIGINT	NOT NULL,
 	`from_status`	VARCHAR(20)	NULL	COMMENT '변경 전 상태 — 승인으로 생성될 때만 NULL',
 	`to_status`	VARCHAR(20)	NOT NULL	COMMENT '변경 후 상태',
-	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'SELLER(폐점) / ADMIN(정지 · 해제)',
-	`reason`	VARCHAR(255)	NULL	COMMENT '사유 — 관리자 정지 · 해제는 필수',
+	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'SELLER(폐점) / ADMIN(정지, 해제)',
+	`reason`	VARCHAR(255)	NULL	COMMENT '사유 — 관리자 정지, 해제는 필수',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '상태가 바뀐 시각'
 );
 
@@ -184,8 +184,8 @@ CREATE TABLE `storedb_outbox_event` (
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
--- ============================================================ productdb (product-service · 담당 박지연)
--- 원본: V1__init_product_ddl.sql · V2__product_info_columns.sql · V3__store_status.sql
+-- ============================================================ productdb (product-service, 담당 박지연)
+-- 원본: V1__init_product_ddl.sql, V2__product_info_columns.sql, V3__store_status.sql
 
 -- 상품 카테고리 (상위/하위 2단계)
 CREATE TABLE `category` (
@@ -194,7 +194,7 @@ CREATE TABLE `category` (
 	`name`	VARCHAR(50)	NOT NULL	COMMENT '카테고리 이름',
 	`name_en`	VARCHAR(50)	NULL	COMMENT '카테고리 영문명 예: Apparel — 선택 입력, 없으면 화면에서 표시하지 않음',
 	`sort_order`	INT	NOT NULL	DEFAULT 0	COMMENT '같은 부모 안의 정렬 순서 (작을수록 먼저)',
-	`is_active`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '사용 여부 — 삭제 없음, FALSE 면 공개 트리에서 숨김 (store · settlement 가 category_id 를 논리 참조)',
+	`is_active`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '사용 여부 — 삭제 없음, FALSE 면 공개 트리에서 숨김 (store, settlement 가 category_id 를 논리 참조)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
@@ -207,22 +207,22 @@ CREATE TABLE `product` (
 	`name`	VARCHAR(100)	NOT NULL	COMMENT '상품명',
 	`price`	BIGINT	NOT NULL	COMMENT '판매가 (원, 판매자 입력)',
 	`discount_rate`	DECIMAL(5,2)	NOT NULL	DEFAULT 0	COMMENT '즉시할인율 % (0~90, 판매자 입력) — 수정 화면 표시용, 비율이라 DECIMAL (컨벤션 3-6)',
-	`sale_price`	BIGINT	NOT NULL	COMMENT '할인 적용가 (원) — 서버가 price · discount_rate 로 계산(10원 단위 반올림). 정렬 · 주문 금액 기준',
+	`sale_price`	BIGINT	NOT NULL	COMMENT '할인 적용가 (원) — 서버가 price, discount_rate 로 계산(10원 단위 반올림). 정렬, 주문 금액 기준',
 	`description`	TEXT	NULL	COMMENT '상세 설명 (sanitizer 정화 HTML)',
-	`material`	VARCHAR(100)	NOT NULL	COMMENT '소재 · 원재료 (상품정보 제공고시) 예: 리넨 100%',
-	`origin`	VARCHAR(50)	NOT NULL	COMMENT '제조국 · 원산지 (상품정보 제공고시) 예: 대한민국',
+	`material`	VARCHAR(100)	NOT NULL	COMMENT '소재, 원재료 (상품정보 제공고시) 예: 리넨 100%',
+	`origin`	VARCHAR(50)	NOT NULL	COMMENT '제조국, 원산지 (상품정보 제공고시) 예: 대한민국',
 	`option1_name`	VARCHAR(30)	NULL	COMMENT '옵션 그룹 1 이름 예: 색상 — 옵션 없으면 NULL',
 	`option2_name`	VARCHAR(30)	NULL	COMMENT '옵션 그룹 2 이름 예: 사이즈 — 최대 2개',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'ON_SALE'	COMMENT 'ON_SALE / STOPPED(판매자 판매중지) / BLOCKED(관리자 강제 판매중지 — 해제하면 STOPPED)',
 	`status_reason`	VARCHAR(255)	NULL	COMMENT '강제 판매중지 사유',
-	`is_store_active`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '스토어 운영중 여부 — StoreStatusChanged 로 갱신, FALSE 면 목록 · 검색에서 제외',
+	`is_store_active`	BOOLEAN	NOT NULL	DEFAULT TRUE	COMMENT '스토어 운영중 여부 — StoreStatusChanged 로 갱신, FALSE 면 목록, 검색에서 제외',
 	`store_status_changed_at`	DATETIME(6)	NULL	COMMENT '마지막으로 반영한 StoreStatusChanged 의 occurredAt — 이보다 오래된 이벤트는 무시 (SQS 순서 미보장)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '등록 시각 (신상품 정렬)',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 (주문 스냅샷 보존, 물리 DELETE 금지)'
 );
 
--- 상품 옵션 조합 · 재고 (조합 중복은 서비스 검증)
+-- 상품 옵션 조합, 재고 (조합 중복은 서비스 검증)
 CREATE TABLE `product_option` (
 	`product_option_id`	BIGINT	NOT NULL,
 	`product_id`	BIGINT	NOT NULL,
@@ -232,7 +232,7 @@ CREATE TABLE `product_option` (
 	`stock`	INT UNSIGNED	NOT NULL	DEFAULT 0	COMMENT '현재 재고 — 예약은 조건부 UPDATE(stock >= :qty), 판매자 수정은 본 값 비교(stock = :seen)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
-	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 — 옵션 구성 변경으로 사라진 조합 (주문 · 장바구니 · stock_history 가 참조)'
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '소프트 삭제 시각 — 옵션 구성 변경으로 사라진 조합 (주문, 장바구니, stock_history 가 참조)'
 );
 
 -- 상품 이미지
@@ -245,12 +245,12 @@ CREATE TABLE `product_image` (
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
--- 재고 예약 · 해제 · 복원 원장
+-- 재고 예약, 해제, 복원 원장
 CREATE TABLE `stock_history` (
 	`stock_history_id`	BIGINT	NOT NULL,
 	`product_option_id`	BIGINT	NOT NULL,
-	`type`	VARCHAR(20)	NOT NULL	COMMENT 'RESERVE(예약 차감) / RELEASE(예약 해제) / RESTORE(취소 · 반품 복원)',
-	`ref_key`	VARCHAR(64)	NOT NULL	COMMENT '멱등 키 — RESERVE · RELEASE: order-service saga_instance.saga_id / RESTORE: claim-{claimId}',
+	`type`	VARCHAR(20)	NOT NULL	COMMENT 'RESERVE(예약 차감) / RELEASE(예약 해제) / RESTORE(취소, 반품 복원)',
+	`ref_key`	VARCHAR(64)	NOT NULL	COMMENT '멱등 키 — RESERVE, RELEASE: order-service saga_instance.saga_id / RESTORE: claim-{claimId}',
 	`quantity`	INT UNSIGNED	NOT NULL	COMMENT '변동 수량 (항상 양수) — 증감 방향은 type 으로 판단',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
@@ -266,14 +266,14 @@ CREATE TABLE `productdb_processed_event` (
 -- 스토어 운영 상태 스냅샷 — StoreStatusChanged 로 갱신, 상품 등록 때 is_store_active 초기값
 CREATE TABLE `store_status` (
 	`store_id`	BIGINT	NOT NULL	COMMENT '스토어 ID (storedb store.store_id, 논리 참조)',
-	`status`	VARCHAR(20)	NOT NULL	COMMENT '마지막으로 반영한 StoreStatusChanged.status — ACTIVE 만 운영 중, 그 밖의 값(SUSPENDED · CLOSED …)은 상품 숨김',
+	`status`	VARCHAR(20)	NOT NULL	COMMENT '마지막으로 반영한 StoreStatusChanged.status — ACTIVE 만 운영 중, 그 밖의 값(SUSPENDED, CLOSED …)은 상품 숨김',
 	`status_changed_at`	DATETIME(6)	NOT NULL	COMMENT '마지막으로 반영한 이벤트 occurredAt — 이보다 오래된 이벤트는 무시 (SQS 순서 미보장)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
--- ============================================================ orderdb (order-service · 담당 이경석)
--- 원본: V1__init.sql · V2__order_saga_outbox.sql · V3__saga_retry.sql · V4__order_item_ordered.sql · V5__order_claim_restore_point.sql · V6__outbox_attempts.sql
+-- ============================================================ orderdb (order-service, 담당 이경석)
+-- 원본: V1__init.sql, V2__order_saga_outbox.sql, V3__saga_retry.sql, V4__order_item_ordered.sql, V5__order_claim_restore_point.sql, V6__outbox_attempts.sql
 
 -- 장바구니 항목 (원본, Redis 캐시의 출처)
 CREATE TABLE `cart_item` (
@@ -293,7 +293,7 @@ CREATE TABLE `orders` (
 	`buyer_id`	BIGINT	NOT NULL	COMMENT 'user-service users.user_id (논리 참조)',
 	`order_no`	VARCHAR(20)	NOT NULL	COMMENT '외부 노출 주문번호 예: 20261021-000123',
 	`orderer_name`	VARCHAR(50)	NOT NULL	COMMENT '주문 시점 스냅샷 (실명 users.name) — 주문 확인 메일 등 알림용, 화면 공개 금지',
-	`orderer_display_name`	VARCHAR(50)	NOT NULL	COMMENT '주문 시점 스냅샷 (공개 표시용 이름) — users.nick 이 있으면 nick, NULL · 공백이면 users.name 을 마스킹한 값(예: 홍*동). 주문 생성 시 애플리케이션이 결정. OrderItemConfirmed.buyerDisplayName 으로 review 에 전달',
+	`orderer_display_name`	VARCHAR(50)	NOT NULL	COMMENT '주문 시점 스냅샷 (공개 표시용 이름) — users.nick 이 있으면 nick, NULL, 공백이면 users.name 을 마스킹한 값(예: 홍*동). 주문 생성 시 애플리케이션이 결정. OrderItemConfirmed.buyerDisplayName 으로 review 에 전달',
 	`orderer_email`	VARCHAR(100)	NOT NULL	COMMENT '주문 시점 스냅샷 — 알림 Lambda가 user-service를 부르지 않게',
 	`receiver_name`	VARCHAR(50)	NOT NULL	COMMENT '수령인',
 	`receiver_phone`	VARCHAR(20)	NOT NULL	COMMENT '수령인 연락처',
@@ -339,8 +339,8 @@ CREATE TABLE `order_item` (
 	`unit_price`	BIGINT	NOT NULL	COMMENT '단가 (원)',
 	`quantity`	INT UNSIGNED	NOT NULL	COMMENT '수량',
 	`item_amt`	BIGINT	NOT NULL	COMMENT '상품주문 금액 (원)',
-	`used_point`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '금액 비율로 배분한 사용 포인트 (원) — 취소 · 반품 시 환원액',
-	`earned_point`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '적립 포인트 (원) = (item_amt - used_point)의 5% — 취소 · 반품 시 회수액',
+	`used_point`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '금액 비율로 배분한 사용 포인트 (원) — 취소, 반품 시 환원액',
+	`earned_point`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '적립 포인트 (원) = (item_amt - used_point)의 5% — 취소, 반품 시 회수액',
 	`courier`	VARCHAR(30)	NULL	COMMENT '택배사',
 	`tracking_no`	VARCHAR(40)	NULL	COMMENT '송장번호',
 	`status`	VARCHAR(30)	NOT NULL	DEFAULT 'ORDERED'	COMMENT 'ORDERED / PAYMENT_DONE / PREPARING / SHIPPING / DELIVERED / CONFIRMED / CANCEL_REQUESTED / CANCELLED / RETURN_REQUESTED / RETURNED / EXCHANGE_REQUESTED',
@@ -364,7 +364,7 @@ CREATE TABLE `order_item_history` (
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각'
 );
 
--- 취소 · 반품 · 교환 요청
+-- 취소, 반품, 교환 요청
 CREATE TABLE `order_claim` (
 	`order_claim_id`	BIGINT	NOT NULL	COMMENT '클레임 PK',
 	`order_item_id`	BIGINT	NOT NULL	COMMENT 'order_item.order_item_id',
@@ -373,11 +373,11 @@ CREATE TABLE `order_claim` (
 	`reason_code`	VARCHAR(30)	NOT NULL	COMMENT 'CHANGE_OF_MIND / DEFECTIVE / WRONG_DELIVERY / DELAYED / ETC',
 	`reason_detail`	VARCHAR(500)	NULL	COMMENT '상세 사유 (구매자 입력)',
 	`reject_reason`	VARCHAR(500)	NULL	COMMENT '판매자 거부 사유',
-	`refund_amt`	BIGINT	NULL	COMMENT '환불 금액 (원) — 교환이면 NULL (OrderItemCancelled · Returned.refundAmt)',
-	`restore_point`	BIGINT	NULL	COMMENT '돌려줄 사용 포인트 (원) — 교환이면 NULL (OrderItemCancelled · Returned.restoredPoint)',
+	`refund_amt`	BIGINT	NULL	COMMENT '환불 금액 (원) — 교환이면 NULL (OrderItemCancelled, Returned.refundAmt)',
+	`restore_point`	BIGINT	NULL	COMMENT '돌려줄 사용 포인트 (원) — 교환이면 NULL (OrderItemCancelled, Returned.restoredPoint)',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'REQUESTED'	COMMENT 'REQUESTED / APPROVED / REJECTED / COMPLETED',
 	`requested_at`	DATETIME(6)	NOT NULL	COMMENT '요청 시각 (애플리케이션이 기록)',
-	`processed_at`	DATETIME(6)	NULL	COMMENT '승인 · 거부 · 완료 처리 시각',
+	`processed_at`	DATETIME(6)	NULL	COMMENT '승인, 거부, 완료 처리 시각',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각'
 );
@@ -386,14 +386,14 @@ CREATE TABLE `order_claim` (
 CREATE TABLE `saga_instance` (
 	`saga_instance_id`	BIGINT	NOT NULL	COMMENT 'Saga PK',
 	`order_id`	BIGINT	NOT NULL	COMMENT 'orders.order_id',
-	`order_claim_id`	BIGINT	NULL	COMMENT 'order_claim.order_claim_id — 취소 · 반품 Saga일 때만',
-	`saga_id`	CHAR(36)	NOT NULL	COMMENT 'UUID — Saga 참여자 API(user · product · payment) 멱등 키',
+	`order_claim_id`	BIGINT	NULL	COMMENT 'order_claim.order_claim_id — 취소, 반품 Saga일 때만',
+	`saga_id`	CHAR(36)	NOT NULL	COMMENT 'UUID — Saga 참여자 API(user, product, payment) 멱등 키',
 	`saga_type`	VARCHAR(30)	NOT NULL	COMMENT 'PLACE_ORDER / CANCEL_ITEM / RETURN_ITEM',
-	`current_step`	VARCHAR(30)	NOT NULL	COMMENT 'PLACE_ORDER: ORDER_CREATED / POINT_USED / STOCK_RESERVED / PAYMENT_READY / PAYMENT_VERIFIED / DONE, CANCEL_ITEM · RETURN_ITEM: PAYMENT_CANCEL_REQUESTED / PAYMENT_CANCELLED / STOCK_RESTORED / POINT_RESTORED / DONE',
+	`current_step`	VARCHAR(30)	NOT NULL	COMMENT 'PLACE_ORDER: ORDER_CREATED / POINT_USED / STOCK_RESERVED / PAYMENT_READY / PAYMENT_VERIFIED / DONE, CANCEL_ITEM, RETURN_ITEM: PAYMENT_CANCEL_REQUESTED / PAYMENT_CANCELLED / STOCK_RESTORED / POINT_RESTORED / DONE',
 	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '현재 단계 재시도 횟수 — 단계가 넘어가면 0, 8회 넘으면 FAILED',
 	`last_error`	VARCHAR(500)	NULL	COMMENT '마지막 실패 사유',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'STARTED'	COMMENT 'STARTED / COMPENSATING / COMPLETED / COMPENSATED / FAILED',
-	`next_retry_at`	DATETIME(6)	NULL	COMMENT '다음 재시도 시각 — NULL 이면 재시도 대상 아님 (복구 스케줄러가 status · next_retry_at 으로 조회)',
+	`next_retry_at`	DATETIME(6)	NULL	COMMENT '다음 재시도 시각 — NULL 이면 재시도 대상 아님 (복구 스케줄러가 status, next_retry_at 으로 조회)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각'
 );
@@ -413,14 +413,14 @@ CREATE TABLE `orderdb_outbox_event` (
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각'
 );
 
--- ============================================================ paymentdb (payment-service · 담당 구지훈)
--- 원본: V1__init.sql · V2__payment_cancel_write_ahead.sql
+-- ============================================================ paymentdb (payment-service, 담당 구지훈)
+-- 원본: V1__init.sql, V2__payment_cancel_write_ahead.sql
 
 -- 결제 (포트원 V2)
 CREATE TABLE `payment` (
 	`payment_id`	BIGINT	NOT NULL,
 	`order_id`	BIGINT	NOT NULL	COMMENT 'order-service orders.order_id (논리 참조)',
-	`order_no`	VARCHAR(20)	NOT NULL	COMMENT 'order-service orders.order_no (논리 참조) — 준비 · 검증 · 조회 멱등 키',
+	`order_no`	VARCHAR(20)	NOT NULL	COMMENT 'order-service orders.order_no (논리 참조) — 준비, 검증, 조회 멱등 키',
 	`portone_payment_id`	VARCHAR(64)	NOT NULL	COMMENT '포트원 paymentId = pay-{orderNo} — 우리가 만들어 결제창에 넘기는 값',
 	`amount`	BIGINT	NOT NULL	COMMENT '기대 금액 = 실결제금액 (원, 1원 이상) — 포트원 조회 결과와 비교',
 	`cancelled_amount`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '누적 취소 금액 (원) — 부분 취소 합계, amount 와 같아지면 CANCELLED',
@@ -434,7 +434,7 @@ CREATE TABLE `payment` (
 	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '낙관적 락(@Version) — 확인 요청과 웹훅이 동시에 와도 한 번만 반영'
 );
 
--- 결제 취소 (전액 · 부분)
+-- 결제 취소 (전액, 부분)
 CREATE TABLE `payment_cancel` (
 	`payment_cancel_id`	BIGINT	NOT NULL,
 	`payment_id`	BIGINT	NOT NULL,
@@ -445,15 +445,15 @@ CREATE TABLE `payment_cancel` (
 	`reason`	VARCHAR(200)	NOT NULL	COMMENT '취소 사유 예: 구매자 취소 / 반품 / 결제 금액 불일치 자동 취소 / 주문 처리 실패',
 	`portone_cancellation_id`	VARCHAR(64)	NULL	COMMENT '포트원 취소 응답의 cancellation id',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'SUCCEEDED'	COMMENT 'PENDING(포트원 결과 미확정) / SUCCEEDED / FAILED — V1 행은 모두 성공 기록이라 기본값 SUCCEEDED',
-	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '포트원 취소 요청 · 대조 시도 횟수 (복구 스케줄러 경보 기준)',
-	`last_error`	VARCHAR(200)	NULL	COMMENT '마지막 실패 · 미확정 사유 (포트원 오류 type 등, 비밀 값 금지)',
+	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '포트원 취소 요청, 대조 시도 횟수 (복구 스케줄러 경보 기준)',
+	`last_error`	VARCHAR(200)	NULL	COMMENT '마지막 실패, 미확정 사유 (포트원 오류 type 등, 비밀 값 금지)',
 	`cancelled_at`	DATETIME(6)	NULL	COMMENT '포트원 취소 완료 시각 — SUCCEEDED 일 때만 값이 있음',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6),
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
--- ============================================================ reviewdb (review-service · 담당 이경석)
--- 원본: V1__init.sql · V2__init_reviewdb.sql · V3__drop_review_helpful_count.sql · V4__review_eligibility_option_thumbnail.sql · V5__drop_review_image_file_size.sql · V6__product_inquiry_snapshot.sql
+-- ============================================================ reviewdb (review-service, 담당 이경석)
+-- 원본: V1__init.sql, V2__init_reviewdb.sql, V3__drop_review_helpful_count.sql, V4__review_eligibility_option_thumbnail.sql, V5__drop_review_image_file_size.sql, V6__product_inquiry_snapshot.sql
 
 -- 리뷰 작성 자격 (상품주문당 1개)
 CREATE TABLE `review_eligibility` (
@@ -484,16 +484,16 @@ CREATE TABLE `review` (
 	`rating`	TINYINT UNSIGNED	NOT NULL	COMMENT '별점 1~5',
 	`title`	VARCHAR(100)	NULL	COMMENT '한줄 요약 (목업 title)',
 	`content`	TEXT	NOT NULL	COMMENT '본문 (OWASP sanitizer 정화 후 저장)',
-	`fit`	VARCHAR(20)	NULL	COMMENT '사이즈 체감 SMALL / TRUE_TO_SIZE / LARGE — 패션 · 신발가방만 (목업 fit)',
+	`fit`	VARCHAR(20)	NULL	COMMENT '사이즈 체감 SMALL / TRUE_TO_SIZE / LARGE — 패션, 신발가방만 (목업 fit)',
 	`helpful_count`	INT UNSIGNED	NOT NULL	DEFAULT 0	COMMENT '도움돼요 수 (목업 helpful)',
 	`reply_content`	TEXT	NULL	COMMENT '판매자 답글 (1개, sanitizer 정화)',
-	`is_blinded`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '관리자 블라인드 여부 — 구매자 목록 · 평균 · 리뷰 수에서 제외, 판매자 목록엔 "블라인드됨"(답글 불가)',
+	`is_blinded`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '관리자 블라인드 여부 — 구매자 목록, 평균, 리뷰 수에서 제외, 판매자 목록엔 "블라인드됨"(답글 불가)',
 	`blind_reason`	VARCHAR(255)	NULL	COMMENT '블라인드 사유 (해제하면 NULL)',
-	`replied_at`	DATETIME(6)	NULL	COMMENT '판매자 답글 작성 · 수정 시각',
+	`replied_at`	DATETIME(6)	NULL	COMMENT '판매자 답글 작성, 수정 시각',
 	`blinded_at`	DATETIME(6)	NULL	COMMENT '블라인드 시각 (해제하면 NULL)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각',
-	`deleted_at`	DATETIME(6)	NULL	COMMENT '삭제 시각 (soft delete) — 평균 · 분포 집계에서 제외'
+	`deleted_at`	DATETIME(6)	NULL	COMMENT '삭제 시각 (soft delete) — 평균, 분포 집계에서 제외'
 );
 
 -- 리뷰 사진
@@ -507,19 +507,19 @@ CREATE TABLE `review_image` (
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각'
 );
 
--- 상품문의 · 답변
+-- 상품문의, 답변
 CREATE TABLE `product_inquiry` (
 	`product_inquiry_id`	BIGINT	NOT NULL	COMMENT '상품문의 PK',
 	`user_id`	BIGINT	NOT NULL	COMMENT 'user-service users.user_id (논리 참조) — 작성자',
 	`product_id`	BIGINT	NOT NULL	COMMENT 'product-service product.product_id (논리 참조)',
 	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service store.store_id (논리 참조) — 판매자 문의 목록 키',
-	`product_name`	VARCHAR(200)	NOT NULL	COMMENT '등록 시점 상품명 스냅샷 — 내 문의 · 판매자 문의 목록 표시용',
+	`product_name`	VARCHAR(200)	NOT NULL	COMMENT '등록 시점 상품명 스냅샷 — 내 문의, 판매자 문의 목록 표시용',
 	`thumbnail_url`	VARCHAR(500)	NULL	COMMENT '등록 시점 상품 대표 사진 URL 스냅샷 — 사진 없으면 NULL',
 	`writer_display_name`	VARCHAR(50)	NOT NULL	COMMENT '작성자 공개 표시 이름 (닉네임, 없으면 가운데 가린 실명)',
 	`content`	TEXT	NOT NULL	COMMENT '문의 본문 (sanitizer 정화)',
 	`answer_content`	TEXT	NULL	COMMENT '판매자 답변 (sanitizer 정화)',
-	`is_secret`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '비밀글 — 작성자 · 판매자만 본문 확인',
-	`answered_at`	DATETIME(6)	NULL	COMMENT '답변 작성 · 수정 시각 (NULL = 미답변)',
+	`is_secret`	BOOLEAN	NOT NULL	DEFAULT FALSE	COMMENT '비밀글 — 작성자, 판매자만 본문 확인',
+	`answered_at`	DATETIME(6)	NULL	COMMENT '답변 작성, 수정 시각 (NULL = 미답변)',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '생성 시각',
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '수정 시각',
 	`deleted_at`	DATETIME(6)	NULL	COMMENT '삭제 시각 (soft delete)'
@@ -533,10 +533,10 @@ CREATE TABLE `reviewdb_processed_event` (
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '처리 시각'
 );
 
--- ============================================================ settlementdb (settlement-service · 담당 구지훈)
--- 원본: V1__init.sql · V2__settlement_store_processed_event.sql · V3__settlement_commission_payout.sql · V4__settlement_history_product_name.sql · V5__settlement_store_seller_email.sql · V6__settlement_carried_over_count.sql · V7__event_outbox.sql · V8__remove_dormant_comments.sql
+-- ============================================================ settlementdb (settlement-service, 담당 구지훈)
+-- 원본: V1__init.sql, V2__settlement_store_processed_event.sql, V3__settlement_commission_payout.sql, V4__settlement_history_product_name.sql, V5__settlement_store_seller_email.sql, V6__settlement_carried_over_count.sql, V7__event_outbox.sql, V8__remove_dormant_comments.sql
 
--- 정산용 스토어 스냅샷 (StoreApproved · StoreStatusChanged)
+-- 정산용 스토어 스냅샷 (StoreApproved, StoreStatusChanged)
 CREATE TABLE `settlement_store` (
 	`settlement_store_id`	BIGINT	NOT NULL,
 	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service 스토어 ID (다른 서비스 ID — FK 없음)',
@@ -555,7 +555,7 @@ CREATE TABLE `settlement_store` (
 CREATE TABLE `settlementdb_processed_event` (
 	`processed_event_id`	BIGINT	NOT NULL,
 	`event_id`	VARCHAR(36)	NOT NULL	COMMENT '이벤트 봉투 eventId (UUID)',
-	`event_type`	VARCHAR(50)	NOT NULL	COMMENT 'StoreApproved · StoreStatusChanged · OrderItemConfirmed',
+	`event_type`	VARCHAR(50)	NOT NULL	COMMENT 'StoreApproved, StoreStatusChanged, OrderItemConfirmed',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '처리 시각'
 );
 
@@ -569,10 +569,10 @@ CREATE TABLE `category_commission` (
 	`updated_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
--- 주간 정산서 (STL-03 · 05 · 07 · 09)
+-- 주간 정산서 (STL-03, 05, 07, 09)
 CREATE TABLE `settlement` (
 	`settlement_id`	BIGINT	NOT NULL,
-	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service store.store_id (논리 참조) — settlement_store 로 스토어명 · 계좌 확인',
+	`store_id`	BIGINT	NOT NULL	COMMENT 'store-service store.store_id (논리 참조) — settlement_store 로 스토어명, 계좌 확인',
 	`week_start`	DATE	NOT NULL	COMMENT '정산 주차 시작일 (월요일, KST)',
 	`week_end`	DATE	NOT NULL	COMMENT '정산 주차 종료일 (일요일, KST)',
 	`item_count`	INT UNSIGNED	NOT NULL	COMMENT '정산 대상 상품주문 수',
@@ -582,7 +582,7 @@ CREATE TABLE `settlement` (
 	`payment_fee_amt`	BIGINT	NOT NULL	COMMENT '결제수수료 (원) = Σ payment_fee_amt',
 	`payout_amt`	BIGINT	NOT NULL	COMMENT '지급액 (원) = 매출 − 판매수수료 − 결제수수료',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'SCHEDULED'	COMMENT 'SCHEDULED(지급예정) / HELD(지급보류) / PAID(지급완료)',
-	`hold_reason`	VARCHAR(255)	NULL	COMMENT '보류 사유 — 스토어 정지 · 폐점(자동) 또는 관리자 입력',
+	`hold_reason`	VARCHAR(255)	NULL	COMMENT '보류 사유 — 스토어 정지, 폐점(자동) 또는 관리자 입력',
 	`scheduled_pay_date`	DATE	NOT NULL	COMMENT '지급 예정일 (KST)',
 	`held_at`	DATETIME(6)	NULL	COMMENT '보류 시각',
 	`paid_at`	DATETIME(6)	NULL	COMMENT '지급 완료 시각 — SettlementPaid 발행 기준',
@@ -591,7 +591,7 @@ CREATE TABLE `settlement` (
 	`version`	BIGINT	NOT NULL	DEFAULT 0	COMMENT '낙관적 락(@Version) — 지급 실행과 보류가 동시에 저장되는 것 방지'
 );
 
--- 정산 대상 상품주문 (STL-02 · 04)
+-- 정산 대상 상품주문 (STL-02, 04)
 CREATE TABLE `settlement_item` (
 	`settlement_item_id`	BIGINT	NOT NULL,
 	`settlement_id`	BIGINT	NULL	COMMENT '주간 집계 때 연결 — 집계 전에는 NULL',
@@ -621,14 +621,14 @@ CREATE TABLE `payout` (
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)
 );
 
--- 정산서 상태 이력 (STL-05 상세 · STL-09)
+-- 정산서 상태 이력 (STL-05 상세, STL-09)
 CREATE TABLE `settlement_history` (
 	`settlement_history_id`	BIGINT	NOT NULL,
 	`settlement_id`	BIGINT	NOT NULL,
 	`from_status`	VARCHAR(20)	NULL	COMMENT '변경 전 상태 — 집계로 생성될 때만 NULL',
 	`to_status`	VARCHAR(20)	NOT NULL	COMMENT '변경 후 상태 (SCHEDULED / HELD / PAID)',
-	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'SYSTEM(주간 집계 · 스토어 정지/폐점 자동 보류) / ADMIN — 관리자 ID는 남기지 않음 (storedb 이력과 같은 규칙)',
-	`reason`	VARCHAR(255)	NULL	COMMENT '보류 · 해제 사유',
+	`actor_type`	VARCHAR(10)	NOT NULL	COMMENT 'SYSTEM(주간 집계, 스토어 정지/폐점 자동 보류) / ADMIN — 관리자 ID는 남기지 않음 (storedb 이력과 같은 규칙)',
+	`reason`	VARCHAR(255)	NULL	COMMENT '보류, 해제 사유',
 	`created_at`	DATETIME(6)	NOT NULL	DEFAULT CURRENT_TIMESTAMP(6)	COMMENT '상태가 바뀐 시각'
 );
 
@@ -639,7 +639,7 @@ CREATE TABLE `event_outbox` (
 	`event_type`	VARCHAR(50)	NOT NULL	COMMENT 'SettlementPaid',
 	`aggregate_id`	VARCHAR(64)	NOT NULL	COMMENT '봉투 aggregateId (정산서 ID 등)',
 	`payload`	TEXT	NOT NULL	COMMENT '보낼 봉투 JSON 그대로 (docs/events.md 형식)',
-	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT 'PENDING(보내기 전 · 실패) / SENT',
+	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'PENDING'	COMMENT 'PENDING(보내기 전, 실패) / SENT',
 	`attempt_count`	INT	NOT NULL	DEFAULT 0	COMMENT '발행 시도 횟수 (경보 기준)',
 	`last_error`	VARCHAR(200)	NULL	COMMENT '마지막 발행 실패 사유',
 	`sent_at`	DATETIME(6)	NULL	COMMENT 'SNS 발행 성공 시각',

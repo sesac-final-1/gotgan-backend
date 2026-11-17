@@ -78,7 +78,7 @@ class StoreStatusServiceTest {
 
     @ParameterizedTest
     @CsvSource({"ACTIVE, SUSPENDED", "SUSPENDED, ACTIVE"})
-    @DisplayName("정지 · 해제하면 상태 · 사유를 바꾸고 스토어 이력(ADMIN, 사유)과 StoreStatusChanged 아웃박스 행을 남긴 뒤 1절 응답을 돌려준다")
+    @DisplayName("정지, 해제하면 상태, 사유를 바꾸고 스토어 이력(ADMIN, 사유)과 StoreStatusChanged 아웃박스 행을 남긴 뒤 1절 응답을 돌려준다")
     void changeByAdmin_whenDifferentStatus_changesAndEnqueuesEvent(StoreStatus from, StoreStatus to) {
         // given
         Store store = store(1L, from);
@@ -90,7 +90,7 @@ class StoreStatusServiceTest {
         InternalStoreResponse response = service.changeByAdmin(1L, to, "허위 광고 신고 3건 확인");
 
         // then
-        assertThat(response).isSameAs(detail); // 바뀐 상태 · 새 이력까지 담은 1절 응답을 상세 조회로 다시 만든다
+        assertThat(response).isSameAs(detail); // 바뀐 상태, 새 이력까지 담은 1절 응답을 상세 조회로 다시 만든다
         assertThat(store.getStatus()).isEqualTo(to);
         assertThat(store.getStatusReason()).isEqualTo("허위 광고 신고 3건 확인");
 
@@ -109,7 +109,7 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    @DisplayName("이미 그 상태면 아무것도 바꾸지 않고 200 — 이력 · 이벤트 없음 (멱등)")
+    @DisplayName("이미 그 상태면 아무것도 바꾸지 않고 200 — 이력, 이벤트 없음 (멱등)")
     void changeByAdmin_whenSameStatus_isNoOp() {
         // given
         Store store = store(15L, StoreStatus.SUSPENDED);
@@ -137,12 +137,12 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    @DisplayName("폐점 스토어는 409 STORE_INVALID_STATUS_TRANSITION 이고 이력 · 이벤트를 남기지 않는다")
+    @DisplayName("폐점 스토어는 409 STORE_INVALID_STATUS_TRANSITION 이고 이력, 이벤트를 남기지 않는다")
     void changeByAdmin_whenStoreClosed_throwsInvalidTransition() {
         // given
         given(storeRepository.findForUpdate(2L)).willReturn(Optional.of(store(2L, StoreStatus.CLOSED)));
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.changeByAdmin(2L, StoreStatus.ACTIVE, "사유"), StoreErrorCode.STORE_INVALID_STATUS_TRANSITION);
         verify(storeStatusHistoryRepository, never()).save(any());
         verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
@@ -154,7 +154,7 @@ class StoreStatusServiceTest {
         // given
         given(storeRepository.findForUpdate(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.changeByAdmin(99L, StoreStatus.SUSPENDED, "사유"), StoreErrorCode.STORE_NOT_FOUND);
     }
 
@@ -174,7 +174,7 @@ class StoreStatusServiceTest {
 
     @ParameterizedTest
     @CsvSource({"ACTIVE", "SUSPENDED"})
-    @DisplayName("폐점 — 진행 중 주문 0 · 미정산 없음이면 잠근 행을 CLOSED, 이력(SELLER) · StoreStatusChanged{CLOSED} · 폐점 시각")
+    @DisplayName("폐점 — 진행 중 주문 0, 미정산 없음이면 잠근 행을 CLOSED, 이력(SELLER), StoreStatusChanged{CLOSED}, 폐점 시각")
     void closeBySeller_whenClear_closesAndEnqueuesEvent(StoreStatus from) {
         // given
         Store store = store(1L, from);
@@ -206,7 +206,7 @@ class StoreStatusServiceTest {
         given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store(1L, StoreStatus.ACTIVE)));
         given(orderClientAdapter.inProgressCount(1L)).willReturn(3L);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.closeBySeller(1L))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage("진행 중인 주문 3건이 모두 끝난 뒤 폐점할 수 있습니다.")
@@ -216,14 +216,14 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    @DisplayName("미정산이 있으면 409 STORE_SETTLEMENT_OUTSTANDING — 금액은 집계 전 · 지급 예정 · 보류의 합")
+    @DisplayName("미정산이 있으면 409 STORE_SETTLEMENT_OUTSTANDING — 금액은 집계 전, 지급 예정, 보류의 합")
     void closeBySeller_whenSettlementOutstanding_throwsWithAmount() {
         // given
         given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store(1L, StoreStatus.ACTIVE)));
         given(orderClientAdapter.inProgressCount(1L)).willReturn(0L);
         given(settlementClientAdapter.outstanding(1L)).willReturn(new SettlementOutstandingResponse(1L, 30_000, 48_000, 12_000, false));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.closeBySeller(1L))
                 .hasMessage("미정산 90,000원 — 지급 완료(매주 목요일) 후 폐점할 수 있습니다.")
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(StoreErrorCode.STORE_SETTLEMENT_OUTSTANDING);
@@ -231,7 +231,7 @@ class StoreStatusServiceTest {
     }
 
     @Test
-    @DisplayName("order · settlement 장애(어댑터 폴백 502)면 폐점하지 않는다 — 확인할 수 없으면 거절")
+    @DisplayName("order, settlement 장애(어댑터 폴백 502)면 폐점하지 않는다 — 확인할 수 없으면 거절")
     void closeBySeller_whenRemoteUnavailable_rejects() {
         // given
         given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store(1L, StoreStatus.ACTIVE)));
@@ -239,7 +239,7 @@ class StoreStatusServiceTest {
         given(settlementClientAdapter.outstanding(1L))
                 .willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "settlement 미정산 조회에 실패했습니다."));
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.closeBySeller(1L), CommonErrorCode.EXTERNAL_API_ERROR);
         verify(storeRepository, never()).findForUpdate(any());
         verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
@@ -287,7 +287,7 @@ class StoreStatusServiceTest {
         // given
         given(storeRepository.findByIdAndDeletedAtIsNull(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.closeBySeller(99L), StoreErrorCode.STORE_NOT_FOUND);
     }
 }

@@ -29,7 +29,7 @@ public interface UserClient {
     @DeleteExchange("/points/use/{sagaId}")
     ApiResponse<PointRestoreResponse> restorePoints(@PathVariable String sagaId);
 
-    /** 취소 · 반품 포인트 환원 · 회수 — claim-{claimId}-{orderItemId} 멱등 */
+    /** 취소, 반품 포인트 환원, 회수 — claim-{claimId}-{orderItemId} 멱등 */
     @PostExchange("/points/reversals")
     ApiResponse<PointReversalResponse> reversePoints(@RequestBody PointReversalRequest request);
 }

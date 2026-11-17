@@ -43,7 +43,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 카테고리 조합(product + settlement 수수료) · 대시보드 부분 응답(정산 · 주문 · 일별 · 상품). 시각 고정 2026-10-26 KST — 신규 상위 수수료 적용 시작일 = 오늘.
+ * 카테고리 조합(product + settlement 수수료), 대시보드 부분 응답(정산, 주문, 일별, 상품). 시각 고정 2026-10-26 KST — 신규 상위 수수료 적용 시작일 = 오늘.
  * 트레이스 샘플링 0 — LogbackConfigTest 에 Zipkin 경고가 섞이지 않게
  */
 @SpringBootTest(properties = "management.tracing.sampling.probability=0")
@@ -69,7 +69,7 @@ class AdminCategoryDashboardApiTest {
     @MockitoBean AdminProductClient adminProductClient;
     @Autowired CircuitBreakerRegistry circuitBreakers;
 
-    /** 목 · 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
+    /** 목, 서킷 초기화 — 장애 시험이 쌓여 서킷이 열리면 다음 테스트가 502 를 받는다 */
     @BeforeEach
     void resetMocks() {
         reset(productClient, settlementClient, orderClient, adminProductClient);
@@ -163,7 +163,7 @@ class AdminCategoryDashboardApiTest {
     }
 
     @Test
-    @DisplayName("대시보드 — 네 영역(정산 · 주문 · 최근 30일 일별 · 상품) 모두, 장애난 영역만 null + unavailable 로 200")
+    @DisplayName("대시보드 — 네 영역(정산, 주문, 최근 30일 일별, 상품) 모두, 장애난 영역만 null + unavailable 로 200")
     void dashboard_partial() throws Exception {
         when(settlementClient.platformStats()).thenReturn(ok("{\"store\":null,\"platform\":{\"scheduledCount\":3,\"heldCount\":1}}"));
         when(orderClient.platformStats()).thenReturn(ok("{\"totalTradeAmt\":1200000,\"orderCount\":42}"));

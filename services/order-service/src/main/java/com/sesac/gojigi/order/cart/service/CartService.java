@@ -29,7 +29,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 장바구니 담기 · 수량 · 선택 · 삭제 (ORD-01) — MySQL cart_item 에 먼저 쓰고, 커밋 뒤 Redis cart:{userId} 를 그 회원 장바구니 전체로 갱신 (09장).
+ * 장바구니 담기, 수량, 선택, 삭제 (ORD-01) — MySQL cart_item 에 먼저 쓰고, 커밋 뒤 Redis cart:{userId} 를 그 회원 장바구니 전체로 갱신 (09장).
  * 결제가 확정되면 주문한 옵션을 장바구니에서 지운다 (주문 PAID 와 같은 트랜잭션).
  */
 @Service
@@ -43,7 +43,7 @@ public class CartService {
     private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate tx;
 
-    /** 커밋 뒤 Redis 에 쓸 그 회원 장바구니 (옵션 ID → 수량 · 선택) */
+    /** 커밋 뒤 Redis 에 쓸 그 회원 장바구니 (옵션 ID → 수량, 선택) */
     record Changed(Long userId, Map<Long, CachedLine> lines) {
     }
 
@@ -86,7 +86,7 @@ public class CartService {
         });
     }
 
-    /** 수량 · 선택 변경 — 보낸 것만. 장바구니에 없는 옵션이면 404 */
+    /** 수량, 선택 변경 — 보낸 것만. 장바구니에 없는 옵션이면 404 */
     @Transactional
     public CartItemsResponse update(Long userId, Long productOptionId, CartItemUpdateRequest request) {
         CartItem item = cartItemRepository.findByUserIdAndProductOptionId(userId, productOptionId)
@@ -100,7 +100,7 @@ public class CartService {
         return changed(userId);
     }
 
-    /** 선택 한꺼번에 — optionIds 가 없으면 전체 (전체 선택 · 해제), 장바구니에 없는 옵션은 건너뛴다 */
+    /** 선택 한꺼번에 — optionIds 가 없으면 전체 (전체 선택, 해제), 장바구니에 없는 옵션은 건너뛴다 */
     @Transactional
     public CartItemsResponse check(Long userId, List<Long> optionIds, boolean checked) {
         cartItemRepository.findByUserIdOrderByIdAsc(userId).stream()
@@ -109,7 +109,7 @@ public class CartService {
         return changed(userId);
     }
 
-    /** 단건 · 선택 삭제 — 장바구니에 없는 옵션은 건너뛴다 */
+    /** 단건, 선택 삭제 — 장바구니에 없는 옵션은 건너뛴다 */
     @Transactional
     public CartItemsResponse remove(Long userId, List<Long> optionIds) {
         cartItemRepository.deleteOptions(userId, optionIds);
@@ -128,7 +128,7 @@ public class CartService {
         cartRedisRepository.replace(changed.userId(), changed.lines());
     }
 
-    /** 없는 옵션(응답에서 빠짐) · 구매 불가가 하나라도 있으면 전부 거절 */
+    /** 없는 옵션(응답에서 빠짐), 구매 불가가 하나라도 있으면 전부 거절 */
     private Map<Long, ProductOptionResponse> purchasable(Collection<Long> optionIds) {
         Map<Long, ProductOptionResponse> options = productClient.getOptions(List.copyOf(optionIds)).stream()
                 .filter(ProductOptionResponse::purchasable)

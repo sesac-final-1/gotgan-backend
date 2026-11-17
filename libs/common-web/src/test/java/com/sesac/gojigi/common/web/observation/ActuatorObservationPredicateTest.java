@@ -25,7 +25,7 @@ class ActuatorObservationPredicateTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"/actuator", "/actuator/health/readiness", "/actuator/health/liveness", "/actuator/prometheus"})
-    @DisplayName("/actuator 요청(프로브 · Prometheus 수집)은 관측하지 않는다")
+    @DisplayName("/actuator 요청(프로브, Prometheus 수집)은 관측하지 않는다")
     void actuator_excluded(String uri) {
         assertThat(predicate.test("http.server.requests", request(uri))).isFalse();
     }
@@ -38,7 +38,7 @@ class ActuatorObservationPredicateTest {
     }
 
     @Test
-    @DisplayName("서버 요청이 아닌 관측(스케줄러 · HTTP 클라이언트 등)은 건드리지 않는다")
+    @DisplayName("서버 요청이 아닌 관측(스케줄러, HTTP 클라이언트 등)은 건드리지 않는다")
     void otherContext_kept() {
         assertThat(predicate.test("tasks.scheduled.execution", new Observation.Context())).isTrue();
     }

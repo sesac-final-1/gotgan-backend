@@ -9,8 +9,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 
 /**
- * order-service 호출 — 탈퇴 전 진행 중인 주문 · 교환 · 반품 확인. 서킷 브레이커 "order", 조회(GET)라 재시도 1회.
- * 확인하지 못하면 탈퇴를 막는다 — 거절(4xx) · 장애 모두 EXTERNAL_API_ERROR(502).
+ * order-service 호출 — 탈퇴 전 진행 중인 주문, 교환, 반품 확인. 서킷 브레이커 "order", 조회(GET)라 재시도 1회.
+ * 확인하지 못하면 탈퇴를 막는다 — 거절(4xx), 장애 모두 EXTERNAL_API_ERROR(502).
  */
 @Component
 @RequiredArgsConstructor
@@ -36,7 +36,7 @@ public class OrderClientAdapter {
         if (t instanceof BusinessException business) {
             throw business;   // 4xx 거절 — 이미 변환됨
         }
-        // 연결 실패 · 타임아웃 · 5xx · 서킷 OPEN(CallNotPermittedException)
+        // 연결 실패, 타임아웃, 5xx, 서킷 OPEN(CallNotPermittedException)
         throw new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "주문 서버에 연결할 수 없습니다.", t);
     }
 }

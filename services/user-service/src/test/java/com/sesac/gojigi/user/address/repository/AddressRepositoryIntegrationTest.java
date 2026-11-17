@@ -65,7 +65,7 @@ class AddressRepositoryIntegrationTest {
         User other = saveUser("other@gotgan.com");
         Address address = saveAddress(owner, "집", true);
 
-        // when · then
+        // when, then
         assertThat(addressRepository.findActiveByIdAndUserId(address.getId(), owner.getId())).isPresent();
         assertThat(addressRepository.findActiveByIdAndUserId(address.getId(), other.getId())).isEmpty();
     }

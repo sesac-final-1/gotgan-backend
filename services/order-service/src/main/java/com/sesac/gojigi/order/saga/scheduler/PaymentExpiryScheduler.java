@@ -17,7 +17,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 결제 대기 만료 (ORD-07) — 결제 대기가 payment-timeout(15분, 데모는 ConfigMap 으로 짧게)을 넘긴 주문을 payment 에 다시 물어 확정 · 보상.
+ * 결제 대기 만료 (ORD-07) — 결제 대기가 payment-timeout(15분, 데모는 ConfigMap 으로 짧게)을 넘긴 주문을 payment 에 다시 물어 확정, 보상.
  * saga 패키지에 둔다 — PlaceOrderSaga 를 부르므로 order 패키지에 두면 order ↔ saga 가 서로 참조한다.
  */
 @Slf4j

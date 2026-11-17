@@ -15,7 +15,7 @@ import org.springframework.web.client.RestClient;
 
 /**
  * 상대가 그 방을 보고 있지 않으면 알림 센터로 (chat.md 7절, admin POST /internal/notifications).
- * 전송 경로를 막지 않게 작은 전용 스레드에서 보내고, 대기열이 차거나 admin 이 안 되면 알림만 빠진다(메시지는 저장 · 전달됨).
+ * 전송 경로를 막지 않게 작은 전용 스레드에서 보내고, 대기열이 차거나 admin 이 안 되면 알림만 빠진다(메시지는 저장, 전달됨).
  * sourceId = chat-msg-{messageId} — 재시도해도 알림은 한 번
  */
 @Slf4j
@@ -47,7 +47,7 @@ public class ChatNotifier {
         }
     }
 
-    /** 알림 스레드에서 — 보고 있는지 확인 · 이름 조회(ChatDirectory, 캐시)까지 여기서 해 전송 경로를 막지 않는다 */
+    /** 알림 스레드에서 — 보고 있는지 확인, 이름 조회(ChatDirectory, 캐시)까지 여기서 해 전송 경로를 막지 않는다 */
     private void send(ChatRoom room, ChatMessage message, Target target) {
         Long roomId = room.getId();
         if (presence.isWatching(roomId, target.readerKey())) {

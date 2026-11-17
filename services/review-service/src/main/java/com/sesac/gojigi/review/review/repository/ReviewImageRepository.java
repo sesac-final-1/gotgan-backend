@@ -10,7 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface ReviewImageRepository extends JpaRepository<ReviewImage, Long> {
 
-    /** 여러 리뷰의 사진을 한 번에 — 리뷰 · 순서대로 (목록 응답의 N+1 방지) */
+    /** 여러 리뷰의 사진을 한 번에 — 리뷰, 순서대로 (목록 응답의 N+1 방지) */
     @Query("select i from ReviewImage i where i.review.id in :reviewIds order by i.review.id, i.sortOrder")
     List<ReviewImage> findByReviewIdsOrdered(Collection<Long> reviewIds);
 

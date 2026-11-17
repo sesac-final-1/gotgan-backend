@@ -1,6 +1,6 @@
 spring:
   application:
-    name: payment-service                  # 지표 · 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
+    name: payment-service                  # 지표, 로그의 app 이름이 된다 (컨벤션 5-3 라벨)
 
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:3306/paymentdb?connectionTimeZone=Asia/Seoul
@@ -11,7 +11,7 @@ spring:
     hibernate:
       ddl-auto: validate                    # 스키마는 Flyway 만 바꾼다 (컨벤션 3-10)
   flyway:
-    locations: classpath:db/migration       # 시드(db/seed) 는 local · k8s 프로필에서만 추가
+    locations: classpath:db/migration       # 시드(db/seed) 는 local, k8s 프로필에서만 추가
 
   lifecycle:
     timeout-per-shutdown-phase: 30s         # 처리 중인 요청을 마치는 최대 시간 (terminationGracePeriodSeconds 보다 짧게)
@@ -30,7 +30,7 @@ app:
     api-secret: ${PORTONE_API_SECRET:}            # GitHub Secret → secrets-sync → payment-service-secret (로그 금지)
     webhook-secret: ${PORTONE_WEBHOOK_SECRET:}    # Standard Webhooks 서명 검증 (whsec_...)
     webhook-tolerance: 5m                   # 웹훅 시각 허용 범위 — 재전송 공격 방지
-  cancel-recovery:                          # 취소 복구 스케줄러 (PaymentCancelRecoveryScheduler · payment.md 8절)
+  cancel-recovery:                          # 취소 복구 스케줄러 (PaymentCancelRecoveryScheduler, payment.md 8절)
     interval: 60s                           # 주기 (끝난 뒤 60초)
     initial-delay: 30s
     stale-after: 60s                        # 이만큼 확정되지 않은 PENDING 만 — 진행 중인 요청과 겹치지 않게
@@ -39,7 +39,7 @@ app:
 
 resilience4j:
   circuitbreaker:
-    circuit-breaker-aspect-order: 1         # 서킷이 바깥 · 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 예외를 바꿔 재시도가 안 걸린다
+    circuit-breaker-aspect-order: 1         # 서킷이 바깥, 재시도가 안쪽 — 기본(재시도 바깥)이면 서킷 폴백이 먼저 예외를 바꿔 재시도가 안 걸린다
     configs:
       default:
         sliding-window-size: 10
@@ -47,7 +47,7 @@ resilience4j:
         failure-rate-threshold: 50          # 최근 10건 중 50% 실패면 OPEN → 바로 폴백
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
-        record-exceptions:                  # 장애로 세는 것: 연결 실패 · 타임아웃 · 5xx
+        record-exceptions:                  # 장애로 세는 것: 연결 실패, 타임아웃, 5xx
           - org.springframework.web.client.ResourceAccessException
           - org.springframework.web.client.HttpServerErrorException
         ignore-exceptions:                  # 포트원의 4xx 거절(비즈니스 오류로 변환)은 세지 않음
@@ -80,7 +80,7 @@ management:
   endpoint:
     health:
       probes:
-        enabled: true                       # /actuator/health/liveness · readiness
+        enabled: true                       # /actuator/health/liveness, readiness
   health:
     circuitbreakers:
       enabled: false                        # 서킷이 열려도 내 파드는 건강함 — 다른 서비스 장애로 재시작되지 않게

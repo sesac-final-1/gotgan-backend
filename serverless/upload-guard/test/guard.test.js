@@ -18,14 +18,14 @@ test('확장자 — 소문자, jpeg 는 jpg, 없으면 null', () => {
   assert.equal(extensionOf('products/1/noext'), null);
 });
 
-test('images — jpg · png · webp 는 내용이 맞으면 통과', () => {
+test('images — jpg, png, webp 는 내용이 맞으면 통과', () => {
   assert.deepEqual(inspect(RULES.images, 'products/1/a.jpg', JPG), { ok: true });
   assert.deepEqual(inspect(RULES.images, 'reviews/4/b.png', PNG), { ok: true });
   assert.deepEqual(inspect(RULES.images, 'stores/2/c.webp', WEBP), { ok: true });
   assert.deepEqual(inspect(RULES.images, 'products/seed/p101-1.jpg', JPG), { ok: true });
 });
 
-test('images — 확장자만 바꾼 파일 · pdf · 빈 파일 · 다른 경로는 거절', () => {
+test('images — 확장자만 바꾼 파일, pdf, 빈 파일, 다른 경로는 거절', () => {
   assert.equal(inspect(RULES.images, 'products/1/a.jpg', HTML).reason, '내용이 jpg 형식이 아님');
   assert.equal(inspect(RULES.images, 'products/1/a.png', JPG).reason, '내용이 png 형식이 아님');
   assert.equal(inspect(RULES.images, 'products/1/a.pdf', PDF).reason, '허용하지 않는 확장자(pdf)');
@@ -33,7 +33,7 @@ test('images — 확장자만 바꾼 파일 · pdf · 빈 파일 · 다른 경�
   assert.equal(inspect(RULES.images, 'tmp/a.jpg', JPG).reason, '허용하지 않는 경로');
 });
 
-test('seller-docs — pdf · jpg · png 통과, webp · 위장 pdf 거절', () => {
+test('seller-docs — pdf, jpg, png 통과, webp, 위장 pdf 거절', () => {
   assert.deepEqual(inspect(RULES['seller-docs'], 'applications/4/a.pdf', PDF), { ok: true });
   assert.deepEqual(inspect(RULES['seller-docs'], 'applications/4/b.png', PNG), { ok: true });
   assert.equal(inspect(RULES['seller-docs'], 'applications/4/c.webp', WEBP).reason, '허용하지 않는 확장자(webp)');
@@ -68,7 +68,7 @@ test('정상 파일 — 앞 16바이트만 읽고 아무것도 지우지 않음'
   assert.equal(calls[0].input.Range, 'bytes=0-15');
 });
 
-test('위장 파일 — 알림 토픽에 버킷 · 키 · 이유를 먼저 보내고 객체 삭제(삭제 뒤 알림 실패로 알림이 사라지지 않게)', async () => {
+test('위장 파일 — 알림 토픽에 버킷, 키, 이유를 먼저 보내고 객체 삭제(삭제 뒤 알림 실패로 알림이 사라지지 않게)', async () => {
   const { calls, handler } = fake({ head: HTML });
   const r = await handler(created(ENV.SELLER_DOCS_BUCKET, 'applications/4/a.pdf'));
 
@@ -79,7 +79,7 @@ test('위장 파일 — 알림 토픽에 버킷 · 키 · 이유를 먼저 보�
   assert.match(calls[1].input.Message, /applications\/4\/a\.pdf[\s\S]*내용이 pdf 형식이 아님/);
 });
 
-test('이미 없는 객체(재전달) · 다른 버킷은 건너뜀, 그 밖의 S3 오류는 던져서 재시도', async () => {
+test('이미 없는 객체(재전달), 다른 버킷은 건너뜀, 그 밖의 S3 오류는 던져서 재시도', async () => {
   const gone = Object.assign(new Error('gone'), { name: 'NoSuchKey' });
   assert.deepEqual(await fake({ getError: gone }).handler(created(ENV.IMAGES_BUCKET, 'products/1/a.jpg')), { checked: false });
   assert.deepEqual(await fake().handler(created('other-bucket', 'a.jpg')), { checked: false });

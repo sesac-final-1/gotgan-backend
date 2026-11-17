@@ -2,7 +2,7 @@ package com.sesac.gojigi.order.order.entity;
 
 import java.util.concurrent.atomic.AtomicLong;
 
-/** 테스트용 주문 · 상품주문 — 이벤트 payload 값 확인에 쓰는 스냅샷 값 */
+/** 테스트용 주문, 상품주문 — 이벤트 payload 값 확인에 쓰는 스냅샷 값 */
 public final class OrderFixtures {
 
     private static final AtomicLong ORDER_NO = new AtomicLong();

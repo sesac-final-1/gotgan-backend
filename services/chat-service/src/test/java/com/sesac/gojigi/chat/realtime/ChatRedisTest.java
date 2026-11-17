@@ -23,7 +23,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.testcontainers.containers.GenericContainer;
 
 /**
- * Redis 모드 — 파드 간 중계(chat:room:*) · 접속 중 표시(ZSET 만료 시각) · 차단 목록. 스프링 컨텍스트 없이 Redis 컨테이너에 직접 붙는다.
+ * Redis 모드 — 파드 간 중계(chat:room:*), 접속 중 표시(ZSET 만료 시각), 차단 목록. 스프링 컨텍스트 없이 Redis 컨테이너에 직접 붙는다.
  * 시계는 직접 움직여 "파드가 죽어 지우지 못한 항목은 TTL 뒤 무시"를 확인
  */
 class ChatRedisTest {
@@ -140,7 +140,7 @@ class ChatRedisTest {
     }
 
     @Test
-    @DisplayName("차단 목록: blocked:user:{id} 가 있으면 차단 · local 모드는 확인 안 함")
+    @DisplayName("차단 목록: blocked:user:{id} 가 있으면 차단, local 모드는 확인 안 함")
     void blockedUsers() {
         redis.opsForValue().set(BlockedUsers.KEY_PREFIX + 10, "1");
 
@@ -150,7 +150,7 @@ class ChatRedisTest {
     }
 
     @Test
-    @DisplayName("Redis 가 안 되면: 표시 · 중계 · 차단 확인 모두 예외 없이 넘어가고, 접속 중 확인은 '보고 있지 않음'(알림을 보냄)")
+    @DisplayName("Redis 가 안 되면: 표시, 중계, 차단 확인 모두 예외 없이 넘어가고, 접속 중 확인은 '보고 있지 않음'(알림을 보냄)")
     void redisDownIsTolerated() {
         LettuceConnectionFactory down = new LettuceConnectionFactory("localhost", 1);
         down.afterPropertiesSet();

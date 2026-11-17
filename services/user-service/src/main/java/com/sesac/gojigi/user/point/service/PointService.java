@@ -28,14 +28,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 포인트 — 내 포인트 조회 · 관리자 회원 포인트 조회 · 주문 사용(Saga) · 사용 취소(Saga 보상) · 취소 · 반품 환원 · 회수 · 구매확정 적립.
- * 잔액은 users.point_balance 조건부 UPDATE 로만 바꾸고(음수 · 동시 차감 방지), 같은 트랜잭션에서 이력을 남긴다.
+ * 포인트 — 내 포인트 조회, 관리자 회원 포인트 조회, 주문 사용(Saga), 사용 취소(Saga 보상), 취소, 반품 환원, 회수, 구매확정 적립.
+ * 잔액은 users.point_balance 조건부 UPDATE 로만 바꾸고(음수, 동시 차감 방지), 같은 트랜잭션에서 이력을 남긴다.
  * 멱등: ref_key = sagaId — 같은 sagaId 재요청은 처음 결과를 그대로 돌려준다. 동시에 두 번 오면
  * uk_point_history_type_ref_key 에 걸린 쪽이 롤백되고 먼저 커밋된 결과를 돌려준다.
  * 늦게 도착한 사용 차단: order 가 사용 응답을 못 받고(타임아웃) 보상으로 취소를 먼저 보내면, 사용 기록이 없으니 취소는 0원으로 끝난다.
  * 그때 point_use_saga 에 RELEASED 를 남겨, 뒤늦게 도착한 같은 sagaId 의 사용을 409 POINT_USE_RELEASED 로 거절한다(포인트가 사라지지 않게).
- * 사용도 같은 트랜잭션에서 USED 를 넣어, 사용 · 취소가 겹치면 uk 충돌로 한쪽만 표식을 갖는다 — 어느 순서든 잔액은 원래대로.
- * 적립은 구매확정(OrderItemConfirmed) 때 — 취소 · 반품은 구매확정 전에만 가능해, 적립한 포인트를 회수할 일이 없다 (먼저 써 버려 못 돌려받는 문제 없음).
+ * 사용도 같은 트랜잭션에서 USED 를 넣어, 사용, 취소가 겹치면 uk 충돌로 한쪽만 표식을 갖는다 — 어느 순서든 잔액은 원래대로.
+ * 적립은 구매확정(OrderItemConfirmed) 때 — 취소, 반품은 구매확정 전에만 가능해, 적립한 포인트를 회수할 일이 없다 (먼저 써 버려 못 돌려받는 문제 없음).
  */
 @Slf4j
 @Service
@@ -49,9 +49,9 @@ public class PointService {
 
     /**
      * 구매확정 적립 (OrderItemConfirmed) — 상품주문 하나의 earnedPoint 를 적립하고 적립한 포인트를 돌려준다(이미 적립했거나 0 이면 0).
-     * 호출하는 쪽(PurchaseConfirmedService)의 트랜잭션 안에서, 회원 행을 잠근 뒤 불러야 한다 — 잔액 · 이력이 누적 구매액과 함께 커밋된다.
+     * 호출하는 쪽(PurchaseConfirmedService)의 트랜잭션 안에서, 회원 행을 잠근 뒤 불러야 한다 — 잔액, 이력이 누적 구매액과 함께 커밋된다.
      * 멱등: ref_key earn-{orderItemId} — 다른 eventId 로 다시 와도 상품주문당 한 번.
-     * 구매확정 뒤에는 취소 · 반품이 없어(order 상태 전이) 적립 후 회수할 일이 없다.
+     * 구매확정 뒤에는 취소, 반품이 없어(order 상태 전이) 적립 후 회수할 일이 없다.
      */
     public long earnConfirmed(User locked, Long orderItemId, String orderNo, long earnedPoint) {
         String refKey = PointHistory.earnRefKey(orderItemId);
@@ -92,7 +92,7 @@ public class PointService {
         try {
             return transactionTemplate.execute(status -> doUse(request));
         } catch (DataIntegrityViolationException e) {
-            // 표식 · 이력 uk 충돌 — 이쪽 차감은 롤백됨
+            // 표식, 이력 uk 충돌 — 이쪽 차감은 롤백됨
             // ① 같은 sagaId 의 취소가 먼저 커밋됨 → 거절 ② 같은 sagaId 사용이 동시에 두 번 → 먼저 커밋된 결과
             if (isReleased(request.sagaId())) {
                 throw releasedUse(request);
@@ -103,7 +103,7 @@ public class PointService {
         }
     }
 
-    /** 사용 취소 (Saga 보상) — 그 sagaId 로 쓴 포인트를 돌려준다. 사용 기록이 없으면(사용 단계 실패 · 미호출 · 아직 도착 전) 해제 표식만 남긴다. */
+    /** 사용 취소 (Saga 보상) — 그 sagaId 로 쓴 포인트를 돌려준다. 사용 기록이 없으면(사용 단계 실패, 미호출, 아직 도착 전) 해제 표식만 남긴다. */
     public PointRestoreResponse cancelUse(String sagaId) {
         try {
             return transactionTemplate.execute(status -> doCancelUse(sagaId));
@@ -119,7 +119,7 @@ public class PointService {
     }
 
     /**
-     * 취소 · 반품 환원 · 회수 (order 취소 · 반품 Saga) — 쓴 포인트를 돌려주고, 이 상품주문으로 실제 적립된 포인트만큼 회수한다.
+     * 취소, 반품 환원, 회수 (order 취소, 반품 Saga) — 쓴 포인트를 돌려주고, 이 상품주문으로 실제 적립된 포인트만큼 회수한다.
      * 한 트랜잭션: 환원 먼저(돌려준 포인트로 회수할 수 있게) → 회수는 잔액 0 까지만, 못 뺀 차액은 shortfall 로 남긴다.
      * 멱등: ref_key = claim-{claimId}-{orderItemId} — 이미 처리했으면 처음 결과 그대로. 탈퇴 회원이면 아무것도 하지 않고 0.
      */
@@ -141,7 +141,7 @@ public class PointService {
             return processed.get();
         }
         if (locked.isEmpty()) {
-            log.warn("포인트 환원 · 회수 — 탈퇴 회원이라 처리하지 않음 userId={} claimId={}", request.userId(), request.claimId());
+            log.warn("포인트 환원, 회수 — 탈퇴 회원이라 처리하지 않음 userId={} claimId={}", request.userId(), request.claimId());
             return PointReversalResponse.of(request.claimId(), request.orderItemId(), null, null);
         }
         long balance = locked.get().getPointBalance();
@@ -164,12 +164,12 @@ public class PointService {
             log.warn("포인트 회수 — 잔액 0 이라 회수하지 못함 userId={} claimId={} shortfall={}",
                     request.userId(), request.claimId(), reclaimable);
         }
-        log.info("포인트 환원 · 회수 userId={} orderNo={} claimId={} restored={} reclaimed={} balanceAfter={}",
+        log.info("포인트 환원, 회수 userId={} orderNo={} claimId={} restored={} reclaimed={} balanceAfter={}",
                 request.userId(), request.orderNo(), request.claimId(), request.restoreAmount(), taken, balance);
         return PointReversalResponse.of(request.claimId(), request.orderItemId(), restore, reclaim);
     }
 
-    /** 이미 처리한 클레임이면 그 결과 — RESTORE · RECLAIM 중 하나라도 있으면 처리된 것 (한 트랜잭션에서 같이 남기므로) */
+    /** 이미 처리한 클레임이면 그 결과 — RESTORE, RECLAIM 중 하나라도 있으면 처리된 것 (한 트랜잭션에서 같이 남기므로) */
     private Optional<PointReversalResponse> processedReversal(ReversePointRequest request) {
         Optional<PointHistory> restore = pointHistoryRepository.findByTypeAndRefKey(PointType.RESTORE, request.refKey());
         Optional<PointHistory> reclaim = pointHistoryRepository.findByTypeAndRefKey(PointType.RECLAIM, request.refKey());
@@ -197,7 +197,7 @@ public class PointService {
         // 사용 표식 — 같은 sagaId 의 취소가 지금 해제 표식을 넣는 중이면 여기서 uk 충돌(커밋 순서대로 한쪽만)
         pointUseSagaRepository.saveAndFlush(PointUseSaga.used(request.sagaId()));
         if (userRepository.deductPoint(request.userId(), request.amount()) == 0) {
-            findActive(request.userId());   // 없는 회원 · 탈퇴면 USER_NOT_FOUND, 있으면 잔액 부족
+            findActive(request.userId());   // 없는 회원, 탈퇴면 USER_NOT_FOUND, 있으면 잔액 부족
             throw new PointException(PointErrorCode.POINT_INSUFFICIENT);
         }
         User user = findActive(request.userId());   // 조건부 UPDATE 가 영속성 컨텍스트를 비워 다시 읽는다 (차감 후 잔액)
@@ -246,7 +246,7 @@ public class PointService {
         return new PointException(PointErrorCode.POINT_USE_RELEASED);
     }
 
-    /** 같은 sagaId 인데 회원 · 금액이 다르면 order 쪽 멱등 키 재사용 버그 */
+    /** 같은 sagaId 인데 회원, 금액이 다르면 order 쪽 멱등 키 재사용 버그 */
     private static PointUseResponse sameRequestOrThrow(PointHistory existing, UsePointRequest request) {
         if (!existing.getUser().getId().equals(request.userId()) || existing.getAmount() != request.amount()) {
             throw new PointException(PointErrorCode.POINT_USE_CONFLICT);

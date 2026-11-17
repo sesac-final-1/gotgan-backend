@@ -13,7 +13,7 @@ public record InquiryAnswerResponse(
         @Schema(description = "저장된 답변 (태그를 지운 값)", example = "M 추천드립니다!")
         String answerContent,
 
-        @Schema(description = "답변 작성 · 수정 시각", example = "2026-10-29T11:00:00+09:00")
+        @Schema(description = "답변 작성, 수정 시각", example = "2026-10-29T11:00:00+09:00")
         OffsetDateTime answeredAt) {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");

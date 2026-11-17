@@ -25,7 +25,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
     /** 스토어 톡이 '운영팀에 도움 요청'으로 상담방에 붙었는지 — 관리자 읽기 전용 열람 */
     boolean existsByContextTypeAndContextId(ContextType contextType, Long contextId);
 
-    /** 방마다 안 읽은 수 — 같은 쪽(readerKey · 내 역할)이 보낸 것과 SYSTEM 안내는 세지 않는다 */
+    /** 방마다 안 읽은 수 — 같은 쪽(readerKey, 내 역할)이 보낸 것과 SYSTEM 안내는 세지 않는다 */
     @Query(nativeQuery = true, value = """
             SELECT m.chat_room_id AS roomId, COUNT(*) AS count
             FROM chat_message m

@@ -53,7 +53,7 @@ class InternalOrderStatsControllerTest {
     }
 
     @Test
-    @DisplayName("storeId 가 없으면 전체 통계 — 거래액 · 주문 수")
+    @DisplayName("storeId 가 없으면 전체 통계 — 거래액, 주문 수")
     void platformStats() throws Exception {
         given(orderStatsService.getPlatformStats()).willReturn(new PlatformOrderStatsResponse(1_250_000L, 37L));
 
@@ -65,7 +65,7 @@ class InternalOrderStatsControllerTest {
     }
 
     @Test
-    @DisplayName("buyerId 가 있으면 구매자 통계 — 진행 중 상품주문 · 클레임 수, storeId 와 같이 오면 스토어 통계")
+    @DisplayName("buyerId 가 있으면 구매자 통계 — 진행 중 상품주문, 클레임 수, storeId 와 같이 오면 스토어 통계")
     void buyerStats() throws Exception {
         given(orderStatsService.getBuyerStats(4L)).willReturn(new BuyerOrderStatsResponse(4L, 2L, 1L));
         given(orderStatsService.getStoreStats(1L)).willReturn(new StoreOrderStatsResponse(1L, 0L, 0L, 0L, 0L, 0L));
@@ -84,7 +84,7 @@ class InternalOrderStatsControllerTest {
     }
 
     @Test
-    @DisplayName("일별 통계 — storeId 는 선택, days 기본 30 · 1~90 밖이면 400")
+    @DisplayName("일별 통계 — storeId 는 선택, days 기본 30, 1~90 밖이면 400")
     void dailyStats() throws Exception {
         given(orderStatsService.getDailyStats(null, 30)).willReturn(
                 List.of(new DailyOrderStatsResponse(LocalDate.of(2026, 10, 22), 1_234_000L, 12L)));

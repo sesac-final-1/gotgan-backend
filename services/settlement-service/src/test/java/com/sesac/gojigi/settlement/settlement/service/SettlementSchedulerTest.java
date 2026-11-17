@@ -46,7 +46,7 @@ class SettlementSchedulerTest {
     }
 
     @Test
-    @DisplayName("집계가 실패해도(DB 장애 등) 기동을 막지 않는다 — 다음 기동 · 정시 · 관리자 \"지금 집계\"로 다시")
+    @DisplayName("집계가 실패해도(DB 장애 등) 기동을 막지 않는다 — 다음 기동, 정시, 관리자 \"지금 집계\"로 다시")
     void startup_failureDoesNotBlockBoot() {
         when(commandService.aggregate(any(), any())).thenThrow(new DataAccessResourceFailureException("DB 연결 끊김"));
 

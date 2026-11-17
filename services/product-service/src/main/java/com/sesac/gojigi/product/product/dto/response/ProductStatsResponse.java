@@ -7,7 +7,7 @@ import java.util.List;
  */
 public record ProductStatsResponse(Store store, Platform platform) {
 
-    /** stoppedCount = STOPPED · BLOCKED 합계, lowStockProducts = 재고 적은 순 최대 10개 */
+    /** stoppedCount = STOPPED, BLOCKED 합계, lowStockProducts = 재고 적은 순 최대 10개 */
     public record Store(long onSaleCount, long lowStockCount, long soldOutCount, long stoppedCount, List<LowStock> lowStockProducts) {
     }
 

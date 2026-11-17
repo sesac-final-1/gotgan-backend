@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** StoreApproved → 정산용 스토어 스냅샷 (스토어명 · 판매자 이메일 · 정산 계좌). 지급 · 명세서 때 store 를 호출하지 않으려고 미리 받아 둔다 */
+/** StoreApproved → 정산용 스토어 스냅샷 (스토어명, 판매자 이메일, 정산 계좌). 지급, 명세서 때 store 를 호출하지 않으려고 미리 받아 둔다 */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,7 +29,7 @@ public class StoreSnapshotService {
         }
         StoreApprovedPayload p = event.payload();
         Result result = Result.ALREADY_EXISTS;
-        if (!settlementStoreRepository.existsByStoreId(p.storeId())) {   // 1인 1스토어 · 승인 1회 — 이미 있으면 그대로
+        if (!settlementStoreRepository.existsByStoreId(p.storeId())) {   // 1인 1스토어, 승인 1회 — 이미 있으면 그대로
             StoreApprovedPayload.SettlementAccount account = p.settlementAccount();
             settlementStoreRepository.save(SettlementStore.approved(p.storeId(), p.storeName(), p.sellerEmail(),
                     account == null ? null : account.bank(),

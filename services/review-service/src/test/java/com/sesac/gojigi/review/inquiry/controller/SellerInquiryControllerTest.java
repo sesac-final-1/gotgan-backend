@@ -57,7 +57,7 @@ class SellerInquiryControllerTest {
     }
 
     @Test
-    @DisplayName("문의 목록 — X-Store-Id 스토어 · tab 그대로")
+    @DisplayName("문의 목록 — X-Store-Id 스토어, tab 그대로")
     void list_passesStoreAndTab() throws Exception {
         given(inquiryService.listForSeller(7L, SellerInquiryTab.UNANSWERED, 0, 10)).willReturn(new PageResponse<>(List.of(
                 new SellerInquiryResponse(12L, 101L, "린넨 오버핏 셔츠", "곳간러버", "배송지 변경 가능할까요?", true, null, null, AT)),
@@ -72,7 +72,7 @@ class SellerInquiryControllerTest {
 
     @ParameterizedTest
     @ValueSource(strings = { "/api/seller/inquiries?tab=NEW", "/api/seller/inquiries?page=-1", "/api/seller/inquiries?size=51" })
-    @DisplayName("모르는 tab · page · size 범위 밖 — 400 INVALID_INPUT")
+    @DisplayName("모르는 tab, page, size 범위 밖 — 400 INVALID_INPUT")
     void list_invalidParam_returns400(String url) throws Exception {
         perform(get(url))
                 .andExpect(status().isBadRequest())
@@ -103,7 +103,7 @@ class SellerInquiryControllerTest {
     }
 
     @Test
-    @DisplayName("답변 — 200, 저장된 답변 · 시각")
+    @DisplayName("답변 — 200, 저장된 답변, 시각")
     void answer_returns200() throws Exception {
         given(inquiryService.answer(7L, 12L, new InquiryAnswerRequest("M 추천드립니다!")))
                 .willReturn(new InquiryAnswerResponse(12L, "M 추천드립니다!", AT));
@@ -118,7 +118,7 @@ class SellerInquiryControllerTest {
 
     @ParameterizedTest
     @ValueSource(strings = { "{}", "{ \"content\": \"   \" }" })
-    @DisplayName("답변 누락 · 공백 — 400 INVALID_INPUT")
+    @DisplayName("답변 누락, 공백 — 400 INVALID_INPUT")
     void answer_blank_returns400(String body) throws Exception {
         perform(put("/api/seller/inquiries/12/answer").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -137,7 +137,7 @@ class SellerInquiryControllerTest {
     }
 
     @Test
-    @DisplayName("다른 스토어 · 없는 문의 답변 — 404 INQUIRY_NOT_FOUND")
+    @DisplayName("다른 스토어, 없는 문의 답변 — 404 INQUIRY_NOT_FOUND")
     void answer_notFound_returns404() throws Exception {
         given(inquiryService.answer(eq(7L), eq(99L), any(InquiryAnswerRequest.class)))
                 .willThrow(new InquiryException(InquiryErrorCode.INQUIRY_NOT_FOUND));

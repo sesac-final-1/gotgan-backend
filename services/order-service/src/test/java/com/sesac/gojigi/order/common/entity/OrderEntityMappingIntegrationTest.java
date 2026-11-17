@@ -31,7 +31,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 /**
  * 엔티티 ↔ orderdb 스키마(Flyway V1~V3) 매핑 확인 — 컨텍스트가 뜨면 ddl-auto: validate 통과,
- * 저장 후 다시 읽어 DB 기본값(created_at · version) · Enum 문자열 · JSON 컬럼이 맞는지 본다.
+ * 저장 후 다시 읽어 DB 기본값(created_at, version), Enum 문자열, JSON 컬럼이 맞는지 본다.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -43,7 +43,7 @@ class OrderEntityMappingIntegrationTest {
     private TestEntityManager em;
 
     @Test
-    @DisplayName("주문 · 상품주문 · 이력 · 클레임 · Saga · Outbox · 장바구니를 저장하고 다시 읽는다")
+    @DisplayName("주문, 상품주문, 이력, 클레임, Saga, Outbox, 장바구니를 저장하고 다시 읽는다")
     void persistAndReload_allEntities() {
         // given
         Order order = em.persist(Order.builder()

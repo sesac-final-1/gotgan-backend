@@ -55,35 +55,35 @@ class SellerDocumentClientTest {
     }
 
     @Test
-    @DisplayName("파일이 있으면 S3 의 형식 · 크기를 돌려준다")
+    @DisplayName("파일이 있으면 S3 의 형식, 크기를 돌려준다")
     void head_fileExists_returnsMeta() {
         // given
         givenHead().willReturn(HeadObjectResponse.builder().contentType("application/pdf").contentLength(1234L).build());
 
-        // when · then
+        // when, then
         assertThat(sellerDocumentClient.head("applications/4/a.pdf")).contains(new FileMeta("application/pdf", 1234L));
     }
 
     @Test
-    @DisplayName("NoSuchKey · 404 는 파일 없음(empty)")
+    @DisplayName("NoSuchKey, 404 는 파일 없음(empty)")
     void head_fileMissing_returnsEmpty() {
         // given
         givenHead().willThrow(NoSuchKeyException.builder().build())
                 .willThrow(S3Exception.builder().statusCode(404).build());
 
-        // when · then
+        // when, then
         assertThat(sellerDocumentClient.head("applications/4/a.pdf")).isEmpty();
         assertThat(sellerDocumentClient.head("applications/4/a.pdf")).isEmpty();
     }
 
     @Test
-    @DisplayName("권한 오류(403) · 연결 실패는 502 EXTERNAL_API_ERROR")
+    @DisplayName("권한 오류(403), 연결 실패는 502 EXTERNAL_API_ERROR")
     void head_s3Error_throwsExternalApiError() {
         // given
         givenHead().willThrow(S3Exception.builder().statusCode(403).build())
                 .willThrow(SdkClientException.create("timeout"));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> sellerDocumentClient.head("applications/4/a.pdf"))
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
         assertThatThrownBy(() -> sellerDocumentClient.head("applications/4/a.pdf"))
@@ -91,7 +91,7 @@ class SellerDocumentClientTest {
     }
 
     @Test
-    @DisplayName("presigned PUT — 버킷 · 키 주소, 10분 만료, Content-Type · Content-Length 가 서명 헤더에 들어간다")
+    @DisplayName("presigned PUT — 버킷, 키 주소, 10분 만료, Content-Type, Content-Length 가 서명 헤더에 들어간다")
     void presignUpload_signsTypeAndLength() {
         // given
         Instant before = Instant.now();
@@ -115,13 +115,13 @@ class SellerDocumentClientTest {
         given(failingPresigner.presignPutObject(any(PutObjectPresignRequest.class))).willThrow(SdkClientException.create("no credentials"));
         SellerDocumentClient client = new SellerDocumentClient(s3Client, failingPresigner, BUCKET);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> client.presignUpload("applications/4/a.pdf", "application/pdf", 1L))
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
     }
 
     @Test
-    @DisplayName("presigned GET — 버킷 · 키 주소, 10분 만료")
+    @DisplayName("presigned GET — 버킷, 키 주소, 10분 만료")
     void presignDownload_signsGetWithTenMinutes() {
         // given
         Instant before = Instant.now();
@@ -145,7 +145,7 @@ class SellerDocumentClientTest {
         given(failingPresigner.presignGetObject(any(Consumer.class))).willThrow(SdkClientException.create("no credentials"));
         SellerDocumentClient client = new SellerDocumentClient(s3Client, failingPresigner, BUCKET);
 
-        // when · then
+        // when, then
         assertThat(client.presignDownload("applications/4/a.pdf")).isEmpty();
     }
 

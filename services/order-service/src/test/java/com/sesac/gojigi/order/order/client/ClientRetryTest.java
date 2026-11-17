@@ -23,7 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.web.client.ResourceAccessException;
 
 /**
- * 서킷 · 재시도 AOP 를 실제로 거쳐 application.yml 설정대로 GET 이 한 번 더 불리는지 (A-경-3).
+ * 서킷, 재시도 AOP 를 실제로 거쳐 application.yml 설정대로 GET 이 한 번 더 불리는지 (A-경-3).
  * 재시도가 서킷 바깥이면 서킷 폴백이 먼저 502(BusinessException)로 바꿔 재시도가 0회가 된다.
  */
 @SpringBootTest(classes = UserClientAdapter.class)

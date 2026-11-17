@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
-/** 채팅 오류 (접두어 CHAT — docs/api/error-codes.md · chat.md 9절) */
+/** 채팅 오류 (접두어 CHAT — docs/api/error-codes.md, chat.md 9절) */
 @Getter
 @RequiredArgsConstructor
 public enum ChatErrorCode implements ErrorCode {

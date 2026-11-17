@@ -12,8 +12,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 /**
- * 관리자 회원 관리 — admin-service 가 /internal/users 로 호출한다 (관리자 인가는 gateway · admin-service 에서 끝남).
- * 탈퇴 회원은 목록 · 상세 모두 제외.
+ * 관리자 회원 관리 — admin-service 가 /internal/users 로 호출한다 (관리자 인가는 gateway, admin-service 에서 끝남).
+ * 탈퇴 회원은 목록, 상세 모두 제외.
  */
 @Service
 @RequiredArgsConstructor
@@ -27,14 +27,14 @@ public class AdminUserService {
                 .map(AdminUserSummaryResponse::from));
     }
 
-    /** 회원 상세 — 없는 회원 · 탈퇴 회원은 USER_NOT_FOUND */
+    /** 회원 상세 — 없는 회원, 탈퇴 회원은 USER_NOT_FOUND */
     public AdminUserDetailResponse getDetail(Long userId) {
         return userRepository.findByIdAndDeletedAtIsNull(userId)
                 .map(AdminUserDetailResponse::from)
                 .orElseThrow(() -> new UserException(UserErrorCode.USER_NOT_FOUND));
     }
 
-    /** LIKE '%q%' — 검색어의 % · _ 를 와일드카드가 아닌 글자로 (escape 문자 '!', UserRepository.searchForAdmin) */
+    /** LIKE '%q%' — 검색어의 %, _ 를 와일드카드가 아닌 글자로 (escape 문자 '!', UserRepository.searchForAdmin) */
     private static String containsPattern(String q) {
         if (q == null || q.isBlank()) {
             return null;

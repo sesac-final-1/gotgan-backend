@@ -21,7 +21,7 @@ import org.mockito.stubbing.Answer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
-/** 판매자 대시보드 조합 — 네 영역 동시 호출 · 요청 스레드의 Observation(traceId) 전파 · 실패 영역만 unavailable */
+/** 판매자 대시보드 조합 — 네 영역 동시 호출, 요청 스레드의 Observation(traceId) 전파, 실패 영역만 unavailable */
 class SellerDashboardServiceTest {
 
     private static final Long STORE_ID = 1L;
@@ -68,7 +68,7 @@ class SellerDashboardServiceTest {
     }
 
     @Test
-    @DisplayName("실패한 영역만 null + unavailable — 순서는 응답 필드 순서(order · orderDaily · product · settlement)")
+    @DisplayName("실패한 영역만 null + unavailable — 순서는 응답 필드 순서(order, orderDaily, product, settlement)")
     void dashboard_whenSomeFail_returnsPartial() {
         // given
         given(adapter.orderStats(STORE_ID)).willThrow(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR));
@@ -98,7 +98,7 @@ class SellerDashboardServiceTest {
         given(adapter.productStats(STORE_ID)).willReturn(OK);
         given(adapter.settlementStats(STORE_ID)).willReturn(OK);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.dashboard(STORE_ID)).isInstanceOf(CompletionException.class).hasCause(bug);
     }
 }

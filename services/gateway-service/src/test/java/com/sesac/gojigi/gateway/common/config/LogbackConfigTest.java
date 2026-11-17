@@ -15,7 +15,7 @@ import org.springframework.mock.env.MockEnvironment;
 
 /**
  * 이 서비스의 logback-spring.xml 이 공통 설정(libs/common-logging logback-base.xml)을 제대로 include 하는지만 본다 (관측성 담당 박지연).
- * 라벨 · traceId · 스택 트레이스 · 콘솔 형식 같은 상세 검증은 모듈의 LogbackBaseTest 한 벌. 여기서는 로그를 남기지 않아 Loki 로 보내지 않는다.
+ * 라벨, traceId, 스택 트레이스, 콘솔 형식 같은 상세 검증은 모듈의 LogbackBaseTest 한 벌. 여기서는 로그를 남기지 않아 Loki 로 보내지 않는다.
  */
 class LogbackConfigTest {
 

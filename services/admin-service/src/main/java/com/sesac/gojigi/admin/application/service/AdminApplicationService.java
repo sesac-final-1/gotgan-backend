@@ -12,9 +12,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * 입점 심사 (STR-03 · 04 · 05 · 09 · 10) — store 응답을 그대로 전달하되, store 는 카테고리 이름을 모르므로(store.md 3절)
- * 목록 · 상세에 product 카테고리로 categoryName 을 붙인다. 카테고리를 못 읽으면 이름 없이(심사는 계속할 수 있게) 그대로 돌려준다.
- * 승인 · 반려 · 보완요청은 store 그대로 — 체크리스트는 화면만 검사(STR-10), 보완 기한은 store 가 +7일
+ * 입점 심사 (STR-03, 04, 05, 09, 10) — store 응답을 그대로 전달하되, store 는 카테고리 이름을 모르므로(store.md 3절)
+ * 목록, 상세에 product 카테고리로 categoryName 을 붙인다. 카테고리를 못 읽으면 이름 없이(심사는 계속할 수 있게) 그대로 돌려준다.
+ * 승인, 반려, 보완요청은 store 그대로 — 체크리스트는 화면만 검사(STR-10), 보완 기한은 store 가 +7일
  */
 @Slf4j
 @Service
@@ -49,7 +49,7 @@ public class AdminApplicationService {
         return storeClientAdapter.supplement(applicationId, body);
     }
 
-    /** 카테고리 id → 이름 (상위 · 하위 모두) — product 장애면 빈 맵 */
+    /** 카테고리 id → 이름 (상위, 하위 모두) — product 장애면 빈 맵 */
     private Map<Long, String> categoryNames() {
         Map<Long, String> names = new HashMap<>();
         try {

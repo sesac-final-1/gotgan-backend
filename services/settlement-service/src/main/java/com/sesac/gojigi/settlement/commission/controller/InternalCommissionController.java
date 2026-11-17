@@ -31,7 +31,7 @@ public class InternalCommissionController {
         return ApiResponse.success("수수료를 조회했습니다.", commissionService.list());
     }
 
-    @Operation(summary = "카테고리 수수료 변경(예약)", description = "rate %(11.5), effectiveFrom 생략 = 다음 주 월요일 · 지난 날짜 400. 이력 보존")
+    @Operation(summary = "카테고리 수수료 변경(예약)", description = "rate %(11.5), effectiveFrom 생략 = 다음 주 월요일, 지난 날짜 400. 이력 보존")
     @PutMapping
     public ApiResponse<List<CommissionResponse>> update(@RequestBody @NotEmpty List<@Valid CommissionUpdateRequest> requests) {
         return ApiResponse.success("수수료를 변경했습니다.", commissionService.update(requests));

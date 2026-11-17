@@ -5,7 +5,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
-/** 신고 · 조치 오류 (접두어 REPORT — docs/api/error-codes.md). 대상이 없으면 review · user 의 404 를 그대로 전달 */
+/** 신고, 조치 오류 (접두어 REPORT — docs/api/error-codes.md). 대상이 없으면 review, user 의 404 를 그대로 전달 */
 @Getter
 @RequiredArgsConstructor
 public enum ReportErrorCode implements ErrorCode {

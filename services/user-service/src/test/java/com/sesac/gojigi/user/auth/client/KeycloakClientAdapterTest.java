@@ -37,7 +37,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Keycloak 토큰 응답 매핑 · 요청 모양 · 오류 변환 (서킷 브레이커 동작은 AOP 라 여기서 보지 않음) */
+/** Keycloak 토큰 응답 매핑, 요청 모양, 오류 변환 (서킷 브레이커 동작은 AOP 라 여기서 보지 않음) */
 class KeycloakClientAdapterTest {
 
     private static final String BASE = "http://keycloak:8080";
@@ -59,7 +59,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("Direct Grant — client 인증은 Basic 헤더, 폼에는 grant_type · 이메일 · 비밀번호만 담고 토큰 응답을 읽는다")
+    @DisplayName("Direct Grant — client 인증은 Basic 헤더, 폼에는 grant_type, 이메일, 비밀번호만 담고 토큰 응답을 읽는다")
     void passwordGrant_sendsFormAndReadsToken() {
         server.expect(requestTo(TOKEN_URL))
                 .andExpect(method(HttpMethod.POST))
@@ -83,7 +83,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("invalid_grant(비밀번호 불일치 · 없는 계정 · 임시 잠금)는 AUTH_INVALID_CREDENTIALS")
+    @DisplayName("invalid_grant(비밀번호 불일치, 없는 계정, 임시 잠금)는 AUTH_INVALID_CREDENTIALS")
     void passwordGrant_invalidGrant_becomesInvalidCredentials() {
         server.expect(requestTo(TOKEN_URL))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED).contentType(MediaType.APPLICATION_JSON)
@@ -144,7 +144,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("client-id · secret 의 특수문자는 URL 인코딩 후 Basic 헤더에 넣는다 (RFC 6749 2.3.1)")
+    @DisplayName("client-id, secret 의 특수문자는 URL 인코딩 후 Basic 헤더에 넣는다 (RFC 6749 2.3.1)")
     void keycloakClient_urlEncodesCredentialsInBasicHeader() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer encodedServer = MockRestServiceServer.bindTo(builder).build();
@@ -174,7 +174,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("계정 생성 — 서비스 계정 토큰(Bearer)으로 username=email · 비밀번호 · user_id 속성을 보내고 Location 의 ID 를 돌려준다")
+    @DisplayName("계정 생성 — 서비스 계정 토큰(Bearer)으로 username=email, 비밀번호, user_id 속성을 보내고 Location 의 ID 를 돌려준다")
     void createUser_sendsUserWithServiceAccountToken() {
         expectServiceAccountToken();
         server.expect(requestTo(USERS_URL))
@@ -207,7 +207,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("계정 찾기 — username 정확 일치 계정의 user_id 속성, 속성이 없으면 null · 계정이 없으면 empty")
+    @DisplayName("계정 찾기 — username 정확 일치 계정의 user_id 속성, 속성이 없으면 null, 계정이 없으면 empty")
     void findAccount_readsUserIdAttribute() {
         expectServiceAccountToken();
         server.expect(requestTo(USERS_URL + "?username=ghost%40gotgan.com&exact=true"))
@@ -230,7 +230,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("결과를 모르는 실패는 타임아웃 · 5xx 뿐 — 원인이 없거나 4xx 면 계정이 없다")
+    @DisplayName("결과를 모르는 실패는 타임아웃, 5xx 뿐 — 원인이 없거나 4xx 면 계정이 없다")
     void outcomeUnknown_onlyTimeoutAnd5xx() {
         assertThat(KeycloakClientAdapter.outcomeUnknown(new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "x",
                 new ResourceAccessException("timeout")))).isTrue();
@@ -391,7 +391,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("로그아웃 — 만료 · 잘못된 토큰(invalid_grant)은 이미 로그아웃된 것으로 보고 성공")
+    @DisplayName("로그아웃 — 만료, 잘못된 토큰(invalid_grant)은 이미 로그아웃된 것으로 보고 성공")
     void logout_invalidGrant_succeeds() {
         server.expect(requestTo(LOGOUT_URL))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
@@ -430,7 +430,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("재발급 — grant_type=refresh_token 폼, invalid_grant(만료 · 로그아웃)는 AUTH_SESSION_EXPIRED")
+    @DisplayName("재발급 — grant_type=refresh_token 폼, invalid_grant(만료, 로그아웃)는 AUTH_SESSION_EXPIRED")
     void refreshGrant_sendsRefreshTokenAndMapsInvalidGrant() {
         server.expect(requestTo(TOKEN_URL))
                 .andExpect(content().formData(new LinkedMultiValueMap<>(Map.of(
@@ -448,7 +448,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("소셜 code 교환 — authorization_code · PKCE verifier · redirect_uri, invalid_grant 는 AUTH_SOCIAL_LOGIN_FAILED")
+    @DisplayName("소셜 code 교환 — authorization_code, PKCE verifier, redirect_uri, invalid_grant 는 AUTH_SOCIAL_LOGIN_FAILED")
     void authorizationCodeGrant_sendsPkceAndMapsInvalidGrant() {
         server.expect(requestTo(TOKEN_URL))
                 .andExpect(header(HttpHeaders.AUTHORIZATION, basic("gotgan-backend:test-secret")))
@@ -532,7 +532,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("비밀번호 변경 — 정책 위반 400 은 AUTH_PASSWORD_POLICY_VIOLATION, 그 외 4xx · 계정 없음 · 연결 실패는 EXTERNAL_API_ERROR")
+    @DisplayName("비밀번호 변경 — 정책 위반 400 은 AUTH_PASSWORD_POLICY_VIOLATION, 그 외 4xx, 계정 없음, 연결 실패는 EXTERNAL_API_ERROR")
     void resetPassword_failures() {
         // MockRestServiceServer 는 요청이 나간 뒤 기대를 추가할 수 없어 세 번 호출의 기대를 먼저 모두 등록
         expectServiceAccountToken();
@@ -600,7 +600,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("이용정지 · 해제 — 계정이 없으면(검색 결과 없음 · 404) 성공, 그 외 4xx · 연결 실패는 EXTERNAL_API_ERROR")
+    @DisplayName("이용정지, 해제 — 계정이 없으면(검색 결과 없음, 404) 성공, 그 외 4xx, 연결 실패는 EXTERNAL_API_ERROR")
     void disableAndEnableUser_failures() {
         expectServiceAccountToken();
         server.expect(requestTo(USERS_URL + "?username=gone%40gotgan.com&exact=true")).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
@@ -629,7 +629,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("판매자 전환 — store_id 속성을 더해 PUT(다른 속성 그대로) 후 available 에서 찾은 SELLER(id · name)를 부여")
+    @DisplayName("판매자 전환 — store_id 속성을 더해 PUT(다른 속성 그대로) 후 available 에서 찾은 SELLER(id, name)를 부여")
     void grantSeller_setsStoreIdThenAddsRole() {
         expectServiceAccountToken();
         expectGetUser("kc-6", "{\"user_id\":[\"6\"]}");
@@ -659,7 +659,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("판매자 전환 재전달 — 같은 store_id · SELLER 가 이미 있으면 PUT · POST 없이 ALREADY_GRANTED")
+    @DisplayName("판매자 전환 재전달 — 같은 store_id, SELLER 가 이미 있으면 PUT, POST 없이 ALREADY_GRANTED")
     void grantSeller_alreadyGranted_noWrites() {
         expectServiceAccountToken();
         expectGetUser("kc-6", "{\"store_id\":[\"3\"]}");
@@ -694,7 +694,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("판매자 전환 — 다른 store_id 가 이미 있으면 STORE_MISMATCH, 속성 · 역할 모두 그대로")
+    @DisplayName("판매자 전환 — 다른 store_id 가 이미 있으면 STORE_MISMATCH, 속성, 역할 모두 그대로")
     void grantSeller_otherStore_mismatchNoWrites() {
         expectServiceAccountToken();
         expectGetUser("kc-6", "{\"store_id\":[\"9\"]}");
@@ -705,7 +705,7 @@ class KeycloakClientAdapterTest {
     }
 
     @Test
-    @DisplayName("판매자 전환 — 계정 없음(검색 결과 없음 · 404)은 ACCOUNT_NOT_FOUND, SELLER 역할이 realm 에 없거나 4xx · 연결 실패는 EXTERNAL_API_ERROR")
+    @DisplayName("판매자 전환 — 계정 없음(검색 결과 없음, 404)은 ACCOUNT_NOT_FOUND, SELLER 역할이 realm 에 없거나 4xx, 연결 실패는 EXTERNAL_API_ERROR")
     void grantSeller_failures() {
         expectServiceAccountToken();
         server.expect(requestTo(USERS_URL + "?username=gone%40gotgan.com&exact=true")).andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));

@@ -8,7 +8,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 
-/** 상품 상세 공개 리뷰 한 건 (review.md 9절) — 프론트 ShopProductReviews. 작성자는 표시 이름만(회원 ID 없음) · 내 리뷰 여부만 */
+/** 상품 상세 공개 리뷰 한 건 (review.md 9절) — 프론트 ShopProductReviews. 작성자는 표시 이름만(회원 ID 없음), 내 리뷰 여부만 */
 public record ProductReviewResponse(
         @Schema(description = "리뷰 ID", example = "31")
         Long reviewId,
@@ -28,7 +28,7 @@ public record ProductReviewResponse(
         @Schema(description = "본문", example = "평소 M 입는데 M 주문했고 어깨가 살짝 내려오는 오버핏이에요.")
         String content,
 
-        @Schema(description = "산 옵션 — 옵션 없는 상품 · 스냅샷 전 자격은 null", example = "오트밀 / M")
+        @Schema(description = "산 옵션 — 옵션 없는 상품, 스냅샷 전 자격은 null", example = "오트밀 / M")
         String optionName,
 
         @Schema(description = "사이즈 체감", example = "TRUE_TO_SIZE")

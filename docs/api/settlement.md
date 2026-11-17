@@ -1,18 +1,18 @@
 # settlement-service API 계약 (10/19)
 
-담당 구지훈. 정산 적재 · 주간 집계 · 지급 · 보류 · 카테고리 수수료. 코드가 정본(springdoc `/swagger-ui.html`)이고, 이 문서는 **호출하는 쪽(admin-service · store 대시보드 · 프론트)이 알아야 할 규칙**을 정리합니다.
-근거: 스펙 STL-01~10 · 05장 정산 규칙, 가이드라인 08장(인가) · 10장(이벤트 · 스케줄러), API 명세 시트.
+담당 구지훈. 정산 적재, 주간 집계, 지급, 보류, 카테고리 수수료. 코드가 정본(springdoc `/swagger-ui.html`)이고, 이 문서는 **호출하는 쪽(admin-service, store 대시보드, 프론트)이 알아야 할 규칙**을 정리합니다.
+근거: 스펙 STL-01~10, 05장 정산 규칙, 가이드라인 08장(인가), 10장(이벤트, 스케줄러), API 명세 시트.
 
 ## 공통
 
 | 항목 | 값 |
 |---|---|
 | 주소 | `SETTLEMENT_SERVICE_URI=http://settlement-service:8085` |
-| 인가 | `/internal/**` = 게이트웨이 라우트 없음(admin-service · store · chat 이 호출 — chat 은 정산 카드용 `GET /internal/settlements/{id}`). `/api/seller/settlements/**` = 게이트웨이 SELLER → 여기서 `X-Store-Id` 소유권 |
+| 인가 | `/internal/**` = 게이트웨이 라우트 없음(admin-service, store, chat 이 호출 — chat 은 정산 카드용 `GET /internal/settlements/{id}`). `/api/seller/settlements/**` = 게이트웨이 SELLER → 여기서 `X-Store-Id` 소유권 |
 | 주차 | ISO 주차 `2026-W43` = 월~일(KST). 생략하면 지난주 |
 | 금액 | `long` 원. 지급액 = 매출 − 판매수수료 − 결제수수료(2.2%), 상품주문마다 원 단위 내림 후 합계 |
 | 율 | % 값 (`11.50` = 11.5%) |
-| 상태 | `SCHEDULED`(지급예정) · `HELD`(지급보류) · `PAID`(지급완료) |
+| 상태 | `SCHEDULED`(지급예정), `HELD`(지급보류), `PAID`(지급완료) |
 | 지급 예정일 | 주차 종료(일) + 4일 = 다음 주 목요일 — **확정**(10/20 결정 1번) |
 
 ## 1. 이벤트 수신 (SQS)
@@ -21,19 +21,19 @@
 
 | 이벤트 | 처리 |
 |---|---|
-| `StoreApproved` | 스토어명 · 판매자 이메일 · 정산 계좌 스냅샷 |
-| `StoreStatusChanged` | 지급 보류 판단 상태(옛 이벤트 무시) → 운영 중(`ACTIVE`)이 아니면(정지 · 폐점) 지급예정 정산서 **자동 보류**, 운영 재개면 **자동 보류만 자동 해제**(관리자 보류는 유지) |
+| `StoreApproved` | 스토어명, 판매자 이메일, 정산 계좌 스냅샷 |
+| `StoreStatusChanged` | 지급 보류 판단 상태(옛 이벤트 무시) → 운영 중(`ACTIVE`)이 아니면(정지, 폐점) 지급예정 정산서 **자동 보류**, 운영 재개면 **자동 보류만 자동 해제**(관리자 보류는 유지) |
 | `OrderItemConfirmed` | 정산 대상 적재 — 구매확정일에 유효한 상위 카테고리(`topCategoryId`) 수수료율 스냅샷. **수수료율이 없으면 적재하지 않고 재전달 → DLQ** |
 
 ## 2. 수수료 — `/internal/commissions` (STL-01)
 
 - `GET` → `[{categoryId, current: {rate, effectiveFrom} | null, reserved: [{rate, effectiveFrom}]}]`
 - `PUT` `[{categoryId, rate, effectiveFrom?}]` → 위와 같은 목록
-  - `effectiveFrom` 생략 = 다음 주 월요일 · 지난 날짜 400 `COMMISSION_PAST_EFFECTIVE_DATE` · `rate` 0~100
+  - `effectiveFrom` 생략 = 다음 주 월요일, 지난 날짜 400 `COMMISSION_PAST_EFFECTIVE_DATE`, `rate` 0~100
   - 같은 (카테고리, 적용 시작일)이 있으면 율만 수정, 이력은 지우지 않음
   - 오늘 날짜는 허용 — 등록 즉시 `current` 로 조회됨 (아래 신규 상위 카테고리 흐름에서 사용)
 
-### 신규 상위 카테고리 — 수수료 등록 후에만 노출 (CAT-02 · STL-01, 10/20 박지연 합의)
+### 신규 상위 카테고리 — 수수료 등록 후에만 노출 (CAT-02, STL-01, 10/20 박지연 합의)
 
 수수료율이 없는 상위 카테고리가 노출되면 구매확정이 적재되지 못하고 DLQ 로 간다. 그래서 상위 카테고리는 **비활성으로 생성 → 수수료 등록 → 활성화** 순서로만 연다.
 
@@ -53,43 +53,43 @@
 | API | 요청 | 응답 |
 |---|---|---|
 | `GET /internal/settlements?week=&storeId=&status=` | | `{week, totals{count, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt}, settlements[Summary]}` |
-| `GET /internal/settlements/recent?storeId=&weeks=8` | | `{storeId, weeks, fromWeek, totals, settlements[Summary]}` — 관리자 스토어 상세(admin `GET /api/admin/stores/{storeId}/settlements`)의 정산 이력 · 8주 KPI. 이번 주를 포함해 최근 `weeks`(1~12, 기본 8)주 동안 시작한 주차, 최신 주차 먼저 · 없는 스토어는 빈 목록 (10/29) |
+| `GET /internal/settlements/recent?storeId=&weeks=8` | | `{storeId, weeks, fromWeek, totals, settlements[Summary]}` — 관리자 스토어 상세(admin `GET /api/admin/stores/{storeId}/settlements`)의 정산 이력, 8주 KPI. 이번 주를 포함해 최근 `weeks`(1~12, 기본 8)주 동안 시작한 주차, 최신 주차 먼저, 없는 스토어는 빈 목록 (10/29) |
 | `GET /internal/settlements/{id}` | | `{settlement: Summary, items[{orderItemId, orderNo, productName, confirmedAt, itemAmt, categoryId, rate, commission, paymentFee, payout, carriedOver}], history[{at, actor(SYSTEM/ADMIN), from, to, reason}]}` |
 | `POST /internal/settlements/aggregate` | `{week?}` | `{week, created, updated, autoHeld, carriedOver}` — 멱등(스토어 × 주차 1건) |
 | `POST /internal/settlements/pay` | `{ids[]}` (1~500개) | `{success[ids], failed[{id, code, message}]}` — 건마다 따로 커밋 |
 | `PATCH /internal/settlements/{id}/hold` | `{hold, reason}` | 상세 — `hold=true` 면 reason 필수(255자) |
-| `GET /internal/settlements/outstanding?storeId=` | | `{storeId, unsettledItemCount, unsettledPayoutAmt, scheduledCount, scheduledPayoutAmt, heldCount, heldPayoutAmt, clear}` — 스토어 폐점 · 판매자 탈퇴 전 확인, 셋 다 0 이면 `clear=true` |
-| `GET /internal/stats/settlements?storeId=` | | storeId 있으면 `store{storeId, pendingItemCount, pendingPayoutAmt, nextPayout, recentPaid[8주]}`, 없으면 `platform{scheduledCount, scheduledAmt, heldCount, heldAmt, paidThisMonthAmt, commissionRevenueThisMonth, salesFrom, categorySales[{categoryId, itemCount, salesAmt, commissionAmt}], topStores[{storeId, storeName, itemCount, salesAmt, commissionAmt}](10개)}` — salesFrom(이번 주 포함 8주 전 월요일)부터 오늘까지 구매확정분, 매출 큰 순 (10/26 관리자 대시보드 카테고리별 거래액 · 스토어 순위) |
+| `GET /internal/settlements/outstanding?storeId=` | | `{storeId, unsettledItemCount, unsettledPayoutAmt, scheduledCount, scheduledPayoutAmt, heldCount, heldPayoutAmt, clear}` — 스토어 폐점, 판매자 탈퇴 전 확인, 셋 다 0 이면 `clear=true` |
+| `GET /internal/stats/settlements?storeId=` | | storeId 있으면 `store{storeId, pendingItemCount, pendingPayoutAmt, nextPayout, recentPaid[8주]}`, 없으면 `platform{scheduledCount, scheduledAmt, heldCount, heldAmt, paidThisMonthAmt, commissionRevenueThisMonth, salesFrom, categorySales[{categoryId, itemCount, salesAmt, commissionAmt}], topStores[{storeId, storeName, itemCount, salesAmt, commissionAmt}](10개)}` — salesFrom(이번 주 포함 8주 전 월요일)부터 오늘까지 구매확정분, 매출 큰 순 (10/26 관리자 대시보드 카테고리별 거래액, 스토어 순위) |
 
 `Summary` = `{id, storeId, storeName, week, weekStart, weekEnd, itemCount, carriedOverCount, salesAmt, commissionAmt, paymentFeeAmt, payoutAmt, status, holdReason, scheduledPayDate, paidAt, bank{bankName, accountNumber, accountHolder}}`
 
 **집계 규칙**
-- 매주 월 03:00(KST) 자동 + **앱 기동 시 지난주 따라잡기**(10/20) — 클러스터가 08~22시에만 떠 있어 03:00 은 돌지 않으므로, 매일 아침 기동할 때 지난주를 한 번 집계(멱등 · ShedLock 같은 잠금). 바로 확인할 때는 "지금 집계"(`aggregate`)
+- 매주 월 03:00(KST) 자동 + **앱 기동 시 지난주 따라잡기**(10/20) — 클러스터가 08~22시에만 떠 있어 03:00 은 돌지 않으므로, 매일 아침 기동할 때 지난주를 한 번 집계(멱등, ShedLock 같은 잠금). 바로 확인할 때는 "지금 집계"(`aggregate`)
 - **늦게 들어온 구매확정**(10/20 결정 2번 A안) — 집계 때 지난 주차의 안 묶인 구매확정을 함께 처리
   - 원래 주 정산서가 지급 전 → 거기에 더해 다시 계산
-  - 지급 완료 · 정산서 없음 → **이번 주 정산서로 이월** (항목의 구매확정일은 그대로). 정산서 `carriedOverCount` · 항목 `carriedOver` 로 "이월 n건" 표시
+  - 지급 완료, 정산서 없음 → **이번 주 정산서로 이월** (항목의 구매확정일은 그대로). 정산서 `carriedOverCount`, 항목 `carriedOver` 로 "이월 n건" 표시
   - 이번 주 정산서까지 지급됐다면 다음 집계에서 이월
-- 정지 · 폐점 스토어는 집계 때 바로 `HELD`
+- 정지, 폐점 스토어는 집계 때 바로 `HELD`
 
 **대시보드 기준** (결정 2번 의견) — 같은 숫자처럼 보여도 기준이 다르다
-- "얼마 팔렸나"(매출 · 판매 추이) = **구매확정일** 기준 — 항목 `confirmedAt` (또는 order 의 구매확정 집계)
-- "얼마 받나 · 줬나"(지급 예정 · 지급액 · 수수료 수익) = **정산서** 기준 — 이월분이 다음 주 정산서에 포함되므로 주차별 매출 합과 정산서 합이 다를 수 있음
+- "얼마 팔렸나"(매출, 판매 추이) = **구매확정일** 기준 — 항목 `confirmedAt` (또는 order 의 구매확정 집계)
+- "얼마 받나, 줬나"(지급 예정, 지급액, 수수료 수익) = **정산서** 기준 — 이월분이 다음 주 정산서에 포함되므로 주차별 매출 합과 정산서 합이 다를 수 있음
 
-**폐점 · 탈퇴 조건** (결정 3번 A안) — 판매자 탈퇴는 스토어 폐점 후. 폐점 조건 중 정산 쪽은 `/internal/settlements/outstanding` 의 `clear=true` (진행 중 주문 0건은 order, 폐점 · 탈퇴 판단은 store · user)
+**폐점, 탈퇴 조건** (결정 3번 A안) — 판매자 탈퇴는 스토어 폐점 후. 폐점 조건 중 정산 쪽은 `/internal/settlements/outstanding` 의 `clear=true` (진행 중 주문 0건은 order, 폐점, 탈퇴 판단은 store, user)
 
-- **store 폐점 409 (10/21 박지연)**: `clear=false` 면 `STORE_SETTLEMENT_OUTSTANDING` — `unsettledPayoutAmt + scheduledPayoutAmt + heldPayoutAmt` 를 합쳐 "미정산 n원 — 지급 완료(매주 목요일) 후 폐점할 수 있습니다". 다음 지급 예정일은 고정 문구라 응답에 추가하지 않음. 코드 정의는 store.md · error-codes.md(박지연)
-- **폐점 직후 늦게 적재된 구매확정 (10/21 A안 — 지금대로)**: 구매확정 이벤트가 SQS 처리 전이거나 DLQ 에 있으면 `clear=true` 로 보여 폐점될 수 있습니다. 이후 적재된 정산서는 스토어가 CLOSED 라 **자동 보류("스토어 폐점 — 자동 보류") · 지급 불가**로 남고 관리자가 처리합니다. 금액 손실은 없고, DLQ 알람(config #30)과 admin 정산 화면의 "폐점 스토어 보류" 구분으로 찾습니다. `lastConfirmedAt` 조건(B안)은 DLQ 경우를 막지 못하고 서비스 간 계약만 늘려 채택하지 않음
+- **store 폐점 409 (10/21 박지연)**: `clear=false` 면 `STORE_SETTLEMENT_OUTSTANDING` — `unsettledPayoutAmt + scheduledPayoutAmt + heldPayoutAmt` 를 합쳐 "미정산 n원 — 지급 완료(매주 목요일) 후 폐점할 수 있습니다". 다음 지급 예정일은 고정 문구라 응답에 추가하지 않음. 코드 정의는 store.md, error-codes.md(박지연)
+- **폐점 직후 늦게 적재된 구매확정 (10/21 A안 — 지금대로)**: 구매확정 이벤트가 SQS 처리 전이거나 DLQ 에 있으면 `clear=true` 로 보여 폐점될 수 있습니다. 이후 적재된 정산서는 스토어가 CLOSED 라 **자동 보류("스토어 폐점 — 자동 보류"), 지급 불가**로 남고 관리자가 처리합니다. 금액 손실은 없고, DLQ 알람(config #30)과 admin 정산 화면의 "폐점 스토어 보류" 구분으로 찾습니다. `lastConfirmedAt` 조건(B안)은 DLQ 경우를 막지 못하고 서비스 간 계약만 늘려 채택하지 않음
 
-**지급 규칙** — `SCHEDULED` · 스토어 운영중 · 계좌 있음일 때만. 지급 시 `payout`(계좌 스냅샷) 기록 + `SettlementPaid` 를 **같은 트랜잭션의 `event_outbox` 에 남김** → 커밋 직후 SNS 발행, 실패하면 아웃박스 발행기(30초 · ShedLock)가 같은 `eventId` 로 다시 보냄(최소 1회 전달 — 소비자는 `eventId` 로 중복 제거, 10/20). SNS 가 죽어도 지급은 성공. 구독: 정산 명세서 Lambda · admin 알림 센터(스토어에 `SETTLEMENT_PAID` 알림, `admin.md` 5절 — 10/27)
-- 실패 코드: `SETTLE_INVALID_STATUS`(보류 · 이미 지급) · `SETTLE_STORE_PAYOUT_HELD` · `SETTLE_PAYOUT_ACCOUNT_MISSING` · `SETTLE_NOT_FOUND`
+**지급 규칙** — `SCHEDULED`, 스토어 운영중, 계좌 있음일 때만. 지급 시 `payout`(계좌 스냅샷) 기록 + `SettlementPaid` 를 **같은 트랜잭션의 `event_outbox` 에 남김** → 커밋 직후 SNS 발행, 실패하면 아웃박스 발행기(30초, ShedLock)가 같은 `eventId` 로 다시 보냄(최소 1회 전달 — 소비자는 `eventId` 로 중복 제거, 10/20). SNS 가 죽어도 지급은 성공. 구독: 정산 명세서 Lambda, admin 알림 센터(스토어에 `SETTLEMENT_PAID` 알림, `admin.md` 5절 — 10/27)
+- 실패 코드: `SETTLE_INVALID_STATUS`(보류, 이미 지급), `SETTLE_STORE_PAYOUT_HELD`, `SETTLE_PAYOUT_ACCOUNT_MISSING`, `SETTLE_NOT_FOUND`
 
-## 4. 판매자 — `/api/seller/settlements` (STL-07 · 10)
+## 4. 판매자 — `/api/seller/settlements` (STL-07, 10)
 
 | API | 응답 |
 |---|---|
 | `GET /api/seller/settlements` | `{summary{nextPayout, paidRecent8WeeksAmt, pendingPayoutAmt, appliedRates[{categoryId, rate}]}, settlements[Summary]}` |
 | `GET /api/seller/settlements/{id}` | 상세(위와 같음) — 다른 스토어 403 |
-| `GET /api/seller/settlements/{id}/report` | `{url, expiresAt}` — presigned GET **10분, 버튼을 누를 때마다 발급**(IRSA 임시 자격 증명으로 서명해 길게 줄 수 없음, 10/20), `reports/{storeId}/{week}.csv`. 지급 전 · CSV 생성 전 409 `SETTLE_REPORT_NOT_READY`, S3 장애 502 |
+| `GET /api/seller/settlements/{id}/report` | `{url, expiresAt}` — presigned GET **10분, 버튼을 누를 때마다 발급**(IRSA 임시 자격 증명으로 서명해 길게 줄 수 없음, 10/20), `reports/{storeId}/{week}.csv`. 지급 전, CSV 생성 전 409 `SETTLE_REPORT_NOT_READY`, S3 장애 502 |
 
 - `X-Store-Id` 가 없으면 403, `X-User-Id` 가 없으면 401 (게이트웨이를 거치지 않은 요청)
 
@@ -98,16 +98,16 @@
 | 코드 | HTTP | 언제 |
 |---|---|---|
 | `SETTLE_NOT_FOUND` | 404 | 정산서 없음 |
-| `SETTLE_STORE_NOT_FOUND` | 404 | 스토어 스냅샷 없음 (이벤트 재전달 대기 · 지급 불가) |
+| `SETTLE_STORE_NOT_FOUND` | 404 | 스토어 스냅샷 없음 (이벤트 재전달 대기, 지급 불가) |
 | `SETTLE_AGGREGATE_CONFLICT` | 409 | 다른 집계와 겹침 — 멱등이라 다시 시도 |
-| `SETTLE_INVALID_STATUS` | 409 | 지금 상태에서 불가 (보류 중 지급 · 지급완료 보류 등) |
-| `SETTLE_STORE_PAYOUT_HELD` | 409 | 정지 · 폐점 스토어 지급 |
+| `SETTLE_INVALID_STATUS` | 409 | 지금 상태에서 불가 (보류 중 지급, 지급완료 보류 등) |
+| `SETTLE_STORE_PAYOUT_HELD` | 409 | 정지, 폐점 스토어 지급 |
 | `SETTLE_PAYOUT_ACCOUNT_MISSING` | 409 | 정산 계좌 없음 |
 | `SETTLE_HOLD_REASON_REQUIRED` | 400 | 보류 사유 없음 |
 | `SETTLE_REPORT_NOT_READY` | 409 | 지급 전 명세서 요청 |
 | `COMMISSION_NOT_FOUND` | 404 | 수수료율 미등록 (적재 시 — 재전달) |
 | `COMMISSION_PAST_EFFECTIVE_DATE` | 400 | 지난 적용 시작일 |
-| `INVALID_INPUT` (공통) | 400 | 주차 형식 · 율 범위 등 |
+| `INVALID_INPUT` (공통) | 400 | 주차 형식, 율 범위 등 |
 
 ## 6. 운영 — DLQ 재처리
 
@@ -126,7 +126,7 @@ SQS 큐는 처리 실패 시 메시지를 지우지 않아 재전달되고, **3�
 # DLQ 메시지 수
 aws sqs get-queue-attributes --queue-url https://sqs.ap-northeast-2.amazonaws.com/<계정>/sesac-gojigi-settlement-order-events-dlq \
   --attribute-names ApproximateNumberOfMessages
-# 실패 원인 — settlement 로그의 "이벤트 처리 실패 — 재전달 대기" 줄 (eventType · cause)
+# 실패 원인 — settlement 로그의 "이벤트 처리 실패 — 재전달 대기" 줄 (eventType, cause)
 kubectl -n sesac-gojigi logs deploy/settlement-service --since=24h | grep "이벤트 처리 실패"
 ```
 
@@ -146,7 +146,7 @@ kubectl -n sesac-gojigi logs deploy/settlement-service --since=24h | grep "이�
 ```bash
 A=arn:aws:sqs:ap-northeast-2:<계정>
 aws sqs start-message-move-task --source-arn $A:sesac-gojigi-settlement-order-events-dlq --destination-arn $A:sesac-gojigi-settlement-order-events
-aws sqs list-message-move-tasks --source-arn $A:sesac-gojigi-settlement-order-events-dlq   # Status=COMPLETED · ApproximateNumberOfMessagesMoved
+aws sqs list-message-move-tasks --source-arn $A:sesac-gojigi-settlement-order-events-dlq   # Status=COMPLETED, ApproximateNumberOfMessagesMoved
 ```
 
 - DLQ 의 메시지 전부를 옮긴다 — 시험 메시지가 섞여 있으면 먼저 받아서 지운다(storeId 확인)
@@ -155,7 +155,7 @@ aws sqs list-message-move-tasks --source-arn $A:sesac-gojigi-settlement-order-ev
 ### 4) 확인
 
 - `settlement_item` 에 해당 `order_item_id` 적재(`settlement_id` 는 다음 집계 때 연결) — 지난주 분이면 "지금 집계"
-- 10/20 클러스터 검증: 수수료 없는 상위 99 구매확정 → DLQ → 율 등록 → move task `COMPLETED 1` → 10,000원 · 8% → 판매수수료 800 · 결제수수료 220 적재
+- 10/20 클러스터 검증: 수수료 없는 상위 99 구매확정 → DLQ → 율 등록 → move task `COMPLETED 1` → 10,000원, 8% → 판매수수료 800, 결제수수료 220 적재
 
 ### 아웃박스 발행 포기 행 다시 보내기 (11/3)
 

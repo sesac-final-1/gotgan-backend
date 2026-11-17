@@ -76,7 +76,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 판매자 클레임 처리 (CLM-03 ~ 05) — 반품: 승인 → 수거 완료 → 환불 Saga → 반품완료 / 교환: 승인 → 수거 → 재배송 송장 → 배송완료로 교환완료,
- * 거부 · 목록 탭 숫자 · 내 클레임 · 잘못된 전이 (MySQL 8.4 + Flyway, 원격 참여자는 목)
+ * 거부, 목록 탭 숫자, 내 클레임, 잘못된 전이 (MySQL 8.4 + Flyway, 원격 참여자는 목)
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -125,7 +125,7 @@ class SellerClaimIntegrationTest {
     @MockitoBean private ProductClientAdapter product;
     @MockitoBean private UserClientAdapter user;
 
-    /** 배송완료(하루 전) 상품주문 — 20,000원 · 포인트 2,000 사용 */
+    /** 배송완료(하루 전) 상품주문 — 20,000원, 포인트 2,000 사용 */
     private OrderItem deliveredItem(long buyer, long store) {
         OrderCreateRequest request = new OrderCreateRequest(List.of(new OrderCreateRequest.Item(111L, 1)), "김수령",
                 "010-1234-5678", "06236", "서울 강남구 테헤란로 1", null, null, 2_000L);
@@ -157,14 +157,14 @@ class SellerClaimIntegrationTest {
     }
 
     @Test
-    @DisplayName("반품 — 승인(수거 요청) → 수거 완료 → 결제 부분 취소 · 재고 복원 · 포인트 환원으로 반품완료, 막히면 COLLECTED 로 남는다")
+    @DisplayName("반품 — 승인(수거 요청) → 수거 완료 → 결제 부분 취소, 재고 복원, 포인트 환원으로 반품완료, 막히면 COLLECTED 로 남는다")
     void returnFlow() {
         // given
         long buyer = BUYERS.getAndIncrement();
         OrderItem item = deliveredItem(buyer, STORE);
         ClaimResponse claim = open(buyer, item, ClaimType.RETURN, ClaimReasonCode.CHANGE_OF_MIND);
 
-        // when — 승인 · 수거 완료
+        // when — 승인, 수거 완료
         ClaimDetailResponse approved = sellerClaimTx.approve(STORE, claim.claimId());
         ClaimStatus done = cancelSaga.collectReturn(STORE, claim.claimId());
 
@@ -178,7 +178,7 @@ class SellerClaimIntegrationTest {
         verify(user).reversePoints(any());
         assertThat(outboxRepository.findAll()).filteredOn(e -> e.getAggregateId().equals(item.getItemNo()))
                 .extracting(e -> e.getEventType())
-                .containsExactly("OrderClaimRequested", "OrderItemReturned");   // 신청 시 판매자 알림 · 반품 완료 메일 (같은 트랜잭션)
+                .containsExactly("OrderClaimRequested", "OrderItemReturned");   // 신청 시 판매자 알림, 반품 완료 메일 (같은 트랜잭션)
         assertThat(sagaRepository.findAll()).filteredOn(s -> s.getOrderClaim() != null
                         && s.getOrderClaim().getId().equals(claim.claimId()))
                 .singleElement().satisfies(s -> {
@@ -186,7 +186,7 @@ class SellerClaimIntegrationTest {
                     assertThat(s.getStatus()).isEqualTo(SagaStatus.COMPLETED);
                 });
 
-        // 결제 취소가 막히면 — 클레임 COLLECTED · 상품주문 반품요청 그대로 (복구 스케줄러가 마저)
+        // 결제 취소가 막히면 — 클레임 COLLECTED, 상품주문 반품요청 그대로 (복구 스케줄러가 마저)
         long buyer2 = BUYERS.getAndIncrement();
         OrderItem stuck = deliveredItem(buyer2, STORE);
         ClaimResponse stuckClaim = open(buyer2, stuck, ClaimType.RETURN, ClaimReasonCode.DEFECTIVE);
@@ -202,7 +202,7 @@ class SellerClaimIntegrationTest {
     }
 
     @Test
-    @DisplayName("교환 — 승인 → 수거 → 재배송 송장(상품주문 송장 갱신) → 배송완료 버튼 · 자동 배송완료 대상으로 교환완료, 상품주문 다시 배송완료")
+    @DisplayName("교환 — 승인 → 수거 → 재배송 송장(상품주문 송장 갱신) → 배송완료 버튼, 자동 배송완료 대상으로 교환완료, 상품주문 다시 배송완료")
     void exchangeFlow() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -214,7 +214,7 @@ class SellerClaimIntegrationTest {
         assertThat(sellerClaimTx.collectExchange(STORE, claim.claimId()).status()).isEqualTo(ClaimStatus.COLLECTED);
         ClaimDetailResponse reshipped = sellerClaimTx.reship(STORE, SELLER, claim.claimId(), "롯데택배", null);
 
-        // then — 재배송 송장은 mock(택배사 접두 + 상품주문 ID), 상품주문은 교환요청 그대로 · 자동 배송완료 대상
+        // then — 재배송 송장은 mock(택배사 접두 + 상품주문 ID), 상품주문은 교환요청 그대로, 자동 배송완료 대상
         assertThat(reshipped.status()).isEqualTo(ClaimStatus.RESHIPPED);
         assertThat(reshipped.trackingNo()).isEqualTo(String.format("2470%08d", item.getId()));
         assertThat(reload(item).getStatus()).isEqualTo(OrderItemStatus.EXCHANGE_REQUESTED);
@@ -230,7 +230,7 @@ class SellerClaimIntegrationTest {
     }
 
     @Test
-    @DisplayName("거부 — 사유 저장 · 상품주문 다시 배송완료, 잘못된 전이 409 · 남의 스토어 404 · 스토어 없음 403")
+    @DisplayName("거부 — 사유 저장, 상품주문 다시 배송완료, 잘못된 전이 409, 남의 스토어 404, 스토어 없음 403")
     void rejectAndInvalid() {
         // given
         long buyer = BUYERS.getAndIncrement();
@@ -260,9 +260,9 @@ class SellerClaimIntegrationTest {
     }
 
     @Test
-    @DisplayName("목록 — 처리대기 · 처리완료 · 유형 필터, 탭 숫자(단계는 유형 기준 · 유형은 단계 기준), 상세 · 내 클레임")
+    @DisplayName("목록 — 처리대기, 처리완료, 유형 필터, 탭 숫자(단계는 유형 기준, 유형은 단계 기준), 상세, 내 클레임")
     void listAndMine() {
-        // given — 처리대기 반품 1 · 교환 1, 처리완료(거부) 반품 1
+        // given — 처리대기 반품 1, 교환 1, 처리완료(거부) 반품 1
         long buyer = BUYERS.getAndIncrement();
         ClaimResponse ret = open(buyer, deliveredItem(buyer, LIST_STORE), ClaimType.RETURN, ClaimReasonCode.DEFECTIVE);
         ClaimResponse exchange = open(buyer, deliveredItem(buyer, LIST_STORE), ClaimType.EXCHANGE, ClaimReasonCode.CHANGE_OF_MIND);
@@ -292,7 +292,7 @@ class SellerClaimIntegrationTest {
     }
 
     @Test
-    @DisplayName("철회 — 판매자 승인 전 반품 · 교환만 WITHDRAWN · 상품주문 다시 배송완료, 승인 뒤 · 다른 회원 · 취소는 거절, 처리완료 탭에 보인다")
+    @DisplayName("철회 — 판매자 승인 전 반품, 교환만 WITHDRAWN, 상품주문 다시 배송완료, 승인 뒤, 다른 회원, 취소는 거절, 처리완료 탭에 보인다")
     void withdraw() {
         // given
         long buyer = BUYERS.getAndIncrement();

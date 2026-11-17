@@ -25,11 +25,11 @@ import org.springframework.stereotype.Component;
  * <pre>
  * 포트원 응답                         → 처리
  * SUCCEEDED                           → SUCCEEDED 확정 (결제 누적 취소액 반영)
- * REQUESTED (PG 비동기 처리)          → PENDING 유지 + 취소 내역 id 기억 → 웹훅 · 복구 스케줄러가 확정
+ * REQUESTED (PG 비동기 처리)          → PENDING 유지 + 취소 내역 id 기억 → 웹훅, 복구 스케줄러가 확정
  * FAILED                              → FAILED
- * 4xx 중 "이미 됐을 수 있음"          → 포트원 조회로 대조 (PAYMENT_ALREADY_CANCELLED · CANCELLABLE_AMOUNT_CONSISTENCY_BROKEN)
+ * 4xx 중 "이미 됐을 수 있음"          → 포트원 조회로 대조 (PAYMENT_ALREADY_CANCELLED, CANCELLABLE_AMOUNT_CONSISTENCY_BROKEN)
  * 그 밖의 4xx                         → FAILED (포트원이 요청 자체를 거절 — 돈이 움직이지 않음)
- * 타임아웃 · 5xx(PG_PROVIDER 포함) · 서킷 OPEN · 응답 해석 실패 → 포트원 조회로 대조
+ * 타임아웃, 5xx(PG_PROVIDER 포함), 서킷 OPEN, 응답 해석 실패 → 포트원 조회로 대조
  * 대조도 실패                          → PENDING 유지 → 복구 스케줄러
  * </pre>
  *
@@ -92,7 +92,7 @@ public class PaymentCancelExecutor {
     }
 
     /**
-     * 결과를 모르는 PENDING 을 마무리 — 같은 sagaId 재요청 · 복구 스케줄러가 부른다.
+     * 결과를 모르는 PENDING 을 마무리 — 같은 sagaId 재요청, 복구 스케줄러가 부른다.
      * 포트원에 흔적이 없고 잔액이 선기록 때와 같으면 그때 처음 보내는 것처럼 다시 보낸다.
      */
     public Result resume(CancelRef cancel) {

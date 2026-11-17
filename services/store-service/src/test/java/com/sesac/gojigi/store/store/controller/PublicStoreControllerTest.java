@@ -42,13 +42,13 @@ class PublicStoreControllerTest {
     }
 
     @Test
-    @DisplayName("스토어 목록 — 로그인 헤더 없이 200, 숫자 storeId · 카테고리 ID · 이미지 없음 null · 등급 · +09:00")
+    @DisplayName("스토어 목록 — 로그인 헤더 없이 200, 숫자 storeId, 카테고리 ID, 이미지 없음 null, 등급, +09:00")
     void list_returns200WithSummaries() throws Exception {
         // given
         given(storeQueryService.getPublicList()).willReturn(List.of(new PublicStoreSummaryResponse(1L, "산골농부 박씨네", "park-farm", 1L,
                 "<p>소개</p>", null, "#d0701f", StoreGrade.BIG_POWER, OffsetDateTime.parse("2024-03-23T10:00:00+09:00"))));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/stores"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(1)))
@@ -64,14 +64,14 @@ class PublicStoreControllerTest {
     }
 
     @Test
-    @DisplayName("스토어 홈 — 운영 중 200, 판매자 정보 · 배송 정책까지")
+    @DisplayName("스토어 홈 — 운영 중 200, 판매자 정보, 배송 정책까지")
     void get_whenActive_returns200() throws Exception {
         // given
         given(storeQueryService.getPublic(1L)).willReturn(new PublicStoreResponse(1L, "산골농부 박씨네", StoreStatus.ACTIVE, "park-farm",
                 1L, "<p>소개</p>", null, "#d0701f", StoreGrade.BIG_POWER, OffsetDateTime.parse("2024-03-23T10:00:00+09:00"),
                 "박영철", "000-00-00006", "064-0000-0006", 3000L, null, "우체국택배", "수확일 기준 당일 발송"));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/stores/1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"))
@@ -84,13 +84,13 @@ class PublicStoreControllerTest {
     }
 
     @Test
-    @DisplayName("스토어 홈 — 정지 스토어도 200, 이름 · 상태만 있고 판매자 정보는 null")
+    @DisplayName("스토어 홈 — 정지 스토어도 200, 이름, 상태만 있고 판매자 정보는 null")
     void get_whenSuspended_returnsNameAndStatusOnly() throws Exception {
         // given
         given(storeQueryService.getPublic(15L)).willReturn(new PublicStoreResponse(15L, "볕드는집", StoreStatus.SUSPENDED, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/stores/15"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.storeName").value("볕드는집"))
@@ -108,7 +108,7 @@ class PublicStoreControllerTest {
                 "박영철", "000-00-00006", "064-0000-0006", 3000L, null, "우체국택배", "수확일 기준 당일 발송"));
         given(storeQueryService.getPublicBySlug("no-store")).willThrow(new StoreException(StoreErrorCode.STORE_NOT_FOUND));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/stores/slug/park-farm"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.storeId").value(1))
@@ -124,7 +124,7 @@ class PublicStoreControllerTest {
         // given
         given(storeQueryService.getPublic(99L)).willThrow(new StoreException(StoreErrorCode.STORE_NOT_FOUND));
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/stores/99"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("STORE_NOT_FOUND"));
@@ -139,7 +139,7 @@ class PublicStoreControllerTest {
         // given
         given(storeQueryService.getPublicList()).willReturn(List.of());
 
-        // when · then
+        // when, then
         mockMvc.perform(get("/api/stores"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(0)));

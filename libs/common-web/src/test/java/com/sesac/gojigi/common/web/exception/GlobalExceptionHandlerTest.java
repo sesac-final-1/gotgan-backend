@@ -48,7 +48,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("원인을 담은 BusinessException(외부 호출 실패) — 원인은 로그에만, 응답은 코드 · 메시지 그대로")
+    @DisplayName("원인을 담은 BusinessException(외부 호출 실패) — 원인은 로그에만, 응답은 코드, 메시지 그대로")
     void businessWithCause() throws Exception {
         BusinessException e = new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "인증 서버에 연결할 수 없습니다.",
                 new IllegalStateException("connection refused"));
@@ -72,7 +72,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("본문 파싱 실패 · 타입 불일치 · 필수 파라미터 누락은 400 INVALID_INPUT")
+    @DisplayName("본문 파싱 실패, 타입 불일치, 필수 파라미터 누락은 400 INVALID_INPUT")
     void badRequestGroup() throws Exception {
         mockMvc.perform(post("/test/body").contentType(MediaType.APPLICATION_JSON).content("{broken"))
                 .andExpect(status().isBadRequest())

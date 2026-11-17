@@ -29,11 +29,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 재고 예약 · 해제 (PRD-08, product.md 1 · 2절) — 주문 Saga 3단계와 그 보상. sagaId 멱등.
- * 예약: ① 옵션 행 잠금(ID 오름차순) ② 같은 sagaId 예약 기록 → 처음 응답 ③ 해제 표식 → 409 ④ 없는 옵션 404 · 구매 불가 409
+ * 재고 예약, 해제 (PRD-08, product.md 1, 2절) — 주문 Saga 3단계와 그 보상. sagaId 멱등.
+ * 예약: ① 옵션 행 잠금(ID 오름차순) ② 같은 sagaId 예약 기록 → 처음 응답 ③ 해제 표식 → 409 ④ 없는 옵션 404, 구매 불가 409
  * ⑤ 조건부 차감(모자라면 409) ⑥ RESERVE 기록. 예외는 트랜잭션 전체를 롤백한다.
  * 해제: ① 같은 옵션 행 잠금 ② 이미 RELEASE → 같은 응답 ③ RESERVE 있으면 그 수량만큼 되돌림 + RELEASE ④ 없으면 수량 0 표식.
- * 예약 · 해제 모두 같은 옵션 행을 먼저 잠그므로, order 가 타임아웃으로 해제를 먼저 보내도 둘 중 하나만 반영된다.
+ * 예약, 해제 모두 같은 옵션 행을 먼저 잠그므로, order 가 타임아웃으로 해제를 먼저 보내도 둘 중 하나만 반영된다.
  */
 @Slf4j
 @Service
@@ -81,7 +81,7 @@ public class StockReservationService {
     }
 
     /**
-     * 해제 — 되돌릴 게 없으면 표식만 남기고, 옵션 · 상품이 그 사이 삭제 · 판매중지돼도 재고 수는 돌려놓는다.
+     * 해제 — 되돌릴 게 없으면 표식만 남기고, 옵션, 상품이 그 사이 삭제, 판매중지돼도 재고 수는 돌려놓는다.
      * 응답 items 는 실제로 되돌린 수량(옵션 ID 오름차순), 예약이 없었으면 빈 목록.
      */
     @Transactional
@@ -120,7 +120,7 @@ public class StockReservationService {
         return response(sagaId, saved);
     }
 
-    /** 옵션 ID 오름차순(데드락 방지 · 응답 순서). 같은 옵션이 두 번이면 order 버그 → 400 */
+    /** 옵션 ID 오름차순(데드락 방지, 응답 순서). 같은 옵션이 두 번이면 order 버그 → 400 */
     private static List<StockItem> sortedWithoutDuplicates(List<StockItem> items) {
         List<StockItem> sorted = items.stream().sorted(Comparator.comparing(StockItem::productOptionId)).toList();
         if (sorted.stream().map(StockItem::productOptionId).distinct().count() != sorted.size()) {

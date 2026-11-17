@@ -30,8 +30,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * 관리자 상품 조회 · 강제 판매중지 (/internal/products) · 상품 통계 (/internal/stats/products) — 실제 MySQL · Flyway V1~V2.
- * 테스트마다 상품 · 카테고리 표를 비우고 필요한 것만 만든다. 트레이스 샘플링 0 — CategoryApiIntegrationTest 와 같은 이유
+ * 관리자 상품 조회, 강제 판매중지 (/internal/products), 상품 통계 (/internal/stats/products) — 실제 MySQL, Flyway V1~V2.
+ * 테스트마다 상품, 카테고리 표를 비우고 필요한 것만 만든다. 트레이스 샘플링 0 — CategoryApiIntegrationTest 와 같은 이유
  */
 @SpringBootTest(properties = {"management.tracing.sampling.probability=0", "app.images.base-url=https://img.test/"})
 @AutoConfigureMockMvc
@@ -62,7 +62,7 @@ class InternalProductApiIntegrationTest {
     /** 끝나고도 지운다 — 같은 DB 를 쓰는 CategoryApiIntegrationTest 가 카테고리를 지울 때 상품 FK 에 걸리지 않게 */
     @AfterEach
     void clean() {
-        // FK 순서대로 — 이미지 · 옵션 → 상품 → 하위 → 상위 카테고리
+        // FK 순서대로 — 이미지, 옵션 → 상품 → 하위 → 상위 카테고리
         jdbc.update("DELETE FROM product_image");
         jdbc.update("DELETE FROM product_option");
         jdbc.update("DELETE FROM product");
@@ -96,7 +96,7 @@ class InternalProductApiIntegrationTest {
     class ListByStore {
 
         @Test
-        @DisplayName("삭제된 상품 · 다른 스토어는 빼고 최신 순 — 재고 합계 · 대표 이미지 URL · 카테고리 이름 · 노출 여부")
+        @DisplayName("삭제된 상품, 다른 스토어는 빼고 최신 순 — 재고 합계, 대표 이미지 URL, 카테고리 이름, 노출 여부")
         void listsStoreProducts() throws Exception {
             product(STORE, "셔츠A", ProductStatus.ON_SALE, 3, 4);
             Product stopped = product(STORE, "셔츠B", ProductStatus.STOPPED, 0);
@@ -148,11 +148,11 @@ class InternalProductApiIntegrationTest {
     }
 
     @Nested
-    @DisplayName("강제 판매중지 · 해제")
+    @DisplayName("강제 판매중지, 해제")
     class Block {
 
         @Test
-        @DisplayName("차단하면 BLOCKED + 사유, 다시 차단하면 사유만 바뀌고, 해제하면 STOPPED · 사유 지움")
+        @DisplayName("차단하면 BLOCKED + 사유, 다시 차단하면 사유만 바뀌고, 해제하면 STOPPED, 사유 지움")
         void blockThenUnblock() throws Exception {
             long id = product(STORE, "셔츠A", ProductStatus.ON_SALE, 3).getId();
 
@@ -203,8 +203,8 @@ class InternalProductApiIntegrationTest {
         @BeforeEach
         void products() {
             product(STORE, "넉넉", ProductStatus.ON_SALE, 20);        // 판매중 (부족 아님 — 경계 20)
-            product(STORE, "부족", ProductStatus.ON_SALE, 10, 9);     // 판매중 · 재고 부족 19
-            product(STORE, "아주부족", ProductStatus.ON_SALE, 1);     // 판매중 · 재고 부족 1
+            product(STORE, "부족", ProductStatus.ON_SALE, 10, 9);     // 판매중, 재고 부족 19
+            product(STORE, "아주부족", ProductStatus.ON_SALE, 1);     // 판매중, 재고 부족 1
             product(STORE, "품절", ProductStatus.ON_SALE, 0, 0);      // 품절
             product(STORE, "중지", ProductStatus.STOPPED, 5);         // 중지
             Product blocked = product(OTHER_STORE, "차단", ProductStatus.ON_SALE, 5);
@@ -213,7 +213,7 @@ class InternalProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("storeId 있으면 store — 판매중 3 · 재고 부족 2(적은 순) · 품절 1 · 중지 1, platform 은 null")
+        @DisplayName("storeId 있으면 store — 판매중 3, 재고 부족 2(적은 순), 품절 1, 중지 1, platform 은 null")
         void storeStats() throws Exception {
             mockMvc.perform(get("/internal/stats/products").param("storeId", String.valueOf(STORE)))
                     .andExpect(status().isOk())
@@ -242,7 +242,7 @@ class InternalProductApiIntegrationTest {
         }
 
         @Test
-        @DisplayName("상품 없는 스토어는 모두 0 · 빈 목록")
+        @DisplayName("상품 없는 스토어는 모두 0, 빈 목록")
         void emptyStore() throws Exception {
             mockMvc.perform(get("/internal/stats/products").param("storeId", "99"))
                     .andExpect(jsonPath("$.data.store.onSaleCount").value(0))

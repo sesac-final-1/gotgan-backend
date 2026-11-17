@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
-/** 내 문의 한 건 (review.md 14절) — 수정 결과. 상품명 · 대표 사진은 등록 시점 스냅샷 */
+/** 내 문의 한 건 (review.md 14절) — 수정 결과. 상품명, 대표 사진은 등록 시점 스냅샷 */
 public record InquiryResponse(
         @Schema(description = "상품 문의 ID", example = "12")
         Long inquiryId,

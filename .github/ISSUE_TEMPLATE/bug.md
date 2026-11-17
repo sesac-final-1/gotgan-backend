@@ -12,4 +12,4 @@ labels: bug
 ## 기대 동작
 
 ## 환경
-<!-- local / dev 클러스터 · 서비스 · 커밋 SHA · traceId -->
+<!-- local / dev 클러스터, 서비스, 커밋 SHA, traceId -->

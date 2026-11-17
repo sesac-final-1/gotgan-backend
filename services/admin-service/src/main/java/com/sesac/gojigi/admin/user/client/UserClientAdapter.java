@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
-/** user-service 호출 — 서킷 브레이커 "user", 재시도는 GET 3개만(정지 · 해제 PATCH 는 재시도 없음). 오류는 RemoteCalls 규칙으로 그대로 전달 */
+/** user-service 호출 — 서킷 브레이커 "user", 재시도는 GET 3개만(정지, 해제 PATCH 는 재시도 없음). 오류는 RemoteCalls 규칙으로 그대로 전달 */
 @Component
 @RequiredArgsConstructor
 public class UserClientAdapter {

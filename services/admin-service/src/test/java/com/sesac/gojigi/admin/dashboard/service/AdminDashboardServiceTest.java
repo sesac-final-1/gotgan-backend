@@ -20,7 +20,7 @@ import org.mockito.stubbing.Answer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
-/** 관리자 대시보드 조합 — 네 영역 동시 호출 · 요청 스레드의 Observation(traceId) 전파 · 실패 영역만 unavailable */
+/** 관리자 대시보드 조합 — 네 영역 동시 호출, 요청 스레드의 Observation(traceId) 전파, 실패 영역만 unavailable */
 class AdminDashboardServiceTest {
 
     private final SettlementClientAdapter settlement = mock(SettlementClientAdapter.class);
@@ -65,7 +65,7 @@ class AdminDashboardServiceTest {
     }
 
     @Test
-    @DisplayName("실패한 영역만 null + unavailable — 순서는 응답 필드 순서(settlement · order · orderDaily · product)")
+    @DisplayName("실패한 영역만 null + unavailable — 순서는 응답 필드 순서(settlement, order, orderDaily, product)")
     void failedSectionsAreUnavailableInFieldOrder() {
         given(settlement.platformStats()).willThrow(RemoteCalls.unavailable("settlement", new IllegalStateException()));
         given(order.platformStats()).willReturn(OK);

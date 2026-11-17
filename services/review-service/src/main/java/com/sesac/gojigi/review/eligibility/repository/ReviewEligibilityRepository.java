@@ -12,7 +12,7 @@ public interface ReviewEligibilityRepository extends JpaRepository<ReviewEligibi
     Optional<ReviewEligibility> findByOrderItemId(Long orderItemId);
 
     /**
-     * 마이페이지 작성 가능한 리뷰 — 기한 안 · 리뷰가 없는(삭제한 리뷰 포함) 자격, 기한 임박순.
+     * 마이페이지 작성 가능한 리뷰 — 기한 안, 리뷰가 없는(삭제한 리뷰 포함) 자격, 기한 임박순.
      * idx_review_eligibility_user_expires 범위 조회, 기한 30일이라 건수가 작아 페이징하지 않는다.
      */
     @Query("""

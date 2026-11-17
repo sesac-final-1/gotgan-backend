@@ -45,7 +45,7 @@ class OrderItemTest {
     }
 
     @Test
-    @DisplayName("배송 — 발주확인 → 송장 등록(택배사 · 송장 · 발송 시각) → 배송완료(시각), 순서를 건너뛰면 409")
+    @DisplayName("배송 — 발주확인 → 송장 등록(택배사, 송장, 발송 시각) → 배송완료(시각), 순서를 건너뛰면 409")
     void delivery_transitions() {
         // given
         OrderItem item = OrderFixtures.item(OrderFixtures.order());
@@ -67,7 +67,7 @@ class OrderItemTest {
     }
 
     @Test
-    @DisplayName("반품 · 교환 신청 — 배송완료에서만")
+    @DisplayName("반품, 교환 신청 — 배송완료에서만")
     void returnAndExchange_onlyFromDelivered() {
         // given
         OrderItem returning = OrderFixtures.item(OrderFixtures.order());
@@ -92,7 +92,7 @@ class OrderItemTest {
         OrderItem item = OrderFixtures.item(OrderFixtures.order());
         item.markPaymentDone();
 
-        // when · then
+        // when, then
         assertThatThrownBy(item::markPaymentDone).isInstanceOf(OrderException.class)
                 .extracting(e -> ((OrderException) e).getErrorCode()).isEqualTo(OrderErrorCode.ORDER_INVALID_STATUS);
     }

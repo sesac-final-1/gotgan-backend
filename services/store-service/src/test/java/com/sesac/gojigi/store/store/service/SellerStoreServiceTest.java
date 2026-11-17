@@ -82,7 +82,7 @@ class SellerStoreServiceTest {
         Store suspended = store(3L, StoreStatus.SUSPENDED, null);
         given(storeRepository.findForUpdate(3L)).willReturn(Optional.of(suspended));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.update(2L, request(null, null, "#5b6b4a")))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(StoreErrorCode.STORE_CLOSED);
         service.update(3L, request(null, null, "#5b6b4a"));
@@ -96,14 +96,14 @@ class SellerStoreServiceTest {
         // given
         given(storeRepository.findForUpdate(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.update(99L, request(null, null, "#5b6b4a")))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(StoreErrorCode.STORE_NOT_FOUND);
         verify(storeQueryService, never()).getSellerStore(any());
     }
 
     @Test
-    @DisplayName("이미지 키 — 비우면 없음, 지금 키는 모양과 상관없이 유지, 내 stores/{storeId}/ 키(jpg · png · webp)만 새로")
+    @DisplayName("이미지 키 — 비우면 없음, 지금 키는 모양과 상관없이 유지, 내 stores/{storeId}/ 키(jpg, png, webp)만 새로")
     void checkImageKey_acceptsNoneCurrentAndOwnKey() {
         assertThat(SellerStoreService.checkImageKey(1L, null, "stores/1/a.jpg")).isNull();
         assertThat(SellerStoreService.checkImageKey(1L, "  ", "stores/1/a.jpg")).isNull();
@@ -113,7 +113,7 @@ class SellerStoreServiceTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"stores/2/a.jpg", "products/1/a.jpg", "stores/1/a.gif", "stores/1/../2/a.jpg", "https://evil/stores/1/a.jpg"})
-    @DisplayName("이미지 키 — 다른 스토어 · 다른 폴더 · 허용 안 된 확장자 · 경로 장난은 400 INVALID_INPUT")
+    @DisplayName("이미지 키 — 다른 스토어, 다른 폴더, 허용 안 된 확장자, 경로 장난은 400 INVALID_INPUT")
     void checkImageKey_rejectsForeignOrInvalidKey(String key) {
         assertThatThrownBy(() -> SellerStoreService.checkImageKey(1L, key, null))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(CommonErrorCode.INVALID_INPUT);
@@ -133,7 +133,7 @@ class SellerStoreServiceTest {
 
     @ParameterizedTest
     @CsvSource({"image/jpeg, jpg", "image/png, png", "image/webp, webp"})
-    @DisplayName("업로드 주소 — 키 stores/{storeId}/{UUID}.{확장자}, 형식 · 크기를 서명에 넘기고, 그 키는 설정 수정의 이미지 키 검사를 통과한다")
+    @DisplayName("업로드 주소 — 키 stores/{storeId}/{UUID}.{확장자}, 형식, 크기를 서명에 넘기고, 그 키는 설정 수정의 이미지 키 검사를 통과한다")
     void presignImage_whenActive_issuesOwnStoreKey(String contentType, String extension) {
         // given
         given(storeRepository.findByIdAndDeletedAtIsNull(1L)).willReturn(Optional.of(store(1L, StoreStatus.SUSPENDED, null)));
@@ -151,14 +151,14 @@ class SellerStoreServiceTest {
     }
 
     @Test
-    @DisplayName("업로드 주소 — 폐점 스토어 409 STORE_CLOSED · 없는 스토어 404, 서명하지 않는다")
+    @DisplayName("업로드 주소 — 폐점 스토어 409 STORE_CLOSED, 없는 스토어 404, 서명하지 않는다")
     void presignImage_whenClosedOrMissing_rejects() {
         // given
         given(storeRepository.findByIdAndDeletedAtIsNull(2L)).willReturn(Optional.of(store(2L, StoreStatus.CLOSED, null)));
         given(storeRepository.findByIdAndDeletedAtIsNull(99L)).willReturn(Optional.empty());
         StoreImagePresignRequest request = new StoreImagePresignRequest("image/jpeg", 1L);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.presignImage(2L, request))
                 .extracting(e -> ((BusinessException) e).getErrorCode()).isEqualTo(StoreErrorCode.STORE_CLOSED);
         assertThatThrownBy(() -> service.presignImage(99L, request))

@@ -16,9 +16,9 @@ import org.springframework.security.web.server.header.StaticServerHttpHeadersWri
 
 /**
  * 거친 인가(역할) 는 여기서, 세밀한 인가(소유권) 는 각 서비스에서 (가이드라인 08장).
- * 경로 규칙은 정리 문서 8-3 · 컨벤션 2-4. Keycloak 이 발급한 JWT 를 issuer-uri 의 JWKS 로 검증하고,
+ * 경로 규칙은 정리 문서 8-3, 컨벤션 2-4. Keycloak 이 발급한 JWT 를 issuer-uri 의 JWKS 로 검증하고,
  * 토큰의 roles 클레임(realm 역할)을 ROLE_* 권한으로 바꿔 hasRole 로 판단한다.
- * 401 · 403 은 업무 서비스와 같은 봉투 { code, message, data } 로 응답한다.
+ * 401, 403 은 업무 서비스와 같은 봉투 { code, message, data } 로 응답한다.
  */
 @Configuration
 @EnableWebFluxSecurity
@@ -27,7 +27,7 @@ public class SecurityConfig {
 
     /**
      * API 응답 보안 헤더 (SYS-23, 10/27) — JSON 만 돌려주므로 아무것도 불러오거나 끼워 넣지 못하게.
-     * 이미 같은 헤더가 있는 응답(Keycloak 로그인 화면 /realms/** — 자기 CSP · HSTS 를 보냄)은 덮어쓰지 않는다
+     * 이미 같은 헤더가 있는 응답(Keycloak 로그인 화면 /realms/** — 자기 CSP, HSTS 를 보냄)은 덮어쓰지 않는다
      */
     static final String API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
     static final String HSTS = "max-age=31536000; includeSubDomains";
@@ -48,15 +48,15 @@ public class SecurityConfig {
                         .pathMatchers(HttpMethod.OPTIONS, "/api/notifications/stream").permitAll()   // 실시간 알림 CORS preflight — 판정은 application.yml globalcors
                         .pathMatchers(HttpMethod.GET, "/ws/chat").permitAll()                       // 채팅 WebSocket 핸드셰이크 — 토큰은 STOMP CONNECT 에서 chat-service 가 검증 (X-User-* 는 UserHeaderFilter 가 지움)
                         .pathMatchers(HttpMethod.POST, "/api/presence/ping", "/api/presence/leave").permitAll()   // 접속 신호(PresenceWebFilter 가 바로 204) — 비로그인 방문자도 센다
-                        .pathMatchers("/api/auth/**").permitAll()                                   // 가입 · 로그인 · refresh (user-service 가 Keycloak 대리 호출)
+                        .pathMatchers("/api/auth/**").permitAll()                                   // 가입, 로그인, refresh (user-service 가 Keycloak 대리 호출)
                         .pathMatchers(HttpMethod.POST, "/api/payments/webhook").permitAll()          // 포트원 웹훅 (서명은 payment 가 검증)
-                        .pathMatchers("/actuator/health/**").permitAll()                          // 프로브 · bootstrap 접속 확인 (상태만, 상세 없음)
+                        .pathMatchers("/actuator/health/**").permitAll()                          // 프로브, bootstrap 접속 확인 (상태만, 상세 없음)
                         .pathMatchers("/actuator/prometheus").access(metricsAccessManager)          // 클러스터 노드 대역(Prometheus)만 — NLB 로 들어온 외부 요청은 거절 (K-3)
-                        // Keycloak 사용자 계정 콘솔 · 동적 클라이언트 등록은 막는다 (B-경-9) — 회원 정보 · 비밀번호는 user-service API 로만 바꾼다
+                        // Keycloak 사용자 계정 콘솔, 동적 클라이언트 등록은 막는다 (B-경-9) — 회원 정보, 비밀번호는 user-service API 로만 바꾼다
                         // (계정 콘솔에서 바꾸면 Keycloak 과 userdb 이메일이 어긋남). 아래 permitAll 보다 먼저 와야 한다
                         .pathMatchers("/realms/gotgan/account", "/realms/gotgan/account/**",
                                 "/realms/gotgan/clients-registrations/**").denyAll()
-                        .pathMatchers("/realms/gotgan/**", "/resources/**").permitAll()                // Keycloak 로그인 · 소셜 복귀 화면 (라우트 keycloak)
+                        .pathMatchers("/realms/gotgan/**", "/resources/**").permitAll()                // Keycloak 로그인, 소셜 복귀 화면 (라우트 keycloak)
                         .pathMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**",
                                 "/api/stores/**", "/api/reviews/**", "/api/inquiries/**").permitAll()
                         .pathMatchers("/api/seller/apply/**").hasRole("BUYER")                      // 입점 신청은 구매자
@@ -68,14 +68,14 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .oauth2ResourceServer(o -> o
-                        .authenticationEntryPoint(authenticationEntryPoint)                         // 잘못된 · 만료 토큰도 같은 봉투
+                        .authenticationEntryPoint(authenticationEntryPoint)                         // 잘못된, 만료 토큰도 같은 봉투
                         .accessDeniedHandler(accessDeniedHandler)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .build();
     }
 
     /**
-     * Keycloak realm 역할(roles 클레임, realm 설정의 매퍼) → ROLE_BUYER · ROLE_SELLER · ROLE_ADMIN.
+     * Keycloak realm 역할(roles 클레임, realm 설정의 매퍼) → ROLE_BUYER, ROLE_SELLER, ROLE_ADMIN.
      * Spring 기본은 scope 클레임만 SCOPE_* 로 읽어 hasRole 이 항상 거부된다.
      */
     static ReactiveJwtAuthenticationConverterAdapter jwtAuthenticationConverter() {

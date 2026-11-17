@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 카테고리 관리 (CAT-02 · product.md 7절) — admin-service 의 카테고리 화면이 호출 */
+/** 카테고리 관리 (CAT-02, product.md 7절) — admin-service 의 카테고리 화면이 호출 */
 @Tag(name = "카테고리 관리 (내부)", description = "admin-service 가 호출 — 인가: 내부")
 @RestController
 @RequestMapping("/internal/categories")
@@ -32,7 +32,7 @@ public class InternalCategoryController {
 
     private final CategoryService categoryService;
 
-    @Operation(summary = "카테고리 트리 (비활성 포함)", description = "상위 · 하위 모두 sortOrder 순")
+    @Operation(summary = "카테고리 트리 (비활성 포함)", description = "상위, 하위 모두 sortOrder 순")
     @GetMapping
     public ApiResponse<List<AdminCategoryTreeResponse>> tree() {
         return ApiResponse.success("카테고리를 조회했습니다.", categoryService.adminTree());
@@ -40,7 +40,7 @@ public class InternalCategoryController {
 
     @Operation(summary = "카테고리 생성", description = """
             parentId 없으면 상위 — 사용 중지로 생성(수수료 등록 뒤 PATCH 로 켬), 있으면 하위 — 사용 중으로 생성. sortOrder 생략 = 같은 부모 안 맨 뒤.
-            에러: 400 CATEGORY_DEPTH_EXCEEDED(하위 아래) · INVALID_INPUT / 404 CATEGORY_NOT_FOUND(parentId) / 409 CATEGORY_NAME_DUPLICATED""")
+            에러: 400 CATEGORY_DEPTH_EXCEEDED(하위 아래), INVALID_INPUT / 404 CATEGORY_NOT_FOUND(parentId) / 409 CATEGORY_NAME_DUPLICATED""")
     @PostMapping
     public ResponseEntity<ApiResponse<CategoryResponse>> create(@Valid @RequestBody CategoryCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -48,7 +48,7 @@ public class InternalCategoryController {
     }
 
     @Operation(summary = "카테고리 수정", description = """
-            이름 · 영문명 · 정렬만 (상위 · 하위 이동 없음).
+            이름, 영문명, 정렬만 (상위, 하위 이동 없음).
             에러: 400 INVALID_INPUT / 404 CATEGORY_NOT_FOUND / 409 CATEGORY_NAME_DUPLICATED""")
     @PutMapping("/{categoryId}")
     public ApiResponse<CategoryResponse> update(@PathVariable Long categoryId, @Valid @RequestBody CategoryUpdateRequest request) {

@@ -17,15 +17,15 @@ import org.springframework.web.socket.config.annotation.WebSocketTransportRegist
 import org.springframework.web.socket.handler.WebSocketHandlerDecorator;
 
 /**
- * STOMP over WebSocket /ws/chat (chat.md 6 · 6-1절) — 연결은 항상 열려 있어서 수명과 자원을 여기서 묶는다.
+ * STOMP over WebSocket /ws/chat (chat.md 6, 6-1절) — 연결은 항상 열려 있어서 수명과 자원을 여기서 묶는다.
  * <ul>
- *   <li>하트비트 10초(양방향) — 화면이 사라졌는데 닫기 신호가 없던 연결(모바일 절전 · 네트워크 끊김)은 브로커가 약 30초 안에 닫는다.
+ *   <li>하트비트 10초(양방향) — 화면이 사라졌는데 닫기 신호가 없던 연결(모바일 절전, 네트워크 끊김)은 브로커가 약 30초 안에 닫는다.
  *       NLB 유휴 350초보다 훨씬 짧아 중간 장비가 조용히 끊는 일도 없다</li>
  *   <li>CONNECT 첫 프레임은 {@value #FIRST_MESSAGE_MILLIS}ms 안에 — 연결만 열고 아무것도 안 보내는 연결을 바로 닫는다</li>
- *   <li>프레임 {@value #MESSAGE_SIZE_LIMIT}바이트(1,000자 한글 + 헤더) · 연결별 보내기 버퍼 {@value #SEND_BUFFER_LIMIT}바이트 · 보내기 {@value #SEND_TIME_LIMIT}ms —
- *       느린 연결 하나가 메모리 · 스레드를 붙잡으면 그 연결만 닫는다</li>
+ *   <li>프레임 {@value #MESSAGE_SIZE_LIMIT}바이트(1,000자 한글 + 헤더), 연결별 보내기 버퍼 {@value #SEND_BUFFER_LIMIT}바이트, 보내기 {@value #SEND_TIME_LIMIT}ms —
+ *       느린 연결 하나가 메모리, 스레드를 붙잡으면 그 연결만 닫는다</li>
  *   <li>들어오고 나가는 채널 스레드는 고정 4개 — 연결 수와 무관 (연결 자체는 Tomcat NIO 라 스레드를 쓰지 않음)</li>
- *   <li>연결 목록(ChatSessionRegistry)에 열림 · 닫힘을 기록 — 미인증 · 토큰 만료 · 사용자당 상한 정리</li>
+ *   <li>연결 목록(ChatSessionRegistry)에 열림, 닫힘을 기록 — 미인증, 토큰 만료, 사용자당 상한 정리</li>
  * </ul>
  */
 @Configuration
@@ -59,7 +59,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         heartbeat.setThreadNamePrefix("ws-heartbeat-");
         heartbeat.setDaemon(true);                                                       // 종료를 막지 않게 (빈이 아니라 스프링이 멈추지 않음)
         heartbeat.initialize();
-        registry.enableSimpleBroker("/sub", "/queue")   // /sub/rooms/{id} · /user/queue/errors
+        registry.enableSimpleBroker("/sub", "/queue")   // /sub/rooms/{id}, /user/queue/errors
                 .setHeartbeatValue(new long[] {HEARTBEAT_MILLIS, HEARTBEAT_MILLIS})
                 .setTaskScheduler(heartbeat);
         registry.setApplicationDestinationPrefixes("/pub");

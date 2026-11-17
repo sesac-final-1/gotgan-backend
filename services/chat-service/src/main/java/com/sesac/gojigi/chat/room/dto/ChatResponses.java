@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
-/** 채팅 응답 (chat.md 1 · 3 · 4절) — 시각은 +09:00 */
+/** 채팅 응답 (chat.md 1, 3, 4절) — 시각은 +09:00 */
 public final class ChatResponses {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -20,7 +20,7 @@ public final class ChatResponses {
     private ChatResponses() {
     }
 
-    /** 방 — storeId · buyerId 는 쓰지 않는 방이면 null. status 는 상담방만 */
+    /** 방 — storeId, buyerId 는 쓰지 않는 방이면 null. status 는 상담방만 */
     public record Room(Long roomId, ChatRoomType type, ChatRoomStatus status, Counterpart counterpart, Long storeId,
             Long buyerId, LastMessage lastMessage, long unreadCount, OffsetDateTime createdAt) {
 

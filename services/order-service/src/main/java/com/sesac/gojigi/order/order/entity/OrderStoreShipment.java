@@ -14,7 +14,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 주문의 스토어별 묶음배송비 — 같은 스토어 상품끼리 배송비 1회, 주문 · 스토어당 1행 */
+/** 주문의 스토어별 묶음배송비 — 같은 스토어 상품끼리 배송비 1회, 주문, 스토어당 1행 */
 @Getter
 @Entity
 @Table(name = "order_store_shipment")

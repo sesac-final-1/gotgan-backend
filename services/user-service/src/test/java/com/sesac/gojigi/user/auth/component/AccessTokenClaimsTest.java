@@ -23,7 +23,7 @@ public class AccessTokenClaimsTest {
     }
 
     @Test
-    @DisplayName("sub · user_id · store_id 를 꺼내고 역할은 BUYER · SELLER · ADMIN 만 남긴다")
+    @DisplayName("sub, user_id, store_id 를 꺼내고 역할은 BUYER, SELLER, ADMIN 만 남긴다")
     void parse_extractsClaimsAndFiltersRoles() {
         // given
         String accessToken = token("{\"sub\":\"kc-1\",\"user_id\":2,\"store_id\":1,"
@@ -63,7 +63,7 @@ public class AccessTokenClaimsTest {
     }
 
     @Test
-    @DisplayName("email · 이름(name → given_name → preferred_username 순)을 꺼낸다")
+    @DisplayName("email, 이름(name → given_name → preferred_username 순)을 꺼낸다")
     void parse_emailAndDisplayName() {
         assertThat(AccessTokenClaims.parse(token("{\"sub\":\"a\",\"email\":\"a@b.com\",\"name\":\"홍길동\",\"given_name\":\"길동\"}"), jsonMapper))
                 .extracting(AccessTokenClaims::email, AccessTokenClaims::name).containsExactly("a@b.com", "홍길동");

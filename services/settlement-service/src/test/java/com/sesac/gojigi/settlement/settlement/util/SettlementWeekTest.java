@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-/** 정산 주차 — ISO 주차(월~일) 연말 · 연초 경계. 2026년은 1월 1일이 목요일이라 53주차가 있다 */
+/** 정산 주차 — ISO 주차(월~일) 연말, 연초 경계. 2026년은 1월 1일이 목요일이라 53주차가 있다 */
 class SettlementWeekTest {
 
     @ParameterizedTest(name = "{0} → {1} (월 {2})")
@@ -25,7 +25,7 @@ class SettlementWeekTest {
             "2027-01-03, 2026-W53, 2026-12-28",
             "2027-01-04, 2027-W01, 2027-01-04",
     })
-    @DisplayName("아무 날짜 → 그 주 월요일 · ISO 주차 표기")
+    @DisplayName("아무 날짜 → 그 주 월요일, ISO 주차 표기")
     void of_isoWeek(LocalDate day, String iso, LocalDate monday) {
         SettlementWeek week = SettlementWeek.of(day);
 
@@ -55,7 +55,7 @@ class SettlementWeekTest {
     }
 
     @Test
-    @DisplayName("53주차 — 종료일 · 구매확정 범위 · 지급 예정일(다음 해 목요일)")
+    @DisplayName("53주차 — 종료일, 구매확정 범위, 지급 예정일(다음 해 목요일)")
     void week53_endAndPayDate() {
         SettlementWeek week = SettlementWeek.parse("2026-W53");
 

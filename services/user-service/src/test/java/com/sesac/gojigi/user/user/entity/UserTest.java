@@ -27,7 +27,7 @@ class UserTest {
     class Create {
 
         @Test
-        @DisplayName("자체 가입은 LOCAL · 포인트 0 · NORMAL · ACTIVE 로 시작하고 keycloak_id 는 비어 있다")
+        @DisplayName("자체 가입은 LOCAL, 포인트 0, NORMAL, ACTIVE 로 시작하고 keycloak_id 는 비어 있다")
         void signUp_startsWithDefaults() {
             // when
             User user = activeUser();
@@ -66,7 +66,7 @@ class UserTest {
     }
 
     @Nested
-    @DisplayName("연결 · 프로필")
+    @DisplayName("연결, 프로필")
     class Profile {
 
         @Test
@@ -83,7 +83,7 @@ class UserTest {
         }
 
         @Test
-        @DisplayName("이름 · 닉네임 · 휴대폰을 수정하고 이메일은 바꾸지 않는다")
+        @DisplayName("이름, 닉네임, 휴대폰을 수정하고 이메일은 바꾸지 않는다")
         void updateProfile_changesProfileButNotEmail() {
             // given
             User user = activeUser();
@@ -113,7 +113,7 @@ class UserTest {
     }
 
     @Nested
-    @DisplayName("이용정지 · 해제")
+    @DisplayName("이용정지, 해제")
     class Suspension {
 
         @Test
@@ -139,7 +139,7 @@ class UserTest {
             User user = activeUser();
             user.suspend("부정 거래", NOW, null);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> user.suspend("재정지", NOW, null))
                     .isInstanceOf(UserException.class)
                     .extracting(e -> ((UserException) e).getErrorCode())
@@ -152,7 +152,7 @@ class UserTest {
             // given
             User user = activeUser();
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> user.suspend("  ", NOW, null))
                     .isInstanceOf(UserException.class)
                     .extracting(e -> ((UserException) e).getErrorCode())
@@ -163,7 +163,7 @@ class UserTest {
         }
 
         @Test
-        @DisplayName("정지된 회원을 사유와 함께 해제하면 정지 시각 · 종료 시각이 지워진다")
+        @DisplayName("정지된 회원을 사유와 함께 해제하면 정지 시각, 종료 시각이 지워진다")
         void activate_whenSuspended_activates() {
             // given
             User user = activeUser();
@@ -181,7 +181,7 @@ class UserTest {
         }
 
         @Test
-        @DisplayName("기간 정지는 종료 시각부터 만료, 영구 정지(종료 시각 없음) · 정상 회원은 만료되지 않는다")
+        @DisplayName("기간 정지는 종료 시각부터 만료, 영구 정지(종료 시각 없음), 정상 회원은 만료되지 않는다")
         void isSuspensionExpired() {
             // given
             User sevenDays = activeUser();
@@ -189,7 +189,7 @@ class UserTest {
             User permanent = activeUser();
             permanent.suspend("부정 거래", NOW, null);
 
-            // when · then
+            // when, then
             assertThat(sevenDays.getSuspendedUntil()).isEqualTo(NOW.plusDays(7));
             assertThat(sevenDays.isSuspensionExpired(NOW.plusDays(7).minusNanos(1000))).isFalse();
             assertThat(sevenDays.isSuspensionExpired(NOW.plusDays(7))).isTrue();
@@ -203,7 +203,7 @@ class UserTest {
             // given
             User user = activeUser();
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> user.activate("해제"))
                     .isInstanceOf(UserException.class)
                     .extracting(e -> ((UserException) e).getErrorCode())
@@ -217,7 +217,7 @@ class UserTest {
             User user = activeUser();
             user.suspend("부정 거래", NOW, null);
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> user.activate(""))
                     .isInstanceOf(UserException.class)
                     .extracting(e -> ((UserException) e).getErrorCode())

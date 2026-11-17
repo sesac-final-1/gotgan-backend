@@ -30,7 +30,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-/** 마이페이지 리뷰 관리 조회 — 내가 쓴 리뷰 · 작성 가능한 리뷰 (MySQL 8.4 + Flyway) */
+/** 마이페이지 리뷰 관리 조회 — 내가 쓴 리뷰, 작성 가능한 리뷰 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, MyReviewQueryService.class, ReviewImages.class, MyReviewQueryServiceIntegrationTest.FixedClock.class })
@@ -78,12 +78,12 @@ class MyReviewQueryServiceIntegrationTest {
     class ListMine {
 
         @Test
-        @DisplayName("내 리뷰만 최신 작성순 — 삭제한 리뷰는 빠지고 블라인드 · 답글은 보인다, 상품 표시값은 자격 스냅샷")
+        @DisplayName("내 리뷰만 최신 작성순 — 삭제한 리뷰는 빠지고 블라인드, 답글은 보인다, 상품 표시값은 자격 스냅샷")
         void listMine_returnsOwnNotDeletedNewestFirst() {
             // given
             Review first = saveReview(BUYER, 5);
             Review blinded = saveReview(BUYER, 1);
-            blinded.blind("욕설 · 비방", NOW);
+            blinded.blind("욕설, 비방", NOW);
             Review deleted = saveReview(BUYER, 3);
             deleted.softDelete(NOW);
             Review replied = saveReview(BUYER, 4);
@@ -135,7 +135,7 @@ class MyReviewQueryServiceIntegrationTest {
     class ListWritable {
 
         @Test
-        @DisplayName("기한 안 · 리뷰 없는 내 자격만 기한 임박순 — 지난 기한 · 쓴 리뷰 · 삭제한 리뷰 · 남의 자격은 빠진다")
+        @DisplayName("기한 안, 리뷰 없는 내 자격만 기한 임박순 — 지난 기한, 쓴 리뷰, 삭제한 리뷰, 남의 자격은 빠진다")
         void listWritable_returnsOpenEligibilitiesBySoonestDeadline() {
             // given
             long user = BUYER + 20;
@@ -170,7 +170,7 @@ class MyReviewQueryServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("내가 쓴 리뷰에 사진 키 · URL 이 순서대로 붙는다 (사진 없는 리뷰는 빈 목록)")
+    @DisplayName("내가 쓴 리뷰에 사진 키, URL 이 순서대로 붙는다 (사진 없는 리뷰는 빈 목록)")
     void listMine_includesImages(@Autowired ReviewImageRepository reviewImageRepository) {
         // given
         long user = BUYER + 40;

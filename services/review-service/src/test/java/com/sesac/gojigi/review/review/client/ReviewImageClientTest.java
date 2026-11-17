@@ -35,7 +35,7 @@ class ReviewImageClientTest {
             .build();
 
     @Test
-    @DisplayName("presigned PUT — 버킷 · 키 주소, 10분 만료, Content-Type · Content-Length 가 서명 헤더에 들어간다")
+    @DisplayName("presigned PUT — 버킷, 키 주소, 10분 만료, Content-Type, Content-Length 가 서명 헤더에 들어간다")
     void presignUpload_validKey_signsTypeAndLength() {
         // given
         ReviewImageClient client = new ReviewImageClient(presigner, BUCKET);
@@ -61,7 +61,7 @@ class ReviewImageClientTest {
         given(failingPresigner.presignPutObject(any(Consumer.class))).willThrow(SdkClientException.create("no credentials"));
         ReviewImageClient client = new ReviewImageClient(failingPresigner, BUCKET);
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> client.presignUpload("reviews/4/a.jpg", "image/jpeg", 1L))
                 .extracting("errorCode").isEqualTo(CommonErrorCode.EXTERNAL_API_ERROR);
     }

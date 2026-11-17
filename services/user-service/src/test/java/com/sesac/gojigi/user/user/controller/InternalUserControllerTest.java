@@ -54,7 +54,7 @@ class InternalUserControllerTest {
     private static final OffsetDateTime JOINED = OffsetDateTime.parse("2026-10-01T09:30:00+09:00");
 
     @Test
-    @DisplayName("목록 — 검색어 · 상태 · 페이지를 그대로 넘기고 PageResponse 로 응답")
+    @DisplayName("목록 — 검색어, 상태, 페이지를 그대로 넘기고 PageResponse 로 응답")
     void search() throws Exception {
         given(adminUserService.search("kim", UserStatus.SUSPENDED, 1, 10)).willReturn(new PageResponse<>(
                 List.of(new AdminUserSummaryResponse(7L, "kim@gotgan.com", "김곳간", null, Grade.SILVER,
@@ -72,7 +72,7 @@ class InternalUserControllerTest {
     }
 
     @Test
-    @DisplayName("목록 — 파라미터 생략 시 전체 · 0페이지 · 20개")
+    @DisplayName("목록 — 파라미터 생략 시 전체, 0페이지, 20개")
     void search_defaults() throws Exception {
         given(adminUserService.search(null, null, 0, 20)).willReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, false));
 
@@ -82,7 +82,7 @@ class InternalUserControllerTest {
     }
 
     @Test
-    @DisplayName("목록 — size 범위 밖 · 음수 page · 없는 status 는 서비스 호출 없이 400 INVALID_INPUT")
+    @DisplayName("목록 — size 범위 밖, 음수 page, 없는 status 는 서비스 호출 없이 400 INVALID_INPUT")
     void search_invalidParams() throws Exception {
         for (String[] param : new String[][] { { "size", "101" }, { "size", "0" }, { "page", "-1" }, { "status", "DORMANT" } }) {
             mockMvc.perform(get("/internal/users").param(param[0], param[1]))
@@ -93,7 +93,7 @@ class InternalUserControllerTest {
     }
 
     @Test
-    @DisplayName("상세 — 200 상세, 없는 회원 · 탈퇴는 404 USER_NOT_FOUND")
+    @DisplayName("상세 — 200 상세, 없는 회원, 탈퇴는 404 USER_NOT_FOUND")
     void detail() throws Exception {
         given(adminUserService.getDetail(7L)).willReturn(suspendedDetail());
         given(adminUserService.getDetail(99L)).willThrow(new UserException(UserErrorCode.USER_NOT_FOUND));
@@ -115,7 +115,7 @@ class InternalUserControllerTest {
     }
 
     @Test
-    @DisplayName("이용정지 — 본문 · 관리자 ID 를 넘기고 바뀐 상세로 응답, 해제는 다른 메시지")
+    @DisplayName("이용정지 — 본문, 관리자 ID 를 넘기고 바뀐 상세로 응답, 해제는 다른 메시지")
     void changeStatus() throws Exception {
         ChangeUserStatusRequest suspend = new ChangeUserStatusRequest(UserStatus.SUSPENDED, "허위 리뷰", 7);
         given(userStatusService.changeStatus(7L, suspend, 1L)).willReturn(suspendedDetail());
@@ -136,7 +136,7 @@ class InternalUserControllerTest {
     }
 
     @Test
-    @DisplayName("이용정지 — 상태 없음 · days 0 · 366 · 없는 상태는 서비스 호출 없이 400 INVALID_INPUT")
+    @DisplayName("이용정지 — 상태 없음, days 0, 366, 없는 상태는 서비스 호출 없이 400 INVALID_INPUT")
     void changeStatus_invalidBody() throws Exception {
         for (String body : new String[] {
                 "{\"reason\":\"사유\"}",
@@ -151,7 +151,7 @@ class InternalUserControllerTest {
     }
 
     @Test
-    @DisplayName("이용정지 — 사유 없음 400 · 이미 정지 409 · 없는 회원 404 는 서비스 에러 코드 그대로")
+    @DisplayName("이용정지 — 사유 없음 400, 이미 정지 409, 없는 회원 404 는 서비스 에러 코드 그대로")
     void changeStatus_serviceErrors() throws Exception {
         given(userStatusService.changeStatus(eq(7L), any(), any()))
                 .willThrow(new UserException(UserErrorCode.USER_STATUS_REASON_REQUIRED),

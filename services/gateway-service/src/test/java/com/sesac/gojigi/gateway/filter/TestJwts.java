@@ -8,7 +8,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
-/** 테스트용 Keycloak 토큰 — realm 매퍼가 넣는 user_id · store_id · roles 모양 그대로 */
+/** 테스트용 Keycloak 토큰 — realm 매퍼가 넣는 user_id, store_id, roles 모양 그대로 */
 final class TestJwts {
 
     private TestJwts() {

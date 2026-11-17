@@ -37,7 +37,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-/** 판매자 리뷰 관리 — 목록 탭 · 평점 요약 · 답글 (MySQL 8.4 + Flyway) */
+/** 판매자 리뷰 관리 — 목록 탭, 평점 요약, 답글 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, SellerReviewService.class, ReviewImages.class, SellerReviewServiceIntegrationTest.FixedClock.class })
@@ -88,7 +88,7 @@ class SellerReviewServiceIntegrationTest {
         // 오래된 것부터 저장 — 목록은 최신순
         shirt5 = saveReview(STORE, SHIRT, "린넨 셔츠", 5);
         shirt1Blinded = saveReview(STORE, SHIRT, "린넨 셔츠", 1);
-        shirt1Blinded.blind("욕설 · 비방", NOW);
+        shirt1Blinded.blind("욕설, 비방", NOW);
         pants2 = saveReview(STORE, PANTS, "와이드 팬츠", 2);
         pants4Replied = saveReview(STORE, PANTS, "와이드 팬츠", 4);
         pants4Replied.reply("감사합니다", NOW);
@@ -102,7 +102,7 @@ class SellerReviewServiceIntegrationTest {
     class Listing {
 
         @Test
-        @DisplayName("전체 — 내 스토어 · 삭제 제외 · 블라인드 포함, 최신순, 작성자 표시 이름 · 상품 스냅샷")
+        @DisplayName("전체 — 내 스토어, 삭제 제외, 블라인드 포함, 최신순, 작성자 표시 이름, 상품 스냅샷")
         void list_all_returnsStoreReviewsNewestFirst() {
             PageResponse<SellerReviewResponse> page = sellerReviewService.list(STORE, SellerReviewTab.ALL, null, 0, 10);
 
@@ -139,11 +139,11 @@ class SellerReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("요약 — 평균 · 분포 · 상품별은 블라인드 · 삭제 제외, 탭 숫자는 목록 조건과 같다")
+    @DisplayName("요약 — 평균, 분포, 상품별은 블라인드, 삭제 제외, 탭 숫자는 목록 조건과 같다")
     void summarize_excludesBlindedFromRatings() {
         SellerReviewSummaryResponse summary = sellerReviewService.summarize(STORE);
 
-        // 보이는 리뷰 5 · 2 · 4 → 평균 3.67
+        // 보이는 리뷰 5, 2, 4 → 평균 3.67
         assertThat(summary.ratedCount()).isEqualTo(3);
         assertThat(summary.averageRating()).isEqualTo(3.67);
         assertThat(summary.distribution()).extracting(RatingCount::rating).containsExactly(5, 4, 3, 2, 1);
@@ -155,7 +155,7 @@ class SellerReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("리뷰가 없는 스토어 — 평균 0 · 분포 모두 0 · 상품 없음")
+    @DisplayName("리뷰가 없는 스토어 — 평균 0, 분포 모두 0, 상품 없음")
     void summarize_noReviews_returnsZeros() {
         SellerReviewSummaryResponse summary = sellerReviewService.summarize(899L);
 
@@ -170,7 +170,7 @@ class SellerReviewServiceIntegrationTest {
     class Reply {
 
         @Test
-        @DisplayName("없으면 작성 · 있으면 덮어쓰기, 태그는 지우고 시각을 남긴다")
+        @DisplayName("없으면 작성, 있으면 덮어쓰기, 태그는 지우고 시각을 남긴다")
         void reply_writesOrOverwrites() {
             ReviewReplyResponse written = sellerReviewService.reply(STORE, pants2.getId(),
                     new ReviewReplyRequest("<b>불편을 드려 죄송합니다.</b>"));
@@ -192,7 +192,7 @@ class SellerReviewServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("없는 · 다른 스토어 리뷰는 404 REVIEW_NOT_FOUND, 태그만 있으면 400 INVALID_INPUT")
+        @DisplayName("없는, 다른 스토어 리뷰는 404 REVIEW_NOT_FOUND, 태그만 있으면 400 INVALID_INPUT")
         void reply_notFoundOrEmpty() {
             assertThatThrownBy(() -> sellerReviewService.reply(STORE, -1L, new ReviewReplyRequest("답글")))
                     .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
@@ -204,7 +204,7 @@ class SellerReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("스토어 정보가 없으면 목록 · 요약 · 답글 모두 403 FORBIDDEN")
+    @DisplayName("스토어 정보가 없으면 목록, 요약, 답글 모두 403 FORBIDDEN")
     void withoutStore_throwsForbidden() {
         assertThatThrownBy(() -> sellerReviewService.list(null, SellerReviewTab.ALL, null, 0, 10))
                 .hasFieldOrPropertyWithValue("errorCode", CommonErrorCode.FORBIDDEN);

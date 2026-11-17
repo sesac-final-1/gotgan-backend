@@ -30,7 +30,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 분기 규칙 — 회원 없음 · 멱등 충돌 · 탈퇴 회원 보상 (잔액 · 동시성은 PointServiceIntegrationTest) */
+/** 분기 규칙 — 회원 없음, 멱등 충돌, 탈퇴 회원 보상 (잔액, 동시성은 PointServiceIntegrationTest) */
 @ExtendWith(MockitoExtension.class)
 class PointServiceTest {
 
@@ -59,7 +59,7 @@ class PointServiceTest {
     }
 
     @Test
-    @DisplayName("없는 회원 · 탈퇴 — 차감 0건이면 회원부터 확인해 USER_NOT_FOUND")
+    @DisplayName("없는 회원, 탈퇴 — 차감 0건이면 회원부터 확인해 USER_NOT_FOUND")
     void use_unknownUser() {
         given(userRepository.deductPoint(9L, 100L)).willReturn(0);
         given(userRepository.findByIdAndDeletedAtIsNull(9L)).willReturn(Optional.empty());
@@ -69,7 +69,7 @@ class PointServiceTest {
     }
 
     @Test
-    @DisplayName("같은 sagaId 인데 회원 · 금액이 다르면 409 POINT_USE_CONFLICT, 차감하지 않음")
+    @DisplayName("같은 sagaId 인데 회원, 금액이 다르면 409 POINT_USE_CONFLICT, 차감하지 않음")
     void use_sameSagaDifferentRequest_conflict() {
         PointHistory existing = PointHistory.use(member(4L), "o", 100L, 900L, "saga-1");
         given(pointHistoryRepository.findByTypeAndRefKey(PointType.USE, "saga-1")).willReturn(Optional.of(existing));

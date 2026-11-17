@@ -68,7 +68,7 @@ class CartControllerTest {
     }
 
     @Test
-    @DisplayName("담기 — 빈 목록 · 수량 0 · 1000 은 400")
+    @DisplayName("담기 — 빈 목록, 수량 0, 1000 은 400")
     void add_invalid() throws Exception {
         for (String body : List.of("""
                 {"items":[]}""", """
@@ -81,7 +81,7 @@ class CartControllerTest {
     }
 
     @Test
-    @DisplayName("삭제 — ?productOptionIds=11,12 로 단건 · 선택 삭제, 없으면 400")
+    @DisplayName("삭제 — ?productOptionIds=11,12 로 단건, 선택 삭제, 없으면 400")
     void remove() throws Exception {
         given(cartService.remove(4L, List.of(11L, 12L))).willReturn(CART);
 
@@ -94,7 +94,7 @@ class CartControllerTest {
     }
 
     @Test
-    @DisplayName("조회 — 스토어 묶음 · 금액, 수량 · 선택 변경 — 둘 다 없거나 범위 밖이면 400, 선택 한꺼번에")
+    @DisplayName("조회 — 스토어 묶음, 금액, 수량, 선택 변경 — 둘 다 없거나 범위 밖이면 400, 선택 한꺼번에")
     void getUpdateCheck() throws Exception {
         com.sesac.gojigi.order.cart.dto.response.CartResponse.Line line = new com.sesac.gojigi.order.cart.dto.response.CartResponse.Line(
                 11L, 101L, "사과", "특", null, 10_000L, 2, true, true, 100, 20_000L);

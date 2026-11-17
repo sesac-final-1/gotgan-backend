@@ -8,7 +8,7 @@ import software.amazon.awssdk.services.sns.SnsClient;
 /**
  * 봉투 JSON 을 SNS order-events 토픽에 발행 (docs/events.md 봉투 형식, raw delivery 라 구독 큐에는 봉투 JSON 그대로).
  * 직접 부르지 않고 EventOutboxService 를 거친다 — 업무 트랜잭션과 함께 아웃박스에 남긴 뒤 커밋 후 보낸다.
- * 토픽 ARN 이 비어 있으면(로컬 · 테스트) 발행하지 않고 로그만. SNS 호출 타임아웃은 AwsConfig(호출 3초 · 시도 1초).
+ * 토픽 ARN 이 비어 있으면(로컬, 테스트) 발행하지 않고 로그만. SNS 호출 타임아웃은 AwsConfig(호출 3초, 시도 1초).
  */
 @Slf4j
 @Component

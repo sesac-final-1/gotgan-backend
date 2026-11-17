@@ -11,7 +11,7 @@ import org.springframework.web.client.HttpClientErrorException;
 /**
  * 다른 서비스 호출 실패를 order 예외로 바꾸는 공통 규칙 (어댑터 3개가 함께 쓴다):
  * - 4xx 거절: 응답 봉투의 code 를 보고 어댑터가 도메인 예외로 바꾸고, 모르는 코드는 EXTERNAL_API_ERROR — 서킷 실패로 세지 않음
- * - 연결 실패 · 타임아웃 · 5xx · 서킷 OPEN: 폴백에서 EXTERNAL_API_ERROR(502) — 결과를 모를 수 있으므로 Saga 는 보상을 시도
+ * - 연결 실패, 타임아웃, 5xx, 서킷 OPEN: 폴백에서 EXTERNAL_API_ERROR(502) — 결과를 모를 수 있으므로 Saga 는 보상을 시도
  */
 @Slf4j
 final class RemoteCalls {
@@ -41,7 +41,7 @@ final class RemoteCalls {
         if (t instanceof CallNotPermittedException) {
             log.warn("{} {} 차단(서킷 OPEN)", target, action);   // 원인 스택은 OPEN 직전 실패 로그에 있다
         } else {
-            log.error("{} {} 실패", target, action, t);           // 연결 실패 · 타임아웃 · 5xx — 스택트레이스 포함 (컨벤션 2-8)
+            log.error("{} {} 실패", target, action, t);           // 연결 실패, 타임아웃, 5xx — 스택트레이스 포함 (컨벤션 2-8)
         }
         return new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, action + "에 실패했습니다.");   // 응답 문구는 화면에 그대로 나간다 — 서비스 이름은 로그에만
     }

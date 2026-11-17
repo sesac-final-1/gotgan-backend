@@ -7,7 +7,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.support.RestClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
 
-/** store 클라이언트 — 공통 RestClient.Builder(연결 2초 · 읽기 3초)를 복제해 주소만 붙인다 (내부 API 는 인증 헤더 없음) */
+/** store 클라이언트 — 공통 RestClient.Builder(연결 2초, 읽기 3초)를 복제해 주소만 붙인다 (내부 API 는 인증 헤더 없음) */
 @Configuration
 public class StoreClientConfig {
 

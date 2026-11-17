@@ -32,7 +32,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-/** admin 신고 처리 내부 API — 조회 · 블라인드 · 해제 (MySQL 8.4 + Flyway) */
+/** admin 신고 처리 내부 API — 조회, 블라인드, 해제 (MySQL 8.4 + Flyway) */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ TestcontainersConfiguration.class, InternalReviewService.class, ReviewImages.class, InternalReviewServiceIntegrationTest.FixedClock.class })
@@ -72,7 +72,7 @@ class InternalReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("조회 — 계약 필드(상품 · 스토어 · 작성자 · 별점 · 본문 · 사진 · 블라인드 · 작성 시각)")
+    @DisplayName("조회 — 계약 필드(상품, 스토어, 작성자, 별점, 본문, 사진, 블라인드, 작성 시각)")
     void get_returnsContractFields() {
         // given
         Review review = saveReview();
@@ -94,7 +94,7 @@ class InternalReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("없는 · 삭제된 리뷰는 조회 · 블라인드 모두 404 REVIEW_NOT_FOUND")
+    @DisplayName("없는, 삭제된 리뷰는 조회, 블라인드 모두 404 REVIEW_NOT_FOUND")
     void notFoundOrDeleted_throwsNotFound() {
         // given
         Review deleted = saveReview();
@@ -102,7 +102,7 @@ class InternalReviewServiceIntegrationTest {
         found.softDelete(NOW);
         reviewRepository.flush();
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> internalReviewService.get(-1L))
                 .hasFieldOrPropertyWithValue("errorCode", ReviewErrorCode.REVIEW_NOT_FOUND);
         assertThatThrownBy(() -> internalReviewService.get(deleted.getId()))
@@ -112,22 +112,22 @@ class InternalReviewServiceIntegrationTest {
     }
 
     @Nested
-    @DisplayName("블라인드 · 해제")
+    @DisplayName("블라인드, 해제")
     class ChangeBlind {
 
         @Test
-        @DisplayName("블라인드하면 사유(앞뒤 공백 제거) · 시각이 저장되고, 해제하면 비운다")
+        @DisplayName("블라인드하면 사유(앞뒤 공백 제거), 시각이 저장되고, 해제하면 비운다")
         void blindThenUnblind() {
             // given
             Review review = saveReview();
 
             // when
             InternalReviewResponse blinded = internalReviewService.changeBlind(review.getId(),
-                    new ReviewBlindRequest(true, "  욕설 · 비방 "));
+                    new ReviewBlindRequest(true, "  욕설, 비방 "));
 
             // then
             assertThat(blinded.blinded()).isTrue();
-            assertThat(blinded.blindReason()).isEqualTo("욕설 · 비방");
+            assertThat(blinded.blindReason()).isEqualTo("욕설, 비방");
             assertThat(reviewRepository.findById(review.getId()).orElseThrow().getBlindedAt()).isEqualTo(NOW);
 
             // when — 해제 사유는 저장하지 않는다
@@ -141,15 +141,15 @@ class InternalReviewServiceIntegrationTest {
         }
 
         @Test
-        @DisplayName("같은 상태 재요청은 그대로 — 블라인드 두 번은 처음 사유 유지, 해제 두 번 · 사유 없는 해제도 성공")
+        @DisplayName("같은 상태 재요청은 그대로 — 블라인드 두 번은 처음 사유 유지, 해제 두 번, 사유 없는 해제도 성공")
         void sameState_isIdempotent() {
             // given
             Review review = saveReview();
-            internalReviewService.changeBlind(review.getId(), new ReviewBlindRequest(true, "욕설 · 비방"));
+            internalReviewService.changeBlind(review.getId(), new ReviewBlindRequest(true, "욕설, 비방"));
 
-            // when · then
+            // when, then
             assertThat(internalReviewService.changeBlind(review.getId(), new ReviewBlindRequest(true, "광고")).blindReason())
-                    .isEqualTo("욕설 · 비방");
+                    .isEqualTo("욕설, 비방");
             assertThat(internalReviewService.changeBlind(review.getId(), new ReviewBlindRequest(false, null)).blinded())
                     .isFalse();
             assertThat(internalReviewService.changeBlind(review.getId(), new ReviewBlindRequest(false, null)).blinded())
@@ -162,7 +162,7 @@ class InternalReviewServiceIntegrationTest {
             // given
             Review review = saveReview();
 
-            // when · then
+            // when, then
             assertThatThrownBy(() -> internalReviewService.changeBlind(review.getId(), new ReviewBlindRequest(true, null)))
                     .hasFieldOrPropertyWithValue("errorCode", CommonErrorCode.INVALID_INPUT);
             assertThatThrownBy(() -> internalReviewService.changeBlind(review.getId(), new ReviewBlindRequest(true, "  ")))
@@ -172,7 +172,7 @@ class InternalReviewServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("회원별 리뷰 — 그 회원 것만 · 삭제 제외 · 블라인드 포함 · 최신순, 상품명은 자격 스냅샷, 없는 회원은 빈 목록")
+    @DisplayName("회원별 리뷰 — 그 회원 것만, 삭제 제외, 블라인드 포함, 최신순, 상품명은 자격 스냅샷, 없는 회원은 빈 목록")
     void listByUser_ownNotDeletedNewestFirst() {
         // given
         long user = 7_301L;
@@ -181,7 +181,7 @@ class InternalReviewServiceIntegrationTest {
         Review deleted = saveReviewOf(user);
         saveReviewOf(user + 1);
         Review b = reviewRepository.findById(blinded.getId()).orElseThrow();
-        b.blind("욕설 · 비방", NOW);
+        b.blind("욕설, 비방", NOW);
         reviewRepository.findById(deleted.getId()).orElseThrow().softDelete(NOW);
         reviewRepository.flush();
         em.clear();
@@ -194,7 +194,7 @@ class InternalReviewServiceIntegrationTest {
                 .containsExactly(blinded.getId(), first.getId());
         InternalUserReviewResponse latest = page.content().getFirst();
         assertThat(latest.blinded()).isTrue();
-        assertThat(latest.blindReason()).isEqualTo("욕설 · 비방");
+        assertThat(latest.blindReason()).isEqualTo("욕설, 비방");
         assertThat(latest.productName()).isEqualTo("린넨 셔츠");
         assertThat(latest.productId()).isEqualTo(101L);
         assertThat(latest.storeId()).isEqualTo(1L);
@@ -220,7 +220,7 @@ class InternalReviewServiceIntegrationTest {
         reviewImageRepository.save(new ReviewImage(managed, "reviews/4/z.jpg", 0));
         reviewImageRepository.flush();
 
-        // when · then
+        // when, then
         assertThat(internalReviewService.get(review.getId()).imageUrls()).singleElement().asString().endsWith("/reviews/4/z.jpg");
     }
 }

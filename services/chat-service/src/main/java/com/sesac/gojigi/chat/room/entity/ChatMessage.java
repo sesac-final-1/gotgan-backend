@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Generated;
 import org.hibernate.generator.EventType;
 
-/** 채팅 메시지 — 수정 · 삭제 없음, 90일 뒤 보관 삭제(ChatRetentionJob). created_at 의 주인은 DB */
+/** 채팅 메시지 — 수정, 삭제 없음, 90일 뒤 보관 삭제(ChatRetentionJob). created_at 의 주인은 DB */
 @Getter
 @Entity
 @Table(name = "chat_message")

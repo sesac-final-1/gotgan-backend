@@ -41,7 +41,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import software.amazon.awssdk.services.sns.model.SnsException;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 실제 MySQL + 실제 커밋 · 롤백 · ShedLock 잠금 위에서 아웃박스 동작 확인 — 테스트 트랜잭션을 끄고 업무 트랜잭션을 직접 연다 */
+/** 실제 MySQL + 실제 커밋, 롤백, ShedLock 잠금 위에서 아웃박스 동작 확인 — 테스트 트랜잭션을 끄고 업무 트랜잭션을 직접 연다 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfiguration.class, SchedulingConfig.class, EventOutboxService.class, EventOutboxIntegrationTest.Config.class})
@@ -84,7 +84,7 @@ class EventOutboxIntegrationTest {
     }
 
     @Test
-    @DisplayName("업무가 커밋되면 직후 한 번 발행하고 행은 SENT · 시도 1회로 남는다")
+    @DisplayName("업무가 커밋되면 직후 한 번 발행하고 행은 SENT, 시도 1회로 남는다")
     void enqueue_whenCommitted_sendsRightAfterCommit() {
         // when
         new TransactionTemplate(transactionManager).executeWithoutResult(s -> {
@@ -129,7 +129,7 @@ class EventOutboxIntegrationTest {
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         tx.executeWithoutResult(s -> service.enqueue("StoreApproved", "3", "evt-dup", NOW, Map.of("storeId", 3)));
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> tx.executeWithoutResult(
                 s -> service.enqueue("StoreApproved", "3", "evt-dup", NOW, Map.of("storeId", 3))))
                 .isInstanceOf(DataIntegrityViolationException.class);

@@ -27,7 +27,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
-/** 포트원 V2 응답 매핑 · 요청 모양 · 오류 변환 (서킷 브레이커 동작은 통합 테스트에서) */
+/** 포트원 V2 응답 매핑, 요청 모양, 오류 변환 (서킷 브레이커 동작은 통합 테스트에서) */
 class PortOneClientAdapterTest {
 
     private static final String BASE = "https://api.portone.io";
@@ -43,7 +43,7 @@ class PortOneClientAdapterTest {
     }
 
     @Test
-    @DisplayName("결제 조회 — 상태 · 금액 · 결제수단 · PG 거래 ID · 결제 시각을 읽고, 인증 헤더는 PortOne {시크릿}")
+    @DisplayName("결제 조회 — 상태, 금액, 결제수단, PG 거래 ID, 결제 시각을 읽고, 인증 헤더는 PortOne {시크릿}")
     void getPayment_mapsPaidPayment() {
         server.expect(requestTo(BASE + "/payments/pay-20261021-000123"))
                 .andExpect(method(HttpMethod.GET))
@@ -76,7 +76,7 @@ class PortOneClientAdapterTest {
     }
 
     @Test
-    @DisplayName("부분 취소 요청은 amount · reason · currentCancellableAmount 를 보내고 취소 ID 를 읽는다")
+    @DisplayName("부분 취소 요청은 amount, reason, currentCancellableAmount 를 보내고 취소 ID 를 읽는다")
     void cancel_sendsPartialCancelBody() {
         server.expect(requestTo(BASE + "/payments/pay-1/cancel"))
                 .andExpect(method(HttpMethod.POST))
@@ -129,7 +129,7 @@ class PortOneClientAdapterTest {
     }
 
     @Test
-    @DisplayName("장애 폴백 — 서킷 OPEN · 연결 실패 모두 EXTERNAL_API_ERROR, 이미 변환된 4xx 거절은 그대로")
+    @DisplayName("장애 폴백 — 서킷 OPEN, 연결 실패 모두 EXTERNAL_API_ERROR, 이미 변환된 4xx 거절은 그대로")
     void unavailable_mapsToExternalApiError() {
         CircuitBreaker open = CircuitBreaker.ofDefaults("portone");
         open.transitionToOpenState();

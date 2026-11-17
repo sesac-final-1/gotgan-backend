@@ -28,7 +28,7 @@ public record InternalUserReviewResponse(
         @Schema(description = "관리자 블라인드 여부", example = "true")
         boolean blinded,
 
-        @Schema(description = "블라인드 사유 (해제면 null)", example = "욕설 · 비방")
+        @Schema(description = "블라인드 사유 (해제면 null)", example = "욕설, 비방")
         String blindReason,
 
         @Schema(description = "작성 시각", example = "2026-10-20T14:00:00+09:00")

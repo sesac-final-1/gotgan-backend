@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
-/** store-service 호출 — 서킷 브레이커 "store", 재시도는 GET 만(승인 · 반려 · 보완요청 · 정지는 재시도 없음 — store.md 공통). 오류는 그대로 전달 */
+/** store-service 호출 — 서킷 브레이커 "store", 재시도는 GET 만(승인, 반려, 보완요청, 정지는 재시도 없음 — store.md 공통). 오류는 그대로 전달 */
 @Component
 @RequiredArgsConstructor
 public class StoreClientAdapter {

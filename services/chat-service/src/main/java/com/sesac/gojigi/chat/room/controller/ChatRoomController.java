@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 1:1 채팅 REST — 게이트웨이 /api/chats/** → chat-service, 로그인한 누구나. 방 단위 권한은 서비스가 (남의 방 404) */
-@Tag(name = "채팅", description = "스토어 톡 · 판매자 운영 상담 · 고객센터 1:1 상담 (docs/api/chat.md)")
+@Tag(name = "채팅", description = "스토어 톡, 판매자 운영 상담, 고객센터 1:1 상담 (docs/api/chat.md)")
 @RestController
 @RequestMapping("/api/chats")
 @RequiredArgsConstructor
@@ -38,8 +38,8 @@ public class ChatRoomController {
     private final ChatRoomService chatRoomService;
 
     @Operation(summary = "방 열기", description = """
-            {type, storeId?, context?: {type, id}} → 처음이면 201 · 있던 방이면 200 (문맥 카드만 추가).
-            403 CHAT_NOT_ALLOWED · 400 CHAT_SELF · INVALID_INPUT(storeId 없음)""")
+            {type, storeId?, context?: {type, id}} → 처음이면 201, 있던 방이면 200 (문맥 카드만 추가).
+            403 CHAT_NOT_ALLOWED, 400 CHAT_SELF, INVALID_INPUT(storeId 없음)""")
     @PostMapping("/rooms")
     public ResponseEntity<ApiResponse<Room>> open(@Parameter(hidden = true) @CurrentUser AuthUser user,
                                                   @Valid @RequestBody ChatRequests.OpenRoom request) {

@@ -19,7 +19,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
-/** order 구매자 주문 통계 응답 매핑 · 요청 경로 · 오류 변환 (서킷 브레이커 · 재시도는 AOP 라 여기서 보지 않음) */
+/** order 구매자 주문 통계 응답 매핑, 요청 경로, 오류 변환 (서킷 브레이커, 재시도는 AOP 라 여기서 보지 않음) */
 class OrderClientAdapterTest {
 
     private static final String BASE_URL = "http://order-service:8084";
@@ -58,7 +58,7 @@ class OrderClientAdapterTest {
     }
 
     @Test
-    @DisplayName("폴백 — 장애 · 서킷 OPEN 은 502, 이미 바꾼 4xx 는 그대로")
+    @DisplayName("폴백 — 장애, 서킷 OPEN 은 502, 이미 바꾼 4xx 는 그대로")
     void fallback() {
         BusinessException rejected = new BusinessException(CommonErrorCode.EXTERNAL_API_ERROR, "거절");
 

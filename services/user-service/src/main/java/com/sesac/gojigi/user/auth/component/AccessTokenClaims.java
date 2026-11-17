@@ -11,13 +11,13 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Access Token 의 필요한 클레임만 꺼낸다 — sub(Keycloak 사용자 ID) · user_id · store_id · roles · email · name(소셜 첫 로그인 회원 생성용).
+ * Access Token 의 필요한 클레임만 꺼낸다 — sub(Keycloak 사용자 ID), user_id, store_id, roles, email, name(소셜 첫 로그인 회원 생성용).
  * 서명 검증은 하지 않는다: user-service 가 방금 Keycloak 에서 클러스터 내부로 직접 받은 토큰이라서다.
  * 브라우저가 보낸 토큰은 게이트웨이가 JWKS 로 검증한다 (이 클래스를 그 용도로 쓰면 안 된다).
  */
 public record AccessTokenClaims(String keycloakId, Long userId, Long storeId, List<String> roles, String email, String name) {
 
-    /** 서비스가 쓰는 역할만 — default-roles-gotgan · offline_access · uma_authorization 같은 Keycloak 내부 역할 제외 */
+    /** 서비스가 쓰는 역할만 — default-roles-gotgan, offline_access, uma_authorization 같은 Keycloak 내부 역할 제외 */
     private static final Set<String> SERVICE_ROLES = Set.of("BUYER", "SELLER", "ADMIN");
 
     public static AccessTokenClaims parse(String accessToken, JsonMapper jsonMapper) {

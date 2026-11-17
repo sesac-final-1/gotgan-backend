@@ -14,7 +14,7 @@ public record StockReserveRequest(
         @NotBlank(message = "sagaId 가 없습니다.") @Size(max = 64, message = "sagaId 는 64자 이하여야 합니다.")
         String sagaId,
 
-        @Schema(description = "예약할 옵션 · 수량 — 전부 예약하거나 하나도 안 함")
+        @Schema(description = "예약할 옵션, 수량 — 전부 예약하거나 하나도 안 함")
         @NotEmpty(message = "예약할 상품이 없습니다.")
         List<@Valid @NotNull StockItem> items) {
 }

@@ -2,7 +2,7 @@
 #   docker build -f services/gateway-service/Dockerfile .
 # ===== 1단계: 빌드 (로컬 JDK 없이도, CI 어디서든 같은 결과) =====
 FROM eclipse-temurin:21-jdk AS builder
-# gateway 는 WebFlux 라 libs/common-web 은 쓰지 않고 libs/common-logging 만 쓴다 — includeBuild 상대 경로가 맞도록 저장소 구조(/app/libs · /app/services/<서비스>)를 유지한다
+# gateway 는 WebFlux 라 libs/common-web 은 쓰지 않고 libs/common-logging 만 쓴다 — includeBuild 상대 경로가 맞도록 저장소 구조(/app/libs, /app/services/<서비스>)를 유지한다
 WORKDIR /app/services/gateway-service
 COPY libs/common-logging/settings.gradle libs/common-logging/build.gradle /app/libs/common-logging/
 COPY services/gateway-service/gradlew services/gateway-service/settings.gradle services/gateway-service/build.gradle services/gateway-service/gradle.properties ./
@@ -25,7 +25,7 @@ COPY --from=builder /app/services/gateway-service/extracted/snapshot-dependencie
 # 자주 바뀌는 코드 레이어는 맨 마지막
 COPY --from=builder /app/services/gateway-service/extracted/application/ ./
 USER spring
-# 컨테이너 기본 시간대는 UTC — DB · JDBC 와 맞춰 Asia/Seoul 로 고정 (컨벤션 3-5)
+# 컨테이너 기본 시간대는 UTC — DB, JDBC 와 맞춰 Asia/Seoul 로 고정 (컨벤션 3-5)
 ENV TZ=Asia/Seoul
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080

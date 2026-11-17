@@ -19,7 +19,7 @@ import java.util.Set;
 
 /**
  * 입점 신청 — 필드 이름은 storedb 컬럼명의 camelCase, 정산 계좌만 StoreApproved 와 같은 객체 (docs/api/store.md 2절).
- * 길이는 컬럼 크기와 같다. 서류 개수 · 형식은 서비스가 APPLY_DOCUMENT_INVALID 로 검사한다.
+ * 길이는 컬럼 크기와 같다. 서류 개수, 형식은 서비스가 APPLY_DOCUMENT_INVALID 로 검사한다.
  */
 public record SellerApplyRequest(
         @Schema(description = "사업자 구분", example = "INDIVIDUAL")
@@ -62,7 +62,7 @@ public record SellerApplyRequest(
         @Size(max = 255, message = "사업장 주소는 255자 이하로 입력해 주세요.")
         String businessAddress,
 
-        @Schema(description = "스토어명 — 공백 · 대소문자를 무시하고 중복 검사", example = "곳간상회")
+        @Schema(description = "스토어명 — 공백, 대소문자를 무시하고 중복 검사", example = "곳간상회")
         @NotBlank(message = "스토어명을 입력해 주세요.")
         @Size(max = 50, message = "스토어명은 50자 이하로 입력해 주세요.")
         String storeName,
@@ -70,7 +70,7 @@ public record SellerApplyRequest(
         @Schema(description = "스토어 주소 /store/{slug} — 승인 후 변경 불가", example = "gotgan-store")
         @NotBlank(message = "스토어 주소를 입력해 주세요.")
         @Pattern(regexp = "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$",
-                message = "스토어 주소는 영소문자 · 숫자 · - 로 3~30자이며 - 로 시작하거나 끝날 수 없습니다.")
+                message = "스토어 주소는 영소문자, 숫자, - 로 3~30자이며 - 로 시작하거나 끝날 수 없습니다.")
         String slug,
 
         @Schema(description = "희망 상위 카테고리 ID — 존재 여부는 store 가 확인하지 않음 (심사 참고용)", example = "1")
@@ -94,7 +94,7 @@ public record SellerApplyRequest(
         @Size(max = 255, message = "운영 채널은 255자 이하로 입력해 주세요.")
         String salesChannel,
 
-        @Schema(description = "입점 서류 — presign 으로 올린 키. 사업자등록증 · 통신판매업 신고증 · 통장 사본 각 1 + 상품 사진 3~10")
+        @Schema(description = "입점 서류 — presign 으로 올린 키. 사업자등록증, 통신판매업 신고증, 통장 사본 각 1 + 상품 사진 3~10")
         @NotNull(message = "입점 서류를 올려 주세요.")
         List<@Valid @NotNull DocumentItem> documents,
 
@@ -108,7 +108,7 @@ public record SellerApplyRequest(
         @Valid
         Agreements agreements) {
 
-    /** 스토어 주소로 쓸 수 없는 단어 — 화면 경로 · 관리 기능과 겹침 (스펙 STR-01) */
+    /** 스토어 주소로 쓸 수 없는 단어 — 화면 경로, 관리 기능과 겹침 (스펙 STR-01) */
     static final Set<String> RESERVED_SLUGS = Set.of("admin", "seller", "new", "api", "me");
 
     @Schema(hidden = true)

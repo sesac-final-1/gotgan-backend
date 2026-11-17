@@ -86,7 +86,7 @@ class ApplicationReviewServiceTest {
 
     @ParameterizedTest
     @CsvSource({"PENDING", "SUPPLEMENT"})
-    @DisplayName("승인하면 신청서 값으로 스토어를 만들고 스토어 · 신청 이력을 남긴 뒤 storeId · 승인 시각을 돌려준다")
+    @DisplayName("승인하면 신청서 값으로 스토어를 만들고 스토어, 신청 이력을 남긴 뒤 storeId, 승인 시각을 돌려준다")
     void approve_whenPendingOrSupplement_createsStoreAndHistories(ApplicationStatus from) {
         // given
         StoreApplication application = application(27L, from);
@@ -140,7 +140,7 @@ class ApplicationReviewServiceTest {
         // given
         given(storeApplicationRepository.findById(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.approve(99L), ApplyErrorCode.APPLY_NOT_FOUND);
     }
 
@@ -150,7 +150,7 @@ class ApplicationReviewServiceTest {
         // given
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application(27L, ApplicationStatus.REJECTED)));
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.approve(27L), ApplyErrorCode.APPLY_INVALID_STATUS);
         verify(storeRepository, never()).saveAndFlush(any());
     }
@@ -162,7 +162,7 @@ class ApplicationReviewServiceTest {
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application(27L, ApplicationStatus.PENDING)));
         given(storeRepository.existsByUserId(4L)).willReturn(true);
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.approve(27L), ApplyErrorCode.APPLY_STORE_ALREADY_EXISTS);
         verify(storeRepository, never()).saveAndFlush(any());
     }
@@ -174,18 +174,18 @@ class ApplicationReviewServiceTest {
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application(27L, ApplicationStatus.PENDING)));
         given(storeRepository.existsBySlug("gotgan")).willReturn(true);
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.approve(27L), ApplyErrorCode.APPLY_SLUG_DUPLICATED);
     }
 
     @Test
-    @DisplayName("스토어명이 공백 · 대소문자만 다른 스토어와 겹치면 409 APPLY_STORE_NAME_DUPLICATED")
+    @DisplayName("스토어명이 공백, 대소문자만 다른 스토어와 겹치면 409 APPLY_STORE_NAME_DUPLICATED")
     void approve_whenStoreNameTaken_throwsStoreNameDuplicated() {
         // given
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application(27L, ApplicationStatus.PENDING)));
         given(storeRepository.existsByNormalizedStoreName("곳간상회")).willReturn(true);
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.approve(27L), ApplyErrorCode.APPLY_STORE_NAME_DUPLICATED);
     }
 
@@ -198,7 +198,7 @@ class ApplicationReviewServiceTest {
         willThrow(new ObjectOptimisticLockingFailureException(StoreApplication.class, 27L))
                 .given(storeApplicationRepository).saveAndFlush(application);
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.approve(27L), ApplyErrorCode.APPLY_INVALID_STATUS);
         verify(storeRepository, never()).saveAndFlush(any());
         verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
@@ -217,7 +217,7 @@ class ApplicationReviewServiceTest {
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application(27L, ApplicationStatus.PENDING)));
         given(storeRepository.saveAndFlush(any(Store.class))).willThrow(duplicate(constraint));
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.approve(27L), expected);
         verify(storeStatusHistoryRepository, never()).save(any());
         verify(applicationHistoryRepository, never()).save(any());
@@ -230,13 +230,13 @@ class ApplicationReviewServiceTest {
         // given
         DataIntegrityViolationException e = duplicate("store.fk_store_store_application");
 
-        // when · then
+        // when, then
         assertThatThrownBy(() -> ApplicationReviewService.duplicateCode(e)).isSameAs(e);
     }
 
     @ParameterizedTest
     @CsvSource({"PENDING", "SUPPLEMENT"})
-    @DisplayName("반려하면 신청을 REJECTED · 사유 저장 · 이력(사유 포함)을 남기고 StoreApplicationRejected 를 아웃박스에 남긴다")
+    @DisplayName("반려하면 신청을 REJECTED, 사유 저장, 이력(사유 포함)을 남기고 StoreApplicationRejected 를 아웃박스에 남긴다")
     void reject_whenPendingOrSupplement_rejectsAndEnqueuesEvent(ApplicationStatus from) {
         // given
         StoreApplication application = application(27L, from);
@@ -269,13 +269,13 @@ class ApplicationReviewServiceTest {
 
     @ParameterizedTest
     @CsvSource({"APPROVED", "REJECTED"})
-    @DisplayName("이미 승인 · 반려된 신청을 반려하면 409 APPLY_INVALID_STATUS 이고 이력 · 이벤트를 남기지 않는다")
+    @DisplayName("이미 승인, 반려된 신청을 반려하면 409 APPLY_INVALID_STATUS 이고 이력, 이벤트를 남기지 않는다")
     void reject_whenAlreadyDecided_throwsInvalidStatus(ApplicationStatus from) {
         // given
         StoreApplication application = application(27L, from);
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.reject(27L, "사유"), ApplyErrorCode.APPLY_INVALID_STATUS);
         assertThat(application.getStatus()).isEqualTo(from);
         verify(applicationHistoryRepository, never()).save(any());
@@ -283,7 +283,7 @@ class ApplicationReviewServiceTest {
     }
 
     @Test
-    @DisplayName("반려 저장 순간 다른 관리자가 먼저 처리해 버전이 달라지면 409 APPLY_INVALID_STATUS 이고 이력 · 이벤트를 남기지 않는다")
+    @DisplayName("반려 저장 순간 다른 관리자가 먼저 처리해 버전이 달라지면 409 APPLY_INVALID_STATUS 이고 이력, 이벤트를 남기지 않는다")
     void reject_whenVersionConflict_throwsInvalidStatus() {
         // given
         StoreApplication application = application(27L, ApplicationStatus.PENDING);
@@ -291,7 +291,7 @@ class ApplicationReviewServiceTest {
         willThrow(new ObjectOptimisticLockingFailureException(StoreApplication.class, 27L))
                 .given(storeApplicationRepository).saveAndFlush(application);
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.reject(27L, "사유"), ApplyErrorCode.APPLY_INVALID_STATUS);
         verify(applicationHistoryRepository, never()).save(any());
         verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
@@ -303,12 +303,12 @@ class ApplicationReviewServiceTest {
         // given
         given(storeApplicationRepository.findById(99L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.reject(99L, "사유"), ApplyErrorCode.APPLY_NOT_FOUND);
     }
 
     @Test
-    @DisplayName("보완요청하면 신청을 SUPPLEMENT · 메시지 저장 · 이력을 남기고, 기한 +7일 · 서류 한글 이름으로 이벤트를 아웃박스에 남긴다")
+    @DisplayName("보완요청하면 신청을 SUPPLEMENT, 메시지 저장, 이력을 남기고, 기한 +7일, 서류 한글 이름으로 이벤트를 아웃박스에 남긴다")
     void requestSupplement_whenPending_supplementsAndEnqueuesEvent() {
         // given
         StoreApplication application = application(27L, ApplicationStatus.PENDING);
@@ -377,13 +377,13 @@ class ApplicationReviewServiceTest {
 
     @ParameterizedTest
     @CsvSource({"SUPPLEMENT", "APPROVED", "REJECTED"})
-    @DisplayName("심사대기가 아닌 신청(보완요청 중 · 승인 · 반려)에 보완요청하면 409 APPLY_INVALID_STATUS 이고 이력 · 이벤트를 남기지 않는다")
+    @DisplayName("심사대기가 아닌 신청(보완요청 중, 승인, 반려)에 보완요청하면 409 APPLY_INVALID_STATUS 이고 이력, 이벤트를 남기지 않는다")
     void requestSupplement_whenNotPending_throwsInvalidStatus(ApplicationStatus from) {
         // given
         StoreApplication application = application(27L, from);
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(application));
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.requestSupplement(27L, "보완", List.of()), ApplyErrorCode.APPLY_INVALID_STATUS);
         assertThat(application.getStatus()).isEqualTo(from);
         verify(applicationHistoryRepository, never()).save(any());
@@ -393,7 +393,7 @@ class ApplicationReviewServiceTest {
     @Test
     @DisplayName("보완 서류가 중복되면 400 INVALID_INPUT — 신청을 조회하지 않는다")
     void requestSupplement_whenDocsDuplicated_throwsInvalidInput() {
-        // when · then
+        // when, then
         assertThatThrownBy(() -> service.requestSupplement(27L, "보완", List.of(DocType.BANK_COPY, DocType.BANK_COPY)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -411,7 +411,7 @@ class ApplicationReviewServiceTest {
         willThrow(new ObjectOptimisticLockingFailureException(StoreApplication.class, 27L))
                 .given(storeApplicationRepository).saveAndFlush(application);
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.requestSupplement(27L, "보완", List.of()), ApplyErrorCode.APPLY_INVALID_STATUS);
         assertErrorCode(() -> service.requestSupplement(99L, "보완", List.of()), ApplyErrorCode.APPLY_NOT_FOUND);
         verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
@@ -420,7 +420,7 @@ class ApplicationReviewServiceTest {
     @Test
     @DisplayName("반려 eventId 는 신청 ID 로 정해지고 같은 신청의 승인 eventId 와 다르다")
     void applicationEventId_whenRejected_differsFromApproved() {
-        // when · then
+        // when, then
         assertThat(ApplicationReviewService.applicationEventId("StoreApplicationRejected", 27L))
                 .isEqualTo(ApplicationReviewService.applicationEventId("StoreApplicationRejected", 27L))
                 .isNotEqualTo(ApplicationReviewService.storeApprovedEventId(27L));
@@ -429,7 +429,7 @@ class ApplicationReviewServiceTest {
     @Test
     @DisplayName("StoreApproved eventId 는 신청 ID 로 정해지는 UUID — 같은 신청은 항상 같은 값, 다른 신청은 다른 값")
     void storeApprovedEventId_whenSameApplication_isStable() {
-        // when · then
+        // when, then
         assertThat(ApplicationReviewService.storeApprovedEventId(27L))
                 .isEqualTo(ApplicationReviewService.storeApprovedEventId(27L))
                 .isNotEqualTo(ApplicationReviewService.storeApprovedEventId(28L));
@@ -439,7 +439,7 @@ class ApplicationReviewServiceTest {
     // ── 보완 기한 지난 신청 자동 반려 (7-1절) ──
 
     @Test
-    @DisplayName("자동 반려 — 기한 정각(보완요청 + 7일)이면 반려 · 이력 SYSTEM · 관리자 반려와 같은 이벤트(신청 ID 고정 eventId · 고정 사유)")
+    @DisplayName("자동 반려 — 기한 정각(보완요청 + 7일)이면 반려, 이력 SYSTEM, 관리자 반려와 같은 이벤트(신청 ID 고정 eventId, 고정 사유)")
     void rejectExpiredSupplement_whenDue_rejectsAsSystem() {
         // given
         StoreApplication application = supplementedAt(NOW.minusDays(7));
@@ -469,14 +469,14 @@ class ApplicationReviewServiceTest {
     }
 
     @Test
-    @DisplayName("자동 반려 — 기한 1초 전 · 이미 재제출(PENDING) · 없는 신청은 건너뛴다(false), 저장 · 이벤트 없음")
+    @DisplayName("자동 반려 — 기한 1초 전, 이미 재제출(PENDING), 없는 신청은 건너뛴다(false), 저장, 이벤트 없음")
     void rejectExpiredSupplement_whenNotTarget_skips() {
         // given
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplementedAt(NOW.minusDays(7).plusSeconds(1))));
         given(storeApplicationRepository.findById(28L)).willReturn(Optional.of(application(28L, ApplicationStatus.PENDING)));
         given(storeApplicationRepository.findById(29L)).willReturn(Optional.empty());
 
-        // when · then
+        // when, then
         assertThat(service.rejectExpiredSupplement(27L)).isFalse();
         assertThat(service.rejectExpiredSupplement(28L)).isFalse();
         assertThat(service.rejectExpiredSupplement(29L)).isFalse();
@@ -485,7 +485,7 @@ class ApplicationReviewServiceTest {
     }
 
     @Test
-    @DisplayName("자동 반려 저장 순간 재제출이 먼저 저장됐으면(@Version) 409 — 이력 · 이벤트 없음(스케줄러가 건너뜀)")
+    @DisplayName("자동 반려 저장 순간 재제출이 먼저 저장됐으면(@Version) 409 — 이력, 이벤트 없음(스케줄러가 건너뜀)")
     void rejectExpiredSupplement_whenVersionConflict_throwsInvalidStatus() {
         // given
         StoreApplication application = supplementedAt(NOW.minusDays(8));
@@ -493,7 +493,7 @@ class ApplicationReviewServiceTest {
         willThrow(new ObjectOptimisticLockingFailureException(StoreApplication.class, 27L))
                 .given(storeApplicationRepository).saveAndFlush(application);
 
-        // when · then
+        // when, then
         assertErrorCode(() -> service.rejectExpiredSupplement(27L), ApplyErrorCode.APPLY_INVALID_STATUS);
         verify(applicationHistoryRepository, never()).save(any());
         verify(eventOutboxService, never()).enqueue(anyString(), anyString(), anyString(), any(), any());
@@ -508,7 +508,7 @@ class ApplicationReviewServiceTest {
                 Clock.fixed(NOW.atZone(KST).toInstant(), KST), new SupplementDeadline(Duration.ofMinutes(3)));
         given(storeApplicationRepository.findById(27L)).willReturn(Optional.of(supplementedAt(NOW.minusMinutes(3))));
 
-        // when · then
+        // when, then
         assertThat(demo.rejectExpiredSupplement(27L)).isTrue();
     }
 

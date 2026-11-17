@@ -16,7 +16,7 @@ import software.amazon.awssdk.services.sns.SnsClient;
 @Configuration
 public class AwsConfig {
 
-    /** 입점 서류 존재 · 형식 확인(HeadObject — IRSA s3:GetObject 로 허용). 신청 요청 경로라 호출 전체 3초 · 시도 1초로 끊는다 */
+    /** 입점 서류 존재, 형식 확인(HeadObject — IRSA s3:GetObject 로 허용). 신청 요청 경로라 호출 전체 3초, 시도 1초로 끊는다 */
     @Bean
     public S3Client s3Client(@Value("${AWS_REGION:ap-northeast-2}") String region) {
         return S3Client.builder().region(Region.of(region))
@@ -31,7 +31,7 @@ public class AwsConfig {
     }
 
     /**
-     * 이벤트 발행 (store-events, IRSA sns:Publish). 커밋 직후 발행은 요청 스레드라 호출 전체 1초 · 시도 500ms 로 끊는다 —
+     * 이벤트 발행 (store-events, IRSA sns:Publish). 커밋 직후 발행은 요청 스레드라 호출 전체 1초, 시도 500ms 로 끊는다 —
      * 호출자 admin 의 read-timeout 3초 안에 응답이 들어가게(타임아웃 예산). 늦으면 행이 NEW 로 남아 발행기가 다시 보낸다
      */
     @Bean

@@ -43,7 +43,7 @@ import org.springframework.test.context.transaction.TestTransaction;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** 실제 MySQL + Flyway + 시연 시드 위에서 잠금 조회 · 상태 · 이력 저장 · 커밋 뒤 StoreStatusChanged 발행 확인 */
+/** 실제 MySQL + Flyway + 시연 시드 위에서 잠금 조회, 상태, 이력 저장, 커밋 뒤 StoreStatusChanged 발행 확인 */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({TestcontainersConfiguration.class, StoreStatusService.class, StoreQueryService.class, ImageUrls.class, EventOutboxService.class,
@@ -94,13 +94,13 @@ class StoreStatusServiceIntegrationTest {
         // given
         jdbcTemplate.update("UPDATE store SET deleted_at = NOW(6) WHERE store_id = 2");
 
-        // when · then
+        // when, then
         assertThat(storeRepository.findForUpdate(1L)).isPresent();
         assertThat(storeRepository.findForUpdate(2L)).isEmpty();
     }
 
     @Test
-    @DisplayName("이미 정지된 시드 스토어 15 를 다시 정지하면 이력 · 아웃박스 행이 생기지 않는다")
+    @DisplayName("이미 정지된 시드 스토어 15 를 다시 정지하면 이력, 아웃박스 행이 생기지 않는다")
     void changeByAdmin_whenAlreadySuspended_writesNothing() {
         // given
         long historiesBefore = storeStatusHistoryRepository.count();
@@ -114,7 +114,7 @@ class StoreStatusServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("정지가 커밋되면 상태 · 사유 · 이력이 저장되고 StoreStatusChanged 봉투를 한 번 보낸다 — payload {storeId, status}")
+    @DisplayName("정지가 커밋되면 상태, 사유, 이력이 저장되고 StoreStatusChanged 봉투를 한 번 보낸다 — payload {storeId, status}")
     void changeByAdmin_whenCommitted_persistsAndPublishesEnvelope() {
         // given
         InternalStoreResponse response = service.changeByAdmin(1L, StoreStatus.SUSPENDED, "허위 광고 신고 3건 확인");
@@ -161,9 +161,9 @@ class StoreStatusServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("정지 스토어 15 폐점이 커밋되면 CLOSED · 사유 비움 · 이력(SELLER), StoreStatusChanged{CLOSED} 봉투 1회 — 다시 폐점은 처음 시각 그대로")
+    @DisplayName("정지 스토어 15 폐점이 커밋되면 CLOSED, 사유 비움, 이력(SELLER), StoreStatusChanged{CLOSED} 봉투 1회 — 다시 폐점은 처음 시각 그대로")
     void closeBySeller_whenCommitted_closesAndPublishesClosed() {
-        // given — order · settlement 확인 통과
+        // given — order, settlement 확인 통과
         given(orderClientAdapter.inProgressCount(15L)).willReturn(0L);
         given(settlementClientAdapter.outstanding(15L)).willReturn(new SettlementOutstandingResponse(15L, 0, 0, 0, true));
         StoreCloseResponse response = service.closeBySeller(15L);
@@ -192,7 +192,7 @@ class StoreStatusServiceIntegrationTest {
             StoreCloseResponse again = service.closeBySeller(15L);   // 이미 폐점 — 다른 서비스 확인 없이 처음 시각
             assertThat(again.closedAt()).isNotNull();
             verify(orderClientAdapter).inProgressCount(15L);         // 처음 한 번만
-        } finally { // 커밋된 변경은 시드 값(정지 · 사유 · 정지 이력까지)으로 되돌린다
+        } finally { // 커밋된 변경은 시드 값(정지, 사유, 정지 이력까지)으로 되돌린다
             jdbcTemplate.update("DELETE FROM outbox_event");
             jdbcTemplate.update("DELETE FROM store_status_history WHERE store_id = 15 AND to_status = 'CLOSED'");
             jdbcTemplate.update("UPDATE store SET status = 'SUSPENDED', status_reason = '반품 미처리 3건 — 처리 완료 후 해제' WHERE store_id = 15");
