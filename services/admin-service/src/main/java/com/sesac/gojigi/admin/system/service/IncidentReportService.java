@@ -198,7 +198,8 @@ public class IncidentReportService {
 
     // ── 2) 근거 (파드 · 배포 · 부하테스트 · 장애 주입) ────────────────
 
-    record PodLife(String pod, String service, long createdMs, long lastSeenMs) {
+    /** alive = 기간 끝에도 있는 파드. lastSeenMs = 마지막으로 보인 시각(1분 해상도) */
+    record PodLife(String pod, String service, long createdMs, long lastSeenMs, boolean alive) {
     }
 
     record LoadTest(String id, long startMs, long endMs, int peakVus) {
@@ -208,19 +209,22 @@ public class IncidentReportService {
     }
 
     record Context(Metrics metrics, List<PodLife> pods, Set<String> oomPods, List<Rollout> rollouts, List<LoadTest> loadTests,
-                   List<ChaosEvent> chaos, long medianRequests, long stopMs) {
+                   List<ChaosEvent> chaos, long medianRequests) {
     }
 
     private Context context(Instant start, Instant stop, Duration bucket, Metrics m) {
         String r = "[" + Duration.between(start, stop).toSeconds() + "s]";
-        String sub = "[" + Duration.between(start, stop).toSeconds() + "s:" + bucket.toSeconds() + "s]";
+        // 사라진 시각은 1분 해상도로(구간 크기로 하면 5분 · 1시간 단위로 뭉개져 다른 사건과 섞인다)
+        String sub = "[" + Duration.between(start, stop).toSeconds() + "s:" + Math.min(bucket.toSeconds(), 60) + "s]";
         Map<String, Double> created = byLabel(prometheus.vector("last_over_time(kube_pod_created{" + NS + "}" + r + ")", stop), "pod");
         Map<String, Double> lastSeen = byLabel(prometheus.vector("max_over_time(timestamp(kube_pod_created{" + NS + "})" + sub + ")", stop), "pod");
+        Set<String> alive = byLabel(prometheus.vector("kube_pod_created{" + NS + "}", stop), "pod").keySet();
         List<PodLife> pods = new ArrayList<>();
         created.forEach((pod, c) -> {
             String service = serviceOf(pod);
             if (service != null) {
-                pods.add(new PodLife(pod, service, Math.round(c * 1000), Math.round(lastSeen.getOrDefault(pod, 0.0) * 1000)));
+                pods.add(new PodLife(pod, service, Math.round(c * 1000), Math.round(lastSeen.getOrDefault(pod, 0.0) * 1000),
+                        alive.contains(pod)));
             }
         });
         Set<String> oom = byLabel(prometheus.vector("max by (pod)(max_over_time(kube_pod_container_status_last_terminated_reason{" + NS
@@ -242,7 +246,7 @@ public class IncidentReportService {
                 .sorted(Comparator.comparingLong(LoadTest::startMs)).toList();
         List<ChaosEvent> chaos = chaosEvents.findByKilledAtBetweenOrderByKilledAtAsc(LocalDateTime.ofInstant(start, KST),
                 LocalDateTime.ofInstant(stop, KST));
-        return new Context(m, pods, oom, rollouts, loadTests, chaos, median(m), stop.toEpochMilli());
+        return new Context(m, pods, oom, rollouts, loadTests, chaos, median(m));
     }
 
     private static Map<String, Double> byLabel(Optional<List<Series>> series, String label) {
@@ -325,6 +329,8 @@ public class IncidentReportService {
         long serverErrors = in.stream().mapToLong(Bucket::serverErrors).sum();
         long suspicious = in.stream().mapToLong(Bucket::suspicious).sum();
         long rateLimited = in.stream().mapToLong(Bucket::rateLimited).sum();
+        long requests = in.stream().mapToLong(Bucket::requests).sum();
+        long peak = in.stream().mapToLong(Bucket::requests).max().orElse(0);
         List<String> services = byService.entrySet().stream().sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                 .map(Map.Entry::getKey).toList();
         List<Cause> causes = causes(kind, s - b, e + b, in, ctx, b);
@@ -333,18 +339,18 @@ public class IncidentReportService {
                 ? loki.lines(LokiClient.ERROR_QUERY, Instant.ofEpochMilli(s - b), Instant.ofEpochMilli(e), ISSUE_LOG_LIMIT).stream()
                         .map(l -> new ErrorItem("LOG", l.timestampMs(), l.service(), l.level(), l.message(), null, l.traceId())).toList()
                 : List.of();
-        return new Issue(no, kind, s, e, services, serverErrors, suspicious, rateLimited, intended,
-                sentence(kind, s, e, services, serverErrors, suspicious, rateLimited, causes, ctx), causes, logs);
+        return new Issue(no, kind, s, e, services, serverErrors, suspicious, rateLimited, requests, intended,
+                sentence(kind, s, e, services, new long[] {serverErrors, suspicious, rateLimited, peak}, causes), causes, logs);
     }
 
-    /** 원인 후보 — 시간대(앞뒤 1구간 여유)가 겹치는 근거를 모두 모은다. 앞이 주 원인 */
+    /** 원인 후보 — 시간대(앞뒤 1구간 여유)가 겹치는 근거를 모두 모은다. 앞이 주 원인, 같은 종류는 한 줄로 합친다 */
     private static List<Cause> causes(String kind, long from, long to, List<Bucket> in, Context ctx, long b) {
         List<Cause> causes = new ArrayList<>();
-        Set<String> chaosPods = new LinkedHashSet<>();
+        // 장애 주입으로 지운 파드는 기간 전체에서 모은다 — 사라진 시각이 다음 이슈 창에 걸려도 '비정상 종료'로 보지 않게
+        Set<String> chaosPods = ctx.chaos().stream().flatMap(c -> c.deletedPodList().stream()).collect(Collectors.toSet());
         for (ChaosEvent c : ctx.chaos()) {
             long t = c.getKilledAt().atZone(KST).toInstant().toEpochMilli();
             if (t >= from && t < to) {
-                chaosPods.addAll(c.deletedPodList());
                 String recovery = c.recoverySeconds() == null ? "" : ", " + c.recoverySeconds() + "초 뒤 복구";
                 causes.add(new Cause("CHAOS", "관리자 장애 주입(의도한 시험)",
                         label(c.getServiceName()) + " 파드 " + c.deletedPodList().size() + "개 강제 종료 " + time(t) + recovery));
@@ -364,7 +370,19 @@ public class IncidentReportService {
         if ("ATTACK".equals(kind)) {
             causes.sort(Comparator.comparing(c -> !"ATTACK".equals(c.code())));
         }
-        return causes;
+        return merge(causes);
+    }
+
+    /** 같은 code 는 한 줄로 — 처음 나온 순서 유지, 근거는 이어 붙이고 4개가 넘으면 '외 n건' */
+    static List<Cause> merge(List<Cause> causes) {
+        Map<String, List<Cause>> byCode = new java.util.LinkedHashMap<>();
+        causes.forEach(c -> byCode.computeIfAbsent(c.code(), k -> new ArrayList<>()).add(c));
+        return byCode.values().stream().map(same -> {
+            List<String> details = same.stream().map(Cause::detail).distinct().toList();
+            String detail = String.join(", ", details.subList(0, Math.min(4, details.size())))
+                    + (details.size() > 4 ? " 외 " + (details.size() - 4) + "건" : "");
+            return new Cause(same.get(0).code(), same.get(0).label(), detail);
+        }).toList();
     }
 
     private static void podCauses(long from, long to, Context ctx, Set<String> chaosPods, List<Cause> causes) {
@@ -379,13 +397,13 @@ public class IncidentReportService {
                 : new Cause("POD_RESTART", "파드 재시작", label(serviceOf(pod)) + " " + pod + " 재시작 " + n + "회")));
         Set<String> rolledOut = ctx.rollouts().stream().filter(r -> r.t() >= from - 600_000 && r.t() < to).map(Rollout::service)
                 .collect(Collectors.toSet());
-        ctx.pods().stream().filter(p -> stoppedIn(p, from, to, ctx.stopMs()) && !chaosPods.contains(p.pod()) && !rolledOut.contains(p.service()))
+        ctx.pods().stream().filter(p -> stoppedIn(p, from, to) && !chaosPods.contains(p.pod()) && !rolledOut.contains(p.service()))
                 .forEach(p -> causes.add(new Cause("POD_DOWN", "파드 비정상 종료", label(p.service()) + " " + p.pod() + " " + time(p.lastSeenMs()) + "쯤 사라짐")));
     }
 
-    /** 기간 끝(2분 여유) 전에 마지막으로 보인 파드 = 그 시각에 종료 */
-    private static boolean stoppedIn(PodLife p, long from, long to, long stopMs) {
-        return p.lastSeenMs() > 0 && p.lastSeenMs() < stopMs - 120_000 && p.lastSeenMs() >= from && p.lastSeenMs() < to;
+    /** 기간 끝에 없는 파드 = 마지막으로 보인 시각에 종료 */
+    private static boolean stoppedIn(PodLife p, long from, long to) {
+        return !p.alive() && p.lastSeenMs() > 0 && p.lastSeenMs() >= from && p.lastSeenMs() < to;
     }
 
     private static void dbCauses(List<Bucket> in, Context ctx, List<Cause> causes, long b) {
@@ -440,13 +458,16 @@ public class IncidentReportService {
 
     // ── 4) 문장 · 요약 · 이벤트 ──────────────────────────────────
 
-    private static String sentence(String kind, long s, long e, List<String> services, long serverErrors, long suspicious,
-            long rateLimited, List<Cause> causes, Context ctx) {
+    /** counts = [5xx, 탐색, 429, 구간 최대 요청] */
+    private static String sentence(String kind, long s, long e, List<String> services, long[] counts, List<Cause> causes) {
+        long serverErrors = counts[0];
+        long suspicious = counts[1];
+        long rateLimited = counts[2];
         String when = DAY_TIME.format(Instant.ofEpochMilli(s).atZone(KST)) + "~" + time(e);
         String where = services.isEmpty() ? "" : labels(services) + " 서비스에서 ";
         String what = switch (kind) {
             case "ATTACK" -> "공격 의심 요청 " + suspicious + "건";
-            case "TRAFFIC" -> rateLimited > 0 ? "요청 제한 초과 " + rateLimited + "건" : "요청 급증";
+            case "TRAFFIC" -> rateLimited > 0 ? "요청 제한 초과 " + rateLimited + "건" : "요청 급증(구간 최대 " + counts[3] + "건)";
             default -> serverErrors > 0 ? "응답 실패 " + serverErrors + "건" : "오류 신호";
         };
         String cause = causes.stream().limit(2).map(Cause::label).collect(Collectors.joining(", "));
@@ -481,7 +502,7 @@ public class IncidentReportService {
         }
         ctx.pods().stream().filter(p -> p.createdMs() >= s && p.createdMs() < e)
                 .forEach(p -> events.add(new Event(p.createdMs(), "POD_START", p.service(), p.pod() + " 시작")));
-        ctx.pods().stream().filter(p -> stoppedIn(p, s, e, ctx.stopMs()))
+        ctx.pods().stream().filter(p -> stoppedIn(p, s, e))
                 .forEach(p -> events.add(new Event(p.lastSeenMs(), "POD_STOP", p.service(), p.pod() + " 종료")));
         ctx.metrics().restartsByPod().forEach((pod, points) -> points.forEach((t, v) -> {
             if (round(v) > 0 && serviceOf(pod) != null) {
