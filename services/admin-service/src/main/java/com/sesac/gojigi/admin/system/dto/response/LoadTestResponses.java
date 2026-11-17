@@ -11,7 +11,8 @@ public final class LoadTestResponses {
     private LoadTestResponses() {
     }
 
-    public enum RunState { RUNNING, DONE, FAILED }
+    /** STOPPED = 관리자가 중지(최대 시간 전에 끝남, k6 외부 중지는 종료 코드가 0 이 아니라 Job 은 실패로 남는다) */
+    public enum RunState { RUNNING, DONE, STOPPED, FAILED }
 
     /**
      * GET — load = 가장 최근 부하 실행, accounts = 가장 최근 계정 준비(없으면 null).
