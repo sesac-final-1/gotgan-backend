@@ -171,6 +171,19 @@ class IncidentReportServiceTest {
     }
 
     @Test
+    @DisplayName("사라진 파드 이유 — 같은 시각 replicas 가 줄었으면(HPA 자동 축소) 비정상 종료가 아니고, 이벤트에 이유를 붙인다")
+    void scaleDownIsNotPodDown() {
+        when(prometheus.matrix(contains("kube_deployment_spec_replicas"), any(), any(), any())).thenReturn(Optional.of(List.of(
+                new RangeSeries(Map.of("deployment", "order-service"), List.of(new Sample(ms("11:19"), 4), new Sample(ms("11:20"), 2))))));
+
+        Report report = service.report(at("10:50"), at("11:30"));
+
+        assertThat(report.issues()).flatExtracting(Issue::causes).extracting(Cause::code).doesNotContain("POD_DOWN");
+        assertThat(report.events()).extracting(Event::detail)
+                .contains("order-service-775744fdf6-gone 종료(자동 축소)", "product-service-757dd8467b-old 종료(장애 주입)");
+    }
+
+    @Test
     @DisplayName("이상이 없으면 '이상 없음' 한 문장")
     void quiet() {
         when(prometheus.matrix(contains("httpStatusCode=~\"5..\""), any(), any(), any())).thenReturn(Optional.empty());
