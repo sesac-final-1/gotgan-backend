@@ -48,7 +48,7 @@ class IncidentReportServiceTest {
     private final PrometheusClient prometheus = mock(PrometheusClient.class);
     private final LokiClient loki = mock(LokiClient.class);
     private final ChaosEventRepository chaos = mock(ChaosEventRepository.class);
-    private final IncidentReportService service = new IncidentReportService(prometheus, loki, chaos, Clock.fixed(NOW, KST));
+    private final IncidentReportService service = new IncidentReportService(prometheus, loki, chaos, Clock.fixed(NOW, KST), List.of());
 
     private static Instant at(String hhmm) {
         return LocalDateTime.parse("2026-11-17T" + hhmm).atZone(KST).toInstant();
@@ -181,6 +181,20 @@ class IncidentReportServiceTest {
         assertThat(report.issues()).flatExtracting(Issue::causes).extracting(Cause::code).doesNotContain("POD_DOWN");
         assertThat(report.events()).extracting(Event::detail)
                 .contains("order-service-775744fdf6-gone 종료(자동 축소)", "product-service-757dd8467b-old 종료(장애 주입)");
+    }
+
+    @Test
+    @DisplayName("점검용 요청 시간대의 탐색 요청은 공격 의심 건수와 로그에서 뺀다")
+    void testWindow_excludesOwnProbes() {
+        IncidentReportService withWindow = new IncidentReportService(prometheus, loki, chaos, Clock.fixed(NOW, KST),
+                List.of("2026-11-17T11:24:00+09:00/2026-11-17T11:25:00+09:00"));
+
+        Report report = withWindow.report(at("10:50"), at("11:30"));
+
+        Issue attack = report.issues().stream().filter(i -> "ATTACK".equals(i.kind())).findFirst().orElseThrow();
+        assertThat(attack.suspicious()).isEqualTo(2);   // 3건 중 점검용 1건 제외
+        assertThat(report.suspicious()).isEmpty();
+        assertThat(report.summary().suspicious()).isEqualTo(2);
     }
 
     @Test

@@ -36,6 +36,7 @@ import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
@@ -83,12 +84,42 @@ public class IncidentReportService {
     private final LokiClient loki;
     private final ChaosEventRepository chaosEvents;
     private final Clock clock;
+    /** 점검용 요청 시간대 [시작 ms, 끝 ms] — 우리가 일부러 보낸 탐색 경로 요청(방어 확인 등)을 공격 의심에서 뺀다 */
+    private final List<long[]> testWindows;
 
-    public IncidentReportService(PrometheusClient prometheus, LokiClient loki, ChaosEventRepository chaosEvents, Clock clock) {
+    public IncidentReportService(PrometheusClient prometheus, LokiClient loki, ChaosEventRepository chaosEvents, Clock clock,
+            @Value("${app.report.test-windows:}") List<String> testWindows) {
         this.prometheus = prometheus;
         this.loki = loki;
         this.chaosEvents = chaosEvents;
         this.clock = clock;
+        this.testWindows = testWindows.stream().filter(w -> w.contains("/")).map(w -> {
+            String[] p = w.trim().split("/");
+            return new long[] {OffsetDateTime.parse(p[0]).toInstant().toEpochMilli(), OffsetDateTime.parse(p[1]).toInstant().toEpochMilli()};
+        }).toList();
+    }
+
+    boolean inTestWindow(long ms) {
+        return testWindows.stream().anyMatch(w -> ms >= w[0] && ms < w[1]);
+    }
+
+    private static final java.util.regex.Pattern PROBE_TYPE = java.util.regex.Pattern.compile("type=([a-z-]+)");
+
+    /** 점검용 시간대의 탐색 요청을 구간별 건수에서 뺀다 — 로그(Loki)로 유형과 시각을 알아내 그 구간 값에서 1씩 */
+    private void excludeTestProbes(Metrics m, Instant start, Instant stop, long b) {
+        for (long[] w : testWindows) {
+            if (w[1] <= start.toEpochMilli() || w[0] >= stop.toEpochMilli()) {
+                continue;
+            }
+            for (LokiClient.LogLine l : loki.lines(SUSPICIOUS_LOG, Instant.ofEpochMilli(w[0]), Instant.ofEpochMilli(w[1]), 100)) {
+                java.util.regex.Matcher type = PROBE_TYPE.matcher(l.message());
+                if (!type.find() || !inTestWindow(l.timestampMs())) {
+                    continue;
+                }
+                long at = start.toEpochMilli() + ((l.timestampMs() - start.toEpochMilli()) / b + 1) * b;
+                m.suspiciousByType().computeIfAbsent(type.group(1), k -> new HashMap<>()).merge(at, -1.0, (old, d) -> Math.max(0, old + d));
+            }
+        }
     }
 
     /** 기간이 길수록 구간을 넓게 — 막대가 너무 많거나 적지 않게 */
@@ -117,11 +148,13 @@ public class IncidentReportService {
         Instant stop = Instant.ofEpochMilli((end.toEpochMilli() + b - 1) / b * b);
 
         Metrics m = collect(start, stop, bucket);
+        excludeTestProbes(m, start, stop, b);
         List<Bucket> buckets = buckets(m, start, stop, b);
         Context ctx = context(start, stop, bucket, m);
         List<Issue> issues = issues(buckets, ctx, b);
         List<Event> events = events(ctx, start, stop);
         List<ErrorItem> suspicious = loki.lines(SUSPICIOUS_LOG, start, stop, SUSPICIOUS_LOG_LIMIT).stream()
+                .filter(l -> !inTestWindow(l.timestampMs()))
                 .map(l -> new ErrorItem("LOG", l.timestampMs(), l.service(), l.level(), l.message(), null, l.traceId())).toList();
         return new Report(OffsetDateTime.now(clock), start.toEpochMilli(), stop.toEpochMilli(), (int) bucket.toSeconds(),
                 summary(buckets, issues, start, stop), buckets, issues, events, suspicious);
@@ -353,6 +386,7 @@ public class IncidentReportService {
         boolean intended = causes.stream().anyMatch(c -> "CHAOS".equals(c.code()) || "LOAD_TEST".equals(c.code()));
         List<ErrorItem> logs = no <= EVIDENCE_ISSUES
                 ? loki.lines(LokiClient.ERROR_QUERY, Instant.ofEpochMilli(s - b), Instant.ofEpochMilli(e), ISSUE_LOG_LIMIT).stream()
+                        .filter(l -> !(inTestWindow(l.timestampMs()) && PROBE_TYPE.matcher(l.message()).find()))
                         .map(l -> new ErrorItem("LOG", l.timestampMs(), l.service(), l.level(), l.message(), null, l.traceId())).toList()
                 : List.of();
         return new Issue(no, kind, s, e, services, serverErrors, suspicious, rateLimited, requests, intended,
