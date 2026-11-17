@@ -208,8 +208,9 @@ public class IncidentReportService {
     record Rollout(String service, long t) {
     }
 
+    /** scaleDowns = 서비스 → 원하는 파드 수(replicas)가 줄어든 시각들(HPA 자동 축소 · 수동 축소) */
     record Context(Metrics metrics, List<PodLife> pods, Set<String> oomPods, List<Rollout> rollouts, List<LoadTest> loadTests,
-                   List<ChaosEvent> chaos, long medianRequests) {
+                   List<ChaosEvent> chaos, long medianRequests, Map<String, List<Long>> scaleDowns) {
     }
 
     private Context context(Instant start, Instant stop, Duration bucket, Metrics m) {
@@ -246,7 +247,22 @@ public class IncidentReportService {
                 .sorted(Comparator.comparingLong(LoadTest::startMs)).toList();
         List<ChaosEvent> chaos = chaosEvents.findByKilledAtBetweenOrderByKilledAtAsc(LocalDateTime.ofInstant(start, KST),
                 LocalDateTime.ofInstant(stop, KST));
-        return new Context(m, pods, oom, rollouts, loadTests, chaos, median(m));
+        return new Context(m, pods, oom, rollouts, loadTests, chaos, median(m), scaleDowns(start, stop));
+    }
+
+    /** Deployment 원하는 파드 수가 직전 점보다 줄어든 시각(1분 간격) — 줄어든 만큼 파드가 지워지는 것은 정상 */
+    private Map<String, List<Long>> scaleDowns(Instant start, Instant stop) {
+        Map<String, List<Long>> result = new HashMap<>();
+        for (RangeSeries s : prometheus.matrix("max by (deployment)(kube_deployment_spec_replicas{" + NS + "})", start, stop,
+                Duration.ofMinutes(1)).orElse(List.of())) {
+            List<Sample> points = s.samples();
+            for (int i = 1; i < points.size(); i++) {
+                if (points.get(i).v() < points.get(i - 1).v()) {
+                    result.computeIfAbsent(s.labels().getOrDefault("deployment", ""), k -> new ArrayList<>()).add(points.get(i).t());
+                }
+            }
+        }
+        return result;
     }
 
     private static Map<String, Double> byLabel(Optional<List<Series>> series, String label) {
@@ -395,10 +411,26 @@ public class IncidentReportService {
         restarts.forEach((pod, n) -> causes.add(ctx.oomPods().contains(pod)
                 ? new Cause("OOM", "메모리 부족으로 파드 재시작", label(serviceOf(pod)) + " " + pod + " 재시작 " + n + "회(OOMKilled)")
                 : new Cause("POD_RESTART", "파드 재시작", label(serviceOf(pod)) + " " + pod + " 재시작 " + n + "회")));
-        Set<String> rolledOut = ctx.rollouts().stream().filter(r -> r.t() >= from - 600_000 && r.t() < to).map(Rollout::service)
-                .collect(Collectors.toSet());
-        ctx.pods().stream().filter(p -> stoppedIn(p, from, to) && !chaosPods.contains(p.pod()) && !rolledOut.contains(p.service()))
+        ctx.pods().stream().filter(p -> stoppedIn(p, from, to) && stopReason(p, ctx, chaosPods) == null)
                 .forEach(p -> causes.add(new Cause("POD_DOWN", "파드 비정상 종료", label(p.service()) + " " + p.pod() + " " + time(p.lastSeenMs()) + "쯤 사라짐")));
+    }
+
+    /**
+     * 파드가 사라진 이유 — 장애 주입(관리자가 지운 파드) · 배포 교체(같은 서비스 새 레플리카셋, 15분 안) ·
+     * 자동 축소(같은 서비스 replicas 감소, 앞뒤 3분 — 사라진 시각은 1분 해상도). 설명되지 않으면 null = 비정상 종료
+     */
+    static String stopReason(PodLife p, Context ctx, Set<String> chaosPods) {
+        long t = p.lastSeenMs();
+        if (chaosPods.contains(p.pod())) {
+            return "장애 주입";
+        }
+        if (ctx.rollouts().stream().anyMatch(r -> r.service().equals(p.service()) && r.t() >= t - 900_000 && r.t() <= t + 180_000)) {
+            return "배포 교체";
+        }
+        if (ctx.scaleDowns().getOrDefault(p.service(), List.of()).stream().anyMatch(d -> Math.abs(d - t) <= 180_000)) {
+            return "자동 축소";
+        }
+        return null;
     }
 
     /** 기간 끝에 없는 파드 = 마지막으로 보인 시각에 종료 */
@@ -502,8 +534,11 @@ public class IncidentReportService {
         }
         ctx.pods().stream().filter(p -> p.createdMs() >= s && p.createdMs() < e)
                 .forEach(p -> events.add(new Event(p.createdMs(), "POD_START", p.service(), p.pod() + " 시작")));
-        ctx.pods().stream().filter(p -> stoppedIn(p, s, e))
-                .forEach(p -> events.add(new Event(p.lastSeenMs(), "POD_STOP", p.service(), p.pod() + " 종료")));
+        Set<String> chaosPods = ctx.chaos().stream().flatMap(c -> c.deletedPodList().stream()).collect(Collectors.toSet());
+        ctx.pods().stream().filter(p -> stoppedIn(p, s, e)).forEach(p -> {
+            String reason = stopReason(p, ctx, chaosPods);
+            events.add(new Event(p.lastSeenMs(), "POD_STOP", p.service(), p.pod() + " 종료(" + (reason == null ? "원인 미상" : reason) + ")"));
+        });
         ctx.metrics().restartsByPod().forEach((pod, points) -> points.forEach((t, v) -> {
             if (round(v) > 0 && serviceOf(pod) != null) {
                 events.add(new Event(t, "POD_RESTART", serviceOf(pod), pod + " 재시작 " + round(v) + "회"
