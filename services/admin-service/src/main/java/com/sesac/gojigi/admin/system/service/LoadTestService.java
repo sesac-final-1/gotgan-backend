@@ -222,7 +222,9 @@ public class LoadTestService {
         if (job.active() > 0) {
             state = RunState.RUNNING;
         } else if (job.failed() > 0) {
-            state = RunState.FAILED;
+            // 최대 시간보다 5초 넘게 일찍 끝난 실패는 관리자 중지(k6 정상 종료 요청)로 본다
+            boolean early = finished != null && finished.isBefore(job.createdAt().plusSeconds(job.durationSec() - 5L));
+            state = early ? RunState.STOPPED : RunState.FAILED;
         }
         return new Run(job.id(), job.scenario(), state, job.vus(), job.durationSec(), OffsetDateTime.ofInstant(job.createdAt(), clock.getZone()),
                 OffsetDateTime.ofInstant(job.createdAt().plusSeconds(job.durationSec()), clock.getZone()),

@@ -249,6 +249,20 @@ class LoadTestServiceTest {
         assertThat(result.serverErrors()).containsExactly(Map.entry("product-service", 7L));
     }
 
+    @Test
+    @DisplayName("상태 — 최대 시간보다 일찍 끝난 실패는 중지됨(STOPPED), 끝까지 간 실패는 실패")
+    void status_stoppedVsFailed() {
+        when(kubernetes.loadJobs()).thenReturn(List.of(job("lt-3", "load", NOW.minusSeconds(200), 0, 0, 1)));
+        when(prometheus.vector(contains("timestamp(k6_vus"))).thenReturn(Optional.of(List.of(
+                new PrometheusClient.Series(Map.of(), NOW.minusSeconds(170).getEpochSecond()))));
+        assertThat(service(true).status().load().state()).isEqualTo(RunState.STOPPED);
+
+        when(kubernetes.loadJobs()).thenReturn(List.of(job("lt-4", "load", NOW.minusSeconds(400), 0, 0, 1)));
+        when(prometheus.vector(contains("timestamp(k6_vus"))).thenReturn(Optional.of(List.of(
+                new PrometheusClient.Series(Map.of(), NOW.minusSeconds(100).getEpochSecond()))));
+        assertThat(service(true).status().load().state()).isEqualTo(RunState.FAILED);
+    }
+
     private static void assertCode(Runnable call, SystemErrorCode code) {
         assertThatThrownBy(call::run).isInstanceOf(SystemException.class)
                 .extracting(e -> ((SystemException) e).getErrorCode()).isEqualTo(code);
