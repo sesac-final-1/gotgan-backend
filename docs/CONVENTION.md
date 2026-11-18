@@ -66,9 +66,10 @@
 | 코드 품질 | SonarQube Cloud — main 대상 PR에 품질 게이트 | 1-3 |
 | (10/13) 저장소 3개 | `gotgan-backend`(services, serverless, docker-compose, docs/api), `gotgan-frontend`(React 루트), `gotgan-config`(deploy, infra/terraform, scripts, docs). 모노레포 폐지. 각 저장소 `docs/CONVENTION.md`는 이 문서의 발췌본(자동 생성) — 이 문서만 고친다 | 1-4, 5-5 |
 | (10/13) 시크릿 | **GitHub Secrets 단일 소스**(클러스터, CI), Vercel 환경 변수(프론트). Secrets Manager, KMS, ESO 없음. `secrets-sync` 워크플로가 K8s Secret 생성 | 1-5, 5-3 |
-| (10/13) 인프라 일일 스케줄 | `infra/terraform/cluster/`는 `infra-schedule` 워크플로가 매일 KST 08:00 apply(→ `bootstrap`), 22:00 destroy (10/26 부터 EventBridge Scheduler → Lambda 가 실행). 나머지 폴더는 상시. apply/destroy는 워크플로 또는 구지훈 | 5-2 — **11/17 부터 24시간 운영: 두 스케줄 DISABLED(`infra/terraform/app/scheduler.tf` `schedule_enabled = false`, config #112), 11/20 발표 후 정리는 `infra-schedule` 수동 실행(destroy)** |
+| (10/13) 인프라 일일 스케줄 | `infra/terraform/cluster/`는 `infra-schedule` 워크플로가 매일 KST 08:00 apply(→ `bootstrap`), 22:00 destroy (10/26 부터 EventBridge Scheduler → Lambda 가 실행). 나머지 폴더는 상시. apply/destroy는 워크플로 또는 구지훈. **11/17부터 두 스케줄 DISABLED**(`app/scheduler.tf` `schedule_enabled = false`) — 24시간 운영, 11/20 발표 후 정리는 `infra-schedule` 수동 destroy | 5-2 |
 | (10/13) Redis 폴백 | 장바구니 원본은 MySQL `orderdb.cart_item`, Redis `cart:{userId}`는 캐시. Redis 호출은 서킷 인스턴스 `redisCart` + 폴백(MySQL) | 2-2, 2-7, 3-2 |
 | (10/13 3차) 3티어(db 노드 분리, NetworkPolicy) | 프론트(Vercel) → 백(EKS `app` 노드 그룹 t3.xlarge ×2 — 10/14 t3.large에서 조정) → DB(EKS `db` 노드 그룹 t3.medium ×1, 테인트 `tier=db:NoSchedule`, MySQL, Redis만). `02-networkpolicy.yaml`로 DB 3306, 6379는 `tier=backend` 파드만. blackbox exporter 없음. 파일 업로드만 presigned URL로 브라우저 → S3 직접(예외) | 5-3 |
+| (11/17) 자동 확장 | HPA는 Helm values 서비스 항목에 `hpa: { maxReplicas: N }`이 있을 때만(gateway, user, store, product, order), 최소는 `replicas`, 목표 CPU는 `defaults.hpa.cpu`(requests 대비 70%). HPA가 바꾼 replicas는 ArgoCD `ignoreDifferences`로 덮지 않음. Cluster Autoscaler는 app 노드 그룹만 2~3대(db 노드 그룹 제외) | 5-3 |
 
 ---
 
@@ -169,7 +170,7 @@ com.sesac.gojigi.{service}            # service = gateway, user, store, product,
 | payment-service | paymentdb | `payment`(포트원 V2 검증, 취소, 웹훅) |
 | review-service | reviewdb | `review`(사진, 별점, 판매자 답글), `inquiry`(상품문의, 답변), `eligibility`(리뷰 작성 자격) |
 | settlement-service | settlementdb | `settlement`(적재, 집계, 지급, 보류), `commission`(카테고리별 수수료) |
-| admin-service | admindb(신고, 장애 시연 기록만) | `application`, `store`, `category`, `product`(상품 조회, 강제 판매중지), `settlement`, `user`, `dashboard`, `review` — `/internal/**` 호출 조합, `report`(신고, 조치 이력, 10/26), `notification`(알림 센터 — SQS 3큐, 알림함, SSE, 10/27), `system`(F-1 장애 시연 — 파드 상태, 내리기, 타임라인, 11/7) |
+| admin-service | admindb(신고, 장애 시연 기록만) | `application`, `store`, `category`, `product`(상품 조회, 강제 판매중지), `settlement`, `user`, `dashboard`, `review` — `/internal/**` 호출 조합, `report`(신고, 조치 이력, 10/26), `notification`(알림 센터 — SQS 3큐, 알림함, SSE, 10/27), `system`(F-1 장애 시연 — 파드 상태, 내리기, 타임라인, 11/7, 부하테스트, 실시간 모니터링 11/16, 장애 분석 리포트, 현재 접속자 11/17) |
 | chat-service (10/27) | chatdb | `room`(방, 메시지, 읽음 — 스토어 톡, 판매자 운영 상담, 고객센터 상담), `realtime`(STOMP, Redis 중계, 접속 중, 입력 중, 속도 제한), `directory`(이름 조회 — user, store, settlement `/internal/**`, product 공개 상세), `retention`(90일 뒤 삭제) |
 
 **도메인 경계 기준**
@@ -248,6 +249,9 @@ com.sesac.gojigi.{service}            # service = gateway, user, store, product,
 | `blocked:user:{userId}` | user (쓰기), gateway, chat (읽기) | 탈퇴, 이용정지 회원의 남은 토큰 차단 — 게이트웨이 요청 거절, chat 은 WebSocket CONNECT 거절. Redis 장애면 확인 없이 통과(fail-open) |
 | `chat:room:{roomId}` | chat | 1:1 채팅 파드 간 중계 Pub/Sub 채널 — 파드당 패턴 구독 `chat:room:*` 1개 (10/27) |
 | `chat:presence:{roomId}` | chat | 접속 중 표시 ZSET — 점수 = 만료 시각(20초마다 연장, 60초 TTL), 보고 있는 쪽엔 알림을 보내지 않음 (10/27) |
+| `gotgan:active:visitors` | gateway, admin | 현재 접속자 ZSET — 멤버 = 방문자 ID `v:{X-Gotgan-Visitor}`(없으면 `ip:…`), 점수 = 마지막 요청 시각(초). admin 이 읽을 때 60초 지난 항목을 지우고 센다 (11/17) |
+| `gotgan:active:members` | gateway, admin | 로그인 회원 ZSET — 멤버 = `u:{userId}`, 로그아웃하면 바로 삭제 (11/17) |
+| `gotgan:active:role:{역할}` | gateway, admin | 역할별 로그인 회원 ZSET(`ADMIN`, `SELLER`, `BUYER`) — 역할이 여럿이면 관리자 > 판매자 > 구매자 하나로만 셈 (11/17) |
 | `notify:{받는 쪽}` | admin | 알림 센터 실시간 Pub/Sub 채널(`USER#{id}`, `STORE#{id}`, `ADMIN`) — 모든 파드가 자기 SSE 연결에 전달 (10/27) |
 | `request_rate_limiter.*` | gateway | 요청 제한 토큰 버킷 — Spring Cloud Gateway `RedisRateLimiter` 기본 키, 식별자는 `RateLimitKeyResolver`의 `user:{userId}`, `ip:{ip}`, `direct`, 라우트마다 따로 셈. Redis 장애면 통과(fail-open) |
 
@@ -390,6 +394,7 @@ RuntimeException
 - `GlobalExceptionHandler`가 `BusinessException`을 `ApiResponse.error()`로 변환 → **서비스는 throw만, 컨트롤러는 try-catch 없음**
 - Spring 표준 예외(`MethodArgumentNotValidException`, `HandlerMethodValidationException`, `MethodArgumentTypeMismatchException`, `MissingServletRequestParameterException`, `HttpMessageNotReadableException`)도 400 `INVALID_INPUT`으로 변환
 - 게이트웨이의 401, 403도 같은 봉투 형식(`UNAUTHORIZED`, `FORBIDDEN`)으로 응답
+- 게이트웨이가 업무 서비스에 닿지 못하면(파드 없음, 연결 거부, 연결 타임아웃, 응답 전 연결 끊김) 502, 응답 타임아웃이면 504로, 둘 다 `EXTERNAL_API_ERROR` 봉투로 응답(응답 전 끊김 `PrematureCloseException`을 500이 아니라 502로 분류한 것은 11/17)
 
 **에러 코드 네이밍**
 
@@ -408,7 +413,7 @@ RuntimeException
 | `REVIEW`, `INQUIRY` | review | `REVIEW_NOT_ELIGIBLE` 작성 자격 없음, `INQUIRY_NOT_FOUND` |
 | `SETTLE`, `COMMISSION` | settlement | `SETTLE_AGGREGATE_CONFLICT` 다른 집계 진행 중, `COMMISSION_PAST_EFFECTIVE_DATE` 지난 적용 시작일 |
 | `CHAT` | chat | `CHAT_ROOM_NOT_FOUND` 없거나 남의 방, `CHAT_STORE_INACTIVE` 정지, 폐점 스토어, `CHAT_TOO_FAST` 연결마다 1초 5건 초과(STOMP 오류 큐 `/user/queue/errors`) (10/27) |
-| (조합은 그대로 전달), `CATEGORY`, `REPORT`, `NOTIFICATION`, `SYSTEM` | admin | 하위 서비스가 보낸 `ApiResponse`의 `code`, `message`를 **바꾸지 않고 전달**, 연결 실패, 타임아웃만 `EXTERNAL_API_ERROR`. admin 이 판단하는 것만 자체 코드 — `CATEGORY_COMMISSION_REQUIRED` 수수료 없이 활성화, `REPORT_DUPLICATED` 중복 신고, `NOTIFICATION_NOT_FOUND`, `SYSTEM_KILL_COOLDOWN` 장애 시연 재시도 제한 |
+| (조합은 그대로 전달), `CATEGORY`, `REPORT`, `NOTIFICATION`, `SYSTEM` | admin | 하위 서비스가 보낸 `ApiResponse`의 `code`, `message`를 **바꾸지 않고 전달**, 연결 실패, 타임아웃만 `EXTERNAL_API_ERROR`. admin 이 판단하는 것만 자체 코드 — `CATEGORY_COMMISSION_REQUIRED` 수수료 없이 활성화, `REPORT_DUPLICATED` 중복 신고, `NOTIFICATION_NOT_FOUND`, `SYSTEM_KILL_COOLDOWN` 장애 시연 재시도 제한, `SYSTEM_LOADTEST_RUNNING` 부하테스트 이미 실행 중(11/16), `SYSTEM_REPORT_INVALID_RANGE` 장애 리포트 기간 잘못(11/17). 전체 목록은 backend `docs/api/error-codes.md` |
 | 공통 (도메인 접두어 없음) | 전체 | `SUCCESS`, `INVALID_INPUT`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`, `EXTERNAL_API_ERROR`, `GLOBAL_ERROR` |
 
 - admin-service는 조합, 전달만 하는 API 에서는 자체 에러 코드를 만들지 않습니다. 관리자 화면이 받는 코드는 데이터 주인 서비스의 코드 그대로 (`APPLY_REAPPLY_RESTRICTED` 등). 예외 — admin 이 판단, 데이터 주인인 곳: 카테고리, 수수료 조합 `CATEGORY_*`(10/20), 신고, 조치 `REPORT_*`(10/26 admindb), 알림 센터 `NOTIFICATION_*`(10/27), 장애 시연 `SYSTEM_*`(11/7)
@@ -489,7 +494,7 @@ throw new OrderException(OrderErrorCode.ORDER_NOT_FOUND);
 | 추적 | `RestClient` 를 직접 만들면 `ObservationRegistry` 를 함께 넘긴다 — 빠지면 서비스 간 traceId 가 끊김(QA Q-박-5) |
 | 비동기 풀 | `AsyncTaskExecutor` 빈이 하나뿐이면 Boot 가 WebSocket 채널에 씌운다 — 알림용 풀은 `@Bean(defaultCandidate = false)` + `@Qualifier`(k6 S5) |
 | 서킷 브레이커 | **client(대상 서비스)마다 인스턴스 하나**, 이름 = 대상 서비스 (`resilience4j.circuitbreaker.instances.product`) |
-| 재시도 | **멱등 GET만** (최대 2회). POST, PATCH는 재시도하지 않음 — Saga는 멱등 키 + 보상으로 처리 |
+| 재시도 | **멱등 GET만** (최대 2회). POST, PATCH는 재시도하지 않음 — Saga는 멱등 키 + 보상으로 처리. 게이트웨이도 같은 원칙(11/17, `UpstreamRetryConfig`): GET만, 응답 전 연결 실패나 끊김(IOException)일 때 최대 2회, 5xx 응답과 응답 타임아웃은 재시도하지 않음. 요청 제한 뒤에 두어 재시도가 토큰을 또 쓰지 않게 함 |
 | 폴백 | 도메인 예외 `EXTERNAL_API_ERROR`(502/504), 대시보드는 부분 응답 |
 | 설정 위치 | `application.yml`의 `resilience4j.*` (별도 Config 클래스 없음, 서킷 브레이커 인스턴스 이름 = 대상 서비스 `product`, `store` …) — 값 임의 변경 금지 |
 
